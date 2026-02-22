@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────
+   Fontes e base
+   ───────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    /* Fonte base maior para melhor legibilidade */
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-gray-900 font-sans;
+  }
+
+  /* Foco visível — importante para acessibilidade */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary-800;
+  }
+
+  /* Scrollbar discreta */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Animações
+   ───────────────────────────────────────────────────────────── */
+
+@layer utilities {
+  @keyframes slide-in-from-right {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);   opacity: 1; }
+  }
+
+  .animate-in {
+    animation-duration: 200ms;
+    animation-fill-mode: both;
+  }
+
+  .slide-in-from-right-full {
+    animation-name: slide-in-from-right;
+  }
+
+  /* Utilitário para altura h-13 (52px) — botões grandes */
+  .h-13 {
+    height: 3.25rem; /* 52px */
+  }
+}

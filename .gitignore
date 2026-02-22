@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+.tmp/
+
+# Credenciais e configs locais
+.env
+credentials.json
+token.json
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
