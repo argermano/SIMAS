@@ -33,7 +33,7 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Rotas públicas (não precisam de auth)
-  const rotasPublicas = ['/login', '/registro', '/esqueci-senha']
+  const rotasPublicas = ['/login', '/registro', '/esqueci-senha', '/definir-senha', '/auth/callback']
   const isRotaPublica = rotasPublicas.some(r => pathname.startsWith(r))
   const isRaiz = pathname === '/'
 

@@ -30,6 +30,16 @@ export interface Usuario {
   status: UserStatus
   last_login?: string
   created_at: string
+  // Perfil profissional
+  oab_numero?:            string
+  oab_estado?:            string
+  telefone_profissional?: string
+  email_profissional?:    string
+  endereco_profissional?: string
+  cidade_profissional?:   string
+  estado_profissional?:   string
+  cep_profissional?:      string
+  is_advogado_principal?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,9 +49,16 @@ export interface Cliente {
   tenant_id: string
   nome: string
   cpf?: string          // armazenado criptografado
+  rg?: string
+  estado_civil?: string
+  profissao?: string
   telefone?: string
   email?: string
   endereco?: string
+  bairro?: string
+  cidade?: string
+  estado?: string
+  cep?: string
   notas?: string
   created_by?: string
   created_at: string

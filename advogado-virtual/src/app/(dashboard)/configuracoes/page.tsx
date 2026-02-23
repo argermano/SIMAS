@@ -5,9 +5,10 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Building2, User, Shield, CreditCard, Users, ChevronLeft } from 'lucide-react'
+import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase } from 'lucide-react'
 import { formatarData } from '@/lib/utils'
 import { LABELS_ROLE } from '@/types'
+import { FormPerfilProfissional } from '@/components/configuracoes/FormPerfilProfissional'
 
 export const metadata = { title: 'Configurações' }
 
@@ -25,7 +26,7 @@ export default async function ConfiguracoesPage() {
 
   const { data: usuario } = await supabase
     .from('users')
-    .select('id, nome, email, role, status, created_at, tenant_id, tenants(nome, cnpj, plano, status, created_at)')
+    .select('id, nome, email, role, status, created_at, tenant_id, oab_numero, oab_estado, telefone_profissional, email_profissional, endereco_profissional, cidade_profissional, estado_profissional, cep_profissional, tenants(nome, cnpj, plano, status, created_at)')
     .eq('auth_user_id', user.id)
     .single()
 
@@ -108,6 +109,31 @@ export default async function ConfiguracoesPage() {
                 }
               />
               <InfoItem label="Membro desde" valor={formatarData(usuario.created_at)} />
+            </CardContent>
+          </Card>
+
+          {/* Perfil profissional */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Briefcase className="h-5 w-5 text-gray-400" />
+                Perfil Profissional
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4 text-sm text-gray-500">
+                Esses dados são usados automaticamente na geração de contratos de honorários.
+              </p>
+              <FormPerfilProfissional usuario={{
+                oab_numero:            usuario.oab_numero            ?? undefined,
+                oab_estado:            usuario.oab_estado            ?? undefined,
+                telefone_profissional: usuario.telefone_profissional ?? undefined,
+                email_profissional:    usuario.email_profissional    ?? undefined,
+                endereco_profissional: usuario.endereco_profissional ?? undefined,
+                cidade_profissional:   usuario.cidade_profissional   ?? undefined,
+                estado_profissional:   usuario.estado_profissional   ?? undefined,
+                cep_profissional:      usuario.cep_profissional      ?? undefined,
+              }} />
             </CardContent>
           </Card>
 

@@ -27,10 +27,10 @@ export default async function NovaPecaPage({
   searchParams,
 }: {
   params: Promise<{ area: string; tipoPeca: string }>
-  searchParams: Promise<{ id?: string }>
+  searchParams: Promise<{ id?: string; clienteId?: string }>
 }) {
   const { area, tipoPeca } = await params
-  const { id: atendimentoIdParam } = await searchParams
+  const { id: atendimentoIdParam, clienteId: clienteIdParam } = await searchParams
 
   const areaConfig = AREAS[area as AreaId]
   if (!areaConfig || !areaConfig.ativo) notFound()
@@ -81,6 +81,7 @@ export default async function NovaPecaPage({
             roleUsuario={usuario.role ?? 'advogado'}
             tiposDocumento={[...areaConfig.tipos_documento]}
             atendimentoIdInicial={atendimentoIdParam}
+            clienteIdInicial={clienteIdParam}
           />
         </div>
       </main>

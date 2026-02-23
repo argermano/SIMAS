@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { UserPlus, Save, UserX } from 'lucide-react'
+import { UserPlus, Save, UserX, Star, RefreshCw } from 'lucide-react'
 
 const OPCOES_ROLE = [
   { value: 'admin',       label: 'Administrador'  },
@@ -112,6 +112,97 @@ export function DesativarUsuario({ usuarioId, nomeUsuario }: DesativarUsuarioPro
       title="Desativar usuário"
     >
       <UserX className="h-4 w-4" />
+    </button>
+  )
+}
+
+// ─── Definir advogado principal ───────────────────────────────────────────────
+
+interface DefinirPrincipalProps {
+  usuarioId:   string
+  isPrincipal: boolean
+}
+
+export function DefinirPrincipal({ usuarioId, isPrincipal }: DefinirPrincipalProps) {
+  const router = useRouter()
+  const { success, error: toastError } = useToast()
+  const [salvando, setSalvando] = useState(false)
+
+  async function toggle() {
+    if (isPrincipal) return // remover principal só definindo outro
+    setSalvando(true)
+    try {
+      const res = await fetch(`/api/usuarios/${usuarioId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ is_advogado_principal: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toastError('Erro', data.error ?? 'Falha ao definir advogado principal')
+        return
+      }
+      success('Advogado principal definido', 'Os contratos usarão os dados deste advogado.')
+      router.refresh()
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={salvando || isPrincipal}
+      title={isPrincipal ? 'Advogado principal' : 'Definir como advogado principal'}
+      className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
+        isPrincipal
+          ? 'text-amber-500 cursor-default'
+          : 'text-gray-300 hover:text-amber-400 hover:bg-amber-50'
+      }`}
+    >
+      <Star className={`h-4 w-4 ${isPrincipal ? 'fill-current' : ''}`} />
+    </button>
+  )
+}
+
+// ─── Reenviar convite ────────────────────────────────────────────────────────
+
+interface ReenviarConviteProps {
+  email: string
+}
+
+export function ReenviarConvite({ email }: ReenviarConviteProps) {
+  const { success, error: toastError } = useToast()
+  const [enviando, setEnviando] = useState(false)
+
+  async function reenviar() {
+    setEnviando(true)
+    try {
+      const res = await fetch('/api/usuarios/reenviar-convite', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toastError('Erro', data.error ?? 'Falha ao reenviar convite')
+        return
+      }
+      success('Convite reenviado!', `Um novo e-mail foi enviado para ${email}.`)
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={reenviar}
+      disabled={enviando}
+      title="Reenviar convite"
+      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+    >
+      <RefreshCw className={`h-3 w-3 ${enviando ? 'animate-spin' : ''}`} />
+      Reenviar
     </button>
   )
 }

@@ -14,7 +14,7 @@ import {
   Phone, Mail, MapPin, FileText, Plus,
   Calendar, User, StickyNote, ChevronRight, ChevronLeft,
   Brain, ScrollText, Paperclip, Download,
-  CheckCircle2, Clock, Edit3, FileCheck,
+  CheckCircle2, Clock, Edit3, FileCheck, Briefcase, Heart,
 } from 'lucide-react'
 import { formatarData, formatarDataRelativa, formatarDataHora, mascaraCPF } from '@/lib/utils'
 import type { AtendimentoStatus } from '@/types'
@@ -216,6 +216,27 @@ export default async function DossieClientePage({
                     valor={mascaraCPF(cliente.cpf)}
                   />
                 )}
+                {cliente.rg && (
+                  <DadoItem
+                    icone={<User className="h-4 w-4" />}
+                    label="RG"
+                    valor={cliente.rg}
+                  />
+                )}
+                {cliente.estado_civil && (
+                  <DadoItem
+                    icone={<Heart className="h-4 w-4" />}
+                    label="Estado civil"
+                    valor={cliente.estado_civil}
+                  />
+                )}
+                {cliente.profissao && (
+                  <DadoItem
+                    icone={<Briefcase className="h-4 w-4" />}
+                    label="Profissão"
+                    valor={cliente.profissao}
+                  />
+                )}
                 {cliente.telefone && (
                   <DadoItem
                     icone={<Phone className="h-4 w-4" />}
@@ -240,6 +261,20 @@ export default async function DossieClientePage({
                     className="sm:col-span-2"
                   />
                 )}
+                {cliente.bairro && (
+                  <DadoItem
+                    icone={<MapPin className="h-4 w-4" />}
+                    label="Bairro"
+                    valor={cliente.bairro}
+                  />
+                )}
+                {cliente.cep && (
+                  <DadoItem
+                    icone={<MapPin className="h-4 w-4" />}
+                    label="CEP"
+                    valor={cliente.cep}
+                  />
+                )}
                 {(cliente.cidade || cliente.estado) && (
                   <DadoItem
                     icone={<MapPin className="h-4 w-4" />}
@@ -252,7 +287,7 @@ export default async function DossieClientePage({
                   label="Cliente desde"
                   valor={formatarData(cliente.created_at)}
                 />
-                {!cliente.cpf && !cliente.telefone && !cliente.email && !cliente.endereco && (
+                {!cliente.cpf && !cliente.rg && !cliente.telefone && !cliente.email && !cliente.endereco && !cliente.profissao && (
                   <p className="col-span-2 text-sm text-gray-400 italic">
                     Nenhum dado de contato cadastrado.{' '}
                     <Link href={`/clientes/${id}/editar`} className="text-primary-800 hover:underline">

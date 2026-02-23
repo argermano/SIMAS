@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Zap, FileText, Brain } from 'lucide-react'
+import { Zap, FileText, Brain, ChevronRight } from 'lucide-react'
 import { TIPOS_PECA, MODELOS_PRONTOS } from '@/lib/constants/tipos-peca'
 import type { Area } from '@/lib/constants/areas'
 
@@ -14,54 +14,23 @@ export function PainelArea({ area }: PainelAreaProps) {
   return (
     <div className="space-y-6">
 
-      {/* Grupo 1: Consultoria / Análise IA */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100">
-              <Brain className="h-4 w-4 text-violet-600" />
-            </span>
-            Consultoria / Análise IA
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            <Link
-              href={`/${area.id}/consultoria`}
-              className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-5 text-left transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm"
-            >
-              <span className="font-semibold text-gray-900 group-hover:text-violet-800">
-                Análise de Caso
-              </span>
-              <span className="mt-1 text-sm text-gray-400">
-                Consultoria jurídica completa com IA — caminhos, riscos e estratégia
-              </span>
-            </Link>
-            <Link
-              href={`/${area.id}/consultoria?tipo=parecer`}
-              className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-5 text-left transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm"
-            >
-              <span className="font-semibold text-gray-900 group-hover:text-violet-800">
-                Parecer Jurídico
-              </span>
-              <span className="mt-1 text-sm text-gray-400">
-                Opinião fundamentada sobre tese ou situação jurídica específica
-              </span>
-            </Link>
-            <Link
-              href={`/${area.id}/consultoria?tipo=estrategia`}
-              className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-5 text-left transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm"
-            >
-              <span className="font-semibold text-gray-900 group-hover:text-violet-800">
-                Estratégia Processual
-              </span>
-              <span className="mt-1 text-sm text-gray-400">
-                Plano de ação e sequência de medidas para o caso
-              </span>
-            </Link>
+      {/* Análise de Caso com IA */}
+      <Link href="/analise-caso" className="group block">
+        <div className="flex items-center gap-5 rounded-2xl border-2 border-violet-200 bg-gradient-to-r from-violet-50 to-white p-6 transition-all hover:border-violet-400 hover:shadow-md">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-violet-100">
+            <Brain className="h-7 w-7 text-violet-700" />
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-bold text-gray-900 group-hover:text-violet-800">
+              Análise de Caso com IA
+            </h2>
+            <p className="mt-0.5 text-sm text-gray-500">
+              Descreva o relato do cliente — a IA identifica a área jurídica, avalia a urgência e orienta os próximos passos
+            </p>
+          </div>
+          <ChevronRight className="h-5 w-5 shrink-0 text-violet-400 group-hover:text-violet-700 transition-colors" />
+        </div>
+      </Link>
 
       {/* Grupo 2: Peças com IA */}
       <Card>

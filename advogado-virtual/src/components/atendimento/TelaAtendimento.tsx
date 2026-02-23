@@ -16,6 +16,7 @@ import type { ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, Loader2, UserCheck, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { AcessoRapidoFooter } from '@/components/acesso-rapido/AcessoRapidoFooter'
 
 const ESTADOS_BR = [
   { value: 'AC', label: 'AC' }, { value: 'AL', label: 'AL' }, { value: 'AP', label: 'AP' },
@@ -38,6 +39,7 @@ interface TelaAtendimentoProps {
   roleUsuario: string
   tiposDocumento: string[]
   atendimentoIdInicial?: string
+  clienteIdInicial?: string
 }
 
 export function TelaAtendimento({
@@ -49,6 +51,7 @@ export function TelaAtendimento({
   roleUsuario,
   tiposDocumento,
   atendimentoIdInicial,
+  clienteIdInicial,
 }: TelaAtendimentoProps) {
   const router = useRouter()
   const { success, error: toastError } = useToast()
@@ -155,6 +158,22 @@ export function TelaAtendimento({
       }
     }
   }, [atendimentoId, area, tipoPeca, modoInput, toastError])
+
+  // Pré-selecionar cliente quando vindo da página do cliente (clienteIdInicial)
+  useEffect(() => {
+    if (!clienteIdInicial || atendimentoIdInicial) return
+
+    fetch(`/api/clientes/${clienteIdInicial}`)
+      .then(r => r.json())
+      .then(data => {
+        const c = data.cliente
+        if (c?.id && c?.nome) {
+          handleClienteSelecionado({ id: c.id, nome: c.nome })
+        }
+      })
+      .catch(() => { /* silencioso */ })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // executa só no mount; clienteIdInicial e atendimentoIdInicial são props estáveis
 
   // Receber transcrição do gravador
   const handleTranscricao = useCallback((texto: string) => {
@@ -588,6 +607,15 @@ export function TelaAtendimento({
           <Zap className="h-5 w-5" />
           Gerar Peça IA
         </Button>
+      </div>
+
+      {/* Acesso Rápido */}
+      <div className="border-t pt-6">
+        <AcessoRapidoFooter
+          atendimentoId={atendimentoId}
+          clienteId={cliente?.id ?? null}
+          area={area}
+        />
       </div>
 
     </div>

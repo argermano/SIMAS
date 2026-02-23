@@ -3,9 +3,12 @@ import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 const schema = z.object({
-  role:   z.enum(['admin', 'advogado', 'colaborador']).optional(),
-  status: z.enum(['ativo', 'inativo']).optional(),
-}).refine(data => data.role || data.status, { message: 'Informe role ou status' })
+  role:                  z.enum(['admin', 'advogado', 'colaborador']).optional(),
+  status:                z.enum(['ativo', 'inativo']).optional(),
+  is_advogado_principal: z.boolean().optional(),
+}).refine(data => data.role || data.status || data.is_advogado_principal !== undefined, {
+  message: 'Informe role, status ou is_advogado_principal',
+})
 
 // PATCH /api/usuarios/[id] — atualiza role ou status (admin only)
 export async function PATCH(
@@ -38,12 +41,21 @@ export async function PATCH(
     return NextResponse.json({ error: 'Dados inválidos', detalhes: resultado.error.flatten() }, { status: 400 })
   }
 
+  // Se estiver definindo como advogado principal, limpar a flag nos demais primeiro
+  if (resultado.data.is_advogado_principal === true) {
+    await supabase
+      .from('users')
+      .update({ is_advogado_principal: false })
+      .eq('tenant_id', admin.tenant_id)
+      .neq('id', id)
+  }
+
   const { data: usuario, error } = await supabase
     .from('users')
     .update(resultado.data)
     .eq('id', id)
     .eq('tenant_id', admin.tenant_id)
-    .select('id, nome, email, role, status')
+    .select('id, nome, email, role, status, is_advogado_principal')
     .single()
 
   if (error || !usuario) {

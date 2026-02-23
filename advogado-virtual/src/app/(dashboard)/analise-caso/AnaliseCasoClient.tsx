@@ -15,6 +15,7 @@ import {
   Users, MessageSquare, Mic, Keyboard, Brain, Loader2, Save,
   AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle, UserCheck,
 } from 'lucide-react'
+import { AcessoRapidoFooter } from '@/components/acesso-rapido/AcessoRapidoFooter'
 
 const COR_URGENCIA: Record<string, string> = {
   alta:  'border-red-200 bg-red-50 text-red-800',
@@ -544,6 +545,14 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           </div>
         </div>
       )}
+
+      {/* Acesso Rápido */}
+      <div className="border-t pt-6 mt-2">
+        <AcessoRapidoFooter
+          atendimentoId={atendimentoId}
+          clienteId={cliente?.id ?? null}
+        />
+      </div>
     </div>
   )
 }

@@ -24,25 +24,41 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
-    const { data: usuario } = await supabase
+    const { data: usuarioLogado } = await supabase
       .from('users')
-      .select('id, tenant_id')
+      .select('id, tenant_id, nome, oab_numero, oab_estado, telefone_profissional, email_profissional, endereco_profissional, cidade_profissional, estado_profissional, cep_profissional')
       .eq('auth_user_id', user.id)
       .single()
-    if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    if (!usuarioLogado) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
     // Busca o contrato com dados do cliente e atendimento
     const { data: contrato } = await supabase
       .from('contratos_honorarios')
-      .select('*, clientes(nome, cpf, endereco, cidade, estado), atendimentos(transcricao_editada, transcricao_raw, pedidos_especificos, area)')
+      .select('*, clientes(nome, cpf, telefone, email, endereco, bairro, cidade, estado, cep), atendimentos(transcricao_editada, transcricao_raw, pedidos_especificos, area)')
       .eq('id', contratoId)
-      .eq('tenant_id', usuario.tenant_id)
+      .eq('tenant_id', usuarioLogado.tenant_id)
       .single()
 
     if (!contrato) return NextResponse.json({ error: 'Contrato não encontrado' }, { status: 404 })
 
-    const cliente     = contrato.clientes as { nome?: string; cpf?: string; endereco?: string; cidade?: string; estado?: string } | null
+    const cliente     = contrato.clientes as { nome?: string; cpf?: string; telefone?: string; email?: string; endereco?: string; bairro?: string; cidade?: string; estado?: string; cep?: string } | null
     const atendimento = contrato.atendimentos as { transcricao_editada?: string; transcricao_raw?: string; pedidos_especificos?: string; area?: string } | null
+
+    // Determina o advogado para o contrato:
+    // 1. Usuário logado (se tem OAB)
+    // 2. Advogado principal do tenant
+    let dadosAdvogado = usuarioLogado.oab_numero ? usuarioLogado : null
+
+    if (!dadosAdvogado) {
+      const { data: principal } = await supabase
+        .from('users')
+        .select('nome, oab_numero, oab_estado, telefone_profissional, email_profissional, endereco_profissional, cidade_profissional, estado_profissional, cep_profissional')
+        .eq('tenant_id', usuarioLogado.tenant_id)
+        .eq('is_advogado_principal', true)
+        .eq('status', 'ativo')
+        .single()
+      dadosAdvogado = principal
+    }
 
     // Monta o resumo do caso a partir do atendimento vinculado
     const resumoCaso = atendimento
@@ -60,10 +76,25 @@ export async function POST(req: NextRequest) {
       dadosCliente: {
         nome:     cliente?.nome,
         cpf:      cliente?.cpf,
+        telefone: cliente?.telefone,
+        email:    cliente?.email,
         endereco: cliente?.endereco,
+        bairro:   cliente?.bairro,
         cidade:   cliente?.cidade,
         estado:   cliente?.estado,
+        cep:      cliente?.cep,
       },
+      dadosAdvogado: dadosAdvogado ? {
+        nome:      dadosAdvogado.nome,
+        oab_numero: dadosAdvogado.oab_numero ?? undefined,
+        oab_estado: dadosAdvogado.oab_estado ?? undefined,
+        telefone:  dadosAdvogado.telefone_profissional ?? undefined,
+        email:     dadosAdvogado.email_profissional    ?? undefined,
+        endereco:  dadosAdvogado.endereco_profissional ?? undefined,
+        cidade:    dadosAdvogado.cidade_profissional   ?? undefined,
+        estado:    dadosAdvogado.estado_profissional   ?? undefined,
+        cep:       dadosAdvogado.cep_profissional      ?? undefined,
+      } : undefined,
       resumoCaso,
       modeloAdvogado: modeloTexto,
       instrucoes,

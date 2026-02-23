@@ -3,14 +3,19 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
 const schemaUpdate = z.object({
-  nome:     z.string().min(2).max(200).optional(),
-  cpf:      z.string().max(20).optional().nullable(),
-  telefone: z.string().max(30).optional().nullable(),
-  email:    z.string().email().optional().nullable().or(z.literal('')),
-  endereco: z.string().max(500).optional().nullable(),
-  cidade:   z.string().max(100).optional().nullable(),
-  estado:   z.string().length(2).optional().nullable(),
-  notas:    z.string().max(2000).optional().nullable(),
+  nome:         z.string().min(2).max(200).optional(),
+  cpf:          z.string().max(20).optional().nullable(),
+  rg:           z.string().max(30).optional().nullable(),
+  estado_civil: z.string().max(50).optional().nullable(),
+  profissao:    z.string().max(100).optional().nullable(),
+  telefone:     z.string().max(30).optional().nullable(),
+  email:        z.string().email().optional().nullable().or(z.literal('')),
+  endereco:     z.string().max(500).optional().nullable(),
+  bairro:       z.string().max(100).optional().nullable(),
+  cidade:       z.string().max(100).optional().nullable(),
+  estado:       z.string().length(2).optional().nullable(),
+  cep:          z.string().max(10).optional().nullable(),
+  notas:        z.string().max(2000).optional().nullable(),
 })
 
 // Helper: verifica se o cliente pertence ao tenant do usuário
