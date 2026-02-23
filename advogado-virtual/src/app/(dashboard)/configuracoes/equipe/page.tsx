@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
-import { AlterarRole, DesativarUsuario, FormConvite } from './EquipeClient'
+import { AlterarRole, DesativarUsuario, FormConvite, DefinirPrincipal, ReenviarConvite } from './EquipeClient'
 import { LABELS_ROLE } from '@/types'
 import { Users, UserPlus, Clock, ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
@@ -38,7 +38,7 @@ export default async function EquipePage() {
   // Todos os usuários ativos do escritório
   const { data: usuarios } = await supabase
     .from('users')
-    .select('id, nome, email, role, status, created_at, auth_user_id')
+    .select('id, nome, email, role, status, created_at, auth_user_id, is_advogado_principal')
     .eq('tenant_id', admin.tenant_id)
     .eq('status', 'ativo')
     .order('created_at', { ascending: true })
@@ -108,6 +108,7 @@ export default async function EquipePage() {
                           {LABELS_ROLE[u.role as keyof typeof LABELS_ROLE] ?? u.role}
                         </Badge>
                         <span className="text-xs text-amber-600">Aguardando aceite</span>
+                        <ReenviarConvite email={u.email} />
                         <DesativarUsuario usuarioId={u.id} nomeUsuario={u.nome} />
                       </div>
                     </div>
@@ -168,6 +169,10 @@ export default async function EquipePage() {
                             </Badge>
                           ) : (
                             <>
+                              <DefinirPrincipal
+                                usuarioId={u.id}
+                                isPrincipal={!!u.is_advogado_principal}
+                              />
                               <AlterarRole usuarioId={u.id} roleAtual={u.role} />
                               <DesativarUsuario usuarioId={u.id} nomeUsuario={u.nome} />
                             </>

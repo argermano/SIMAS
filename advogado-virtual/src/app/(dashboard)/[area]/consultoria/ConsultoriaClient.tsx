@@ -27,6 +27,7 @@ interface ConsultoriaClientProps {
   tiposDocumento: string[]
   tipoConsultoria: string
   atendimentoIdInicial?: string
+  clienteIdInicial?: string
 }
 
 const TITULOS_CONSULTORIA: Record<string, string> = {
@@ -59,6 +60,7 @@ export function ConsultoriaClient({
   tiposDocumento,
   tipoConsultoria,
   atendimentoIdInicial,
+  clienteIdInicial,
 }: ConsultoriaClientProps) {
   const router = useRouter()
   const { success, error: toastError } = useToast()
@@ -168,6 +170,22 @@ export function ConsultoriaClient({
       }
     }
   }, [atendimentoId, atendimentoIdInicial, area, modoInput, toastError])
+
+  // Pré-selecionar cliente quando vindo da página do cliente (clienteIdInicial)
+  useEffect(() => {
+    if (!clienteIdInicial || atendimentoIdInicial) return
+
+    fetch(`/api/clientes/${clienteIdInicial}`)
+      .then(r => r.json())
+      .then(data => {
+        const c = data.cliente
+        if (c?.id && c?.nome) {
+          handleClienteSelecionado({ id: c.id, nome: c.nome })
+        }
+      })
+      .catch(() => { /* silencioso */ })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // executa só no mount; clienteIdInicial e atendimentoIdInicial são props estáveis
 
   const handleTranscricao = useCallback((texto: string) => {
     setTranscricao(texto)

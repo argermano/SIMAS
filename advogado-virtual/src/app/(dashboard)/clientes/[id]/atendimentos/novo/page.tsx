@@ -80,7 +80,7 @@ export default async function NovoAtendimentoPage({
                       return (
                         <Link
                           key={tipo.id}
-                          href={`/${area.id}/pecas/${tipo.id}`}
+                          href={`/${area.id}/pecas/${tipo.id}?clienteId=${id}`}
                           className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-3 text-left transition-all hover:border-primary-300 hover:bg-primary-50 hover:shadow-sm"
                         >
                           <span className="text-sm font-semibold text-gray-900 group-hover:text-primary-800 leading-tight">
@@ -102,7 +102,7 @@ export default async function NovoAtendimentoPage({
                     Consultoria / Análise IA
                   </div>
                   <Link
-                    href={`/${area.id}/consultoria`}
+                    href={`/${area.id}/consultoria?clienteId=${id}`}
                     className="group inline-flex flex-col rounded-xl border-2 border-gray-100 bg-white px-4 py-3 text-left transition-all hover:border-violet-300 hover:bg-violet-50"
                   >
                     <span className="text-sm font-semibold text-gray-900 group-hover:text-violet-800">

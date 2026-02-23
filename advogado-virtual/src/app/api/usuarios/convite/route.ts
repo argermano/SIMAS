@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
   // Envia e-mail de convite — cria o auth.user e retorna o ID
   const { data: convite, error: conviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
     data: { nome },
-    redirectTo: `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/dashboard`,
+    redirectTo: `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/auth/callback?next=/definir-senha`,
   })
 
   if (conviteError) {

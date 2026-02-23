@@ -4,7 +4,7 @@ export const SYSTEM_CONTRATO_HONORARIOS = `
 Você é um advogado especialista em contratos de prestação de serviços advocatícios.
 Sua tarefa é redigir um Contrato de Honorários Advocatícios completo, formal e juridicamente sólido.
 
-REGRAS:
+REGRAS DE FORMATAÇÃO OBRIGATÓRIAS:
 - Responda APENAS com o texto do contrato em Markdown
 - Use linguagem jurídica formal, clara e objetiva
 - Marque com [PREENCHER] campos que precisam de informação não disponível
@@ -12,6 +12,20 @@ REGRAS:
 - Baseie os valores na Tabela OAB fornecida e nos dados informados
 - Se um modelo do advogado foi fornecido, adapte o estilo e estrutura para ser similar
 - Gere o contrato COMPLETO do início ao fim, sem interrupções
+
+ESTRUTURA DE FORMATAÇÃO (siga exatamente):
+1. Título com # (ex: # CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS)
+2. Linha separadora ---
+3. Número do contrato em negrito: **CONTRATO DE HONORÁRIOS ADVOCATÍCIOS Nº [PREENCHER]/ANO**
+4. Linha separadora ---
+5. Parágrafo introdutório de apresentação das partes
+6. Linha separadora ---
+7. Cláusulas com ## e numeração romana: ## CLÁUSULA PRIMEIRA — DA IDENTIFICAÇÃO DAS PARTES
+8. Sub-itens com numeração decimal em negrito: **1.1. CONTRATANTE:**
+9. Campos em negrito: **Nome:** João Silva
+10. Alíneas em negrito: **a)** texto da alínea
+11. Linha separadora --- ao final de cada cláusula
+12. Seção de assinaturas ao final com campos [PREENCHER]
 `.trim()
 
 export function buildPromptContratoHonorarios(dados: {
@@ -25,15 +39,30 @@ export function buildPromptContratoHonorarios(dados: {
   dadosCliente: {
     nome?: string
     cpf?: string
+    telefone?: string
+    email?: string
+    endereco?: string
+    bairro?: string
+    cidade?: string
+    estado?: string
+    cep?: string
+  }
+  dadosAdvogado?: {
+    nome?: string
+    oab_numero?: string
+    oab_estado?: string
+    telefone?: string
+    email?: string
     endereco?: string
     cidade?: string
     estado?: string
+    cep?: string
   }
   resumoCaso?: string
   modeloAdvogado?: string
   instrucoes?: string
 }): string {
-  const { dadosContrato, dadosCliente, resumoCaso, modeloAdvogado, instrucoes } = dados
+  const { dadosContrato, dadosCliente, dadosAdvogado, resumoCaso, modeloAdvogado, instrucoes } = dados
 
   const areaLabel: Record<string, string> = {
     previdenciario: 'Previdenciário',
@@ -59,11 +88,23 @@ export function buildPromptContratoHonorarios(dados: {
   return `
 ## DADOS PARA O CONTRATO DE HONORÁRIOS
 
-### Cliente
+### Cliente (CONTRATANTE)
 Nome: ${dadosCliente.nome || '[PREENCHER nome completo]'}
 CPF: ${dadosCliente.cpf || '[PREENCHER CPF]'}
-Endereço: ${dadosCliente.endereco || '[PREENCHER endereço]'}
+Telefone: ${dadosCliente.telefone || '[PREENCHER]'}
+E-mail: ${dadosCliente.email || '[PREENCHER]'}
+Endereço: ${dadosCliente.endereco || '[PREENCHER endereço]'}${dadosCliente.bairro ? `, ${dadosCliente.bairro}` : ''}
 ${dadosCliente.cidade ? `Cidade/Estado: ${dadosCliente.cidade}/${dadosCliente.estado}` : 'Cidade/Estado: [PREENCHER]'}
+CEP: ${dadosCliente.cep || '[PREENCHER]'}
+
+### Advogado (CONTRATADO)
+Nome: ${dadosAdvogado?.nome || '[PREENCHER]'}
+OAB nº: ${dadosAdvogado?.oab_numero || '[PREENCHER]'}/${dadosAdvogado?.oab_estado || 'SC'}
+Telefone profissional: ${dadosAdvogado?.telefone || '[PREENCHER]'}
+E-mail profissional: ${dadosAdvogado?.email || '[PREENCHER]'}
+Endereço profissional: ${dadosAdvogado?.endereco || '[PREENCHER]'}
+${dadosAdvogado?.cidade ? `Cidade/Estado: ${dadosAdvogado.cidade}/${dadosAdvogado.estado}` : 'Cidade/Estado: [PREENCHER]'}
+CEP: ${dadosAdvogado?.cep || '[PREENCHER]'}
 
 ### Serviço contratado
 Área jurídica: ${dadosContrato.area ? (areaLabel[dadosContrato.area] ?? dadosContrato.area) : '[PREENCHER área]'}

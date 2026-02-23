@@ -4,9 +4,25 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import type { Cliente } from '@/types'
+
+const OPCOES_ESTADO_CIVIL = [
+  { value: 'Solteiro(a)',     label: 'Solteiro(a)'     },
+  { value: 'Casado(a)',       label: 'Casado(a)'       },
+  { value: 'Divorciado(a)',   label: 'Divorciado(a)'   },
+  { value: 'Viúvo(a)',        label: 'Viúvo(a)'        },
+  { value: 'União Estável',   label: 'União Estável'   },
+  { value: 'Separado(a)',     label: 'Separado(a)'     },
+]
+
+const ESTADOS_BR = [
+  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
+  'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC',
+  'SP','SE','TO',
+]
 
 interface FormClienteProps {
   cliente?: Cliente        // se fornecido, modo edição
@@ -14,12 +30,19 @@ interface FormClienteProps {
 }
 
 interface FormData {
-  nome:     string
-  cpf:      string
-  telefone: string
-  email:    string
-  endereco: string
-  notas:    string
+  nome:         string
+  cpf:          string
+  rg:           string
+  estado_civil: string
+  profissao:    string
+  telefone:     string
+  email:        string
+  endereco:     string
+  bairro:       string
+  cidade:       string
+  estado:       string
+  cep:          string
+  notas:        string
 }
 
 interface Erros {
@@ -43,18 +66,31 @@ function formatarTelInput(valor: string): string {
   return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`
 }
 
+function formatarCEPInput(valor: string): string {
+  const d = valor.replace(/\D/g, '').slice(0, 8)
+  if (d.length <= 5) return d
+  return `${d.slice(0,5)}-${d.slice(5)}`
+}
+
 export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
   const router = useRouter()
   const { success, error: toastError } = useToast()
   const modoEdicao = !!cliente
 
   const [form, setForm] = useState<FormData>({
-    nome:     cliente?.nome     ?? '',
-    cpf:      cliente?.cpf      ?? '',
-    telefone: cliente?.telefone ?? '',
-    email:    cliente?.email    ?? '',
-    endereco: cliente?.endereco ?? '',
-    notas:    cliente?.notas    ?? '',
+    nome:         cliente?.nome         ?? '',
+    cpf:          cliente?.cpf          ?? '',
+    rg:           cliente?.rg           ?? '',
+    estado_civil: cliente?.estado_civil ?? '',
+    profissao:    cliente?.profissao    ?? '',
+    telefone:     cliente?.telefone     ?? '',
+    email:        cliente?.email        ?? '',
+    endereco:     cliente?.endereco     ?? '',
+    bairro:       cliente?.bairro       ?? '',
+    cidade:       cliente?.cidade       ?? '',
+    estado:       cliente?.estado       ?? '',
+    cep:          cliente?.cep          ?? '',
+    notas:        cliente?.notas        ?? '',
   })
 
   const [erros, setErros] = useState<Erros>({})
@@ -65,6 +101,7 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
       let valor = e.target.value
       if (campo === 'cpf')      valor = formatarCPFInput(valor)
       if (campo === 'telefone') valor = formatarTelInput(valor)
+      if (campo === 'cep')      valor = formatarCEPInput(valor)
       setForm(prev => ({ ...prev, [campo]: valor }))
       setErros(prev => ({ ...prev, [campo]: undefined }))
     }
@@ -89,12 +126,19 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
     setLoading(true)
     try {
       const payload = {
-        nome:     form.nome.trim(),
-        cpf:      form.cpf      || null,
-        telefone: form.telefone || null,
-        email:    form.email    || null,
-        endereco: form.endereco || null,
-        notas:    form.notas    || null,
+        nome:         form.nome.trim(),
+        cpf:          form.cpf          || null,
+        rg:           form.rg           || null,
+        estado_civil: form.estado_civil || null,
+        profissao:    form.profissao    || null,
+        telefone:     form.telefone     || null,
+        email:        form.email        || null,
+        endereco:     form.endereco     || null,
+        bairro:       form.bairro       || null,
+        cidade:       form.cidade       || null,
+        estado:       form.estado       || null,
+        cep:          form.cep          || null,
+        notas:        form.notas        || null,
       }
 
       const url    = modoEdicao ? `/api/clientes/${cliente.id}` : '/api/clientes'
@@ -158,8 +202,36 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
             placeholder="000.000.000-00"
             inputMode="numeric"
             disabled={loading}
-            hint="Opcional — armazenado com segurança"
+            hint="Armazenado com segurança"
           />
+          <Input
+            label="RG"
+            value={form.rg}
+            onChange={set('rg')}
+            placeholder="00.000.000-0"
+            disabled={loading}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Select
+            label="Estado civil"
+            value={form.estado_civil}
+            onChange={e => setForm(prev => ({ ...prev, estado_civil: e.target.value }))}
+            options={OPCOES_ESTADO_CIVIL}
+            placeholder="Selecione..."
+            disabled={loading}
+          />
+          <Input
+            label="Profissão"
+            value={form.profissao}
+            onChange={set('profissao')}
+            placeholder="Ex.: Auxiliar de enfermagem"
+            disabled={loading}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Input
             label="Telefone / WhatsApp"
             value={form.telefone}
@@ -168,25 +240,60 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
             inputMode="numeric"
             disabled={loading}
           />
+          <Input
+            label="E-mail"
+            type="email"
+            value={form.email}
+            onChange={set('email')}
+            error={erros.email}
+            placeholder="cliente@email.com.br"
+            disabled={loading}
+          />
         </div>
-
-        <Input
-          label="E-mail"
-          type="email"
-          value={form.email}
-          onChange={set('email')}
-          error={erros.email}
-          placeholder="cliente@email.com.br"
-          disabled={loading}
-        />
 
         <Input
           label="Endereço"
           value={form.endereco}
           onChange={set('endereco')}
-          placeholder="Rua, número, bairro, cidade — UF"
+          placeholder="Rua, número"
           disabled={loading}
         />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            label="Bairro"
+            value={form.bairro}
+            onChange={set('bairro')}
+            placeholder="Ex.: Centro"
+            disabled={loading}
+          />
+          <Input
+            label="CEP"
+            value={form.cep}
+            onChange={set('cep')}
+            placeholder="00000-000"
+            inputMode="numeric"
+            disabled={loading}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Input
+            label="Cidade"
+            value={form.cidade}
+            onChange={set('cidade')}
+            placeholder="Ex.: São Paulo"
+            disabled={loading}
+          />
+          <Select
+            label="Estado (UF)"
+            value={form.estado}
+            onChange={e => setForm(prev => ({ ...prev, estado: e.target.value }))}
+            options={ESTADOS_BR.map(uf => ({ value: uf, label: uf }))}
+            placeholder="Selecione..."
+            disabled={loading}
+          />
+        </div>
       </div>
 
       {/* Observações */}
