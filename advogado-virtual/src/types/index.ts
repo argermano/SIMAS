@@ -18,7 +18,7 @@ export interface Tenant {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'admin' | 'advogado' | 'revisor' | 'estagiario'
+export type UserRole = 'admin' | 'advogado' | 'colaborador'
 export type UserStatus = 'ativo' | 'inativo'
 
 export interface Usuario {
@@ -182,7 +182,7 @@ export type TipoPeca =
   | 'tutela'
   | 'cumprimento'
 
-export type PecaStatus = 'rascunho' | 'revisada' | 'aprovada' | 'exportada'
+export type PecaStatus = 'rascunho' | 'revisada' | 'aprovada' | 'exportada' | 'aguardando_revisao' | 'rejeitada'
 
 export interface Peca {
   id: string
@@ -234,8 +234,7 @@ export const LABELS_TIPO_DOCUMENTO: Record<TipoDocumento, string> = {
 }
 
 export const LABELS_ROLE: Record<UserRole, string> = {
-  admin:      'Administrador',
-  advogado:   'Advogado(a)',
-  revisor:    'Revisor(a)',
-  estagiario: 'Estagiário(a)',
+  admin:       'Administrador',
+  advogado:    'Advogado(a)',
+  colaborador: 'Colaborador(a)',
 }

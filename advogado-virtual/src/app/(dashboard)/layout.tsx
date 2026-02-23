@@ -21,8 +21,9 @@ export default async function DashboardLayout({
     .eq('auth_user_id', user.id)
     .single()
 
-  const nomeUsuario   = usuario?.nome    ?? user.email ?? 'Usuário'
-  const roleUsuario   = usuario?.role    ? LABELS_ROLE[usuario.role as keyof typeof LABELS_ROLE] : 'Advogado(a)'
+  const nomeUsuario    = usuario?.nome ?? user.email ?? 'Usuário'
+  const roleRaw        = usuario?.role ?? 'advogado'
+  const roleUsuario    = LABELS_ROLE[roleRaw as keyof typeof LABELS_ROLE] ?? 'Advogado(a)'
   const nomeEscritorio = (usuario?.tenants as { nome?: string } | null)?.nome ?? 'Meu Escritório'
 
   return (
@@ -31,6 +32,7 @@ export default async function DashboardLayout({
         nomeUsuario={nomeUsuario}
         nomeEscritorio={nomeEscritorio}
         roleUsuario={roleUsuario}
+        roleRaw={roleRaw}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         {children}

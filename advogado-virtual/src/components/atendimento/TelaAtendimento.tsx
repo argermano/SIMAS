@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,10 +9,25 @@ import { useToast } from '@/components/ui/toast'
 import { useStreaming } from '@/components/shared/StreamingText'
 import { SeletorCliente } from './SeletorCliente'
 import { GravadorAudio } from './GravadorAudio'
+import { MicrofoneInline } from './MicrofoneInline'
 import { UploadDocumentos } from './UploadDocumentos'
 import { SeletorTribunais } from './SeletorTribunais'
 import type { ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
-import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, Loader2 } from 'lucide-react'
+import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, Loader2, UserCheck, MapPin } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
+
+const ESTADOS_BR = [
+  { value: 'AC', label: 'AC' }, { value: 'AL', label: 'AL' }, { value: 'AP', label: 'AP' },
+  { value: 'AM', label: 'AM' }, { value: 'BA', label: 'BA' }, { value: 'CE', label: 'CE' },
+  { value: 'DF', label: 'DF' }, { value: 'ES', label: 'ES' }, { value: 'GO', label: 'GO' },
+  { value: 'MA', label: 'MA' }, { value: 'MT', label: 'MT' }, { value: 'MS', label: 'MS' },
+  { value: 'MG', label: 'MG' }, { value: 'PA', label: 'PA' }, { value: 'PB', label: 'PB' },
+  { value: 'PR', label: 'PR' }, { value: 'PE', label: 'PE' }, { value: 'PI', label: 'PI' },
+  { value: 'RJ', label: 'RJ' }, { value: 'RN', label: 'RN' }, { value: 'RS', label: 'RS' },
+  { value: 'RO', label: 'RO' }, { value: 'RR', label: 'RR' }, { value: 'SC', label: 'SC' },
+  { value: 'SP', label: 'SP' }, { value: 'SE', label: 'SE' }, { value: 'TO', label: 'TO' },
+]
 
 interface TelaAtendimentoProps {
   area: string
@@ -20,6 +35,7 @@ interface TelaAtendimentoProps {
   tipoPecaNome: string
   tenantId: string
   userId: string
+  roleUsuario: string
   tiposDocumento: string[]
   atendimentoIdInicial?: string
 }
@@ -30,6 +46,7 @@ export function TelaAtendimento({
   tipoPecaNome,
   tenantId,
   userId,
+  roleUsuario,
   tiposDocumento,
   atendimentoIdInicial,
 }: TelaAtendimentoProps) {
@@ -40,7 +57,7 @@ export function TelaAtendimento({
   // Estado do atendimento
   const [atendimentoId, setAtendimentoId]     = useState<string | null>(atendimentoIdInicial ?? null)
   const [cliente, setCliente]                   = useState<{ id: string; nome: string } | null>(null)
-  const [modoInput, setModoInput]               = useState<'audio' | 'texto'>('audio')
+  const [modoInput, setModoInput]               = useState<'durante_reuniao' | 'pos_reuniao' | 'texto'>('durante_reuniao')
   const [textoRelato, setTextoRelato]           = useState('')
   const [transcricao, setTranscricao]           = useState('')
   const [pedidoEspecifico, setPedidoEspecifico] = useState('')
@@ -50,6 +67,8 @@ export function TelaAtendimento({
   const [mostraModalGeracao, setMostraModalGeracao] = useState(false)
   const [jurisprudencia, setJurisprudencia] = useState<ResultadoJurisprudencia[]>([])
   const [tribunaisSelecionados, setTribunaisSelecionados] = useState<string[]>([])
+  const [localizacao, setLocalizacao] = useState({ cidade: '', estado: '' })
+  const localizacaoOriginalRef = useRef({ cidade: '', estado: '' })
 
   // Carregar atendimento existente
   useEffect(() => {
@@ -64,8 +83,19 @@ export function TelaAtendimento({
         if (!at) return
         if (at.cliente_id && at.clientes) {
           setCliente({ id: at.cliente_id, nome: at.clientes.nome ?? 'Cliente' })
+          // Buscar localização do cliente
+          try {
+            const resCliente = await fetch(`/api/clientes/${at.cliente_id}`)
+            if (resCliente.ok) {
+              const dadosCliente = await resCliente.json()
+              const loc = { cidade: dadosCliente.cliente?.cidade ?? '', estado: dadosCliente.cliente?.estado ?? '' }
+              setLocalizacao(loc)
+              localizacaoOriginalRef.current = loc
+            }
+          } catch { /* silencioso */ }
         }
-        setModoInput(at.modo_input ?? 'audio')
+        const modoSalvo = at.modo_input
+        setModoInput(modoSalvo === 'texto' ? 'texto' : modoSalvo === 'pos_reuniao' ? 'pos_reuniao' : 'durante_reuniao')
         setTextoRelato(at.transcricao_editada ?? at.transcricao_raw ?? '')
         setTranscricao(at.transcricao_editada ?? at.transcricao_raw ?? '')
         setPedidoEspecifico(at.pedidos_especificos ?? '')
@@ -83,10 +113,23 @@ export function TelaAtendimento({
     if (!c) {
       setCliente(null)
       setAtendimentoId(null)
+      setLocalizacao({ cidade: '', estado: '' })
+      localizacaoOriginalRef.current = { cidade: '', estado: '' }
       return
     }
 
     setCliente(c)
+
+    // Buscar localização do cliente
+    try {
+      const resCliente = await fetch(`/api/clientes/${c.id}`)
+      if (resCliente.ok) {
+        const dadosCliente = await resCliente.json()
+        const loc = { cidade: dadosCliente.cliente?.cidade ?? '', estado: dadosCliente.cliente?.estado ?? '' }
+        setLocalizacao(loc)
+        localizacaoOriginalRef.current = loc
+      }
+    } catch { /* silencioso */ }
 
     // Cria atendimento se ainda não existe
     if (!atendimentoId) {
@@ -98,7 +141,7 @@ export function TelaAtendimento({
             cliente_id: c.id,
             area,
             tipo_peca_origem: tipoPeca,
-            modo_input: modoInput,
+            modo_input: modoInput === 'texto' ? 'texto' : 'audio',
           }),
         })
         const data = await res.json()
@@ -126,7 +169,20 @@ export function TelaAtendimento({
 
     setSalvando(true)
     try {
-      const textoFinal = modoInput === 'audio' ? textoRelato : textoRelato
+      const textoFinal = textoRelato
+
+      // Salvar localização do cliente se foi alterada
+      if (cliente) {
+        const orig = localizacaoOriginalRef.current
+        if (localizacao.cidade !== orig.cidade || localizacao.estado !== orig.estado) {
+          await fetch(`/api/clientes/${cliente.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cidade: localizacao.cidade || null, estado: localizacao.estado || null }),
+          })
+          localizacaoOriginalRef.current = { ...localizacao }
+        }
+      }
 
       const res = await fetch(`/api/atendimentos/${atendimentoId}`, {
         method: 'PATCH',
@@ -134,7 +190,7 @@ export function TelaAtendimento({
         body: JSON.stringify({
           transcricao_editada: textoFinal,
           pedidos_especificos: pedidoEspecifico,
-          modo_input: modoInput,
+          modo_input: modoInput === 'texto' ? 'texto' : 'audio',
         }),
       })
 
@@ -159,6 +215,19 @@ export function TelaAtendimento({
 
     setSalvando(true)
     try {
+      // 0. Salvar localização do cliente se foi alterada
+      if (cliente) {
+        const orig = localizacaoOriginalRef.current
+        if (localizacao.cidade !== orig.cidade || localizacao.estado !== orig.estado) {
+          await fetch(`/api/clientes/${cliente.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cidade: localizacao.cidade || null, estado: localizacao.estado || null }),
+          })
+          localizacaoOriginalRef.current = { ...localizacao }
+        }
+      }
+
       // 1. Salva o atendimento atualizado
       await fetch(`/api/atendimentos/${atendimentoId}`, {
         method: 'PATCH',
@@ -166,7 +235,7 @@ export function TelaAtendimento({
         body: JSON.stringify({
           transcricao_editada: textoRelato,
           pedidos_especificos: pedidoEspecifico,
-          modo_input: modoInput,
+          modo_input: modoInput === 'texto' ? 'texto' : 'audio',
         }),
       })
     } finally {
@@ -206,7 +275,21 @@ export function TelaAtendimento({
       body: JSON.stringify({ pecaId, conteudo: fullText }),
     })
 
-    // 4. Redireciona para o editor da peça
+    // 4. Atualiza status do atendimento para peca_gerada
+    await fetch(`/api/atendimentos/${atendimentoId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'peca_gerada' }),
+    })
+
+    // 5. Colaboradores não vão direto ao editor — peça aguarda revisão
+    if (roleUsuario === 'colaborador') {
+      success('Peça enviada para revisão!', 'Um advogado ou administrador irá avaliar e aprovar a peça.')
+      router.push(`/${area}`)
+      return
+    }
+
+    // 6. Outros perfis vão direto ao editor
     router.push(`/${area}/editor/${pecaId}`)
   }
 
@@ -271,11 +354,36 @@ export function TelaAtendimento({
             Cliente
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <SeletorCliente
             onSelecionado={handleClienteSelecionado}
             clienteSelecionado={cliente}
           />
+          {cliente && (
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-500">
+                <MapPin className="h-3.5 w-3.5" />
+                Localização do cliente
+              </p>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <Input
+                    label="Município"
+                    value={localizacao.cidade}
+                    onChange={(e) => setLocalizacao(l => ({ ...l, cidade: e.target.value }))}
+                    placeholder="Ex.: São Paulo"
+                  />
+                </div>
+                <Select
+                  label="UF"
+                  value={localizacao.estado}
+                  onChange={(e) => setLocalizacao(l => ({ ...l, estado: e.target.value }))}
+                  options={ESTADOS_BR}
+                  placeholder="UF"
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -284,26 +392,37 @@ export function TelaAtendimento({
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <MessageSquare className="h-5 w-5 text-gray-400" />
-            Relato do caso
+            Relato de Caso | Atendimento Cliente
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Tabs Gravar / Digitar */}
-          <div className="flex rounded-lg border bg-gray-50 p-1">
+          {/* Tabs: 3 modos de entrada */}
+          <div className="flex rounded-lg border bg-gray-50 p-1 gap-1">
             <button
-              onClick={() => setModoInput('audio')}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-colors ${
-                modoInput === 'audio'
+              onClick={() => setModoInput('durante_reuniao')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+                modoInput === 'durante_reuniao'
+                  ? 'bg-white text-primary-800 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <UserCheck className="h-4 w-4" />
+              Gravar com cliente
+            </button>
+            <button
+              onClick={() => setModoInput('pos_reuniao')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+                modoInput === 'pos_reuniao'
                   ? 'bg-white text-primary-800 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               <Mic className="h-4 w-4" />
-              Gravar áudio
+              Relato pós-reunião
             </button>
             <button
               onClick={() => setModoInput('texto')}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                 modoInput === 'texto'
                   ? 'bg-white text-primary-800 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
@@ -315,15 +434,17 @@ export function TelaAtendimento({
           </div>
 
           {/* Conteúdo da tab */}
-          {modoInput === 'audio' ? (
+          {modoInput === 'durante_reuniao' && (
             <div className="space-y-4">
+              <p className="text-xs text-gray-500">
+                Grave o áudio <strong>com o cliente presente</strong>. O consentimento LGPD será solicitado antes de iniciar.
+              </p>
               <GravadorAudio
                 onTranscricao={handleTranscricao}
                 atendimentoId={atendimentoId}
                 disabled={!podeGravar}
+                requerConsentimento={true}
               />
-
-              {/* Transcrição editável */}
               {transcricao && (
                 <Textarea
                   label="Transcrição (edite se necessário)"
@@ -334,7 +455,32 @@ export function TelaAtendimento({
                 />
               )}
             </div>
-          ) : (
+          )}
+
+          {modoInput === 'pos_reuniao' && (
+            <div className="space-y-4">
+              <p className="text-xs text-gray-500">
+                Relate os fatos com <strong>suas próprias palavras</strong> após a reunião. Sem necessidade de consentimento LGPD.
+              </p>
+              <GravadorAudio
+                onTranscricao={handleTranscricao}
+                atendimentoId={atendimentoId}
+                disabled={!podeGravar}
+                requerConsentimento={false}
+              />
+              {transcricao && (
+                <Textarea
+                  label="Transcrição (edite se necessário)"
+                  value={textoRelato}
+                  onChange={(e) => setTextoRelato(e.target.value)}
+                  placeholder="A transcrição aparecerá aqui..."
+                  rows={8}
+                />
+              )}
+            </div>
+          )}
+
+          {modoInput === 'texto' && (
             <Textarea
               label="Descreva o caso"
               value={textoRelato}
@@ -356,7 +502,7 @@ export function TelaAtendimento({
             Pedido específico
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-2">
           <Textarea
             label="O que o cliente deseja? (opcional)"
             value={pedidoEspecifico}
@@ -366,6 +512,15 @@ export function TelaAtendimento({
             rows={3}
             disabled={!podeGravar}
           />
+          {podeGravar && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Ou dite:</span>
+              <MicrofoneInline
+                onTranscricao={(t) => setPedidoEspecifico(prev => prev ? prev + ' ' + t : t)}
+                disabled={!podeGravar}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

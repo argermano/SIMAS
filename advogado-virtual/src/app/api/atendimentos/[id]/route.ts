@@ -23,7 +23,7 @@ export async function GET(
 
   const { data: atendimento, error } = await supabase
     .from('atendimentos')
-    .select('*, clientes(id, nome), documentos(*)')
+    .select('*, clientes(id, nome), documentos(*), analises(id, plano_a, resumo_fatos, status, created_at)')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -36,10 +36,14 @@ export async function GET(
 }
 
 const schemaUpdate = z.object({
-  transcricao_editada:  z.string().optional(),
-  pedidos_especificos:  z.string().optional(),
-  status:               z.enum(['caso_novo', 'peca_gerada', 'finalizado']).optional(),
-  modo_input:           z.enum(['audio', 'texto']).optional(),
+  transcricao_editada:          z.string().optional(),
+  pedidos_especificos:          z.string().optional(),
+  status:                       z.enum(['caso_novo', 'peca_gerada', 'finalizado']).optional(),
+  modo_input:                   z.enum(['audio', 'texto']).optional(),
+  tipo_servico:                 z.enum(['administrativo', 'judicial']).nullable().optional(),
+  tipo_processo:                z.string().nullable().optional(),
+  consentimento_gravacao:       z.boolean().optional(),
+  consentimento_confirmado_em:  z.string().optional(), // ISO 8601
 }).partial()
 
 // PATCH /api/atendimentos/[id] — atualiza atendimento

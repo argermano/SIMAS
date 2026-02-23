@@ -10,7 +10,7 @@ import { LABELS_AREA, LABELS_STATUS_ATENDIMENTO } from '@/types'
 import type { AtendimentoStatus, AreaJuridica } from '@/types'
 import {
   Shield, Briefcase, Scale, Gavel, Receipt, Building2,
-  ArrowRight, Clock, ChevronRight,
+  ArrowRight, Clock, ChevronRight, Brain,
 } from 'lucide-react'
 
 export const metadata = { title: 'Início' }
@@ -62,6 +62,26 @@ export default async function DashboardPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-5xl space-y-10">
+
+          {/* Card de acesso rápido — Análise de Caso */}
+          <section>
+            <Link href="/analise-caso" className="group block">
+              <div className="flex items-center gap-5 rounded-2xl border-2 border-violet-200 bg-gradient-to-r from-violet-50 to-white p-6 transition-all hover:border-violet-400 hover:shadow-md">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-violet-100">
+                  <Brain className="h-7 w-7 text-violet-700" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-lg font-bold text-gray-900 group-hover:text-violet-800">
+                    Análise de Caso com IA
+                  </h2>
+                  <p className="mt-0.5 text-sm text-gray-500">
+                    Descreva o relato do cliente — a IA identifica a área jurídica, avalia a urgência e orienta os próximos passos
+                  </p>
+                </div>
+                <ChevronRight className="h-5 w-5 shrink-0 text-violet-400 group-hover:text-violet-700 transition-colors" />
+              </div>
+            </Link>
+          </section>
 
           {/* Cards das áreas */}
           <section aria-label="Áreas do Direito">

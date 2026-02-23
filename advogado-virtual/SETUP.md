@@ -1,4 +1,4 @@
-# Guia de Instalação — Advogado Virtual (Sprint 1)
+# Guia de Instalação — Advogado Virtual (Sprint 1 + Sprint 2)
 
 > Siga este guia passo a passo. Cada etapa é obrigatória.
 
@@ -45,12 +45,17 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_anon_key_aqui
 SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key_aqui
 
 ANTHROPIC_API_KEY=sk-ant-sua_chave_aqui   # obtenha em console.anthropic.com
+ANTHROPIC_MODEL=claude-sonnet-4-6
+
+GROQ_API_KEY=gsk_sua_chave_aqui           # obtenha em console.groq.com (transcrição de áudio)
 
 NEXTAUTH_SECRET=qualquer_texto_longo_e_aleatorio_aqui
 NEXTAUTH_URL=http://localhost:3000
 APP_ENV=development
 ENCRYPTION_KEY=outro_texto_longo_e_aleatorio_aqui
 ```
+
+> **Groq API Key:** Acesse [console.groq.com](https://console.groq.com), crie uma conta gratuita e gere uma API Key. Ela é usada para transcrição de áudio via Whisper.
 
 ---
 
@@ -73,6 +78,10 @@ ENCRYPTION_KEY=outro_texto_longo_e_aleatorio_aqui
 
    ### 005 — Execute este SQL:
    > Copie o conteúdo de `supabase/migrations/005_rls_policies.sql` e cole. Clique **"Run"**.
+
+   ### 006 — Execute este SQL (Sprint 2):
+   > Copie o conteúdo de `supabase/migrations/006_atendimentos_v2.sql` e cole. Clique **"Run"**.
+   > Este script adiciona colunas de áudio/modo e cria o bucket de armazenamento de arquivos.
 
 3. Após executar todos, vá em **"Table Editor"** e verifique se as tabelas foram criadas:
    - tenants, users, clientes, atendimentos, documentos, analises, pecas, exportacoes, api_usage_log
@@ -148,7 +157,7 @@ Aguarde até aparecer:
 
 ---
 
-## Verificação — O que foi entregue no Sprint 1
+## Verificação — Sprint 1
 
 | Funcionalidade            | Status |
 |---------------------------|--------|
@@ -165,13 +174,26 @@ Aguarde até aparecer:
 | Row Level Security (RLS)  | ✅     |
 | Isolamento por tenant     | ✅     |
 
-## Próximos passos — Sprint 2
+## Verificação — Sprint 2
 
-- Gravação de áudio no browser (MediaRecorder API)
-- Transcrição via Whisper (OpenAI)
-- Upload de documentos (PDFs)
-- Extração de texto (pdf-parse)
-- Formulário completo de atendimento
+| Funcionalidade                              | Status |
+|---------------------------------------------|--------|
+| Tela de atendimento unificada               | ✅     |
+| Seletor/criador de cliente inline           | ✅     |
+| Gravação de áudio (MediaRecorder)           | ✅     |
+| Transcrição automática (Groq Whisper)       | ✅     |
+| Aba "Digitar" (modo texto)                  | ✅     |
+| Edição da transcrição                       | ✅     |
+| Campo "Pedido específico"                   | ✅     |
+| Upload de documentos com classificação      | ✅     |
+| Extração de texto de PDF (pdf-parse)        | ✅     |
+| Salvamento automático como "caso_novo"      | ✅     |
+| Geração de peça com IA (streaming)          | ✅     |
+| Editor de peça (markdown + preview)         | ✅     |
+| Validação e revisão da peça                 | ✅     |
+| Exportação DOCX                             | ✅     |
+| Comandos rápidos de IA                      | ✅     |
+| Histórico de atendimentos com status        | ✅     |
 
 ---
 
@@ -187,7 +209,13 @@ Aguarde até aparecer:
 → As chaves do Supabase estão incorretas. Verifique no painel do Supabase → Settings → API.
 
 **Tabelas não encontradas no Supabase**
-→ Execute os SQLs na ordem correta (001, 002, 003, 004, 005).
+→ Execute os SQLs na ordem correta (001, 002, 003, 004, 005, 006).
+
+**Transcrição de áudio retorna "[Transcrição indisponível]"**
+→ A variável `GROQ_API_KEY` não está configurada no `.env.local`. Obtenha a chave em [console.groq.com](https://console.groq.com).
+
+**Erro ao fazer upload de áudio ou documentos**
+→ A migration 006 não foi executada. Execute `supabase/migrations/006_atendimentos_v2.sql` no SQL Editor do Supabase para criar o bucket de armazenamento.
 
 **Usuário não aparece no banco após registro**
 → Verifique se a `SUPABASE_SERVICE_ROLE_KEY` está correta no `.env.local`.

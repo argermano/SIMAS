@@ -1,9 +1,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Building2, User, Shield, CreditCard } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Building2, User, Shield, CreditCard, Users, ChevronLeft } from 'lucide-react'
 import { formatarData } from '@/lib/utils'
 import { LABELS_ROLE } from '@/types'
 
@@ -39,6 +41,15 @@ export default async function ConfiguracoesPage() {
         titulo="Configurações"
         subtitulo="Informações do escritório e da conta"
         nomeUsuario={usuario.nome}
+        acoes={
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-800"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Início
+          </Link>
+        }
       />
 
       <main className="flex-1 overflow-y-auto p-6">
@@ -99,6 +110,26 @@ export default async function ConfiguracoesPage() {
               <InfoItem label="Membro desde" valor={formatarData(usuario.created_at)} />
             </CardContent>
           </Card>
+
+          {/* Gestão de equipe — apenas admin */}
+          {usuario.role === 'admin' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-gray-400" />
+                  Gestão de Equipe
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  Convide colaboradores e gerencie os perfis de acesso do escritório.
+                </p>
+                <Button asChild variant="secondary" size="sm">
+                  <Link href="/configuracoes/equipe">Gerenciar equipe</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Segurança */}
           <Card>

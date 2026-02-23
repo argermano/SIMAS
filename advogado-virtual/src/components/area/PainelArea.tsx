@@ -14,7 +14,56 @@ export function PainelArea({ area }: PainelAreaProps) {
   return (
     <div className="space-y-6">
 
-      {/* Grupo 1: Peças com IA */}
+      {/* Grupo 1: Consultoria / Análise IA */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100">
+              <Brain className="h-4 w-4 text-violet-600" />
+            </span>
+            Consultoria / Análise IA
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <Link
+              href={`/${area.id}/consultoria`}
+              className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-5 text-left transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm"
+            >
+              <span className="font-semibold text-gray-900 group-hover:text-violet-800">
+                Análise de Caso
+              </span>
+              <span className="mt-1 text-sm text-gray-400">
+                Consultoria jurídica completa com IA — caminhos, riscos e estratégia
+              </span>
+            </Link>
+            <Link
+              href={`/${area.id}/consultoria?tipo=parecer`}
+              className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-5 text-left transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm"
+            >
+              <span className="font-semibold text-gray-900 group-hover:text-violet-800">
+                Parecer Jurídico
+              </span>
+              <span className="mt-1 text-sm text-gray-400">
+                Opinião fundamentada sobre tese ou situação jurídica específica
+              </span>
+            </Link>
+            <Link
+              href={`/${area.id}/consultoria?tipo=estrategia`}
+              className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-5 text-left transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm"
+            >
+              <span className="font-semibold text-gray-900 group-hover:text-violet-800">
+                Estratégia Processual
+              </span>
+              <span className="mt-1 text-sm text-gray-400">
+                Plano de ação e sequência de medidas para o caso
+              </span>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Grupo 2: Peças com IA */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -78,55 +127,6 @@ export function PainelArea({ area }: PainelAreaProps) {
                 </Link>
               )
             })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Grupo 3: Consultoria / Análise IA */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100">
-              <Brain className="h-4 w-4 text-violet-600" />
-            </span>
-            Consultoria / Análise IA
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            <Link
-              href={`/${area.id}/consultoria`}
-              className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-5 text-left transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm"
-            >
-              <span className="font-semibold text-gray-900 group-hover:text-violet-800">
-                Análise de Caso
-              </span>
-              <span className="mt-1 text-sm text-gray-400">
-                Consultoria jurídica completa com IA — caminhos, riscos e estratégia
-              </span>
-            </Link>
-            <Link
-              href={`/${area.id}/consultoria?tipo=parecer`}
-              className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-5 text-left transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm"
-            >
-              <span className="font-semibold text-gray-900 group-hover:text-violet-800">
-                Parecer Jurídico
-              </span>
-              <span className="mt-1 text-sm text-gray-400">
-                Opinião fundamentada sobre tese ou situação jurídica específica
-              </span>
-            </Link>
-            <Link
-              href={`/${area.id}/consultoria?tipo=estrategia`}
-              className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-5 text-left transition-all hover:border-violet-300 hover:bg-violet-50 hover:shadow-sm"
-            >
-              <span className="font-semibold text-gray-900 group-hover:text-violet-800">
-                Estratégia Processual
-              </span>
-              <span className="mt-1 text-sm text-gray-400">
-                Plano de ação e sequência de medidas para o caso
-              </span>
-            </Link>
           </div>
         </CardContent>
       </Card>

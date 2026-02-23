@@ -8,6 +8,8 @@ const schemaUpdate = z.object({
   telefone: z.string().max(30).optional().nullable(),
   email:    z.string().email().optional().nullable().or(z.literal('')),
   endereco: z.string().max(500).optional().nullable(),
+  cidade:   z.string().max(100).optional().nullable(),
+  estado:   z.string().length(2).optional().nullable(),
   notas:    z.string().max(2000).optional().nullable(),
 })
 

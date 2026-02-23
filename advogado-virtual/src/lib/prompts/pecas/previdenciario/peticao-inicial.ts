@@ -3,7 +3,12 @@ export function buildPromptPeticaoInicialPrev(dados: {
   transcricao: string
   pedido_especifico?: string
   documentos: Array<{ tipo: string; texto_extraido: string; file_name: string }>
+  localizacao?: { cidade?: string; estado?: string }
 }): string {
+  const enderecamento = dados.localizacao?.cidade && dados.localizacao?.estado
+    ? `À Vara Federal Previdenciária de ${dados.localizacao.cidade}/${dados.localizacao.estado} (ou Juizado Especial Federal, conforme a competência local)`
+    : 'À Vara Federal Previdenciária / Juizado Especial Federal (JEF) competente [PREENCHER comarca]'
+
   return `
 Você é um advogado previdenciarista experiente redigindo uma Petição Inicial.
 
@@ -13,9 +18,10 @@ ${dados.analise ? `### Análise jurídica prévia:\n${JSON.stringify(dados.anali
 ### Transcrição: ${dados.transcricao}
 ### Pedido específico: ${dados.pedido_especifico || 'Nenhum.'}
 ### Documentos: ${dados.documentos.length > 0 ? dados.documentos.map(d => `- ${d.file_name} (${d.tipo}): ${d.texto_extraido?.substring(0, 500) ?? 'sem texto'}`).join('\n') : 'Nenhum documento.'}
+### Localização do cliente: ${dados.localizacao?.cidade ? `${dados.localizacao.cidade}/${dados.localizacao.estado}` : 'Não informada'}
 
 ## ESTRUTURA OBRIGATÓRIA
-1. Endereçamento (Vara Federal / JEF)
+1. Endereçamento: "${enderecamento}"
 2. Qualificação do Autor
 3. Qualificação do Réu (INSS)
 4. Dos Fatos

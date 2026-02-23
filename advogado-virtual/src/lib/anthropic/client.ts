@@ -13,7 +13,7 @@ export function getAnthropicClient(): Anthropic {
   return _client
 }
 
-export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-5-20250929'
+export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6'
 export const DEFAULT_MAX_TOKENS = Number(process.env.ANTHROPIC_MAX_TOKENS ?? 8192)
 
 /**

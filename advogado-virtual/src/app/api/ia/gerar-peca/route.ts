@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { streamCompletion, completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
 import { buscarJurisprudencia, formatarParaPrompt, type ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import { TRIBUNAIS_DEFAULT } from '@/lib/jurisprudencia/tribunais'
@@ -8,12 +8,14 @@ import { buildPromptPeticaoInicialPrev, SYSTEM_PETICAO_PREV } from '@/lib/prompt
 import { buildPromptContestacaoPrev, SYSTEM_CONTESTACAO_PREV } from '@/lib/prompts/pecas/previdenciario/contestacao'
 import { buildPromptPeticaoInicialTrab, SYSTEM_PETICAO_TRAB } from '@/lib/prompts/pecas/trabalhista/peticao-inicial'
 import { buildPromptContestacaoTrab, SYSTEM_CONTESTACAO_TRAB } from '@/lib/prompts/pecas/trabalhista/contestacao'
+import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
 
 type PromptBuilder = (dados: {
   analise?: Record<string, unknown>
   transcricao: string
   pedido_especifico?: string
   documentos: Array<{ tipo: string; texto_extraido: string; file_name: string }>
+  localizacao?: { cidade?: string; estado?: string }
 }) => string
 
 const PROMPT_MAP: Record<string, Record<string, { system: string; build: PromptBuilder }>> = {
@@ -51,19 +53,27 @@ export async function POST(req: NextRequest) {
 
     const { data: usuario } = await supabase
       .from('users')
-      .select('id, tenant_id')
+      .select('id, tenant_id, role')
       .eq('auth_user_id', user.id)
       .single()
     if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
-    // Buscar atendimento + documentos
+    // Colaboradores não podem publicar diretamente — peça vai para fila de revisão
+    const statusInicial = usuario.role === 'colaborador' ? 'aguardando_revisao' : 'rascunho'
+
+    // Buscar atendimento + documentos + localização do cliente
     const { data: atendimento } = await supabase
       .from('atendimentos')
-      .select('*, documentos(*)')
+      .select('*, documentos(*), clientes(cidade, estado)')
       .eq('id', atendimentoId)
       .eq('tenant_id', usuario.tenant_id)
       .single()
     if (!atendimento) return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+
+    const localizacao = {
+      cidade: (atendimento.clientes as { cidade?: string; estado?: string } | null)?.cidade ?? undefined,
+      estado: (atendimento.clientes as { cidade?: string; estado?: string } | null)?.estado ?? undefined,
+    }
 
     // Buscar análise (se existir)
     let analise: Record<string, unknown> | undefined
@@ -96,6 +106,41 @@ export async function POST(req: NextRequest) {
 
     const jurisprudenciaTexto = formatarParaPrompt(resultadosJurisp)
 
+    // Filtragem de relevância dos documentos por IA (antes de qualquer caminho de geração)
+    type DocFiltrado = { id: string; tipo: string; texto_extraido: string; file_name: string }
+    let documentosFiltrados: DocFiltrado[] = (atendimento.documentos ?? []).map((d: Record<string, unknown>) => ({
+      id: d.id as string,
+      tipo: d.tipo as string,
+      texto_extraido: (d.texto_extraido as string) ?? '',
+      file_name: d.file_name as string,
+    }))
+
+    const docsComTexto = documentosFiltrados.filter((d: DocFiltrado) => d.texto_extraido.trim().length > 50)
+    if (docsComTexto.length > 1) {
+      try {
+        const { result: triagem } = await completionJSON<{
+          relevantes: Array<{ id: string; justificativa: string }>
+          irrelevantes: Array<{ id: string; justificativa: string }>
+        }>({
+          system: SYSTEM_RELEVANCIA,
+          prompt: buildPromptRelevancia({
+            area,
+            tipo_peca: tipo,
+            pedido: atendimento.pedidos_especificos,
+            transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
+            documentos: docsComTexto,
+          }),
+          maxTokens: 1024,
+        })
+        const idsRelevantes = new Set(triagem.relevantes.map((r) => r.id))
+        documentosFiltrados = documentosFiltrados.filter(
+          (d: DocFiltrado) => idsRelevantes.has(d.id) || d.texto_extraido.trim().length <= 50
+        )
+      } catch {
+        // Falha silenciosa — inclui todos os documentos
+      }
+    }
+
     // Selecionar prompt
     const promptConfig = PROMPT_MAP[area]?.[tipo]
     if (!promptConfig) {
@@ -105,11 +150,8 @@ export async function POST(req: NextRequest) {
         analise,
         transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
         pedido_especifico: atendimento.pedidos_especificos,
-        documentos: (atendimento.documentos ?? []).map((d: Record<string, unknown>) => ({
-          tipo: d.tipo as string,
-          texto_extraido: (d.texto_extraido as string) ?? '',
-          file_name: d.file_name as string,
-        })),
+        documentos: documentosFiltrados,
+        localizacao,
       })
 
       if (jurisprudenciaTexto) {
@@ -127,7 +169,7 @@ export async function POST(req: NextRequest) {
           tenant_id: usuario.tenant_id,
           tipo,
           area,
-          status: 'rascunho',
+          status: statusInicial,
           created_by: usuario.id,
         })
         .select('id')
@@ -144,17 +186,14 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const documentos = (atendimento.documentos ?? []).map((d: Record<string, unknown>) => ({
-      tipo: d.tipo as string,
-      texto_extraido: (d.texto_extraido as string) ?? '',
-      file_name: d.file_name as string,
-    }))
+    const documentos = documentosFiltrados
 
     let prompt = promptConfig.build({
       analise,
       transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
       pedido_especifico: atendimento.pedidos_especificos,
       documentos,
+      localizacao,
     })
 
     if (jurisprudenciaTexto) {
@@ -172,7 +211,7 @@ export async function POST(req: NextRequest) {
         area,
         prompt_utilizado: prompt.substring(0, 500),
         modelo_ia: DEFAULT_MODEL,
-        status: 'rascunho',
+        status: statusInicial,
         created_by: usuario.id,
       })
       .select('id')
