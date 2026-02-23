@@ -12,7 +12,7 @@ import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import {
   Phone, Mail, MapPin, FileText, Plus,
-  Calendar, User, StickyNote, ChevronRight,
+  Calendar, User, StickyNote, ChevronRight, ChevronLeft,
   Brain, ScrollText, Paperclip, Download,
   CheckCircle2, Clock, Edit3, FileCheck,
 } from 'lucide-react'
@@ -41,10 +41,12 @@ const BADGE_STATUS: Record<AtendimentoStatus, { variant: 'success' | 'warning' |
 }
 
 const BADGE_PECA_STATUS: Record<string, { variant: 'success' | 'warning' | 'secondary' | 'default'; label: string }> = {
-  rascunho:  { variant: 'warning',   label: 'Rascunho'  },
-  revisada:  { variant: 'secondary', label: 'Revisada'  },
-  aprovada:  { variant: 'success',   label: 'Aprovada'  },
-  exportada: { variant: 'default',   label: 'Exportada' },
+  rascunho:           { variant: 'warning',   label: 'Rascunho'           },
+  revisada:           { variant: 'secondary', label: 'Revisada'           },
+  aprovada:           { variant: 'success',   label: 'Aprovada'           },
+  exportada:          { variant: 'default',   label: 'Exportada'          },
+  aguardando_revisao: { variant: 'warning',   label: 'Aguardando Revisão' },
+  rejeitada:          { variant: 'default',   label: 'Rejeitada'          },
 }
 
 const BADGE_ANALISE_STATUS: Record<string, { variant: 'success' | 'warning' | 'secondary'; label: string }> = {
@@ -58,6 +60,7 @@ const LABELS_AREA: Record<string, string> = {
   civel:          'Cível',
   trabalhista:    'Trabalhista',
   criminal:       'Criminal',
+  geral:          'Análise de Caso',
 }
 
 const ICONES_AREA: Record<string, string> = {
@@ -65,6 +68,14 @@ const ICONES_AREA: Record<string, string> = {
   trabalhista:    'amber',
   civel:          'emerald',
   criminal:       'red',
+  geral:          'violet',
+}
+
+// Retorna o href correto para abrir/retomar o atendimento
+function hrefAtendimento(at: { area: string; tipo_peca_origem?: string | null; id: string }): string {
+  if (at.area === 'geral') return `/analise-caso?atendimentoId=${at.id}`
+  if (at.tipo_peca_origem) return `/${at.area}/pecas/${at.tipo_peca_origem}?id=${at.id}`
+  return `/${at.area}`
 }
 
 export default async function DossieClientePage({
@@ -106,7 +117,7 @@ export default async function DossieClientePage({
   // Buscar análises e peças de todos os atendimentos
   const atendimentoIds = (atendimentos ?? []).map(a => a.id)
 
-  const [analises, pecas, documentos] = await Promise.all([
+  const [analises, pecas, documentos, todosDocumentosCliente] = await Promise.all([
     atendimentoIds.length > 0
       ? supabase
           .from('analises')
@@ -126,6 +137,12 @@ export default async function DossieClientePage({
           .select('id, atendimento_id, tipo, file_name')
           .in('atendimento_id', atendimentoIds)
       : Promise.resolve({ data: [] }),
+    // Todos os documentos do cliente (via cliente_id) para o painel de dossiê
+    supabase
+      .from('documentos')
+      .select('id, atendimento_id, tipo, file_name, created_at')
+      .eq('cliente_id', id)
+      .order('created_at', { ascending: false }),
   ])
 
   // Indexar por atendimento
@@ -160,7 +177,14 @@ export default async function DossieClientePage({
         titulo={cliente.nome}
         subtitulo="Dossiê do cliente"
         acoes={
-          <div className="flex gap-2">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/clientes"
+              className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-800"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Clientes
+            </Link>
             <ClienteAcoesClient clienteId={id} clienteNome={cliente.nome} />
             <Button asChild size="md">
               <Link href={`/clientes/${id}/atendimentos/novo`}>
@@ -214,6 +238,13 @@ export default async function DossieClientePage({
                     label="Endereço"
                     valor={cliente.endereco}
                     className="sm:col-span-2"
+                  />
+                )}
+                {(cliente.cidade || cliente.estado) && (
+                  <DadoItem
+                    icone={<MapPin className="h-4 w-4" />}
+                    label="Cidade/Estado"
+                    valor={[cliente.cidade, cliente.estado].filter(Boolean).join(' / ')}
                   />
                 )}
                 <DadoItem
@@ -326,6 +357,7 @@ export default async function DossieClientePage({
                               corArea === 'rose' ? 'border-l-rose-400' :
                               corArea === 'amber' ? 'border-l-amber-400' :
                               corArea === 'emerald' ? 'border-l-emerald-400' :
+                              corArea === 'violet' ? 'border-l-violet-400' :
                               'border-l-gray-400'
                             }`}>
                               <CardContent className="py-4">
@@ -365,7 +397,7 @@ export default async function DossieClientePage({
                                   <div className="flex items-center gap-1 shrink-0">
                                     <BotaoExcluirAtendimento atendimentoId={at.id} />
                                     <Link
-                                      href={at.tipo_peca_origem ? `/${at.area}/pecas/${at.tipo_peca_origem}?id=${at.id}` : `/${at.area}`}
+                                      href={hrefAtendimento(at)}
                                       className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
                                       title="Abrir atendimento"
                                     >
@@ -456,10 +488,10 @@ export default async function DossieClientePage({
                                     <p className="text-xs text-gray-400 italic">
                                       Nenhuma análise ou peça gerada ainda.{' '}
                                       <Link
-                                        href={at.tipo_peca_origem ? `/${at.area}/pecas/${at.tipo_peca_origem}?id=${at.id}` : `/${at.area}`}
+                                        href={hrefAtendimento(at)}
                                         className="text-primary-700 hover:underline"
                                       >
-                                        Gerar peça
+                                        {at.area === 'geral' ? 'Analisar caso' : 'Gerar peça'}
                                       </Link>
                                     </p>
                                   </div>
@@ -475,6 +507,35 @@ export default async function DossieClientePage({
               </div>
             )}
           </section>
+
+          {/* Documentos do Cliente — dossiê permanente */}
+          {(todosDocumentosCliente.data ?? []).length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <Paperclip className="h-5 w-5 text-gray-400" />
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Documentos do Cliente
+                </h2>
+                <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                  {(todosDocumentosCliente.data ?? []).length}
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {(todosDocumentosCliente.data ?? []).map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 rounded-lg border bg-white px-3 py-2.5 text-sm"
+                  >
+                    <Paperclip className="h-4 w-4 shrink-0 text-amber-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-gray-800">{doc.file_name}</p>
+                      <p className="text-xs text-gray-400">{formatarDataRelativa(doc.created_at)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </main>
     </>

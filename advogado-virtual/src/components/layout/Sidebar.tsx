@@ -11,6 +11,9 @@ import {
   LogOut,
   Menu,
   X,
+  ClipboardCheck,
+  UserCog,
+  FileSignature,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -36,6 +39,13 @@ const MENU_ITEMS = [
     ativoSe: (pathname: string) => pathname.startsWith('/clientes'),
   },
   {
+    href:    '/contratos',
+    label:   'Contratos',
+    icon:    FileSignature,
+    exact:   false,
+    ativoSe: (pathname: string) => pathname.startsWith('/contratos'),
+  },
+  {
     href:    '/historico',
     label:   'Histórico',
     icon:    History,
@@ -55,9 +65,12 @@ interface SidebarProps {
   nomeUsuario: string
   nomeEscritorio: string
   roleUsuario: string
+  roleRaw?: string
 }
 
-export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario }: SidebarProps) {
+const ROLES_COM_REVISAO = ['admin', 'advogado']
+
+export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: SidebarProps) {
   const pathname  = usePathname()
   const router    = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -113,6 +126,58 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario }: SidebarPro
               </li>
             )
           })}
+
+          {/* Fila de revisão — visível apenas para revisores/advogados/admins */}
+          {roleRaw && ROLES_COM_REVISAO.includes(roleRaw) && (() => {
+            const ativo = pathname.startsWith('/revisao')
+            return (
+              <li>
+                <Link
+                  href="/revisao"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors',
+                    ativo
+                      ? 'bg-white/15 text-white'
+                      : 'text-primary-200 hover:bg-white/10 hover:text-white'
+                  )}
+                  aria-current={ativo ? 'page' : undefined}
+                >
+                  <ClipboardCheck
+                    className={cn('h-5 w-5 shrink-0', ativo ? 'text-accent' : '')}
+                    aria-hidden="true"
+                  />
+                  Revisão
+                </Link>
+              </li>
+            )
+          })()}
+
+          {/* Gestão de equipe — visível apenas para admin */}
+          {roleRaw === 'admin' && (() => {
+            const ativo = pathname.startsWith('/configuracoes/equipe')
+            return (
+              <li>
+                <Link
+                  href="/configuracoes/equipe"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors',
+                    ativo
+                      ? 'bg-white/15 text-white'
+                      : 'text-primary-200 hover:bg-white/10 hover:text-white'
+                  )}
+                  aria-current={ativo ? 'page' : undefined}
+                >
+                  <UserCog
+                    className={cn('h-5 w-5 shrink-0', ativo ? 'text-accent' : '')}
+                    aria-hidden="true"
+                  />
+                  Equipe
+                </Link>
+              </li>
+            )
+          })()}
         </ul>
       </nav>
 

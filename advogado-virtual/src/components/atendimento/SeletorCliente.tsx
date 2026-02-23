@@ -2,8 +2,21 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Search, Plus, Check, X } from 'lucide-react'
+
+const ESTADOS_BR = [
+  { value: 'AC', label: 'AC' }, { value: 'AL', label: 'AL' }, { value: 'AP', label: 'AP' },
+  { value: 'AM', label: 'AM' }, { value: 'BA', label: 'BA' }, { value: 'CE', label: 'CE' },
+  { value: 'DF', label: 'DF' }, { value: 'ES', label: 'ES' }, { value: 'GO', label: 'GO' },
+  { value: 'MA', label: 'MA' }, { value: 'MT', label: 'MT' }, { value: 'MS', label: 'MS' },
+  { value: 'MG', label: 'MG' }, { value: 'PA', label: 'PA' }, { value: 'PB', label: 'PB' },
+  { value: 'PR', label: 'PR' }, { value: 'PE', label: 'PE' }, { value: 'PI', label: 'PI' },
+  { value: 'RJ', label: 'RJ' }, { value: 'RN', label: 'RN' }, { value: 'RS', label: 'RS' },
+  { value: 'RO', label: 'RO' }, { value: 'RR', label: 'RR' }, { value: 'SC', label: 'SC' },
+  { value: 'SP', label: 'SP' }, { value: 'SE', label: 'SE' }, { value: 'TO', label: 'TO' },
+]
 
 interface Cliente {
   id: string
@@ -24,6 +37,8 @@ export function SeletorCliente({ onSelecionado, clienteSelecionado }: SeletorCli
   const [aberto, setAberto]           = useState(false)
   const [modoNovo, setModoNovo]       = useState(false)
   const [novoNome, setNovoNome]       = useState('')
+  const [novaCidade, setNovaCidade]   = useState('')
+  const [novoEstado, setNovoEstado]   = useState('')
   const [criando, setCriando]         = useState(false)
   const containerRef                  = useRef<HTMLDivElement>(null)
   const debounceRef                   = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -72,16 +87,22 @@ export function SeletorCliente({ onSelecionado, clienteSelecionado }: SeletorCli
     if (!novoNome.trim()) return
     setCriando(true)
     try {
+      const body: Record<string, string> = { nome: novoNome.trim() }
+      if (novaCidade.trim()) body.cidade = novaCidade.trim()
+      if (novoEstado)        body.estado = novoEstado
+
       const res = await fetch('/api/clientes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome: novoNome.trim() }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (data.cliente) {
         onSelecionado({ id: data.cliente.id, nome: data.cliente.nome })
         setModoNovo(false)
         setNovoNome('')
+        setNovaCidade('')
+        setNovoEstado('')
       }
     } finally {
       setCriando(false)
@@ -118,6 +139,23 @@ export function SeletorCliente({ onSelecionado, clienteSelecionado }: SeletorCli
           autoFocus
           disabled={criando}
         />
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Cidade"
+            value={novaCidade}
+            onChange={(e) => setNovaCidade(e.target.value)}
+            placeholder="Ex.: São Paulo"
+            disabled={criando}
+          />
+          <Select
+            label="Estado"
+            value={novoEstado}
+            onChange={(e) => setNovoEstado(e.target.value)}
+            options={ESTADOS_BR}
+            placeholder="UF"
+            disabled={criando}
+          />
+        </div>
         <div className="flex gap-2">
           <Button onClick={criarCliente} loading={criando} size="sm">
             Cadastrar

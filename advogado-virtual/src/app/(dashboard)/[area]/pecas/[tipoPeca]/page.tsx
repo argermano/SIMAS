@@ -47,7 +47,7 @@ export default async function NovaPecaPage({
 
   const { data: usuario } = await supabase
     .from('users')
-    .select('id, nome, tenant_id')
+    .select('id, nome, tenant_id, role')
     .eq('auth_user_id', user.id)
     .single()
 
@@ -78,6 +78,7 @@ export default async function NovaPecaPage({
             tipoPecaNome={pecaConfig.nome}
             tenantId={usuario.tenant_id}
             userId={usuario.id}
+            roleUsuario={usuario.role ?? 'advogado'}
             tiposDocumento={[...areaConfig.tipos_documento]}
             atendimentoIdInicial={atendimentoIdParam}
           />

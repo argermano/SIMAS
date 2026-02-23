@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent } from '@/components/ui/card'
 import { FormCliente } from '@/components/clientes/FormCliente'
-import { UserPlus } from 'lucide-react'
+import { UserPlus, ChevronLeft } from 'lucide-react'
+import Link from 'next/link'
 
 export const metadata = { title: 'Novo Cliente' }
 
@@ -25,6 +26,15 @@ export default async function NovoClientePage() {
         titulo="Novo Cliente"
         subtitulo="Preencha os dados para cadastrar o cliente"
         nomeUsuario={usuario?.nome ?? ''}
+        acoes={
+          <Link
+            href="/clientes"
+            className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-800"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Clientes
+          </Link>
+        }
       />
 
       <main className="flex-1 overflow-y-auto p-6">

@@ -27,10 +27,10 @@ export default async function ConsultoriaPage({
   searchParams,
 }: {
   params: Promise<{ area: string }>
-  searchParams: Promise<{ tipo?: string }>
+  searchParams: Promise<{ tipo?: string; atendimentoId?: string }>
 }) {
   const { area } = await params
-  const { tipo } = await searchParams
+  const { tipo, atendimentoId } = await searchParams
 
   const areaConfig = AREAS[area as AreaId]
   if (!areaConfig || !areaConfig.ativo) notFound()
@@ -69,9 +69,9 @@ export default async function ConsultoriaPage({
         <div className="mx-auto max-w-3xl">
           <ConsultoriaClient
             area={area}
-            areaNome={areaConfig.nome}
             tiposDocumento={[...areaConfig.tipos_documento]}
             tipoConsultoria={tipoConsultoria}
+            atendimentoIdInicial={atendimentoId}
           />
         </div>
       </main>

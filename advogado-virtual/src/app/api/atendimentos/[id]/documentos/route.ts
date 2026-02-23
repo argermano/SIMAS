@@ -23,7 +23,7 @@ export async function POST(
   // Verifica se o atendimento pertence ao tenant
   const { data: atendimento } = await supabase
     .from('atendimentos')
-    .select('id')
+    .select('id, cliente_id')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -77,6 +77,7 @@ export async function POST(
       .from('documentos')
       .insert({
         atendimento_id: id,
+        cliente_id:     atendimento.cliente_id ?? null,
         tenant_id:      usuario.tenant_id,
         tipo,
         file_url:       path,

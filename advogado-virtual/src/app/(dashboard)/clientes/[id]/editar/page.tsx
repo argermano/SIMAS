@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
+import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent } from '@/components/ui/card'
 import { FormCliente } from '@/components/clientes/FormCliente'
+import { ChevronLeft } from 'lucide-react'
 
 export const metadata = { title: 'Editar Cliente' }
 
@@ -40,6 +42,15 @@ export default async function EditarClientePage({
         titulo="Editar Cliente"
         subtitulo={cliente.nome}
         nomeUsuario={usuario.nome}
+        acoes={
+          <Link
+            href={`/clientes/${id}`}
+            className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-800"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Dossiê
+          </Link>
+        }
       />
 
       <main className="flex-1 overflow-y-auto p-6">
