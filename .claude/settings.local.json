@@ -6,7 +6,12 @@
       "Bash(export PATH:*)",
       "Bash(export:*)",
       "Bash(PROJECT_REF=\"wlhtejsimgzzngruhcqt\")",
-      "Bash(npx supabase link:*)"
+      "Bash(npx supabase link:*)",
+      "Bash(git -C \"/c/Users/katle/OneDrive/Documentos/Projetos/juridico\" diff --name-only HEAD~5..HEAD)",
+      "Bash(git -C \"/c/Users/katle/OneDrive/Documentos/Projetos/juridico\" status --short)",
+      "Bash(du -sh:*)",
+      "Bash(git -C \"/c/Users/katle/OneDrive/Documentos/Projetos/juridico\" log --oneline -10)",
+      "Bash(npx next start:*)"
     ]
   }
 }

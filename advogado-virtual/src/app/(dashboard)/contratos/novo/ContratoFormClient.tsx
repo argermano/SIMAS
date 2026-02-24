@@ -1,16 +1,17 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
+import { MarkdownPreview } from '@/components/ui/markdown-preview'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
 import {
-  Users, DollarSign, Brain, Loader2, Upload, X, FileText, ChevronRight,
+  Users, DollarSign, Brain, Loader2, Upload, FileText, ChevronRight,
+  FolderOpen, CheckCircle, Sparkles,
 } from 'lucide-react'
 
 const OPCOES_AREA = [
@@ -34,12 +35,17 @@ const OPCOES_FORMA_PAGAMENTO = [
   { value: 'Êxito',             label: 'Somente êxito'     },
 ]
 
+interface TemplateContrato {
+  id: string
+  titulo: string
+  created_at: string
+}
+
 interface ContratoFormClientProps {
   role: string
 }
 
 export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
-  const router = useRouter()
   const { success, error: toastError } = useToast()
 
   const [cliente,          setCliente]          = useState<{ id: string; nome: string } | null>(null)
@@ -48,18 +54,60 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
   const [percentualExito,  setPercentualExito]  = useState('')
   const [formaPagamento,   setFormaPagamento]   = useState('')
   const [instrucoes,       setInstrucoes]       = useState('')
-  const [modeloFile,       setModeloFile]       = useState<File | null>(null)
   const [modeloTexto,      setModeloTexto]      = useState('')
   const [uploadandoModelo, setUploadandoModelo] = useState(false)
   const [gerando,          setGerando]          = useState(false)
   const [conteudoGerado,   setConteudoGerado]   = useState('')
   const [contratoId,       setContratoId]       = useState<string | null>(null)
 
+  // ── Repositório de modelos ──
+  const [modelosSalvos,       setModelosSalvos]       = useState<TemplateContrato[]>([])
+  const [modeloSelecionadoId, setModeloSelecionadoId] = useState<string | null>(null)
+  const [carregandoModelos,   setCarregandoModelos]   = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleModeloUpload = useCallback(async (file: File) => {
+  // Carregar modelos salvos ao montar
+  useEffect(() => {
+    async function carregar() {
+      setCarregandoModelos(true)
+      try {
+        const res = await fetch('/api/templates-contrato')
+        const data = await res.json()
+        if (data.templates) {
+          setModelosSalvos(data.templates)
+          // Selecionar o primeiro automaticamente
+          if (data.templates.length > 0) {
+            setModeloSelecionadoId(data.templates[0].id)
+            // Carregar conteúdo do primeiro modelo
+            const resT = await fetch(`/api/templates-contrato/${data.templates[0].id}`)
+            const dataT = await resT.json()
+            if (dataT.template) setModeloTexto(dataT.template.conteudo_markdown)
+          }
+        }
+      } catch { /* silencioso */ }
+      finally { setCarregandoModelos(false) }
+    }
+    carregar()
+  }, [])
+
+  async function selecionarModelo(id: string | null) {
+    setModeloSelecionadoId(id)
+    if (!id) {
+      setModeloTexto('')
+      return
+    }
+    try {
+      const res = await fetch(`/api/templates-contrato/${id}`)
+      const data = await res.json()
+      if (data.template) setModeloTexto(data.template.conteudo_markdown)
+    } catch {
+      toastError('Erro', 'Falha ao carregar modelo')
+    }
+  }
+
+  async function uploadModelo(file: File) {
     setUploadandoModelo(true)
-    setModeloFile(file)
     try {
       const formData = new FormData()
       formData.append('modelo', file)
@@ -67,18 +115,26 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
       const data = await res.json()
       if (res.ok) {
         setModeloTexto(data.texto_extraido ?? '')
-        success('Modelo carregado', 'O estilo do seu modelo será aplicado ao contrato')
+        success('Modelo salvo!', 'O modelo foi salvo e será usado como base.')
+        // Recarregar lista e selecionar o novo
+        const resModelos = await fetch('/api/templates-contrato')
+        const dataM = await resModelos.json()
+        if (dataM.templates) {
+          setModelosSalvos(dataM.templates)
+          if (data.template_id) setModeloSelecionadoId(data.template_id)
+        }
       } else {
         toastError('Erro no upload', data.error ?? 'Tente novamente')
-        setModeloFile(null)
       }
     } catch {
       toastError('Erro', 'Falha ao enviar o modelo')
-      setModeloFile(null)
     } finally {
       setUploadandoModelo(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
-  }, [success, toastError])
+  }
+
+  const temModeloSelecionado = !!modeloSelecionadoId || !!modeloTexto
 
   const criarEGerar = useCallback(async () => {
     if (!cliente) {
@@ -110,13 +166,13 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
       const id = dataContrato.contrato.id
       setContratoId(id)
 
-      // 2. Gerar com IA (streaming)
+      // 2. Gerar contrato (streaming)
       const resIA = await fetch('/api/ia/gerar-contrato', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          contratoId: id,
-          instrucoes: instrucoes || undefined,
+          contratoId:  id,
+          instrucoes:  instrucoes  || undefined,
           modeloTexto: modeloTexto || undefined,
         }),
       })
@@ -134,24 +190,16 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6)
-            if (dataStr === '[DONE]') continue
-            try {
-              const parsed = JSON.parse(dataStr)
-              if (parsed.delta) {
-                conteudo += parsed.delta
-                setConteudoGerado(conteudo)
-              }
-            } catch {
-              // linha incompleta
+        const chunk = decoder.decode(value, { stream: true })
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const parsed = JSON.parse(line.slice(6))
+            if (parsed.type === 'text') {
+              conteudo += parsed.text
+              setConteudoGerado(conteudo)
             }
-          }
+          } catch { /* linha parcial */ }
         }
       }
 
@@ -162,15 +210,15 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
           headers: { 'Content-Type': 'application/json' },
           body:    JSON.stringify({ conteudo_markdown: conteudo }),
         })
-        success('Contrato gerado!', 'Revise e ajuste antes de enviar para aprovação')
-        router.push(`/contratos/${id}`)
+        success('Contrato gerado!', temModeloSelecionado ? 'Gerado a partir do seu modelo.' : 'Gerado com IA.')
       }
-    } catch {
+    } catch (err) {
+      console.error('[ContratoForm] Erro:', err)
       toastError('Erro', 'Falha de rede')
     } finally {
       setGerando(false)
     }
-  }, [cliente, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, success, toastError, router])
+  }, [cliente, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, temModeloSelecionado, success, toastError])
 
   return (
     <div className="space-y-6">
@@ -235,55 +283,92 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
         </CardContent>
       </Card>
 
-      {/* Modelo do advogado */}
+      {/* Modelo de contrato — Repositório */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5 text-gray-400" />
-            Seu modelo de contrato
-            <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+            Modelo de contrato
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          {!modeloFile ? (
-            <div>
+        <CardContent className="space-y-3">
+          {carregandoModelos ? (
+            <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
+              <Loader2 className="h-4 w-4 animate-spin" /> Carregando modelos...
+            </div>
+          ) : modelosSalvos.length > 0 ? (
+            <div className="space-y-2">
+              {/* Lista de modelos existentes */}
+              <p className="text-xs font-medium text-gray-500">Modelos salvos</p>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {modelosSalvos.map(m => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => selecionarModelo(m.id === modeloSelecionadoId ? null : m.id)}
+                    className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                      m.id === modeloSelecionadoId
+                        ? 'border-primary-300 bg-primary-50 text-primary-800'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <FolderOpen className={`h-4 w-4 shrink-0 ${m.id === modeloSelecionadoId ? 'text-primary-600' : 'text-gray-400'}`} />
+                    <span className="flex-1 truncate font-medium">{m.titulo}</span>
+                    {m.id === modeloSelecionadoId && <CheckCircle className="h-4 w-4 shrink-0 text-primary-600" />}
+                  </button>
+                ))}
+              </div>
+
+              {/* Opção: gerar sem modelo */}
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 px-6 py-8 text-sm text-gray-500 transition-colors hover:border-primary-300 hover:text-primary-700"
+                onClick={() => selecionarModelo(null)}
+                className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                  !modeloSelecionadoId && !modeloTexto
+                    ? 'border-violet-300 bg-violet-50 text-violet-800'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                }`}
               >
-                <Upload className="h-5 w-5" />
-                Clique para enviar seu modelo (PDF ou DOCX)
+                <Sparkles className={`h-4 w-4 shrink-0 ${!modeloSelecionadoId && !modeloTexto ? 'text-violet-600' : 'text-gray-400'}`} />
+                <span className="flex-1">Gerar do zero com IA (sem modelo)</span>
               </button>
-              <p className="mt-2 text-xs text-gray-400">
-                A IA replicará o estilo e estrutura do seu modelo ao gerar o contrato
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx"
-                className="hidden"
-                onChange={e => {
-                  const file = e.target.files?.[0]
-                  if (file) handleModeloUpload(file)
-                }}
-              />
+
+              {/* Separador */}
+              <div className="flex items-center gap-2 pt-1">
+                <div className="flex-1 border-t border-gray-200" />
+                <span className="text-xs text-gray-400">ou enviar novo modelo</span>
+                <div className="flex-1 border-t border-gray-200" />
+              </div>
             </div>
           ) : (
-            <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
-              <FileText className="h-5 w-5 text-green-600 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-green-800 truncate">{modeloFile.name}</p>
-                <p className="text-xs text-green-600">
-                  {uploadandoModelo ? 'Extraindo texto...' : 'Modelo carregado — estilo será aplicado'}
-                </p>
-              </div>
-              <button
-                onClick={() => { setModeloFile(null); setModeloTexto('') }}
-                className="text-green-600 hover:text-green-800"
-              >
-                <X className="h-4 w-4" />
-              </button>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+              Nenhum modelo salvo. Envie um modelo abaixo ou gere com IA.
+            </div>
+          )}
+
+          {/* Upload de novo modelo */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadandoModelo}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 hover:border-primary-300 hover:text-primary-700 transition-colors"
+          >
+            <Upload className="h-4 w-4" />
+            {uploadandoModelo ? 'Extraindo texto e salvando...' : 'Enviar novo modelo PDF/DOCX'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadModelo(f) }}
+          />
+
+          {/* Indicador de modelo selecionado */}
+          {temModeloSelecionado && !gerando && (
+            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              <CheckCircle className="h-4 w-4 shrink-0" />
+              Modelo selecionado — o contrato seguirá este modelo
             </div>
           )}
         </CardContent>
@@ -313,22 +398,25 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
       {conteudoGerado && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Contrato gerado (prévia)</CardTitle>
+            <CardTitle className="text-lg">
+              {gerando ? 'Gerando contrato...' : 'Contrato gerado'}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 leading-relaxed max-h-96 overflow-y-auto">
-              {conteudoGerado}
-            </pre>
+            <div className="max-h-96 overflow-y-auto rounded-lg border bg-gray-50 p-4">
+              <MarkdownPreview>{conteudoGerado}</MarkdownPreview>
+              {gerando && <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary-600 ml-0.5 align-middle" />}
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Botão gerar */}
+      {/* Botões */}
       <div className="flex justify-end gap-3">
         {contratoId && !gerando && (
           <Button
             variant="secondary"
-            onClick={() => router.push(`/contratos/${contratoId}`)}
+            onClick={() => { window.location.href = `/contratos/${contratoId}` }}
             className="gap-2"
           >
             Abrir editor
@@ -343,6 +431,8 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
         >
           {gerando ? (
             <><Loader2 className="h-5 w-5 animate-spin" /> Gerando contrato...</>
+          ) : temModeloSelecionado ? (
+            <><FileText className="h-5 w-5" /> Gerar contrato</>
           ) : (
             <><Brain className="h-5 w-5" /> Gerar com IA</>
           )}

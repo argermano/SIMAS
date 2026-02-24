@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Upload falhou: ${uploadError.message}` }, { status: 500 })
   }
 
-  // Extrai texto
+  // Extrai texto do arquivo
   let textoExtraido = ''
   try {
     if (arquivo.type === 'application/pdf') {
@@ -62,14 +62,40 @@ export async function POST(req: NextRequest) {
       const pdfParse = (pdfMod as any).default ?? pdfMod
       const parsed   = await pdfParse(buffer)
       textoExtraido  = parsed.text?.trim() ?? ''
+    } else {
+      // DOCX: extração com mammoth
+      const mammoth = await import('mammoth')
+      const result  = await mammoth.extractRawText({ buffer })
+      textoExtraido = result.value?.trim() ?? ''
     }
-    // DOCX: extração básica — suporte futuro com mammoth.js
-  } catch {
-    // Falha silenciosa — retorna URL sem texto
+  } catch (err) {
+    console.error('[upload-modelo] Erro na extração de texto:', err)
+  }
+
+  console.log('[upload-modelo] tipo:', ext, '| texto extraído length:', textoExtraido.length)
+
+  const textoLimitado = textoExtraido.substring(0, 8000)
+
+  // Salvar como template no banco para uso futuro
+  let templateId: string | null = null
+  if (textoLimitado) {
+    const nomeModelo = arquivo.name.replace(/\.(pdf|docx)$/i, '') || 'Contrato de Honorários'
+    const { data: template } = await supabase
+      .from('templates_contrato')
+      .insert({
+        tenant_id: usuario.tenant_id,
+        titulo: nomeModelo,
+        conteudo_markdown: textoLimitado,
+        created_by: usuario.id,
+      })
+      .select('id')
+      .single()
+    templateId = template?.id ?? null
   }
 
   return NextResponse.json({
-    modelo_url:    path,
-    texto_extraido: textoExtraido.substring(0, 8000), // Limita para evitar tokens excessivos
+    modelo_url:     path,
+    texto_extraido: textoLimitado,
+    template_id:    templateId,
   })
 }

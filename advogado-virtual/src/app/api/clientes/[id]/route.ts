@@ -14,8 +14,10 @@ const schemaUpdate = z.object({
   bairro:       z.string().max(100).optional().nullable(),
   cidade:       z.string().max(100).optional().nullable(),
   estado:       z.string().length(2).optional().nullable(),
-  cep:          z.string().max(10).optional().nullable(),
-  notas:        z.string().max(2000).optional().nullable(),
+  cep:              z.string().max(10).optional().nullable(),
+  orgao_expedidor:  z.string().max(50).optional().nullable(),
+  nacionalidade:    z.string().max(50).optional().nullable(),
+  notas:            z.string().max(2000).optional().nullable(),
 })
 
 // Helper: verifica se o cliente pertence ao tenant do usuário

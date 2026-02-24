@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Upload, FileText, X, Loader2, Check } from 'lucide-react'
@@ -17,6 +17,8 @@ interface UploadDocumentosProps {
   tiposDocumento: readonly string[]
   onDocumentoAdicionado?: (doc: Documento) => void
   disabled?: boolean
+  /** Documentos já existentes para exibir na lista */
+  documentosIniciais?: Documento[]
 }
 
 const LABELS_TIPO: Record<string, string> = {
@@ -45,12 +47,24 @@ export function UploadDocumentos({
   tiposDocumento,
   onDocumentoAdicionado,
   disabled,
+  documentosIniciais,
 }: UploadDocumentosProps) {
   const [documentos, setDocumentos]   = useState<Documento[]>([])
   const [enviando, setEnviando]       = useState(false)
   const [erro, setErro]               = useState('')
   const [tipoAtual, setTipoAtual]     = useState(tiposDocumento[0] ?? 'outro')
   const inputRef                       = useRef<HTMLInputElement>(null)
+
+  // Carregar documentos iniciais quando a prop mudar
+  useEffect(() => {
+    if (documentosIniciais && documentosIniciais.length > 0) {
+      setDocumentos(prev => {
+        const idsExistentes = new Set(prev.map(d => d.id))
+        const novos = documentosIniciais.filter(d => !idsExistentes.has(d.id))
+        return novos.length > 0 ? [...prev, ...novos] : prev
+      })
+    }
+  }, [documentosIniciais])
 
   const desabilitado = disabled || !atendimentoId
 

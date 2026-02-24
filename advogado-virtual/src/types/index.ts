@@ -14,6 +14,22 @@ export interface Tenant {
   config: Record<string, unknown>
   created_at: string
   updated_at: string
+  // Perfil profissional do escritório (usado em contratos)
+  oab_numero?:         string
+  oab_estado?:         string
+  cpf_responsavel?:    string
+  rg_responsavel?:     string
+  orgao_expedidor?:    string
+  estado_civil?:       string
+  nacionalidade?:      string
+  nome_responsavel?:   string
+  telefone?:           string
+  email_profissional?: string
+  endereco?:           string
+  bairro?:             string
+  cidade?:             string
+  estado?:             string
+  cep?:                string
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,15 +46,6 @@ export interface Usuario {
   status: UserStatus
   last_login?: string
   created_at: string
-  // Perfil profissional
-  oab_numero?:            string
-  oab_estado?:            string
-  telefone_profissional?: string
-  email_profissional?:    string
-  endereco_profissional?: string
-  cidade_profissional?:   string
-  estado_profissional?:   string
-  cep_profissional?:      string
   is_advogado_principal?: boolean
 }
 
@@ -50,7 +57,9 @@ export interface Cliente {
   nome: string
   cpf?: string          // armazenado criptografado
   rg?: string
+  orgao_expedidor?: string
   estado_civil?: string
+  nacionalidade?: string
   profissao?: string
   telefone?: string
   email?: string

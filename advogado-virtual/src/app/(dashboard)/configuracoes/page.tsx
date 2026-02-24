@@ -26,7 +26,7 @@ export default async function ConfiguracoesPage() {
 
   const { data: usuario } = await supabase
     .from('users')
-    .select('id, nome, email, role, status, created_at, tenant_id, oab_numero, oab_estado, telefone_profissional, email_profissional, endereco_profissional, cidade_profissional, estado_profissional, cep_profissional, tenants(nome, cnpj, plano, status, created_at)')
+    .select('id, nome, email, role, status, created_at, tenant_id, tenants(nome, cnpj, plano, status, created_at, oab_numero, oab_estado, cpf_responsavel, rg_responsavel, orgao_expedidor, estado_civil, nacionalidade, nome_responsavel, telefone, email_profissional, endereco, bairro, cidade, estado, cep)')
     .eq('auth_user_id', user.id)
     .single()
 
@@ -34,6 +34,10 @@ export default async function ConfiguracoesPage() {
 
   const tenant = usuario.tenants as {
     nome?: string; cnpj?: string; plano?: string; status?: string; created_at?: string
+    oab_numero?: string; oab_estado?: string; cpf_responsavel?: string; rg_responsavel?: string
+    orgao_expedidor?: string; estado_civil?: string; nacionalidade?: string; nome_responsavel?: string
+    telefone?: string; email_profissional?: string; endereco?: string; bairro?: string
+    cidade?: string; estado?: string; cep?: string
   } | null
 
   return (
@@ -112,30 +116,39 @@ export default async function ConfiguracoesPage() {
             </CardContent>
           </Card>
 
-          {/* Perfil profissional */}
+          {/* Dados profissionais do escritório */}
+          {usuario.role === 'admin' && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Briefcase className="h-5 w-5 text-gray-400" />
-                Perfil Profissional
+                Dados Profissionais do Escritório
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="mb-4 text-sm text-gray-500">
-                Esses dados são usados automaticamente na geração de contratos de honorários.
+                Esses dados são usados automaticamente na geração de contratos de honorários. Preenchidos uma vez, valem para todos os contratos do escritório.
               </p>
-              <FormPerfilProfissional usuario={{
-                oab_numero:            usuario.oab_numero            ?? undefined,
-                oab_estado:            usuario.oab_estado            ?? undefined,
-                telefone_profissional: usuario.telefone_profissional ?? undefined,
-                email_profissional:    usuario.email_profissional    ?? undefined,
-                endereco_profissional: usuario.endereco_profissional ?? undefined,
-                cidade_profissional:   usuario.cidade_profissional   ?? undefined,
-                estado_profissional:   usuario.estado_profissional   ?? undefined,
-                cep_profissional:      usuario.cep_profissional      ?? undefined,
+              <FormPerfilProfissional escritorio={{
+                nome_responsavel:   tenant?.nome_responsavel   ?? undefined,
+                oab_numero:         tenant?.oab_numero         ?? undefined,
+                oab_estado:         tenant?.oab_estado         ?? undefined,
+                cpf_responsavel:    tenant?.cpf_responsavel    ?? undefined,
+                rg_responsavel:     tenant?.rg_responsavel     ?? undefined,
+                orgao_expedidor:    tenant?.orgao_expedidor    ?? undefined,
+                estado_civil:       tenant?.estado_civil       ?? undefined,
+                nacionalidade:      tenant?.nacionalidade      ?? undefined,
+                telefone:           tenant?.telefone           ?? undefined,
+                email_profissional: tenant?.email_profissional ?? undefined,
+                endereco:           tenant?.endereco           ?? undefined,
+                bairro:             tenant?.bairro             ?? undefined,
+                cidade:             tenant?.cidade             ?? undefined,
+                estado:             tenant?.estado             ?? undefined,
+                cep:                tenant?.cep                ?? undefined,
               }} />
             </CardContent>
           </Card>
+          )}
 
           {/* Gestão de equipe — apenas admin */}
           {usuario.role === 'admin' && (

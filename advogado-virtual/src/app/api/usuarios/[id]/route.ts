@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -9,6 +10,13 @@ const schema = z.object({
 }).refine(data => data.role || data.status || data.is_advogado_principal !== undefined, {
   message: 'Informe role, status ou is_advogado_principal',
 })
+
+function getAdminSupabase() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+}
 
 // PATCH /api/usuarios/[id] — atualiza role ou status (admin only)
 export async function PATCH(
@@ -30,27 +38,34 @@ export async function PATCH(
   if (!admin) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
   if (admin.role !== 'admin') return NextResponse.json({ error: 'Apenas administradores podem alterar perfis' }, { status: 403 })
 
-  // Admin não pode alterar o próprio role
-  if (id === admin.id) {
-    return NextResponse.json({ error: 'Você não pode alterar seu próprio perfil' }, { status: 400 })
-  }
-
   const body = await req.json()
   const resultado = schema.safeParse(body)
   if (!resultado.success) {
     return NextResponse.json({ error: 'Dados inválidos', detalhes: resultado.error.flatten() }, { status: 400 })
   }
 
+  // Admin não pode alterar o próprio role/status, mas pode definir-se como advogado principal
+  if (id === admin.id) {
+    const apenasDefinindoPrincipal = resultado.data.is_advogado_principal !== undefined
+      && !resultado.data.role && !resultado.data.status
+    if (!apenasDefinindoPrincipal) {
+      return NextResponse.json({ error: 'Você não pode alterar seu próprio perfil' }, { status: 400 })
+    }
+  }
+
+  // Usa admin client para bypass de RLS (já verificamos permissões acima)
+  const adminDb = getAdminSupabase()
+
   // Se estiver definindo como advogado principal, limpar a flag nos demais primeiro
   if (resultado.data.is_advogado_principal === true) {
-    await supabase
+    await adminDb
       .from('users')
       .update({ is_advogado_principal: false })
       .eq('tenant_id', admin.tenant_id)
       .neq('id', id)
   }
 
-  const { data: usuario, error } = await supabase
+  const { data: usuario, error } = await adminDb
     .from('users')
     .update(resultado.data)
     .eq('id', id)
@@ -86,7 +101,9 @@ export async function DELETE(
   if (admin.role !== 'admin') return NextResponse.json({ error: 'Apenas administradores podem remover usuários' }, { status: 403 })
   if (id === admin.id) return NextResponse.json({ error: 'Você não pode remover a si mesmo' }, { status: 400 })
 
-  const { error } = await supabase
+  const adminDb = getAdminSupabase()
+
+  const { error } = await adminDb
     .from('users')
     .update({ status: 'inativo' })
     .eq('id', id)
