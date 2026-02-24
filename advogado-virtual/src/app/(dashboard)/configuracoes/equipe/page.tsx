@@ -163,16 +163,16 @@ export default async function EquipePage() {
                           <span className="hidden sm:block text-xs text-gray-400">
                             {formatarDataRelativa(u.created_at)}
                           </span>
+                          <DefinirPrincipal
+                            usuarioId={u.id}
+                            isPrincipal={!!u.is_advogado_principal}
+                          />
                           {isMe ? (
                             <Badge variant={BADGE_ROLE[u.role] ?? 'default'} className="text-xs">
                               {LABELS_ROLE[u.role as keyof typeof LABELS_ROLE] ?? u.role}
                             </Badge>
                           ) : (
                             <>
-                              <DefinirPrincipal
-                                usuarioId={u.id}
-                                isPrincipal={!!u.is_advogado_principal}
-                              />
                               <AlterarRole usuarioId={u.id} roleAtual={u.role} />
                               <DesativarUsuario usuarioId={u.id} nomeUsuario={u.nome} />
                             </>

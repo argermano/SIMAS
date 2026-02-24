@@ -51,6 +51,8 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
   const [analise_id,       setAnaliseId]        = useState<string | null>(null)
   const [carregando,       setCarregando]       = useState(!!atendimentoIdInicial)
   const [salvando,         setSalvando]         = useState(false)
+  const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string }>>([])
+
 
   // Carregar atendimento existente quando atendimentoIdInicial é fornecido
   useEffect(() => {
@@ -64,13 +66,17 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
         const at = data.atendimento
         if (!at) return
         if (at.clientes) setCliente({ id: at.clientes.id, nome: at.clientes.nome })
-        if (at.transcricao_editada) {
-          setTextoRelato(at.transcricao_editada)
-          setTranscricao(at.transcricao_editada)
+        // Carregar transcrição (editada ou raw como fallback)
+        const texto = at.transcricao_editada ?? at.transcricao_raw ?? ''
+        if (texto) {
+          setTextoRelato(texto)
+          setTranscricao(texto)
         }
         if (at.pedidos_especificos) setPedido(at.pedidos_especificos)
         if (at.modo_input === 'texto') setModoInput('texto')
         else setModoInput('pos_reuniao')
+        // Carregar documentos existentes
+        if (at.documentos) setDocumentosExistentes(at.documentos)
         // Carregar diagnóstico salvo
         const analises = at.analises as Array<{ id: string; plano_a: ResultadoAnaliseGeral }> | undefined
         if (analises && analises.length > 0 && analises[0].plano_a) {
@@ -343,13 +349,19 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileText className="h-5 w-5 text-gray-400" />
               Documentos
-              <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+              {documentosExistentes.length > 0 && (
+                <span className="ml-1 text-xs font-normal text-gray-500">({documentosExistentes.length} anexados)</span>
+              )}
+              {documentosExistentes.length === 0 && (
+                <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <UploadDocumentos
               atendimentoId={atendimentoId}
               tiposDocumento={['rg_cpf', 'comprovante_residencia', 'cnis', 'ctps', 'outro']}
+              documentosIniciais={documentosExistentes}
             />
           </CardContent>
         </Card>

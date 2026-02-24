@@ -6,6 +6,7 @@ import { EditorContratoClient } from './EditorContratoClient'
 import { ChevronLeft } from 'lucide-react'
 
 export const metadata = { title: 'Contrato de Honorários' }
+export const dynamic = 'force-dynamic'
 
 type ContratoDetalhe = {
   id: string

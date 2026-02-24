@@ -2,21 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
-const ESTADOS_BR = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
-  'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
-
 const schemaPerfil = z.object({
-  oab_numero:            z.string().max(20).optional().nullable(),
-  oab_estado:            z.string().refine(v => !v || ESTADOS_BR.includes(v)).optional().nullable(),
-  telefone_profissional: z.string().max(30).optional().nullable(),
-  email_profissional:    z.string().email().optional().nullable().or(z.literal('')),
-  endereco_profissional: z.string().max(500).optional().nullable(),
-  cidade_profissional:   z.string().max(100).optional().nullable(),
-  estado_profissional:   z.string().refine(v => !v || ESTADOS_BR.includes(v)).optional().nullable(),
-  cep_profissional:      z.string().max(10).optional().nullable(),
+  nome: z.string().max(200).optional(),
 })
 
-// PATCH /api/usuarios/perfil — o usuário atualiza seu próprio perfil profissional
+// PATCH /api/usuarios/perfil — o usuário atualiza seu próprio perfil
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient()
 
@@ -41,16 +31,11 @@ export async function PATCH(req: NextRequest) {
     )
   }
 
-  const dados = {
-    ...resultado.data,
-    email_profissional: resultado.data.email_profissional || null,
-  }
-
   const { data: atualizado, error } = await supabase
     .from('users')
-    .update(dados)
+    .update(resultado.data)
     .eq('id', usuario.id)
-    .select('id, oab_numero, oab_estado, telefone_profissional, email_profissional, endereco_profissional, cidade_profissional, estado_profissional, cep_profissional')
+    .select('id, nome')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

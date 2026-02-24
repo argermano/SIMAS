@@ -30,19 +30,21 @@ interface FormClienteProps {
 }
 
 interface FormData {
-  nome:         string
-  cpf:          string
-  rg:           string
-  estado_civil: string
-  profissao:    string
-  telefone:     string
-  email:        string
-  endereco:     string
-  bairro:       string
-  cidade:       string
-  estado:       string
-  cep:          string
-  notas:        string
+  nome:             string
+  cpf:              string
+  rg:               string
+  orgao_expedidor:  string
+  estado_civil:     string
+  nacionalidade:    string
+  profissao:        string
+  telefone:         string
+  email:            string
+  endereco:         string
+  bairro:           string
+  cidade:           string
+  estado:           string
+  cep:              string
+  notas:            string
 }
 
 interface Erros {
@@ -80,9 +82,11 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
   const [form, setForm] = useState<FormData>({
     nome:         cliente?.nome         ?? '',
     cpf:          cliente?.cpf          ?? '',
-    rg:           cliente?.rg           ?? '',
-    estado_civil: cliente?.estado_civil ?? '',
-    profissao:    cliente?.profissao    ?? '',
+    rg:              cliente?.rg              ?? '',
+    orgao_expedidor: cliente?.orgao_expedidor ?? '',
+    estado_civil:    cliente?.estado_civil    ?? '',
+    nacionalidade:   cliente?.nacionalidade   ?? '',
+    profissao:       cliente?.profissao       ?? '',
     telefone:     cliente?.telefone     ?? '',
     email:        cliente?.email        ?? '',
     endereco:     cliente?.endereco     ?? '',
@@ -128,9 +132,11 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
       const payload = {
         nome:         form.nome.trim(),
         cpf:          form.cpf          || null,
-        rg:           form.rg           || null,
-        estado_civil: form.estado_civil || null,
-        profissao:    form.profissao    || null,
+        rg:              form.rg              || null,
+        orgao_expedidor: form.orgao_expedidor || null,
+        estado_civil:    form.estado_civil    || null,
+        nacionalidade:   form.nacionalidade   || null,
+        profissao:       form.profissao       || null,
         telefone:     form.telefone     || null,
         email:        form.email        || null,
         endereco:     form.endereco     || null,
@@ -193,7 +199,7 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
           disabled={loading}
         />
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Input
             label="CPF"
             value={form.cpf}
@@ -211,15 +217,29 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
             placeholder="00.000.000-0"
             disabled={loading}
           />
+          <Input
+            label="Órgão expedidor"
+            value={form.orgao_expedidor}
+            onChange={set('orgao_expedidor')}
+            placeholder="Ex.: SSP/SC"
+            disabled={loading}
+          />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Select
             label="Estado civil"
             value={form.estado_civil}
             onChange={e => setForm(prev => ({ ...prev, estado_civil: e.target.value }))}
             options={OPCOES_ESTADO_CIVIL}
             placeholder="Selecione..."
+            disabled={loading}
+          />
+          <Input
+            label="Nacionalidade"
+            value={form.nacionalidade}
+            onChange={set('nacionalidade')}
+            placeholder="Ex.: brasileiro(a)"
             disabled={loading}
           />
           <Input

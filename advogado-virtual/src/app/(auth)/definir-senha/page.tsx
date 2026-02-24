@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Scale, Lock, Eye, EyeOff, CheckCircle } from 'lucide-react'
@@ -10,6 +10,18 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 
 export default function DefinirSenhaPage() {
+  return (
+    <Suspense fallback={
+      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary-800 to-primary-900 p-4">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
+      </main>
+    }>
+      <DefinirSenhaContent />
+    </Suspense>
+  )
+}
+
+function DefinirSenhaContent() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const { error: toastError } = useToast()
