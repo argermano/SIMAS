@@ -69,7 +69,7 @@ export async function markdownToDocx(markdown: string, meta?: { titulo?: string;
   }
 
   const doc = new Document({
-    creator: 'Advogado Virtual',
+    creator: 'SIMAS',
     title: meta?.titulo ?? 'Peça Processual',
     sections: [{
       properties: {

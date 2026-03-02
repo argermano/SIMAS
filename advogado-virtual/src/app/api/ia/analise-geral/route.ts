@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
 import { buildPromptAnaliseGeral, SYSTEM_ANALISE_GERAL } from '@/lib/prompts/analise/geral'
+
+function getAdminSupabase() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+}
 
 export interface ResultadoAnaliseGeral {
   areas_identificadas: Array<{
@@ -70,7 +78,9 @@ export async function POST(req: NextRequest) {
     let analise_id: string | null = null
     if (atendimentoId) {
       try {
-        const { data: analiseExistente } = await supabase
+        const admin = getAdminSupabase()
+
+        const { data: analiseExistente } = await admin
           .from('analises')
           .select('id')
           .eq('atendimento_id', atendimentoId)
@@ -79,7 +89,7 @@ export async function POST(req: NextRequest) {
         const payload = {
           atendimento_id:      atendimentoId,
           tenant_id:           usuario.tenant_id,
-          criado_por:          usuario.id,
+          created_by:          usuario.id,
           resumo_fatos:        result.resumo_caso,
           plano_a:             result as unknown as Record<string, unknown>,
           checklist_documentos: result.documentos_solicitar.map((nome: string) => ({ nome, entregue: false })),
@@ -89,23 +99,25 @@ export async function POST(req: NextRequest) {
         }
 
         if (analiseExistente) {
-          const { data: updated } = await supabase
+          const { data: updated, error: updErr } = await admin
             .from('analises')
             .update(payload)
             .eq('id', analiseExistente.id)
             .select('id')
             .single()
+          if (updErr) console.error('[analise-geral] update error:', updErr.message)
           analise_id = updated?.id ?? null
         } else {
-          const { data: created } = await supabase
+          const { data: created, error: insErr } = await admin
             .from('analises')
             .insert(payload)
             .select('id')
             .single()
+          if (insErr) console.error('[analise-geral] insert error:', insErr.message)
           analise_id = created?.id ?? null
         }
-      } catch {
-        // Falha silenciosa — retorna resultado mesmo sem salvar
+      } catch (saveErr) {
+        console.error('[analise-geral] save failed:', saveErr)
       }
     }
 

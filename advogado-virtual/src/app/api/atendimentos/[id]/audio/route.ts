@@ -79,11 +79,29 @@ export async function POST(
       transcricao = '[Transcrição indisponível — configure GROQ_API_KEY no .env.local]'
     }
 
-    // 3. Atualiza o atendimento com áudio e transcrição
+    // 3. Busca paths existentes e acumula (todos os chunks ficam armazenados)
+    const { data: atData } = await supabase
+      .from('atendimentos')
+      .select('audio_url')
+      .eq('id', id)
+      .single()
+
+    let audioPaths: string[] = []
+    if (atData?.audio_url) {
+      try {
+        const parsed = JSON.parse(atData.audio_url)
+        audioPaths = Array.isArray(parsed) ? parsed : [atData.audio_url]
+      } catch {
+        audioPaths = [atData.audio_url]
+      }
+    }
+    audioPaths.push(path)
+
+    // 4. Atualiza o atendimento com todos os paths de áudio e transcrição
     const { error: updateError } = await supabase
       .from('atendimentos')
       .update({
-        audio_url:        path,
+        audio_url:        JSON.stringify(audioPaths),
         transcricao_raw:  transcricao,
         modo_input:       'audio',
       })
