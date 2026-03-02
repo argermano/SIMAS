@@ -10,7 +10,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Cores principais do Advogado Virtual
+        // Cores principais do SIMAS
         primary: {
           50:  '#fff1f2',
           100: '#ffe4e6',

@@ -4,8 +4,8 @@ import { ToastProvider } from '@/components/ui/toast'
 
 export const metadata: Metadata = {
   title: {
-    default:  'Advogado Virtual',
-    template: '%s | Advogado Virtual',
+    default:  'SIMAS',
+    template: '%s | SIMAS',
   },
   description: 'Sistema jurídico inteligente para escritórios de advocacia',
 }

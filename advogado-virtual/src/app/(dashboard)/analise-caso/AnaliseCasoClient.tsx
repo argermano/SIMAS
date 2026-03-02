@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -14,6 +14,7 @@ import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
 import {
   Users, MessageSquare, Mic, Keyboard, Brain, Loader2, Save,
   AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle, UserCheck,
+  Printer, Mail,
 } from 'lucide-react'
 import { AcessoRapidoFooter } from '@/components/acesso-rapido/AcessoRapidoFooter'
 
@@ -37,7 +38,8 @@ const LABEL_RELEVANCIA: Record<string, string> = {
 const AREAS_ATIVAS = ['previdenciario', 'trabalhista']
 
 export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInicial?: string }) {
-  const router  = useRouter()
+  const router   = useRouter()
+  const pathname = usePathname()
   const { success, error: toastError } = useToast()
 
   const [cliente,          setCliente]          = useState<{ id: string; nome: string } | null>(null)
@@ -53,6 +55,11 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
   const [salvando,         setSalvando]         = useState(false)
   const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string }>>([])
 
+  // Atualizar URL com atendimentoId sem navegar (preserva resultado ao voltar)
+  const atualizarUrl = useCallback((id: string) => {
+    const url = `${pathname}?atendimentoId=${id}`
+    window.history.replaceState(null, '', url)
+  }, [pathname])
 
   // Carregar atendimento existente quando atendimentoIdInicial é fornecido
   useEffect(() => {
@@ -101,12 +108,15 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           body: JSON.stringify({ cliente_id: c.id, area: 'geral', modo_input: modoInput === 'texto' ? 'texto' : 'audio' }),
         })
         const data = await res.json()
-        if (data.id) setAtendimentoId(data.id)
+        if (data.id) {
+          setAtendimentoId(data.id)
+          atualizarUrl(data.id)
+        }
       } catch {
         // Silencioso — análise funciona sem atendimento salvo
       }
     }
-  }, [atendimentoId, modoInput])
+  }, [atendimentoId, modoInput, atualizarUrl])
 
   const handleTranscricao = useCallback((texto: string) => {
     setTranscricao(texto)
@@ -124,10 +134,28 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
     setAnalisando(true)
     setResultado(null)
     try {
+      // Garantir que existe um atendimento para salvar a análise
+      let aidAtual = atendimentoId
+      if (!aidAtual && cliente) {
+        try {
+          const resAt = await fetch('/api/atendimentos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cliente_id: cliente.id, area: 'geral', modo_input: modoInput === 'texto' ? 'texto' : 'audio' }),
+          })
+          const dataAt = await resAt.json()
+          if (dataAt.id) {
+            aidAtual = dataAt.id
+            setAtendimentoId(dataAt.id)
+            atualizarUrl(dataAt.id)
+          }
+        } catch { /* continua mesmo sem atendimento */ }
+      }
+
       const res = await fetch('/api/ia/analise-geral', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcricao: texto, pedidoEspecifico: pedido, atendimentoId }),
+        body: JSON.stringify({ transcricao: texto, pedidoEspecifico: pedido, atendimentoId: aidAtual }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -137,6 +165,20 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
       const { analise_id: aid, ...resultado } = data
       setResultado(resultado as ResultadoAnaliseGeral)
       if (aid) setAnaliseId(aid)
+
+      // Salvar transcrição/pedido no atendimento para persistir ao recarregar
+      if (aidAtual) {
+        fetch(`/api/atendimentos/${aidAtual}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcricao_editada: texto,
+            pedidos_especificos: pedido || undefined,
+            modo_input: modoInput === 'texto' ? 'texto' : 'audio',
+          }),
+        }).catch(() => {})
+      }
+
       success('Análise concluída!', 'Veja o resultado abaixo.')
     } catch {
       toastError('Erro', 'Falha de rede')
@@ -498,9 +540,60 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
             {resultado.documentos_solicitar?.length > 0 && (
               <Card>
                 <CardHeader className="pb-2 pt-4">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-gray-400" />
-                    Documentos a solicitar
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-gray-400" />
+                      Documentos a solicitar
+                    </span>
+                    <span className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const conteudo = resultado.documentos_solicitar
+                            .map((d, i) => `${i + 1}. ${d}`)
+                            .join('\n')
+                          const win = window.open('', '_blank', 'width=600,height=500')
+                          if (!win) return
+                          win.document.write(`
+                            <html><head><title>Documentos a solicitar</title>
+                            <style>body{font-family:Arial,sans-serif;padding:32px;font-size:14px}
+                            h2{margin-bottom:16px;font-size:18px}
+                            li{margin-bottom:6px}
+                            @media print{button{display:none}}</style></head>
+                            <body>
+                            <h2>Documentos a solicitar${cliente ? ` — ${cliente.nome}` : ''}</h2>
+                            <ol>${resultado.documentos_solicitar.map(d => `<li>${d}</li>`).join('')}</ol>
+                            <br><button onclick="window.print()">Imprimir</button>
+                            </body></html>
+                          `)
+                          win.document.close()
+                          win.focus()
+                          win.print()
+                        }}
+                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                        title="Imprimir lista"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const lista = resultado.documentos_solicitar
+                            .map((d, i) => `${i + 1}. ${d}`)
+                            .join('\n')
+                          const assunto = encodeURIComponent('Documentos necessários para o seu caso')
+                          const corpo = encodeURIComponent(
+                            `Prezado(a)${cliente ? ` ${cliente.nome}` : ''},\n\nSegue a lista de documentos necessários para dar andamento ao seu caso:\n\n${lista}\n\nPor favor, providencie os documentos listados acima o mais breve possível.\n\nAtenciosamente.`
+                          )
+                          const mailto = `mailto:?subject=${assunto}&body=${corpo}`
+                          window.open(mailto, '_self')
+                        }}
+                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                        title="Enviar por e-mail"
+                      >
+                        <Mail className="h-4 w-4" />
+                      </button>
+                    </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pb-4">

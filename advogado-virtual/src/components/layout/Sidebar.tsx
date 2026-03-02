@@ -94,7 +94,7 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
           <Scale className="h-6 w-6 text-primary-800" />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-base font-bold text-white">Advogado Virtual</p>
+          <p className="truncate text-base font-bold text-white">SIMAS</p>
           <p className="truncate text-xs text-primary-300">{nomeEscritorio}</p>
         </div>
       </div>

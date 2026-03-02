@@ -62,7 +62,7 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg">
             <Scale className="h-9 w-9 text-primary-800" />
           </div>
-          <h1 className="text-3xl font-bold text-white">Advogado Virtual</h1>
+          <h1 className="text-3xl font-bold text-white">SIMAS</h1>
           <p className="mt-1 text-primary-200">Sistema jurídico inteligente</p>
         </div>
 
@@ -127,20 +127,14 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 flex flex-col items-center gap-3 border-t border-gray-100 pt-5 text-sm">
-            <p className="text-gray-600">
-              Ainda não tem conta?{' '}
-              <Link
-                href="/registro"
-                className="font-semibold text-primary-800 hover:underline"
-              >
-                Criar conta
-              </Link>
+            <p className="text-gray-500">
+              Acesso somente por convite do administrador.
             </p>
           </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-primary-300">
-          © {new Date().getFullYear()} Advogado Virtual · Dados protegidos pela LGPD
+          © {new Date().getFullYear()} SIMAS · Dados protegidos pela LGPD
         </p>
       </div>
     </main>

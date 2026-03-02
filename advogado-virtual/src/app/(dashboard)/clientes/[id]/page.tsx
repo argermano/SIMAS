@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ClienteAcoesClient } from './ClienteAcoesClient'
 import { BotaoExcluirAtendimento } from '@/components/atendimento/BotaoExcluirAtendimento'
 import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
+import { PlayerAudio } from '@/components/atendimento/PlayerAudio'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import {
   Phone, Mail, MapPin, FileText, Plus,
@@ -110,7 +111,7 @@ export default async function DossieClientePage({
   // Atendimentos do cliente com dados completos para o dossiê
   const { data: atendimentos } = await supabase
     .from('atendimentos')
-    .select('id, status, area, tipo_peca_origem, created_at, pedidos_especificos, modo_input')
+    .select('id, status, area, tipo_peca_origem, created_at, pedidos_especificos, modo_input, audio_url')
     .eq('cliente_id', id)
     .order('created_at', { ascending: false })
 
@@ -427,6 +428,9 @@ export default async function DossieClientePage({
                                       <p className="mt-1.5 text-sm text-gray-500 line-clamp-2">
                                         {at.pedidos_especificos}
                                       </p>
+                                    )}
+                                    {at.audio_url && (
+                                      <PlayerAudio atendimentoId={at.id} />
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">

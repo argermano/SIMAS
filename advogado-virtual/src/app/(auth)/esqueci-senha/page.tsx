@@ -54,7 +54,7 @@ export default function EsqueciSenhaPage() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg">
             <Scale className="h-9 w-9 text-primary-800" />
           </div>
-          <h1 className="text-3xl font-bold text-white">Advogado Virtual</h1>
+          <h1 className="text-3xl font-bold text-white">SIMAS</h1>
           <p className="mt-1 text-primary-200">Sistema jurídico inteligente</p>
         </div>
 
@@ -108,7 +108,7 @@ export default function EsqueciSenhaPage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-primary-300">
-          © {new Date().getFullYear()} Advogado Virtual · Dados protegidos pela LGPD
+          © {new Date().getFullYear()} SIMAS · Dados protegidos pela LGPD
         </p>
       </div>
     </main>

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Tipos centrais do Advogado Virtual
+// Tipos centrais do SIMAS
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type TenantPlano = 'trial' | 'basico' | 'profissional'
