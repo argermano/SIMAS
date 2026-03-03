@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, Download, Copy, Sparkles, Loader2, Search, Pencil, Save, Check } from 'lucide-react'
 
@@ -13,6 +14,7 @@ interface DocumentHeaderProps {
   baixando: boolean
   onSalvar?: () => void
   salvando?: boolean
+  extraAcoes?: ReactNode
 }
 
 export function DocumentHeader({
@@ -24,6 +26,7 @@ export function DocumentHeader({
   baixando,
   onSalvar,
   salvando,
+  extraAcoes,
 }: DocumentHeaderProps) {
   const [salvo, setSalvo] = useState(false)
 
@@ -103,6 +106,9 @@ export function DocumentHeader({
           <Copy className="h-3.5 w-3.5" />
           Copiar
         </button>
+
+        {/* Ações extras (opcional) */}
+        {extraAcoes}
 
         {/* Salvar (opcional) */}
         {onSalvar && (

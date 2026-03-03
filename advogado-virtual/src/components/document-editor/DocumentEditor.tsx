@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, type ReactNode } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -26,9 +26,10 @@ interface DocumentEditorProps {
   onVoltar: () => void
   onSalvar?: (conteudo: string) => Promise<void> | void
   salvando?: boolean
+  extraAcoes?: ReactNode
 }
 
-export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSalvar, salvando }: DocumentEditorProps) {
+export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSalvar, salvando, extraAcoes }: DocumentEditorProps) {
   const { success, error: toastError } = useToast()
   const [titulo, setTitulo]           = useState(tituloInicial)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -113,6 +114,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         baixando={baixando}
         onSalvar={onSalvar ? () => onSalvar(getMarkdown()) : undefined}
         salvando={salvando}
+        extraAcoes={extraAcoes}
       />
 
       {/* Toolbar */}
