@@ -7,11 +7,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { MarkdownPreview } from '@/components/ui/markdown-preview'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
+import { EditorDocumentoPronto } from '@/components/documentos/EditorDocumentoPronto'
 import {
   Users, FileText, CheckCircle, AlertCircle, Trash2,
-  Upload, Edit3, Loader2, Copy, Download, Save, X, Zap,
+  Upload, Edit3, Loader2, Save, X, Zap,
 } from 'lucide-react'
 
 // ── Tipos e constantes ────────────────────────────────────────────────────────
@@ -62,6 +62,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
   // ── Estado de geração ──
   const [documentoGerado, setDocumentoGerado] = useState('')
   const [gerando, setGerando]                 = useState(false)
+  const [modoEditor, setModoEditor]           = useState(false)
 
   // ── Campos extras por tipo ──
   const [objeto, setObjeto]                         = useState('')           // procuracao
@@ -211,6 +212,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         return
       }
       setDocumentoGerado(data.conteudo)
+      setModoEditor(true)
       if (!data.templateExistia) {
         setTemplateExiste(true)
         setTemplateConteudo(data.conteudo)
@@ -225,22 +227,17 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
     }
   }
 
-  function copiar() {
-    navigator.clipboard.writeText(documentoGerado)
-    success('Copiado!', 'Conteúdo copiado para a área de transferência')
-  }
-
-  function baixar() {
-    const blob = new Blob([documentoGerado], { type: 'text/markdown' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href     = url
-    a.download = `${tipoNome.toLowerCase().replace(/\s+/g, '-')}-${cliente?.nome?.toLowerCase().replace(/\s+/g, '-') ?? 'documento'}.md`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────
+
+  if (modoEditor && documentoGerado) {
+    return (
+      <EditorDocumentoPronto
+        titulo={tipoNome}
+        conteudo={documentoGerado}
+        onVoltar={() => setModoEditor(false)}
+      />
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -532,40 +529,6 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         </Button>
       </div>
 
-      {/* 5. Documento gerado */}
-      {documentoGerado && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                Documento gerado
-              </CardTitle>
-              <div className="flex gap-2">
-                <button
-                  onClick={copiar}
-                  className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  Copiar
-                </button>
-                <button
-                  onClick={baixar}
-                  className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Baixar
-                </button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-xl border bg-gray-50 p-4">
-              <MarkdownPreview>{documentoGerado}</MarkdownPreview>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
     </div>
   )
