@@ -95,7 +95,7 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
         </div>
         <div className="min-w-0">
           <p className="truncate text-base font-bold text-white">SIMAS</p>
-          <p className="truncate text-xs text-primary-300">{nomeEscritorio}</p>
+          <p className="text-xs text-primary-300 leading-tight break-words">{nomeEscritorio}</p>
         </div>
       </div>
 
