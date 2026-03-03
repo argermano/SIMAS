@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { MarkdownPreview } from '@/components/ui/markdown-preview'
-import { Zap, FileText, Loader2, Copy, Download, Edit3, CheckCircle, Upload, ExternalLink, FolderOpen, Maximize2 } from 'lucide-react'
+import { Zap, FileText, Loader2, Copy, Download, Edit3, CheckCircle, Upload, ExternalLink, FolderOpen, Maximize2, Scale, FileSignature } from 'lucide-react'
 import { DocumentEditor } from '@/components/document-editor/DocumentEditor'
 
 type TipoDoc = 'procuracao' | 'declaracao_hipossuficiencia'
@@ -428,21 +428,50 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
   return (
     <>
       {/* ── Barra de acesso rápido ── */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <div className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="mb-3 flex items-center gap-2">
           <Zap className="h-4 w-4 text-amber-500" />
           <span className="text-sm font-semibold text-gray-700">Acesso Rápido</span>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <Button variant="secondary" size="sm" onClick={() => { setPreviewContrato(''); setModeloTexto(''); setModalAberto('contrato') }} className="gap-2">
-            <FileText className="h-4 w-4" /> Contrato de Honorários
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => abrirModalDoc('procuracao')} className="gap-2">
-            <FileText className="h-4 w-4" /> Procuração
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => abrirModalDoc('declaracao')} className="gap-2">
-            <FileText className="h-4 w-4" /> Decl. Hipossuficiência
-          </Button>
+        <div className="grid grid-cols-3 gap-2">
+          {/* Contrato de Honorários */}
+          <button
+            onClick={() => { setPreviewContrato(''); setModeloTexto(''); setModalAberto('contrato') }}
+            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-gray-100 bg-white p-4 text-center transition-all hover:border-primary-300 hover:bg-primary-50 hover:shadow-sm"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 group-hover:bg-primary-100 transition-colors">
+              <FileText className="h-5 w-5 text-primary-700" />
+            </div>
+            <span className="text-xs font-semibold leading-tight text-gray-800 group-hover:text-primary-800">
+              Contrato de Honorários
+            </span>
+          </button>
+
+          {/* Procuração */}
+          <button
+            onClick={() => abrirModalDoc('procuracao')}
+            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-gray-100 bg-white p-4 text-center transition-all hover:border-blue-300 hover:bg-blue-50 hover:shadow-sm"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 group-hover:bg-blue-100 transition-colors">
+              <Scale className="h-5 w-5 text-blue-700" />
+            </div>
+            <span className="text-xs font-semibold leading-tight text-gray-800 group-hover:text-blue-800">
+              Procuração Ad Judicia
+            </span>
+          </button>
+
+          {/* Declaração */}
+          <button
+            onClick={() => abrirModalDoc('declaracao')}
+            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-gray-100 bg-white p-4 text-center transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-sm"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 group-hover:bg-emerald-100 transition-colors">
+              <FileSignature className="h-5 w-5 text-emerald-700" />
+            </div>
+            <span className="text-xs font-semibold leading-tight text-gray-800 group-hover:text-emerald-800">
+              Decl. Hipossuficiência
+            </span>
+          </button>
         </div>
       </div>
 
