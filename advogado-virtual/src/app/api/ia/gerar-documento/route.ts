@@ -3,8 +3,24 @@ import { createClient } from '@/lib/supabase/server'
 import { getAnthropicClient, DEFAULT_MODEL, DEFAULT_MAX_TOKENS } from '@/lib/anthropic/client'
 import { SYSTEM_PROCURACAO, buildPromptProcuracao } from '@/lib/prompts/documentos/procuracao'
 import { SYSTEM_DECLARACAO, buildPromptDeclaracao } from '@/lib/prompts/documentos/declaracao-hipossuficiencia'
+import { SYSTEM_SUBSTABELECIMENTO, buildPromptSubstabelecimento } from '@/lib/prompts/documentos/substabelecimento'
+import { SYSTEM_NOTIFICACAO, buildPromptNotificacao } from '@/lib/prompts/documentos/notificacao-extrajudicial'
+import { SYSTEM_CONTRATO_HONORARIOS, buildPromptContratoHonorarios } from '@/lib/prompts/documentos/contrato-honorarios-modelo'
 
-type TipoDoc = 'procuracao' | 'declaracao_hipossuficiencia'
+type TipoDoc =
+  | 'procuracao'
+  | 'declaracao_hipossuficiencia'
+  | 'substabelecimento'
+  | 'notificacao_extrajudicial'
+  | 'contrato_honorarios'
+
+const TIPOS_VALIDOS: TipoDoc[] = [
+  'procuracao',
+  'declaracao_hipossuficiencia',
+  'substabelecimento',
+  'notificacao_extrajudicial',
+  'contrato_honorarios',
+]
 
 function substituir(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? `[PREENCHER: ${key}]`)
@@ -36,7 +52,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'tipo e clienteId são obrigatórios' }, { status: 400 })
     }
 
-    if (!['procuracao', 'declaracao_hipossuficiencia'].includes(tipo)) {
+    if (!TIPOS_VALIDOS.includes(tipo as TipoDoc)) {
       return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
     }
 
@@ -96,26 +112,41 @@ export async function POST(req: NextRequest) {
     if (tipo === 'procuracao') {
       system = SYSTEM_PROCURACAO
       prompt = buildPromptProcuracao({
-        cliente: {
-          nome:     cliente.nome,
-          cpf:      cliente.cpf,
-          endereco: cliente.endereco,
-          cidade:   cliente.cidade,
-          estado:   cliente.estado,
-        },
+        cliente: { nome: cliente.nome, cpf: cliente.cpf, endereco: cliente.endereco, cidade: cliente.cidade, estado: cliente.estado },
         advogadoNome: usuario.nome ?? 'Advogado',
         objeto: camposExtras?.objeto,
       })
-    } else {
+    } else if (tipo === 'declaracao_hipossuficiencia') {
       system = SYSTEM_DECLARACAO
       prompt = buildPromptDeclaracao({
-        cliente: {
-          nome:     cliente.nome,
-          cpf:      cliente.cpf,
-          endereco: cliente.endereco,
-          cidade:   cliente.cidade,
-          estado:   cliente.estado,
-        },
+        cliente: { nome: cliente.nome, cpf: cliente.cpf, endereco: cliente.endereco, cidade: cliente.cidade, estado: cliente.estado },
+      })
+    } else if (tipo === 'substabelecimento') {
+      system = SYSTEM_SUBSTABELECIMENTO
+      prompt = buildPromptSubstabelecimento({
+        cliente: { nome: cliente.nome, cpf: cliente.cpf },
+        advogadoNome: usuario.nome ?? 'Advogado',
+        nomeSubstabelecido: camposExtras?.nome_substabelecido,
+        oabSubstabelecido: camposExtras?.oab_substabelecido,
+      })
+    } else if (tipo === 'notificacao_extrajudicial') {
+      system = SYSTEM_NOTIFICACAO
+      prompt = buildPromptNotificacao({
+        cliente: { nome: cliente.nome, cpf: cliente.cpf, endereco: cliente.endereco, cidade: cliente.cidade, estado: cliente.estado },
+        advogadoNome: usuario.nome ?? 'Advogado',
+        objetoNotificacao: camposExtras?.objeto_notificacao,
+        prazoResposta: camposExtras?.prazo_resposta,
+      })
+    } else {
+      // contrato_honorarios
+      system = SYSTEM_CONTRATO_HONORARIOS
+      prompt = buildPromptContratoHonorarios({
+        cliente: { nome: cliente.nome, cpf: cliente.cpf, endereco: cliente.endereco, cidade: cliente.cidade, estado: cliente.estado },
+        advogadoNome: usuario.nome ?? 'Advogado',
+        valorFixo: camposExtras?.valor_fixo,
+        percentualExito: camposExtras?.percentual_exito,
+        formaPagamento: camposExtras?.forma_pagamento,
+        instrucoes: camposExtras?.instrucoes,
       })
     }
 
