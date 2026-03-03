@@ -10,6 +10,7 @@ import { useStreaming } from '@/components/shared/StreamingText'
 import { SeletorCliente } from './SeletorCliente'
 import { GravadorAudio } from './GravadorAudio'
 import { MicrofoneInline } from './MicrofoneInline'
+import { PlayerAudio } from './PlayerAudio'
 import { UploadDocumentos } from './UploadDocumentos'
 import { SeletorTribunais } from './SeletorTribunais'
 import type { ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
@@ -72,6 +73,7 @@ export function TelaAtendimento({
   const [tribunaisSelecionados, setTribunaisSelecionados] = useState<string[]>([])
   const [localizacao, setLocalizacao] = useState({ cidade: '', estado: '' })
   const localizacaoOriginalRef = useRef({ cidade: '', estado: '' })
+  const [hasAudio, setHasAudio] = useState(false)
 
   // Carregar atendimento existente
   useEffect(() => {
@@ -102,6 +104,7 @@ export function TelaAtendimento({
         setTextoRelato(at.transcricao_editada ?? at.transcricao_raw ?? '')
         setTranscricao(at.transcricao_editada ?? at.transcricao_raw ?? '')
         setPedidoEspecifico(at.pedidos_especificos ?? '')
+        if (at.audio_url) setHasAudio(true)
       } catch {
         toastError('Erro', 'Não foi possível carregar o atendimento')
       } finally {
@@ -179,6 +182,7 @@ export function TelaAtendimento({
   const handleTranscricao = useCallback((texto: string) => {
     setTranscricao(texto)
     setTextoRelato(texto)
+    setHasAudio(true)
     success('Áudio transcrito', 'Revise o texto abaixo e edite se necessário.')
   }, [success])
 
@@ -509,6 +513,10 @@ export function TelaAtendimento({
               rows={8}
               disabled={!podeGravar}
             />
+          )}
+
+          {hasAudio && atendimentoId && (
+            <PlayerAudio atendimentoId={atendimentoId} />
           )}
         </CardContent>
       </Card>
