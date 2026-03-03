@@ -9,7 +9,8 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { MarkdownPreview } from '@/components/ui/markdown-preview'
-import { Zap, FileText, Loader2, Copy, Download, Edit3, CheckCircle, Upload, X, ExternalLink, FolderOpen } from 'lucide-react'
+import { Zap, FileText, Loader2, Copy, Download, Edit3, CheckCircle, Upload, ExternalLink, FolderOpen, Maximize2 } from 'lucide-react'
+import { DocumentEditor } from '@/components/document-editor/DocumentEditor'
 
 type TipoDoc = 'procuracao' | 'declaracao_hipossuficiencia'
 type ModalTipo = 'contrato' | 'procuracao' | 'declaracao' | null
@@ -67,6 +68,11 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
   const [documentoGerado,  setDocumentoGerado]  = useState('')
   const [templateConteudo, setTemplateConteudo] = useState('')
   const [salvandoTemplate, setSalvandoTemplate] = useState(false)
+
+  // ── Editor de documento full-screen ──
+  const [editorAberto,   setEditorAberto]   = useState(false)
+  const [editorTitulo,   setEditorTitulo]   = useState('')
+  const [editorConteudo, setEditorConteudo] = useState('')
 
   // ── Carregar modelos de contrato existentes ──
   const carregarModelos = useCallback(async () => {
@@ -326,14 +332,22 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
   // ── Modal de documento (reutilizado por procuração e declaração) ──
   function ModalDocumento({ tipo }: { tipo: 'procuracao' | 'declaracao' }) {
     const tipoDoc: TipoDoc = tipo === 'declaracao' ? 'declaracao_hipossuficiencia' : 'procuracao'
-    const titulo           = tipo === 'procuracao' ? 'Gerar Procuração Ad Judicia' : 'Gerar Declaração de Hipossuficiência'
+    const titulo           = tipo === 'procuracao' ? 'Procuração Ad Judicia' : 'Declaração de Hipossuficiência'
+    const tituloModal      = tipo === 'procuracao' ? 'Gerar Procuração Ad Judicia' : 'Gerar Declaração de Hipossuficiência'
     const nomeBaixar       = tipo === 'procuracao' ? 'procuracao' : 'declaracao-hipossuficiencia'
+
+    function abrirEditor() {
+      setEditorTitulo(titulo)
+      setEditorConteudo(documentoGerado)
+      setModalAberto(null)
+      setEditorAberto(true)
+    }
 
     return (
       <Dialog
         open={modalAberto === tipo}
         onClose={() => { setModalAberto(null); resetDocModal() }}
-        title={titulo}
+        title={tituloModal}
         size="lg"
         footer={
           <>
@@ -350,6 +364,9 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
                 </Button>
                 <Button variant="secondary" onClick={() => setSubModalTemplate(tipoDoc)} className="gap-1.5">
                   <Edit3 className="h-4 w-4" /> Editar template
+                </Button>
+                <Button onClick={abrirEditor} className="gap-1.5">
+                  <Maximize2 className="h-4 w-4" /> Abrir no Editor
                 </Button>
               </>
             )}
@@ -395,13 +412,10 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
             />
           )}
           {documentoGerado && (
-            <div>
-              <p className="mb-1.5 text-xs font-medium text-gray-500">Documento gerado</p>
-              <textarea
-                readOnly
-                value={documentoGerado}
-                className="h-80 w-full resize-none rounded-lg border bg-gray-50 p-3 font-mono text-xs text-gray-700 leading-relaxed"
-              />
+            <div className="flex flex-col items-center gap-3 py-4">
+              <CheckCircle className="h-10 w-10 text-green-500" />
+              <p className="text-sm font-medium text-gray-700">Documento gerado com sucesso!</p>
+              <p className="text-xs text-gray-500">Clique em &quot;Abrir no Editor&quot; para formatar e exportar.</p>
             </div>
           )}
         </div>
@@ -581,6 +595,15 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
       {/* ── Modais B e C: Procuração e Declaração ── */}
       <ModalDocumento tipo="procuracao" />
       <ModalDocumento tipo="declaracao" />
+
+      {/* ── Editor full-screen ── */}
+      {editorAberto && (
+        <DocumentEditor
+          titulo={editorTitulo}
+          conteudo={editorConteudo}
+          onVoltar={() => { setEditorAberto(false); resetDocModal() }}
+        />
+      )}
 
       {/* ── Sub-modal: Editar Template ── */}
       <Dialog

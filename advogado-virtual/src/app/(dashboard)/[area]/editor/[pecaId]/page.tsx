@@ -68,18 +68,17 @@ export default async function EditorPecaPage({
         }
       />
 
-      <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-6xl">
-          <EditorPecaClient
-            pecaId={peca.id}
-            atendimentoId={peca.atendimento_id}
-            area={peca.area}
-            tipo={peca.tipo}
-            conteudoInicial={peca.conteudo_markdown ?? ''}
-            versaoInicial={peca.versao ?? 1}
-            statusInicial={peca.status ?? 'rascunho'}
-          />
-        </div>
+      <main className="flex-1 overflow-hidden">
+        <EditorPecaClient
+          pecaId={peca.id}
+          atendimentoId={peca.atendimento_id ?? ''}
+          area={peca.area}
+          tipo={peca.tipo}
+          tipoNome={tipoNome}
+          conteudoInicial={peca.conteudo_markdown ?? ''}
+          versaoInicial={peca.versao ?? 1}
+          statusInicial={peca.status ?? 'rascunho'}
+        />
       </main>
     </>
   )

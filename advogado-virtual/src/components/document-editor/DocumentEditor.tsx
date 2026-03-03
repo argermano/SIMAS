@@ -24,9 +24,11 @@ interface DocumentEditorProps {
   titulo: string
   conteudo: string
   onVoltar: () => void
+  onSalvar?: (conteudo: string) => Promise<void> | void
+  salvando?: boolean
 }
 
-export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar }: DocumentEditorProps) {
+export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSalvar, salvando }: DocumentEditorProps) {
   const { success, error: toastError } = useToast()
   const [titulo, setTitulo]           = useState(tituloInicial)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -109,6 +111,8 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar }: Do
         onCopiar={copiar}
         onBaixarDocx={baixarDocx}
         baixando={baixando}
+        onSalvar={onSalvar ? () => onSalvar(getMarkdown()) : undefined}
+        salvando={salvando}
       />
 
       {/* Toolbar */}
