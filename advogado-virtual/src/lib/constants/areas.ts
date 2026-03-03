@@ -52,11 +52,19 @@ export const AREAS = {
     corBg: 'bg-emerald-50',
     corTexto: 'text-emerald-700',
     corBorda: 'border-emerald-200',
-    ativo: false,
+    ativo: true,
     descricao: 'Contratos, indenizações, cobranças e ações cíveis',
-    pecas: [],
-    modelos: [],
-    tipos_documento: [],
+    pecas: [
+      'peticao_inicial', 'contestacao', 'replica', 'apelacao', 'agravo',
+      'embargos', 'recurso_especial', 'tutela', 'cumprimento', 'contrarrazoes', 'acordo',
+    ],
+    modelos: [
+      'procuracao', 'contrato_honorarios', 'notificacao_extrajudicial', 'substabelecimento',
+    ],
+    tipos_documento: [
+      'contrato', 'nota_fiscal', 'comprovante_pagamento', 'laudo_pericial',
+      'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'comprovante_residencia', 'outro',
+    ],
   },
   criminal: {
     id: 'criminal',
@@ -66,11 +74,19 @@ export const AREAS = {
     corBg: 'bg-red-50',
     corTexto: 'text-red-700',
     corBorda: 'border-red-200',
-    ativo: false,
+    ativo: true,
     descricao: 'Defesa criminal, habeas corpus e recursos penais',
-    pecas: [],
-    modelos: [],
-    tipos_documento: [],
+    pecas: [
+      'habeas_corpus', 'resposta_acusacao', 'alegacoes_finais', 'memorial_defesa',
+      'apelacao', 'agravo', 'embargos', 'recurso_especial',
+    ],
+    modelos: [
+      'procuracao', 'substabelecimento', 'contrato_honorarios',
+    ],
+    tipos_documento: [
+      'boletim_ocorrencia', 'laudo_pericial', 'sentenca', 'acordao',
+      'ata_audiencia', 'procuracao', 'rg_cpf', 'outro',
+    ],
   },
   tributario: {
     id: 'tributario',
@@ -80,11 +96,19 @@ export const AREAS = {
     corBg: 'bg-violet-50',
     corTexto: 'text-violet-700',
     corBorda: 'border-violet-200',
-    ativo: false,
+    ativo: true,
     descricao: 'Impostos, parcelamentos e planejamento tributário',
-    pecas: [],
-    modelos: [],
-    tipos_documento: [],
+    pecas: [
+      'mandado_seguranca', 'impugnacao_auto_infracao', 'recurso_administrativo_fiscal',
+      'acao_anulatoria', 'peticao_inicial', 'apelacao', 'embargos', 'tutela', 'cumprimento',
+    ],
+    modelos: [
+      'procuracao', 'contrato_honorarios', 'substabelecimento',
+    ],
+    tipos_documento: [
+      'certidao_debito', 'auto_infracao', 'guia_pagamento', 'declaracao_fiscal',
+      'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'cnpj', 'outro',
+    ],
   },
   empresarial: {
     id: 'empresarial',
@@ -94,11 +118,19 @@ export const AREAS = {
     corBg: 'bg-cyan-50',
     corTexto: 'text-cyan-700',
     corBorda: 'border-cyan-200',
-    ativo: false,
+    ativo: true,
     descricao: 'Contratos empresariais, societário e recuperação judicial',
-    pecas: [],
-    modelos: [],
-    tipos_documento: [],
+    pecas: [
+      'peticao_inicial', 'contestacao', 'replica', 'apelacao', 'agravo',
+      'embargos', 'recurso_especial', 'tutela', 'cumprimento', 'contrarrazoes', 'acordo',
+    ],
+    modelos: [
+      'procuracao', 'contrato_honorarios', 'notificacao_extrajudicial', 'substabelecimento',
+    ],
+    tipos_documento: [
+      'contrato_social', 'balancete', 'ata_assembleia', 'certidao', 'nota_fiscal',
+      'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'cnpj', 'outro',
+    ],
   },
 } as const
 

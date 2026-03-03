@@ -35,7 +35,7 @@ const LABEL_RELEVANCIA: Record<string, string> = {
 }
 
 // Áreas que têm rota ativa no sistema
-const AREAS_ATIVAS = ['previdenciario', 'trabalhista']
+const AREAS_ATIVAS = ['previdenciario', 'trabalhista', 'civel', 'criminal', 'tributario', 'empresarial']
 
 export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInicial?: string }) {
   const router   = useRouter()

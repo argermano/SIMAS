@@ -293,7 +293,11 @@ function extrairTermosBusca(pedidos: string, transcricao: string, area: string):
   // Fallback: termos genéricos por área
   const termosPorArea: Record<string, string> = {
     previdenciario: 'aposentadoria benefício previdenciário INSS',
-    trabalhista: 'rescisão contrato trabalho verbas trabalhistas',
+    trabalhista:    'rescisão contrato trabalho verbas trabalhistas',
+    civel:          'indenização contrato responsabilidade civil dano',
+    criminal:       'habeas corpus defesa criminal ação penal',
+    tributario:     'tributo imposto lançamento fiscal autuação',
+    empresarial:    'contrato empresarial societário recuperação judicial',
   }
   return termosPorArea[area] ?? 'direito jurisprudência'
 }
