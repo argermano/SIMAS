@@ -561,7 +561,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
           </CardHeader>
           <CardContent>
             <div className="rounded-xl border bg-gray-50 p-4">
-              <MarkdownPreview content={documentoGerado} />
+              <MarkdownPreview>{documentoGerado}</MarkdownPreview>
             </div>
           </CardContent>
         </Card>
