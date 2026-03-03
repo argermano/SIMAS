@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, Download, Copy, Sparkles, Loader2, Search, Pencil } from 'lucide-react'
+import { ChevronLeft, Download, Copy, Sparkles, Loader2, Search, Pencil, Save, Check } from 'lucide-react'
 
 interface DocumentHeaderProps {
   titulo: string
@@ -11,6 +11,8 @@ interface DocumentHeaderProps {
   onBaixarDocx: () => void
   onCopiar: () => void
   baixando: boolean
+  onSalvar?: () => void
+  salvando?: boolean
 }
 
 export function DocumentHeader({
@@ -20,7 +22,17 @@ export function DocumentHeader({
   onBaixarDocx,
   onCopiar,
   baixando,
+  onSalvar,
+  salvando,
 }: DocumentHeaderProps) {
+  const [salvo, setSalvo] = useState(false)
+
+  async function handleSalvar() {
+    if (!onSalvar) return
+    onSalvar()
+    setSalvo(true)
+    setTimeout(() => setSalvo(false), 2000)
+  }
   const [editando, setEditando]     = useState(false)
   const [rascunho, setRascunho]     = useState(titulo)
 
@@ -91,6 +103,19 @@ export function DocumentHeader({
           <Copy className="h-3.5 w-3.5" />
           Copiar
         </button>
+
+        {/* Salvar (opcional) */}
+        {onSalvar && (
+          <Button size="sm" variant="secondary" onClick={handleSalvar} disabled={salvando || salvo} className="gap-1.5">
+            {salvando
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : salvo
+                ? <Check className="h-4 w-4" />
+                : <Save className="h-4 w-4" />
+            }
+            {salvo ? 'Salvo' : 'Salvar'}
+          </Button>
+        )}
 
         {/* Baixar .docx */}
         <Button size="sm" onClick={onBaixarDocx} disabled={baixando} className="gap-1.5">
