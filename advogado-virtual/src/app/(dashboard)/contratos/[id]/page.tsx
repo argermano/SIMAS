@@ -18,7 +18,7 @@ type ContratoDetalhe = {
   valor_fixo: number | null
   percentual_exito: number | null
   forma_pagamento: string | null
-  clientes: { nome: string; cpf?: string } | null
+  clientes: { nome: string; cpf?: string; email?: string } | null
   atendimentos: { area?: string } | null
 }
 
@@ -43,18 +43,29 @@ export default async function ContratoPage({
 
   const { data: contrato } = await supabase
     .from('contratos_honorarios')
-    .select('*, clientes(nome, cpf), atendimentos(area)')
+    .select('*, clientes(nome, cpf, email), atendimentos(area)')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
   if (!contrato) notFound()
 
-  const { data: versoes } = await supabase
-    .from('contratos_versoes')
-    .select('id, versao, created_at')
-    .eq('contrato_id', id)
-    .order('versao', { ascending: false })
+  const [{ data: versoes }, { data: assinatura }] = await Promise.all([
+    supabase
+      .from('contratos_versoes')
+      .select('id, versao, created_at')
+      .eq('contrato_id', id)
+      .order('versao', { ascending: false }),
+    supabase
+      .from('contract_signatures')
+      .select('*, contract_signature_signers(*)')
+      .eq('contrato_id', id)
+      .eq('tenant_id', usuario.tenant_id)
+      .neq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
   return (
     <>
@@ -80,6 +91,7 @@ export default async function ContratoPage({
             contrato={contrato as ContratoDetalhe}
             versoes={(versoes ?? []) as { id: string; versao: number; created_at: string }[]}
             role={usuario.role}
+            assinatura={assinatura ?? null}
           />
         </div>
       </main>

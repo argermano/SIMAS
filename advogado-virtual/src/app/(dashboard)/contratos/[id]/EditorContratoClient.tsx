@@ -6,7 +6,31 @@ import { DocumentEditor } from '@/components/document-editor/DocumentEditor'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/ui/dialog'
-import { CheckCircle, Loader2 } from 'lucide-react'
+import { EnviarAssinaturaModal } from '@/components/contratos/EnviarAssinaturaModal'
+import { PainelAssinatura } from '@/components/contratos/PainelAssinatura'
+import { CheckCircle, Loader2, PenLine } from 'lucide-react'
+
+interface Signer {
+  id:           string
+  name:         string
+  email:        string
+  act:          string
+  signed:       boolean
+  signed_at:    string | null
+  signing_link: string | null
+  d4sign_key:   string | null
+}
+
+interface SignatureData {
+  id:              string
+  status:          string
+  sent_at:         string | null
+  completed_at:    string | null
+  cancelled_at:    string | null
+  cancel_reason:   string | null
+  signed_file_url: string | null
+  contract_signature_signers: Signer[]
+}
 
 interface EditorContratoClientProps {
   contratoId: string
@@ -19,23 +43,29 @@ interface EditorContratoClientProps {
     valor_fixo: number | null
     percentual_exito: number | null
     forma_pagamento: string | null
-    clientes: { nome: string; cpf?: string } | null
+    clientes: { nome: string; cpf?: string; email?: string } | null
     atendimentos: { area?: string } | null
   }
   versoes: { id: string; versao: number; created_at: string }[]
   role: string
+  assinatura?: SignatureData | null
 }
 
-export function EditorContratoClient({ contratoId, contrato, role }: EditorContratoClientProps) {
+export function EditorContratoClient({
+  contratoId, contrato, role, assinatura: assinaturaInicial,
+}: EditorContratoClientProps) {
   const router = useRouter()
   const { success, error: toastError } = useToast()
 
-  const [salvando,        setSalvando]        = useState(false)
-  const [aprovando,       setAprovando]       = useState(false)
-  const [status,          setStatus]          = useState(contrato.status)
+  const [salvando,         setSalvando]         = useState(false)
+  const [aprovando,        setAprovando]        = useState(false)
+  const [status,           setStatus]           = useState(contrato.status)
   const [confirmarAprovar, setConfirmarAprovar] = useState(false)
+  const [showAssinar,      setShowAssinar]      = useState(false)
+  const [assinatura,       setAssinatura]       = useState<SignatureData | null>(assinaturaInicial ?? null)
 
-  const podeAprovar = ['admin', 'advogado'].includes(role)
+  const podeAprovar       = ['admin', 'advogado'].includes(role)
+  const temAssinaturaAtiva = assinatura && assinatura.status !== 'cancelled'
 
   const handleSalvar = useCallback(async (conteudo: string) => {
     setSalvando(true)
@@ -92,6 +122,17 @@ export function EditorContratoClient({ contratoId, contrato, role }: EditorContr
     </Button>
   ) : null
 
+  const acaoAssinar = !temAssinaturaAtiva ? (
+    <Button
+      size="sm"
+      onClick={() => setShowAssinar(true)}
+      className="gap-1.5 bg-violet-700 hover:bg-violet-800"
+    >
+      <PenLine className="h-4 w-4" />
+      Enviar p/ Assinatura
+    </Button>
+  ) : null
+
   return (
     <>
       <ConfirmDialog
@@ -104,14 +145,39 @@ export function EditorContratoClient({ contratoId, contrato, role }: EditorContr
         loading={aprovando}
       />
 
-      <DocumentEditor
-        titulo={contrato.titulo}
-        conteudo={contrato.conteudo_markdown}
-        onVoltar={() => router.push('/contratos')}
-        onSalvar={handleSalvar}
-        salvando={salvando}
-        extraAcoes={acaoAprovar}
+      <EnviarAssinaturaModal
+        open={showAssinar}
+        onClose={() => setShowAssinar(false)}
+        contratoId={contratoId}
+        tituloContrato={contrato.titulo}
+        clienteNome={contrato.clientes?.nome}
+        clienteEmail={contrato.clientes?.email}
+        onSent={() => {
+          setShowAssinar(false)
+          fetch(`/api/contratos/${contratoId}/assinatura`)
+            .then(r => r.json())
+            .then(d => { if (d.signature) setAssinatura(d.signature) })
+            .catch(() => {})
+        }}
       />
+
+      <div className="space-y-6">
+        <DocumentEditor
+          titulo={contrato.titulo}
+          conteudo={contrato.conteudo_markdown}
+          onVoltar={() => router.push('/contratos')}
+          onSalvar={handleSalvar}
+          salvando={salvando}
+          extraAcoes={<>{acaoAprovar}{acaoAssinar}</>}
+        />
+
+        {temAssinaturaAtiva && (
+          <PainelAssinatura
+            contratoId={contratoId}
+            initial={assinatura!}
+          />
+        )}
+      </div>
     </>
   )
 }

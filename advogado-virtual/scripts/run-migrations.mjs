@@ -16,6 +16,8 @@ const MIGRATIONS = [
   '004_analises_pecas.sql',
   '005_rls_policies.sql',
   '006_atendimentos_v2.sql',
+  '020_tarefas_kanban.sql',
+  '021_assinaturas_digitais.sql',
 ]
 
 async function executarSQL(sql, nome) {

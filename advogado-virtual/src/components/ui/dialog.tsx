@@ -105,7 +105,7 @@ interface ConfirmDialogProps {
   onClose: () => void
   onConfirm: () => void
   title: string
-  description: string
+  description: React.ReactNode
   confirmLabel?: string
   cancelLabel?: string
   variant?: 'danger' | 'default'
@@ -145,7 +145,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="text-base text-gray-600">{description}</p>
+      <div className="text-base text-gray-600">{description}</div>
     </Dialog>
   )
 }
