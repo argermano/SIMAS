@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ClienteAcoesClient } from './ClienteAcoesClient'
 import { BotaoExcluirAtendimento } from '@/components/atendimento/BotaoExcluirAtendimento'
 import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
+import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
 import { PlayerAudio } from '@/components/atendimento/PlayerAudio'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import {
@@ -440,6 +441,7 @@ export default async function DossieClientePage({
                                               )}
                                             </div>
                                             <span className="text-xs text-gray-400 shrink-0">{formatarDataRelativa(contrato.created_at)}</span>
+                                            <BotaoExcluirContrato contratoId={contrato.id} />
                                             <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-blue-500 shrink-0" />
                                           </Link>
                                         )
@@ -524,6 +526,7 @@ export default async function DossieClientePage({
                             <span>{formatarDataRelativa(contrato.created_at)}</span>
                           </div>
                         </div>
+                        <BotaoExcluirContrato contratoId={contrato.id} />
                         <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-blue-500 shrink-0" />
                       </Link>
                     )

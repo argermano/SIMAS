@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatarDataRelativa } from '@/lib/utils'
 import { FileSignature, Plus, ChevronRight } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
 
 export const metadata = { title: 'Contratos de Honorários' }
 
@@ -118,7 +119,10 @@ export default async function ContratosPage() {
                             {` · ${formatarDataRelativa(c.created_at)}`}
                           </p>
                         </div>
-                        <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
+                        <div className="flex items-center gap-1 shrink-0">
+                          <BotaoExcluirContrato contratoId={c.id} />
+                          <ChevronRight className="h-4 w-4 text-gray-400" />
+                        </div>
                       </CardContent>
                     </Card>
                   </Link>
