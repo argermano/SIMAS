@@ -154,7 +154,7 @@ export function KanbanCalendar({ tasks, columns }: KanbanCalendarProps) {
   const months = useMemo(() => {
     const now = new Date()
     const result: { year: number; month: number }[] = []
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1)
       result.push({ year: d.getFullYear(), month: d.getMonth() })
     }
