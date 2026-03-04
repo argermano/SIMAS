@@ -112,14 +112,14 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
         <AnimatePresence>
           {!isCollapsed && (
             <motion.div
-              initial={{ opacity: 0, width: 0 }}
-              animate={{ opacity: 1, width: 'auto' }}
-              exit={{ opacity: 0, width: 0 }}
-              className="min-w-0 overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 min-w-0"
             >
               <p className="truncate text-base font-bold text-white font-heading">SIMAS</p>
               <p className="text-[11px] uppercase tracking-wider text-sidebar-muted leading-tight">Sistema Jurídico</p>
-              <p className="truncate text-[11px] text-sidebar-muted/70 leading-tight">{nomeEscritorio}</p>
+              <p className="text-[11px] text-sidebar-muted/70 leading-tight">{nomeEscritorio}</p>
             </motion.div>
           )}
         </AnimatePresence>
