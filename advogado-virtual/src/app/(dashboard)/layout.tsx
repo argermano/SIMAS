@@ -27,7 +27,7 @@ export default async function DashboardLayout({
   const nomeEscritorio = (usuario?.tenants as { nome?: string } | null)?.nome ?? 'Meu Escritório'
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
         nomeUsuario={nomeUsuario}
         nomeEscritorio={nomeEscritorio}

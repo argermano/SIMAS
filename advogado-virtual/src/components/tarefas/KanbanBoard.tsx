@@ -148,10 +148,10 @@ export function KanbanBoard({
 
   return (
     <>
-      <div className="flex gap-4">
+      <div className="flex h-full gap-4">
         {/* Colunas Kanban */}
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="flex flex-1 gap-4 overflow-x-auto pb-4 pt-2">
+          <div className="flex flex-1 gap-4 overflow-x-auto pb-4 pt-2 h-full">
             {columns.map(col => (
               <KanbanColumn
                 key={col.id}
@@ -175,7 +175,7 @@ export function KanbanBoard({
         </DndContext>
 
         {/* Calendários */}
-        <div className="hidden xl:block pt-2">
+        <div className="hidden xl:block pt-2 overflow-y-auto shrink-0">
           <KanbanCalendar tasks={tasks} columns={columns} />
         </div>
       </div>
