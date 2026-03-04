@@ -10,7 +10,10 @@ export interface TaskData {
   due_date?:         string | null
   priority:          'baixa' | 'media' | 'alta' | 'urgente'
   completed_at?:     string | null
+  created_at?:       string | null
   kanban_column_id?: string | null
+  task_list_id?:     string | null
+  kanban_board_id?:  string | null
   users?:            { id: string; nome: string } | null
   task_tag_links?:   { tag_id: string; task_tags: { id: string; name: string; color: string } | null }[]
   task_assignees?:   { user_id: string; users: { id: string; nome: string } | null }[]
