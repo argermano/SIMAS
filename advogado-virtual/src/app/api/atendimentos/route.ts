@@ -1,6 +1,30 @@
 import { createClient } from '@/lib/supabase/server'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+
+// GET /api/atendimentos?cliente_id=UUID — lista atendimentos de um cliente
+export async function GET(req: NextRequest) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+
+  const { data: usuario } = await supabase
+    .from('users').select('tenant_id').eq('auth_user_id', user.id).single()
+  if (!usuario) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+
+  const clienteId = new URL(req.url).searchParams.get('cliente_id')
+  if (!clienteId) return NextResponse.json({ error: 'cliente_id obrigatório' }, { status: 400 })
+
+  const { data } = await supabase
+    .from('atendimentos')
+    .select('id, area, tipo_peca_origem, status, created_at')
+    .eq('cliente_id', clienteId)
+    .eq('tenant_id', usuario.tenant_id)
+    .order('created_at', { ascending: false })
+
+  return NextResponse.json({ atendimentos: data ?? [] })
+}
 
 const schemaNovoAtendimento = z.object({
   cliente_id:       z.string().uuid(),
