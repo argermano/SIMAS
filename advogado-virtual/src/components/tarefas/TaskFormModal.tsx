@@ -15,12 +15,15 @@ interface TaskList { id: string; name: string }
 interface TaskTag { id: string; name: string; color: string }
 interface User { id: string; nome: string }
 
+interface TeamMember { id: string; nome: string }
+
 interface TaskFormModalProps {
   open:               boolean
   onClose:            () => void
   onSaved:            () => void
   currentUserId:      string
   currentUserName:    string
+  teamMembers?:       TeamMember[]
   defaultBoardId?:    string
   defaultColumnId?:   string
 }
@@ -34,7 +37,7 @@ const PRIORITY_OPTIONS = [
 
 export function TaskFormModal({
   open, onClose, onSaved,
-  currentUserId, currentUserName,
+  currentUserId, currentUserName, teamMembers,
   defaultBoardId, defaultColumnId,
 }: TaskFormModalProps) {
   const { success, error: toastError } = useToast()
@@ -42,6 +45,7 @@ export function TaskFormModal({
   const [description,   setDescription]   = useState('')
   const [dueDate,       setDueDate]        = useState('')
   const [taskListId,    setTaskListId]     = useState('')
+  const [assigneeId,    setAssigneeId]     = useState(currentUserId)
   const [priority,      setPriority]       = useState<'baixa'|'media'|'alta'|'urgente'>('media')
   const [boardId,       setBoardId]        = useState(defaultBoardId ?? '')
   const [columnId,      setColumnId]       = useState(defaultColumnId ?? '')
@@ -126,7 +130,7 @@ export function TaskFormModal({
           description:      description.trim(),
           due_date:         dueDate || null,
           task_list_id:     taskListId || null,
-          assignee_id:      currentUserId,
+          assignee_id:      assigneeId,
           priority,
           kanban_board_id:  boardId  || null,
           kanban_column_id: columnId || null,
@@ -257,12 +261,17 @@ export function TaskFormModal({
 
         {/* Responsável + Prioridade */}
         <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="block text-base font-medium text-gray-700">Responsável</label>
-            <div className="flex h-11 items-center rounded-md border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700">
-              {currentUserName}
-            </div>
-          </div>
+          <Select
+            label="Responsável"
+            required
+            value={assigneeId}
+            onChange={e => setAssigneeId(e.target.value)}
+            options={
+              teamMembers && teamMembers.length > 0
+                ? teamMembers.map(m => ({ value: m.id, label: m.nome }))
+                : [{ value: currentUserId, label: currentUserName }]
+            }
+          />
 
           <Select
             label="Prioridade"

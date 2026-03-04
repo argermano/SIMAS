@@ -18,14 +18,17 @@ interface Board    { id: string; name: string; kanban_columns: Column[] }
 interface TaskList { id: string; name: string }
 interface TaskTag  { id: string; name: string; color: string }
 
+interface TeamMember { id: string; nome: string }
+
 interface TaskDetailModalProps {
-  task:    TaskData
-  boards:  Board[]
-  lists:   TaskList[]
-  tags:    TaskTag[]
-  open:    boolean
-  onClose: () => void
-  onSaved: () => void
+  task:         TaskData
+  boards:       Board[]
+  lists:        TaskList[]
+  tags:         TaskTag[]
+  teamMembers?: TeamMember[]
+  open:         boolean
+  onClose:      () => void
+  onSaved:      () => void
 }
 
 const PRIORITY_OPTIONS = [
@@ -62,13 +65,14 @@ function initials(nome: string) {
 }
 
 export function TaskDetailModal({
-  task, boards, lists, tags, open, onClose, onSaved,
+  task, boards, lists, tags, teamMembers, open, onClose, onSaved,
 }: TaskDetailModalProps) {
   const { success, error: toastError } = useToast()
 
   const [description,  setDescription]  = useState(task.description)
   const [dueDate,      setDueDate]       = useState(toInputDate(task.due_date))
   const [priority,     setPriority]      = useState(task.priority)
+  const [assigneeId,   setAssigneeId]    = useState(task.assignee_id ?? task.users?.id ?? '')
   const [boardId,      setBoardId]       = useState(task.kanban_board_id ?? '')
   const [columnId,     setColumnId]      = useState(task.kanban_column_id ?? '')
   const [taskListId,   setTaskListId]    = useState(task.task_list_id ?? '')
@@ -87,6 +91,7 @@ export function TaskDetailModal({
     setDescription(task.description)
     setDueDate(toInputDate(task.due_date))
     setPriority(task.priority)
+    setAssigneeId(task.assignee_id ?? task.users?.id ?? '')
     setBoardId(task.kanban_board_id ?? '')
     setColumnId(task.kanban_column_id ?? '')
     setTaskListId(task.task_list_id ?? '')
@@ -128,6 +133,7 @@ export function TaskDetailModal({
           description,
           due_date:         dueDate || null,
           priority,
+          assignee_id:      assigneeId || null,
           kanban_board_id:  boardId  || null,
           kanban_column_id: columnId || null,
           task_list_id:     taskListId || null,
@@ -338,25 +344,34 @@ export function TaskDetailModal({
               />
             </div>
 
-            {/* Responsáveis */}
+            {/* Responsável */}
             <div className="space-y-1">
               <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                <User className="h-3.5 w-3.5" /> Responsáveis
+                <User className="h-3.5 w-3.5" /> Responsável
               </label>
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {allAssignees.map(u => (
-                  <span
-                    key={u.id}
-                    title={u.nome}
-                    className="flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-800"
-                  >
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary-700 text-[9px] font-bold text-white">
-                      {initials(u.nome)}
+              {teamMembers && teamMembers.length > 0 ? (
+                <Select
+                  value={assigneeId}
+                  onChange={e => setAssigneeId(e.target.value)}
+                  options={teamMembers.map(m => ({ value: m.id, label: m.nome }))}
+                  placeholder="Selecione..."
+                />
+              ) : (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {allAssignees.map(u => (
+                    <span
+                      key={u.id}
+                      title={u.nome}
+                      className="flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-800"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary-700 text-[9px] font-bold text-white">
+                        {initials(u.nome)}
+                      </span>
+                      {u.nome.split(' ')[0]}
                     </span>
-                    {u.nome.split(' ')[0]}
-                  </span>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

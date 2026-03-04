@@ -1,18 +1,20 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Tag, ChevronDown, Plus } from 'lucide-react'
+import { Search, Tag, ChevronDown, Plus, User } from 'lucide-react'
 import { KanbanBoard } from '@/components/tarefas/KanbanBoard'
 import { TaskFormModal } from '@/components/tarefas/TaskFormModal'
 import { cn } from '@/lib/utils'
 
 interface Column { id: string; name: string; position: number; color?: string | null }
 interface Board  { id: string; name: string; kanban_columns: Column[] }
-interface Tag    { id: string; name: string; color: string }
+interface TagItem    { id: string; name: string; color: string }
+interface TeamMember { id: string; nome: string }
 
 interface KanbanPageClientProps {
   boards:          Board[]
-  tags:            Tag[]
+  tags:            TagItem[]
+  teamMembers:     TeamMember[]
   currentUserId:   string
   currentUserName: string
 }
@@ -25,10 +27,10 @@ const PERIOD_OPTIONS = [
 ]
 
 export function KanbanPageClient({
-  boards, tags, currentUserId, currentUserName,
+  boards, tags, teamMembers, currentUserId, currentUserName,
 }: KanbanPageClientProps) {
   const [activeBoardId, setActiveBoardId] = useState(boards[0]?.id ?? '')
-  const [assigneeFilter, setAssigneeFilter] = useState<'all' | 'me'>('all')
+  const [assigneeFilter, setAssigneeFilter] = useState('')  // '' = all, 'me', or UUID
   const [periodFilter,   setPeriodFilter]   = useState('')
   const [tagFilter,      setTagFilter]      = useState('')
   const [search,         setSearch]         = useState('')
@@ -38,9 +40,9 @@ export function KanbanPageClient({
 
   const activeBoard = boards.find(b => b.id === activeBoardId) ?? boards[0]
 
-  const filters = { assignee: assigneeFilter, period: periodFilter, tagId: tagFilter, search }
-
-  const currentPeriodLabel = PERIOD_OPTIONS.find(p => p.value === periodFilter)?.label ?? 'Todos os períodos'
+  // Map filter value to what the API expects
+  const assigneeApiValue = assigneeFilter === '' ? 'all' : assigneeFilter
+  const filters = { assignee: assigneeApiValue, period: periodFilter, tagId: tagFilter, search }
 
   function handleSaved() {
     setFormOpen(false)
@@ -97,18 +99,29 @@ export function KanbanPageClient({
             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
           </div>
 
-          {/* Minhas atribuições */}
-          <button
-            onClick={() => setAssigneeFilter(a => a === 'me' ? 'all' : 'me')}
-            className={cn(
-              'rounded-full border px-3 py-1 text-sm transition-colors',
-              assigneeFilter === 'me'
-                ? 'border-primary-800 bg-primary-800 text-white'
-                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-            )}
-          >
-            {assigneeFilter === 'me' ? 'Minhas atribuições' : 'Todas as atribuições'}
-          </button>
+          {/* Filtro por responsável */}
+          <div className="relative">
+            <select
+              value={assigneeFilter}
+              onChange={e => setAssigneeFilter(e.target.value)}
+              className={cn(
+                'h-8 appearance-none rounded-full border pl-3 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-primary-800',
+                assigneeFilter
+                  ? 'border-primary-800 bg-primary-50 text-primary-800 font-medium'
+                  : 'border-gray-200 bg-white text-gray-600'
+              )}
+            >
+              <option value="">Todos os responsáveis</option>
+              <option value="me">Minhas tarefas</option>
+              {teamMembers
+                .filter(m => m.id !== currentUserId)
+                .map(m => (
+                  <option key={m.id} value={m.id}>{m.nome}</option>
+                ))
+              }
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-gray-400" />
+          </div>
 
           {/* Filtro por tag */}
           <div className="relative">
@@ -157,6 +170,7 @@ export function KanbanPageClient({
             initialTasks={[]}
             currentUserId={currentUserId}
             currentUserName={currentUserName}
+            teamMembers={teamMembers}
             filters={filters}
           />
         ) : (
@@ -174,6 +188,7 @@ export function KanbanPageClient({
         onSaved={handleSaved}
         currentUserId={currentUserId}
         currentUserName={currentUserName}
+        teamMembers={teamMembers}
         defaultBoardId={activeBoardId}
       />
     </div>

@@ -26,11 +26,19 @@ export default async function TarefasPage() {
     .eq('tenant_id', usuario.tenant_id)
     .order('created_at')
 
-  const { data: tags } = await supabase
-    .from('task_tags')
-    .select('id, name, color')
-    .eq('tenant_id', usuario.tenant_id)
-    .order('name')
+  const [{ data: tags }, { data: membros }] = await Promise.all([
+    supabase
+      .from('task_tags')
+      .select('id, name, color')
+      .eq('tenant_id', usuario.tenant_id)
+      .order('name'),
+    supabase
+      .from('users')
+      .select('id, nome')
+      .eq('tenant_id', usuario.tenant_id)
+      .eq('status', 'ativo')
+      .order('nome'),
+  ])
 
   // Se não existem boards ainda, faz seed via API
   const boardList = boards ?? []
@@ -57,6 +65,7 @@ export default async function TarefasPage() {
       <KanbanPageClient
         boards={sortedBoards}
         tags={tagList}
+        teamMembers={(membros ?? []) as { id: string; nome: string }[]}
         currentUserId={usuario.id}
         currentUserName={usuario.nome ?? user.email ?? 'Você'}
       />
