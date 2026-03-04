@@ -10,11 +10,11 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { arrayMove } from '@dnd-kit/sortable'
 import { useToast } from '@/components/ui/toast'
 import { KanbanColumn } from './KanbanColumn'
 import { TaskCard, type TaskData } from './TaskCard'
 import { TaskFormModal } from './TaskFormModal'
+import { TaskDetailModal } from './TaskDetailModal'
 
 interface Column {
   id:       string
@@ -24,10 +24,13 @@ interface Column {
 }
 
 interface Board {
-  id:              string
-  name:            string
-  kanban_columns:  Column[]
+  id:             string
+  name:           string
+  kanban_columns: Column[]
 }
+
+interface TaskList { id: string; name: string }
+interface TaskTag  { id: string; name: string; color: string }
 
 interface KanbanBoardProps {
   board:           Board
@@ -35,9 +38,9 @@ interface KanbanBoardProps {
   currentUserId:   string
   currentUserName: string
   filters: {
-    assignee: string   // 'all' | 'me'
-    period:   string   // '' | 'month' | 'week' | 'today'
-    tagId:    string   // '' | uuid
+    assignee: string
+    period:   string
+    tagId:    string
     search:   string
   }
 }
@@ -46,11 +49,13 @@ export function KanbanBoard({
   board, initialTasks, currentUserId, currentUserName, filters,
 }: KanbanBoardProps) {
   const { error: toastError } = useToast()
-  const [tasks,         setTasks]         = useState<TaskData[]>(initialTasks)
-  const [activeTask,    setActiveTask]     = useState<TaskData | null>(null)
-  const [formOpen,      setFormOpen]       = useState(false)
-  const [defaultColId,  setDefaultColId]   = useState<string>('')
-  const [loading,       setLoading]        = useState(false)
+  const [tasks,        setTasks]        = useState<TaskData[]>(initialTasks)
+  const [activeTask,   setActiveTask]   = useState<TaskData | null>(null)
+  const [formOpen,     setFormOpen]     = useState(false)
+  const [defaultColId, setDefaultColId] = useState<string>('')
+  const [detailTask,   setDetailTask]   = useState<TaskData | null>(null)
+  const [lists,        setLists]        = useState<TaskList[]>([])
+  const [tags,         setTags]         = useState<TaskTag[]>([])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -59,23 +64,29 @@ export function KanbanBoard({
   const columns = [...board.kanban_columns].sort((a, b) => a.position - b.position)
 
   const fetchTasks = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({ board_id: board.id })
-      if (filters.assignee !== 'all')  params.set('assignee', filters.assignee)
-      if (filters.period)              params.set('period',   filters.period)
-      if (filters.tagId)               params.set('tag_id',   filters.tagId)
-      if (filters.search)              params.set('search',   filters.search)
+    const params = new URLSearchParams({ board_id: board.id })
+    if (filters.assignee !== 'all') params.set('assignee', filters.assignee)
+    if (filters.period)             params.set('period',   filters.period)
+    if (filters.tagId)              params.set('tag_id',   filters.tagId)
+    if (filters.search)             params.set('search',   filters.search)
 
-      const res  = await fetch(`/api/tasks?${params}`)
-      const data = await res.json()
-      if (res.ok) setTasks(data.tasks ?? [])
-    } finally {
-      setLoading(false)
-    }
+    const res  = await fetch(`/api/tasks?${params}`)
+    const data = await res.json()
+    if (res.ok) setTasks(data.tasks ?? [])
   }, [board.id, filters])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
+
+  // Buscar listas e tags para o modal de detalhe
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/task-lists').then(r => r.json()),
+      fetch('/api/task-tags').then(r => r.json()),
+    ]).then(([l, t]) => {
+      setLists(l.lists ?? [])
+      setTags(t.tags ?? [])
+    })
+  }, [])
 
   function tasksForColumn(colId: string) {
     return tasks.filter(t => t.kanban_column_id === colId)
@@ -90,13 +101,12 @@ export function KanbanBoard({
     const { active, over } = event
     if (!over || active.id === over.id) { setActiveTask(null); return }
 
-    const taskId    = active.id as string
-    const targetId  = over.id  as string
+    const taskId   = active.id as string
+    const targetId = over.id   as string
 
-    // Determina coluna destino
-    const targetCol = columns.find(c => c.id === targetId)
+    const targetCol  = columns.find(c => c.id === targetId)
     const targetTask = tasks.find(t => t.id === targetId)
-    const destColId = targetCol?.id ?? targetTask?.kanban_column_id
+    const destColId  = targetCol?.id ?? targetTask?.kanban_column_id
 
     if (!destColId) { setActiveTask(null); return }
 
@@ -106,7 +116,6 @@ export function KanbanBoard({
     ))
     setActiveTask(null)
 
-    // Sync backend
     const res = await fetch(`/api/tasks/${taskId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -114,13 +123,23 @@ export function KanbanBoard({
     })
     if (!res.ok) {
       toastError('Erro', 'Não foi possível mover a tarefa')
-      fetchTasks() // revert
+      fetchTasks()
     }
   }
 
   function openNewTask(colId: string) {
     setDefaultColId(colId)
     setFormOpen(true)
+  }
+
+  function handleSaved() {
+    fetchTasks()
+    // Atualiza a tarefa aberta no detalhe se ela ainda existe
+    setDetailTask(prev => {
+      if (!prev) return null
+      // Será re-populated na próxima vez que fetchTasks atualizar tasks
+      return prev
+    })
   }
 
   return (
@@ -135,7 +154,7 @@ export function KanbanBoard({
               color={col.color}
               tasks={tasksForColumn(col.id)}
               onNewTask={() => openNewTask(col.id)}
-              onTaskClick={() => {}}
+              onTaskClick={task => setDetailTask(task)}
             />
           ))}
         </div>
@@ -149,6 +168,7 @@ export function KanbanBoard({
         </DragOverlay>
       </DndContext>
 
+      {/* Modal: nova tarefa */}
       <TaskFormModal
         open={formOpen}
         onClose={() => setFormOpen(false)}
@@ -158,6 +178,19 @@ export function KanbanBoard({
         defaultBoardId={board.id}
         defaultColumnId={defaultColId}
       />
+
+      {/* Modal: detalhe / edição de tarefa */}
+      {detailTask && (
+        <TaskDetailModal
+          open={!!detailTask}
+          task={detailTask}
+          boards={[board]}
+          lists={lists}
+          tags={tags}
+          onClose={() => setDetailTask(null)}
+          onSaved={() => { handleSaved(); setDetailTask(null) }}
+        />
+      )}
     </>
   )
 }
