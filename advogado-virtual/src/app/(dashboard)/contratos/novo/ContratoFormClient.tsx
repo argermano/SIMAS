@@ -11,8 +11,20 @@ import { MarkdownPreview } from '@/components/ui/markdown-preview'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
 import {
   Users, DollarSign, Brain, Loader2, Upload, FileText, ChevronRight,
-  FolderOpen, CheckCircle, Sparkles,
+  FolderOpen, CheckCircle, Sparkles, Link2,
 } from 'lucide-react'
+
+const LABELS_AREA_AT: Record<string, string> = {
+  previdenciario: 'Previdenciário', trabalhista: 'Trabalhista', civel: 'Cível',
+  criminal: 'Criminal', tributario: 'Tributário', empresarial: 'Empresarial',
+  familia: 'Família', consumidor: 'Consumidor', imobiliario: 'Imobiliário',
+  administrativo: 'Administrativo', geral: 'Análise de Caso',
+}
+
+interface AtendimentoOpcao {
+  id: string; area: string; tipo_peca_origem: string | null
+  status: string; created_at: string
+}
 
 const OPCOES_AREA = [
   { value: 'previdenciario', label: 'Previdenciário' },
@@ -48,17 +60,20 @@ interface ContratoFormClientProps {
 export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
   const { success, error: toastError } = useToast()
 
-  const [cliente,          setCliente]          = useState<{ id: string; nome: string } | null>(null)
-  const [area,             setArea]             = useState('')
-  const [valorFixo,        setValorFixo]        = useState('')
-  const [percentualExito,  setPercentualExito]  = useState('')
-  const [formaPagamento,   setFormaPagamento]   = useState('')
-  const [instrucoes,       setInstrucoes]       = useState('')
-  const [modeloTexto,      setModeloTexto]      = useState('')
-  const [uploadandoModelo, setUploadandoModelo] = useState(false)
-  const [gerando,          setGerando]          = useState(false)
-  const [conteudoGerado,   setConteudoGerado]   = useState('')
-  const [contratoId,       setContratoId]       = useState<string | null>(null)
+  const [cliente,           setCliente]           = useState<{ id: string; nome: string } | null>(null)
+  const [atendimentoId,     setAtendimentoId]     = useState<string>('')
+  const [atendimentos,      setAtendimentos]      = useState<AtendimentoOpcao[]>([])
+  const [carregandoAts,     setCarregandoAts]     = useState(false)
+  const [area,              setArea]              = useState('')
+  const [valorFixo,         setValorFixo]         = useState('')
+  const [percentualExito,   setPercentualExito]   = useState('')
+  const [formaPagamento,    setFormaPagamento]    = useState('')
+  const [instrucoes,        setInstrucoes]        = useState('')
+  const [modeloTexto,       setModeloTexto]       = useState('')
+  const [uploadandoModelo,  setUploadandoModelo]  = useState(false)
+  const [gerando,           setGerando]           = useState(false)
+  const [conteudoGerado,    setConteudoGerado]    = useState('')
+  const [contratoId,        setContratoId]        = useState<string | null>(null)
 
   // ── Repositório de modelos ──
   const [modelosSalvos,       setModelosSalvos]       = useState<TemplateContrato[]>([])
@@ -66,6 +81,20 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
   const [carregandoModelos,   setCarregandoModelos]   = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Carregar atendimentos quando cliente é selecionado
+  useEffect(() => {
+    if (!cliente) { setAtendimentos([]); setAtendimentoId(''); return }
+    setCarregandoAts(true)
+    fetch(`/api/atendimentos?cliente_id=${cliente.id}`)
+      .then(r => r.json())
+      .then(d => {
+        setAtendimentos(d.atendimentos ?? [])
+        setAtendimentoId('')
+      })
+      .catch(() => {})
+      .finally(() => setCarregandoAts(false))
+  }, [cliente?.id])
 
   // Carregar modelos salvos ao montar
   useEffect(() => {
@@ -152,6 +181,7 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
           cliente_id:       cliente.id,
+          atendimento_id:   atendimentoId || null,
           area:             area || null,
           valor_fixo:       valorFixo ? parseFloat(valorFixo) : null,
           percentual_exito: percentualExito ? parseFloat(percentualExito) : null,
@@ -218,7 +248,7 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
     } finally {
       setGerando(false)
     }
-  }, [cliente, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, temModeloSelecionado, success, toastError])
+  }, [cliente, atendimentoId, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, temModeloSelecionado, success, toastError])
 
   return (
     <div className="space-y-6">
@@ -238,6 +268,65 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
           />
         </CardContent>
       </Card>
+
+      {/* Vincular a atendimento */}
+      {cliente && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Link2 className="h-5 w-5 text-gray-400" />
+              Vincular a atendimento
+              <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {carregandoAts ? (
+              <div className="flex items-center gap-2 py-2 text-sm text-gray-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Carregando atendimentos...
+              </div>
+            ) : atendimentos.length === 0 ? (
+              <p className="text-sm text-gray-400 italic">
+                Nenhum atendimento encontrado para este cliente.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => setAtendimentoId('')}
+                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                    !atendimentoId
+                      ? 'border-gray-300 bg-gray-50 text-gray-500'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                  }`}
+                >
+                  <span className="flex-1 italic">Sem vínculo (contrato avulso)</span>
+                </button>
+                {atendimentos.map(at => {
+                  const label = [LABELS_AREA_AT[at.area] ?? at.area, at.tipo_peca_origem].filter(Boolean).join(' — ')
+                  const data  = new Date(at.created_at).toLocaleDateString('pt-BR')
+                  return (
+                    <button
+                      key={at.id}
+                      type="button"
+                      onClick={() => setAtendimentoId(at.id)}
+                      className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                        atendimentoId === at.id
+                          ? 'border-primary-300 bg-primary-50 text-primary-800'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      <FileText className={`h-4 w-4 shrink-0 ${atendimentoId === at.id ? 'text-primary-600' : 'text-gray-400'}`} />
+                      <span className="flex-1 font-medium">{label}</span>
+                      <span className="shrink-0 text-xs text-gray-400">{data}</span>
+                      {atendimentoId === at.id && <CheckCircle className="h-4 w-4 shrink-0 text-primary-600" />}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dados do contrato */}
       <Card>
