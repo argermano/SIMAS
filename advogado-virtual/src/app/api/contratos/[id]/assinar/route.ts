@@ -11,6 +11,7 @@ import {
   d4signRegisterWebhook,
   d4signSendToSign,
   d4signGetSigningLink,
+  d4signListSafes,
 } from '@/lib/d4sign/client'
 import { taskService } from '@/services/task-service'
 import type { D4SignSignerInput } from '@/lib/d4sign/types'
@@ -57,10 +58,61 @@ function markdownToDocxParagraphs(markdown: string): Paragraph[] {
   return paragraphs
 }
 
-async function gerarDocxBuffer(markdown: string, titulo: string): Promise<Buffer> {
+function buildSignatureBlocks(signers: { name: string; cpf_cnpj?: string }[]): Paragraph[] {
+  const paragraphs: Paragraph[] = []
+
+  // Espaçamento antes das assinaturas
+  paragraphs.push(new Paragraph({ spacing: { before: 600, after: 200 } }))
+  paragraphs.push(new Paragraph({
+    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '999999' } },
+    spacing: { before: 80, after: 200 },
+  }))
+
+  for (const signer of signers) {
+    // Espaço para assinatura
+    paragraphs.push(new Paragraph({ spacing: { before: 600, after: 0 } }))
+
+    // Linha de assinatura
+    paragraphs.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: '________________________________________', size: 24 })],
+      spacing: { before: 0, after: 40 },
+    }))
+
+    // Nome do signatário
+    paragraphs.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [new TextRun({ text: signer.name, bold: true, size: 22 })],
+      spacing: { before: 0, after: 0 },
+    }))
+
+    // CPF se disponível
+    if (signer.cpf_cnpj) {
+      paragraphs.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: `CPF/CNPJ: ${signer.cpf_cnpj}`, size: 20, color: '666666' })],
+        spacing: { before: 0, after: 0 },
+      }))
+    }
+  }
+
+  return paragraphs
+}
+
+async function gerarDocxBuffer(
+  markdown: string,
+  titulo: string,
+  signers?: { name: string; cpf_cnpj?: string }[],
+): Promise<Buffer> {
+  const contentParagraphs = markdownToDocxParagraphs(markdown)
+  const signatureBlocks = signers?.length ? buildSignatureBlocks(signers) : []
+
   const doc = new Document({
     styles: { default: { document: { run: { font: 'Times New Roman', size: 24 } } } },
-    sections: [{ properties: { page: { margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 } } }, children: markdownToDocxParagraphs(markdown) }],
+    sections: [{
+      properties: { page: { margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 } } },
+      children: [...contentParagraphs, ...signatureBlocks],
+    }],
   })
   const buf = await Packer.toBuffer(doc)
   return Buffer.from(buf)
@@ -138,14 +190,27 @@ export async function POST(
   }
   const { signers, message, workflow } = parsed.data
 
-  const safeUuid = process.env.D4SIGN_SAFE_UUID
+  // Obter safe UUID: variável de ambiente ou auto-descoberta via API
+  let safeUuid = process.env.D4SIGN_SAFE_UUID
   if (!safeUuid) {
-    return NextResponse.json({ error: 'D4SIGN_SAFE_UUID não configurado' }, { status: 500 })
+    try {
+      const safes = await d4signListSafes()
+      if (safes.length > 0) {
+        safeUuid = safes[0].uuid_safe
+      }
+    } catch { /* silencioso */ }
+  }
+  if (!safeUuid) {
+    return NextResponse.json({ error: 'Nenhum cofre D4Sign encontrado. Configure D4SIGN_SAFE_UUID ou verifique as credenciais.' }, { status: 500 })
   }
 
   try {
-    // 1. Gerar DOCX em buffer
-    const fileBuffer = await gerarDocxBuffer(contrato.conteudo_markdown, contrato.titulo)
+    // 1. Gerar DOCX em buffer (com blocos de assinatura para cada signatário)
+    const fileBuffer = await gerarDocxBuffer(
+      contrato.conteudo_markdown,
+      contrato.titulo,
+      signers.map(s => ({ name: s.name, cpf_cnpj: s.cpf_cnpj })),
+    )
     const fileName   = `${(contrato.titulo ?? 'contrato').replace(/[^a-zA-Z0-9\s_-]/g, '').trim()}.docx`
 
     // 2. Upload na D4Sign
