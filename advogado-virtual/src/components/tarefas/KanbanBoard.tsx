@@ -12,6 +12,7 @@ import {
 } from '@dnd-kit/core'
 import { useToast } from '@/components/ui/toast'
 import { KanbanColumn } from './KanbanColumn'
+import { KanbanCalendar } from './KanbanCalendar'
 import { TaskCard, type TaskData } from './TaskCard'
 import { TaskFormModal } from './TaskFormModal'
 import { TaskDetailModal } from './TaskDetailModal'
@@ -147,29 +148,37 @@ export function KanbanBoard({
 
   return (
     <>
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-4 pt-2">
-          {columns.map(col => (
-            <KanbanColumn
-              key={col.id}
-              id={col.id}
-              name={col.name}
-              color={col.color}
-              tasks={tasksForColumn(col.id)}
-              onNewTask={() => openNewTask(col.id)}
-              onTaskClick={task => setDetailTask(task)}
-            />
-          ))}
-        </div>
+      <div className="flex gap-4">
+        {/* Colunas Kanban */}
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="flex flex-1 gap-4 overflow-x-auto pb-4 pt-2">
+            {columns.map(col => (
+              <KanbanColumn
+                key={col.id}
+                id={col.id}
+                name={col.name}
+                color={col.color}
+                tasks={tasksForColumn(col.id)}
+                onNewTask={() => openNewTask(col.id)}
+                onTaskClick={task => setDetailTask(task)}
+              />
+            ))}
+          </div>
 
-        <DragOverlay>
-          {activeTask && (
-            <div className="rotate-2 opacity-90">
-              <TaskCard task={activeTask} />
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay>
+            {activeTask && (
+              <div className="rotate-2 opacity-90">
+                <TaskCard task={activeTask} />
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+
+        {/* Calendários */}
+        <div className="hidden xl:block pt-2">
+          <KanbanCalendar tasks={tasks} columns={columns} />
+        </div>
+      </div>
 
       {/* Modal: nova tarefa */}
       <TaskFormModal
