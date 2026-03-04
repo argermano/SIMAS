@@ -74,10 +74,10 @@ export default async function HistoricoPage() {
                     <Card className="transition-shadow hover:shadow-card-hover">
                       <CardContent className="flex items-center justify-between gap-4 py-4">
                         <div className="min-w-0">
-                          <p className="text-base font-semibold text-gray-900">
+                          <p className="text-base font-semibold text-foreground">
                             {cliente?.nome ?? 'Cliente'}
                           </p>
-                          <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <span>{LABELS_AREA[at.area] ?? at.area}</span>
                             <span>·</span>
                             <span>{formatarDataRelativa(at.created_at)}</span>

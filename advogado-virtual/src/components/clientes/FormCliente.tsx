@@ -184,7 +184,7 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
     <form onSubmit={handleSubmit} className="space-y-6" noValidate>
       {/* Dados principais */}
       <div className="space-y-4">
-        <h3 className="text-base font-semibold text-gray-900 border-b border-gray-100 pb-2">
+        <h3 className="text-base font-semibold text-foreground border-b border-border pb-2">
           Dados pessoais
         </h3>
 
@@ -318,7 +318,7 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
 
       {/* Observações */}
       <div className="space-y-4">
-        <h3 className="text-base font-semibold text-gray-900 border-b border-gray-100 pb-2">
+        <h3 className="text-base font-semibold text-foreground border-b border-border pb-2">
           Observações internas
         </h3>
         <Textarea
@@ -333,7 +333,7 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
       </div>
 
       {/* Botões */}
-      <div className="flex flex-col-reverse gap-3 border-t border-gray-100 pt-5 sm:flex-row sm:justify-end">
+      <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
         <Button
           type="button"
           variant="secondary"

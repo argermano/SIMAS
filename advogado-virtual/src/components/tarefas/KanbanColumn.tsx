@@ -21,7 +21,7 @@ export function KanbanColumn({ id, name, color, tasks, onNewTask, onTaskClick }:
   const count = tasks.length
 
   return (
-    <div className="flex w-72 shrink-0 flex-col rounded-xl bg-gray-100">
+    <div className="flex w-72 shrink-0 flex-col rounded-xl bg-muted">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between px-3 py-3">
         <div className="flex items-center gap-2">
@@ -31,15 +31,15 @@ export function KanbanColumn({ id, name, color, tasks, onNewTask, onTaskClick }:
               style={{ backgroundColor: color }}
             />
           )}
-          <span className="text-sm font-semibold text-gray-700">{name}</span>
-          <span className="rounded-full bg-gray-300 px-2 py-0.5 text-xs font-semibold text-gray-600">
+          <span className="text-sm font-semibold text-foreground">{name}</span>
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
             {count > 40 ? '40+' : count}
           </span>
         </div>
 
         <button
           onClick={onNewTask}
-          className="rounded-md p-1 text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors"
+          className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           aria-label="Nova tarefa"
         >
           <Plus className="h-4 w-4" />
@@ -68,7 +68,7 @@ export function KanbanColumn({ id, name, color, tasks, onNewTask, onTaskClick }:
         {tasks.length === 0 && (
           <button
             onClick={onNewTask}
-            className="mt-1 flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-4 text-sm text-gray-400 hover:border-gray-400 hover:text-gray-500 transition-colors"
+            className="mt-1 flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border py-4 text-sm text-muted-foreground hover:border-muted-foreground hover:text-foreground transition-colors"
           >
             <Plus className="h-4 w-4" />
             NOVA ATIVIDADE

@@ -41,8 +41,8 @@ const PRIORITY_OPTIONS = [
 const PRIORITY_COLORS: Record<string, string> = {
   baixa:   'bg-emerald-100 text-emerald-700',
   media:   'bg-blue-100 text-blue-700',
-  alta:    'bg-amber-100 text-amber-700',
-  urgente: 'bg-red-100 text-red-700',
+  alta:    'bg-warning/10 text-warning',
+  urgente: 'bg-destructive/10 text-destructive',
 }
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -194,7 +194,7 @@ export function TaskDetailModal({
       <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-12">
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-        <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+        <div className="relative w-full max-w-2xl rounded-2xl bg-card shadow-2xl">
           {/* ── Barra colorida de prioridade ── */}
           <div
             className="h-1.5 w-full rounded-t-2xl"
@@ -216,7 +216,7 @@ export function TaskDetailModal({
                 {PRIORITY_LABELS[task.priority]}
               </span>
               {isCompleted && (
-                <span className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+                <span className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs font-semibold text-success">
                   Concluída
                 </span>
               )}
@@ -232,7 +232,7 @@ export function TaskDetailModal({
             </div>
             <button
               onClick={onClose}
-              className="rounded-md p-1 text-gray-400 hover:text-gray-600 transition-colors"
+              className="rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors"
             >
               <X className="h-5 w-5" />
             </button>
@@ -267,12 +267,12 @@ export function TaskDetailModal({
                 className="group flex w-full items-start gap-2 text-left"
               >
                 <p className={cn(
-                  'flex-1 text-base font-medium text-gray-900 leading-relaxed',
-                  isCompleted && 'line-through text-gray-400'
+                  'flex-1 text-base font-medium text-foreground leading-relaxed',
+                  isCompleted && 'line-through text-muted-foreground'
                 )}>
                   {description}
                 </p>
-                <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-border opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
             )}
           </div>
@@ -281,20 +281,20 @@ export function TaskDetailModal({
           <div className="grid grid-cols-2 gap-4 px-6 pb-4">
             {/* Vencimento */}
             <div className="space-y-1">
-              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <Calendar className="h-3.5 w-3.5" /> Vencimento
               </label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={e => setDueDate(e.target.value)}
-                className="h-9 w-full rounded-md border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-800"
+                className="h-9 w-full rounded-md border border-border px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
 
             {/* Prioridade */}
             <div className="space-y-1">
-              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <Flag className="h-3.5 w-3.5" /> Prioridade
               </label>
               <Select
@@ -306,7 +306,7 @@ export function TaskDetailModal({
 
             {/* Quadro */}
             <div className="space-y-1">
-              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <Layers className="h-3.5 w-3.5" /> Quadro
               </label>
               <Select
@@ -319,7 +319,7 @@ export function TaskDetailModal({
 
             {/* Coluna */}
             <div className="space-y-1">
-              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Coluna
               </label>
               <Select
@@ -333,7 +333,7 @@ export function TaskDetailModal({
 
             {/* Lista */}
             <div className="space-y-1">
-              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Lista
               </label>
               <Select
@@ -346,7 +346,7 @@ export function TaskDetailModal({
 
             {/* Responsável */}
             <div className="space-y-1">
-              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <User className="h-3.5 w-3.5" /> Responsável
               </label>
               {teamMembers && teamMembers.length > 0 ? (
@@ -362,9 +362,9 @@ export function TaskDetailModal({
                     <span
                       key={u.id}
                       title={u.nome}
-                      className="flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-800"
+                      className="flex items-center gap-1.5 rounded-full bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary"
                     >
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary-700 text-[9px] font-bold text-white">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/80 text-[9px] font-bold text-white">
                         {initials(u.nome)}
                       </span>
                       {u.nome.split(' ')[0]}
@@ -378,7 +378,7 @@ export function TaskDetailModal({
           {/* ── Tags ── */}
           {tags.length > 0 && (
             <div className="px-6 pb-4">
-              <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <Tag className="h-3.5 w-3.5" /> Etiquetas
               </label>
               <div className="flex flex-wrap gap-2">
@@ -401,7 +401,7 @@ export function TaskDetailModal({
           )}
 
           {/* ── Datas de criação / conclusão ── */}
-          <div className="flex gap-6 border-t border-gray-100 px-6 py-3 text-xs text-gray-400">
+          <div className="flex gap-6 border-t border-border px-6 py-3 text-xs text-muted-foreground">
             {task.created_at && (
               <span>Criada em {formatDateBR(task.created_at as string)}</span>
             )}
@@ -411,7 +411,7 @@ export function TaskDetailModal({
           </div>
 
           {/* ── Footer ── */}
-          <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4">
+          <div className="flex items-center justify-between border-t border-border px-6 py-4">
             <div className="flex gap-2">
               {/* Concluir / Reabrir */}
               <Button
@@ -419,7 +419,7 @@ export function TaskDetailModal({
                 variant={isCompleted ? 'secondary' : 'default'}
                 onClick={handleComplete}
                 disabled={completing}
-                className={isCompleted ? '' : 'bg-green-700 hover:bg-green-800 text-white border-0'}
+                className={isCompleted ? '' : 'bg-success hover:bg-success/90 text-white border-0'}
               >
                 {completing
                   ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -437,7 +437,7 @@ export function TaskDetailModal({
             {/* Excluir */}
             <button
               onClick={() => setConfirmDel(true)}
-              className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+              className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/5 hover:text-destructive transition-colors"
             >
               <Trash2 className="h-4 w-4" />
               Excluir

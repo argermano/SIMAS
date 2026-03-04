@@ -257,7 +257,7 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Users className="h-5 w-5 text-gray-400" />
+            <Users className="h-5 w-5 text-muted-foreground" />
             Cliente
           </CardTitle>
         </CardHeader>
@@ -274,18 +274,18 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Link2 className="h-5 w-5 text-gray-400" />
+              <Link2 className="h-5 w-5 text-muted-foreground" />
               Vincular a atendimento
-              <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+              <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             {carregandoAts ? (
-              <div className="flex items-center gap-2 py-2 text-sm text-gray-400">
+              <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" /> Carregando atendimentos...
               </div>
             ) : atendimentos.length === 0 ? (
-              <p className="text-sm text-gray-400 italic">
+              <p className="text-sm text-muted-foreground italic">
                 Nenhum atendimento encontrado para este cliente.
               </p>
             ) : (
@@ -295,8 +295,8 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
                   onClick={() => setAtendimentoId('')}
                   className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                     !atendimentoId
-                      ? 'border-gray-300 bg-gray-50 text-gray-500'
-                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                      ? 'border-border bg-muted/50 text-muted-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:border-border'
                   }`}
                 >
                   <span className="flex-1 italic">Sem vínculo (contrato avulso)</span>
@@ -311,14 +311,14 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
                       onClick={() => setAtendimentoId(at.id)}
                       className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                         atendimentoId === at.id
-                          ? 'border-primary-300 bg-primary-50 text-primary-800'
-                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                          ? 'border-primary/30 bg-primary/5 text-primary'
+                          : 'border-border bg-card text-foreground hover:border-border'
                       }`}
                     >
-                      <FileText className={`h-4 w-4 shrink-0 ${atendimentoId === at.id ? 'text-primary-600' : 'text-gray-400'}`} />
+                      <FileText className={`h-4 w-4 shrink-0 ${atendimentoId === at.id ? 'text-primary' : 'text-muted-foreground'}`} />
                       <span className="flex-1 font-medium">{label}</span>
-                      <span className="shrink-0 text-xs text-gray-400">{data}</span>
-                      {atendimentoId === at.id && <CheckCircle className="h-4 w-4 shrink-0 text-primary-600" />}
+                      <span className="shrink-0 text-xs text-muted-foreground">{data}</span>
+                      {atendimentoId === at.id && <CheckCircle className="h-4 w-4 shrink-0 text-primary" />}
                     </button>
                   )
                 })}
@@ -332,7 +332,7 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <DollarSign className="h-5 w-5 text-gray-400" />
+            <DollarSign className="h-5 w-5 text-muted-foreground" />
             Dados do contrato
           </CardTitle>
         </CardHeader>
@@ -376,19 +376,19 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5 text-gray-400" />
+            <FileText className="h-5 w-5 text-muted-foreground" />
             Modelo de contrato
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {carregandoModelos ? (
-            <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
+            <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Carregando modelos...
             </div>
           ) : modelosSalvos.length > 0 ? (
             <div className="space-y-2">
               {/* Lista de modelos existentes */}
-              <p className="text-xs font-medium text-gray-500">Modelos salvos</p>
+              <p className="text-xs font-medium text-muted-foreground">Modelos salvos</p>
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {modelosSalvos.map(m => (
                   <button
@@ -397,13 +397,13 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
                     onClick={() => selecionarModelo(m.id === modeloSelecionadoId ? null : m.id)}
                     className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                       m.id === modeloSelecionadoId
-                        ? 'border-primary-300 bg-primary-50 text-primary-800'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                        ? 'border-primary/30 bg-primary/5 text-primary'
+                        : 'border-border bg-card text-foreground hover:border-border'
                     }`}
                   >
-                    <FolderOpen className={`h-4 w-4 shrink-0 ${m.id === modeloSelecionadoId ? 'text-primary-600' : 'text-gray-400'}`} />
+                    <FolderOpen className={`h-4 w-4 shrink-0 ${m.id === modeloSelecionadoId ? 'text-primary' : 'text-muted-foreground'}`} />
                     <span className="flex-1 truncate font-medium">{m.titulo}</span>
-                    {m.id === modeloSelecionadoId && <CheckCircle className="h-4 w-4 shrink-0 text-primary-600" />}
+                    {m.id === modeloSelecionadoId && <CheckCircle className="h-4 w-4 shrink-0 text-primary" />}
                   </button>
                 ))}
               </div>
@@ -414,23 +414,23 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
                 onClick={() => selecionarModelo(null)}
                 className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                   !modeloSelecionadoId && !modeloTexto
-                    ? 'border-violet-300 bg-violet-50 text-violet-800'
-                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                    ? 'border-primary/30 bg-primary/5 text-primary'
+                    : 'border-border bg-card text-muted-foreground hover:border-border'
                 }`}
               >
-                <Sparkles className={`h-4 w-4 shrink-0 ${!modeloSelecionadoId && !modeloTexto ? 'text-violet-600' : 'text-gray-400'}`} />
+                <Sparkles className={`h-4 w-4 shrink-0 ${!modeloSelecionadoId && !modeloTexto ? 'text-primary' : 'text-muted-foreground'}`} />
                 <span className="flex-1">Gerar do zero com IA (sem modelo)</span>
               </button>
 
               {/* Separador */}
               <div className="flex items-center gap-2 pt-1">
-                <div className="flex-1 border-t border-gray-200" />
-                <span className="text-xs text-gray-400">ou enviar novo modelo</span>
-                <div className="flex-1 border-t border-gray-200" />
+                <div className="flex-1 border-t border-border" />
+                <span className="text-xs text-muted-foreground">ou enviar novo modelo</span>
+                <div className="flex-1 border-t border-border" />
               </div>
             </div>
           ) : (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-warning">
               Nenhum modelo salvo. Envie um modelo abaixo ou gere com IA.
             </div>
           )}
@@ -440,7 +440,7 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadandoModelo}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 hover:border-primary-300 hover:text-primary-700 transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground hover:border-primary/30 hover:text-primary transition-colors"
           >
             <Upload className="h-4 w-4" />
             {uploadandoModelo ? 'Extraindo texto e salvando...' : 'Enviar novo modelo PDF/DOCX'}
@@ -455,7 +455,7 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
 
           {/* Indicador de modelo selecionado */}
           {temModeloSelecionado && !gerando && (
-            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 px-3 py-2 text-sm text-success">
               <CheckCircle className="h-4 w-4 shrink-0" />
               Modelo selecionado — o contrato seguirá este modelo
             </div>
@@ -467,9 +467,9 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Brain className="h-5 w-5 text-gray-400" />
+            <Brain className="h-5 w-5 text-muted-foreground" />
             Instruções para a IA
-            <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+            <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -492,9 +492,9 @@ export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="max-h-96 overflow-y-auto rounded-lg border bg-gray-50 p-4">
+            <div className="max-h-96 overflow-y-auto rounded-lg border bg-muted/50 p-4">
               <MarkdownPreview>{conteudoGerado}</MarkdownPreview>
-              {gerando && <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary-600 ml-0.5 align-middle" />}
+              {gerando && <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary/70 ml-0.5 align-middle" />}
             </div>
           </CardContent>
         </Card>

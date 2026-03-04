@@ -4,22 +4,21 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  // Base — tamanho generoso para facilitar clique (acessibilidade sênior)
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default:   'bg-primary-800 text-white hover:bg-primary-900 focus-visible:ring-primary-800',
-        secondary: 'bg-white text-primary-800 border-2 border-primary-800 hover:bg-primary-50 focus-visible:ring-primary-800',
-        accent:    'bg-accent text-primary-800 hover:bg-yellow-500 focus-visible:ring-accent',
-        ghost:     'bg-transparent text-primary-800 hover:bg-primary-50',
-        danger:    'bg-destructive text-white hover:bg-red-700 focus-visible:ring-destructive',
-        link:      'text-primary-800 underline-offset-4 hover:underline p-0 h-auto',
+        default:   'bg-primary text-primary-foreground hover:bg-primary/90',
+        secondary: 'bg-secondary text-secondary-foreground border border-border hover:bg-secondary/80',
+        accent:    'bg-primary-glow text-primary-foreground hover:bg-primary-glow/90',
+        ghost:     'bg-transparent text-foreground hover:bg-muted',
+        danger:    'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        link:      'text-primary underline-offset-4 hover:underline p-0 h-auto',
       },
       size: {
         sm:   'h-9  px-4 text-sm',
         md:   'h-11 px-5 text-base',
-        lg:   'h-13 px-7 text-lg',   // botões principais — mais fácil de clicar
+        lg:   'h-13 px-7 text-lg',
         icon: 'h-10 w-10',
       },
     },

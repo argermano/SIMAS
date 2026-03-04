@@ -56,7 +56,7 @@ export default async function EquipePage() {
         acoes={
           <Link
             href="/configuracoes"
-            className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-800"
+            className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
             Configurações
@@ -71,12 +71,12 @@ export default async function EquipePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <UserPlus className="h-5 w-5 text-primary-600" />
+                <UserPlus className="h-5 w-5 text-primary" />
                 Convidar novo membro
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="mb-4 text-sm text-gray-500">
+              <p className="mb-4 text-sm text-muted-foreground">
                 O convidado receberá um e-mail com um link para definir sua senha e acessar o sistema.
               </p>
               <FormConvite />
@@ -88,9 +88,9 @@ export default async function EquipePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Clock className="h-4 w-4 text-amber-500" />
+                  <Clock className="h-4 w-4 text-warning" />
                   Convites pendentes
-                  <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                  <span className="ml-1 rounded-full bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
                     {pendentes.length}
                   </span>
                 </CardTitle>
@@ -100,14 +100,14 @@ export default async function EquipePage() {
                   {pendentes.map((u) => (
                     <div key={u.id} className="flex items-center justify-between py-3">
                       <div>
-                        <p className="font-medium text-gray-800">{u.nome}</p>
-                        <p className="text-sm text-gray-400">{u.email}</p>
+                        <p className="font-medium text-foreground">{u.nome}</p>
+                        <p className="text-sm text-muted-foreground">{u.email}</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <Badge variant={BADGE_ROLE[u.role] ?? 'default'} className="text-xs">
                           {LABELS_ROLE[u.role as keyof typeof LABELS_ROLE] ?? u.role}
                         </Badge>
-                        <span className="text-xs text-amber-600">Aguardando aceite</span>
+                        <span className="text-xs text-warning">Aguardando aceite</span>
                         <ReenviarConvite email={u.email} />
                         <DesativarUsuario usuarioId={u.id} nomeUsuario={u.nome} />
                       </div>
@@ -122,9 +122,9 @@ export default async function EquipePage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-gray-400" />
+                <Users className="h-5 w-5 text-muted-foreground" />
                 Membros ativos
-                <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
                   {ativos.length}
                 </span>
               </CardTitle>
@@ -144,23 +144,23 @@ export default async function EquipePage() {
                       <div key={u.id} className="flex items-center justify-between py-3 gap-4">
                         {/* Avatar + info */}
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-sm font-bold text-primary-800">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                             {u.nome.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-900 flex items-center gap-1.5">
+                            <p className="font-medium text-foreground flex items-center gap-1.5">
                               {u.nome}
                               {isMe && (
-                                <span className="text-xs text-gray-400">(você)</span>
+                                <span className="text-xs text-muted-foreground">(você)</span>
                               )}
                             </p>
-                            <p className="text-sm text-gray-400 truncate">{u.email}</p>
+                            <p className="text-sm text-muted-foreground truncate">{u.email}</p>
                           </div>
                         </div>
 
                         {/* Ações */}
                         <div className="flex items-center gap-3 shrink-0">
-                          <span className="hidden sm:block text-xs text-gray-400">
+                          <span className="hidden sm:block text-xs text-muted-foreground">
                             {formatarDataRelativa(u.created_at)}
                           </span>
                           <DefinirPrincipal

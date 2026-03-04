@@ -107,26 +107,26 @@ export function AiRewriteDialog({
       <div className="grid grid-cols-2 gap-4">
         {/* Original */}
         <div>
-          <p className="mb-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">Original</p>
-          <div className="rounded-lg border bg-gray-50 p-3 text-sm text-gray-700 leading-relaxed min-h-32 max-h-64 overflow-y-auto whitespace-pre-wrap font-mono">
+          <p className="mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Original</p>
+          <div className="rounded-lg border bg-muted/50 p-3 text-sm text-foreground leading-relaxed min-h-32 max-h-64 overflow-y-auto whitespace-pre-wrap font-mono">
             {originalContent}
           </div>
         </div>
 
         {/* Reescrito */}
         <div>
-          <p className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-violet-600 uppercase tracking-wide">
+          <p className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-primary uppercase tracking-wide">
             <Sparkles className="h-3 w-3" />
             Reescrito pela IA
           </p>
-          <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-gray-700 leading-relaxed min-h-32 max-h-64 overflow-y-auto whitespace-pre-wrap font-mono">
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm text-foreground leading-relaxed min-h-32 max-h-64 overflow-y-auto whitespace-pre-wrap font-mono">
             {gerando ? (
-              <span className="flex items-center gap-2 text-violet-500">
+              <span className="flex items-center gap-2 text-primary/60">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Gerando...
               </span>
             ) : reescrito || (
-              <span className="text-gray-400 italic">Aguardando...</span>
+              <span className="text-muted-foreground italic">Aguardando...</span>
             )}
           </div>
         </div>

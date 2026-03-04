@@ -46,20 +46,20 @@ export function ListaClientesClient({ busca, letraAtiva, letrasDisponiveis }: Li
       {/* Barra de busca */}
       <form onSubmit={pesquisar} className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <input
             type="search"
             value={valor}
             onChange={e => setValor(e.target.value)}
             placeholder="Buscar cliente pelo nome..."
-            className="h-11 w-full rounded-md border border-gray-300 bg-white py-2 pl-10 pr-10 text-base placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary-800 hover:border-gray-400 transition-colors"
+            className="h-11 w-full rounded-md border border-border bg-card py-2 pl-10 pr-10 text-base placeholder:text-muted-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring hover:border-muted-foreground transition-colors"
             aria-label="Buscar clientes"
           />
           {valor && (
             <button
               type="button"
               onClick={limpar}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-muted-foreground"
               aria-label="Limpar busca"
             >
               <X className="h-4 w-4" />
@@ -68,7 +68,7 @@ export function ListaClientesClient({ busca, letraAtiva, letrasDisponiveis }: Li
         </div>
         <button
           type="submit"
-          className="h-11 rounded-md bg-primary-800 px-5 text-base font-semibold text-white hover:bg-primary-900 transition-colors"
+          className="h-11 rounded-md bg-primary px-5 text-base font-semibold text-white hover:bg-primary/90 transition-colors"
         >
           Buscar
         </button>
@@ -81,13 +81,13 @@ export function ListaClientesClient({ busca, letraAtiva, letrasDisponiveis }: Li
             onClick={() => selecionarLetra('')}
             className={`shrink-0 px-1.5 py-0.5 text-xs font-semibold rounded transition-colors ${
               !letraAtiva
-                ? 'bg-primary-800 text-white'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-primary text-white'
+                : 'text-muted-foreground hover:bg-muted'
             }`}
           >
             Todos
           </button>
-          <span className="mx-0.5 h-4 w-px bg-gray-200" />
+          <span className="mx-0.5 h-4 w-px bg-border" />
           {LETRAS.map(letra => {
             const disponivel = letrasDisponiveis.includes(letra)
             return (
@@ -97,10 +97,10 @@ export function ListaClientesClient({ busca, letraAtiva, letrasDisponiveis }: Li
                 disabled={!disponivel}
                 className={`w-6 h-6 text-xs font-semibold rounded transition-colors ${
                   letraAtiva === letra
-                    ? 'bg-primary-800 text-white'
+                    ? 'bg-primary text-white'
                     : disponivel
-                      ? 'text-gray-700 hover:bg-gray-100'
-                      : 'text-gray-300 cursor-default'
+                      ? 'text-foreground hover:bg-muted'
+                      : 'text-border cursor-default'
                 }`}
               >
                 {letra}

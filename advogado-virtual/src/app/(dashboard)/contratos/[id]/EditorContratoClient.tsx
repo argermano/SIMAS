@@ -144,7 +144,7 @@ export function EditorContratoClient({
       size="sm"
       onClick={() => setConfirmarAprovar(true)}
       disabled={aprovando}
-      className="gap-1.5 bg-green-700 hover:bg-green-800"
+      className="gap-1.5 bg-success hover:bg-success/90"
     >
       {aprovando
         ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -157,7 +157,7 @@ export function EditorContratoClient({
   const acaoAssinar = !temAssinaturaAtiva ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button size="sm" className="gap-1.5 bg-violet-700 hover:bg-violet-800">
+        <Button size="sm" className="gap-1.5 bg-primary/80 hover:bg-primary">
           <PenLine className="h-4 w-4" />
           Assinar
           <ChevronDown className="h-3.5 w-3.5 ml-0.5" />

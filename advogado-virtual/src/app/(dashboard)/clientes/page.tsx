@@ -120,28 +120,28 @@ export default async function ClientesPage({
                   <Link key={cliente.id} href={`/clientes/${cliente.id}`}>
                     <Card className="transition-shadow hover:shadow-card-hover">
                       <CardContent className="flex items-center gap-4 py-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-100 text-base font-bold text-primary-800">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary">
                           {iniciais(cliente.nome)}
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <p className="text-lg font-semibold text-gray-900 truncate">
+                          <p className="text-lg font-semibold text-foreground truncate">
                             {cliente.nome}
                           </p>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-gray-500">
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
                             {cliente.cpf && (
                               <span>CPF: {mascaraCPF(cliente.cpf)}</span>
                             )}
                             {cliente.telefone && (
                               <span>{cliente.telefone}</span>
                             )}
-                            <span className="text-gray-400">
+                            <span className="text-muted-foreground">
                               Cadastrado em {formatarData(cliente.created_at)}
                             </span>
                           </div>
                         </div>
 
-                        <svg className="h-5 w-5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="h-5 w-5 shrink-0 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
                       </CardContent>
@@ -158,7 +158,7 @@ export default async function ClientesPage({
                       <Button variant="secondary" size="sm">← Anterior</Button>
                     </Link>
                   )}
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-muted-foreground">
                     Página {pageNum} de {totalPaginas}
                   </span>
                   {pageNum < totalPaginas && (

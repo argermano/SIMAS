@@ -61,19 +61,19 @@ export function BotoesRevisao({ pecaId }: BotoesRevisaoProps) {
     return (
       <div className="mt-3 space-y-2">
         <textarea
-          className="w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+          className="w-full rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-destructive/30 resize-none"
           rows={2}
           placeholder="Descreva o motivo da rejeição..."
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}
           autoFocus
         />
-        {erro && <p className="text-xs text-red-600">{erro}</p>}
+        {erro && <p className="text-xs text-destructive">{erro}</p>}
         <div className="flex gap-2">
           <Button
             size="sm"
             variant="ghost"
-            className="text-red-700 border border-red-200 hover:bg-red-50"
+            className="text-destructive border border-destructive/20 hover:bg-destructive/5"
             onClick={rejeitar}
             loading={rejeitando}
           >
@@ -94,7 +94,7 @@ export function BotoesRevisao({ pecaId }: BotoesRevisaoProps) {
 
   return (
     <div className="flex items-center gap-2">
-      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      {erro && <p className="text-xs text-destructive">{erro}</p>}
       <Button
         size="sm"
         onClick={aprovar}
@@ -107,7 +107,7 @@ export function BotoesRevisao({ pecaId }: BotoesRevisaoProps) {
       <Button
         size="sm"
         variant="ghost"
-        className="text-red-600 border border-red-200 hover:bg-red-50"
+        className="text-destructive border border-destructive/20 hover:bg-destructive/5"
         onClick={() => setModoRejeitar(true)}
         disabled={aprovando}
       >

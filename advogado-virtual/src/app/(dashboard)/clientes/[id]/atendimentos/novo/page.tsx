@@ -56,9 +56,9 @@ export default async function NovoAtendimentoPage({
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-4xl space-y-6">
-          <p className="text-gray-500">
+          <p className="text-muted-foreground">
             Escolha a área jurídica e o tipo de peça para iniciar o atendimento de{' '}
-            <strong className="text-gray-900">{cliente.nome}</strong>.
+            <strong className="text-foreground">{cliente.nome}</strong>.
           </p>
 
           {areasAtivas.map((area) => (
@@ -69,7 +69,7 @@ export default async function NovoAtendimentoPage({
               <CardContent className="space-y-4">
                 {/* Peças com IA */}
                 <div>
-                  <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <Zap className="h-3.5 w-3.5" />
                     Peças com IA
                   </div>
@@ -81,12 +81,12 @@ export default async function NovoAtendimentoPage({
                         <Link
                           key={tipo.id}
                           href={`/${area.id}/pecas/${tipo.id}?clienteId=${id}`}
-                          className="group flex flex-col rounded-xl border-2 border-gray-100 bg-white p-3 text-left transition-all hover:border-primary-300 hover:bg-primary-50 hover:shadow-sm"
+                          className="group flex flex-col rounded-xl border-2 border-border bg-card p-3 text-left transition-all hover:border-primary/30 hover:bg-primary/10 hover:shadow-sm"
                         >
-                          <span className="text-sm font-semibold text-gray-900 group-hover:text-primary-800 leading-tight">
+                          <span className="text-sm font-semibold text-foreground group-hover:text-primary leading-tight">
                             {tipo.nome}
                           </span>
-                          <span className="mt-0.5 text-xs text-gray-400 leading-tight">
+                          <span className="mt-0.5 text-xs text-muted-foreground leading-tight">
                             {tipo.descricao}
                           </span>
                         </Link>
@@ -97,18 +97,18 @@ export default async function NovoAtendimentoPage({
 
                 {/* Consultoria */}
                 <div>
-                  <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <Brain className="h-3.5 w-3.5" />
                     Consultoria / Análise IA
                   </div>
                   <Link
                     href={`/${area.id}/consultoria?clienteId=${id}`}
-                    className="group inline-flex flex-col rounded-xl border-2 border-gray-100 bg-white px-4 py-3 text-left transition-all hover:border-violet-300 hover:bg-violet-50"
+                    className="group inline-flex flex-col rounded-xl border-2 border-border bg-card px-4 py-3 text-left transition-all hover:border-primary/30 hover:bg-primary/5"
                   >
-                    <span className="text-sm font-semibold text-gray-900 group-hover:text-violet-800">
+                    <span className="text-sm font-semibold text-foreground group-hover:text-primary">
                       Análise de Caso
                     </span>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-muted-foreground">
                       Consultoria jurídica completa com IA
                     </span>
                   </Link>

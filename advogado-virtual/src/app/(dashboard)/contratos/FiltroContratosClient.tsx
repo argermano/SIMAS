@@ -49,20 +49,20 @@ export function FiltroContratosClient({ busca, statusAtivo }: FiltroContratosCli
       {/* Barra de busca */}
       <form onSubmit={pesquisar} className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <input
             type="search"
             value={valor}
             onChange={e => setValor(e.target.value)}
             placeholder="Buscar contrato por título ou cliente..."
-            className="h-11 w-full rounded-md border border-gray-300 bg-white py-2 pl-10 pr-10 text-base placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-primary-800 hover:border-gray-400 transition-colors"
+            className="h-11 w-full rounded-md border border-border bg-card py-2 pl-10 pr-10 text-base placeholder:text-muted-foreground focus:border-transparent focus:outline-none focus:ring-2 focus:ring-ring hover:border-muted-foreground transition-colors"
             aria-label="Buscar contratos"
           />
           {valor && (
             <button
               type="button"
               onClick={limpar}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-muted-foreground"
               aria-label="Limpar busca"
             >
               <X className="h-4 w-4" />
@@ -71,7 +71,7 @@ export function FiltroContratosClient({ busca, statusAtivo }: FiltroContratosCli
         </div>
         <button
           type="submit"
-          className="h-11 rounded-md bg-primary-800 px-5 text-base font-semibold text-white hover:bg-primary-900 transition-colors"
+          className="h-11 rounded-md bg-primary px-5 text-base font-semibold text-white hover:bg-primary/90 transition-colors"
         >
           Buscar
         </button>
@@ -85,8 +85,8 @@ export function FiltroContratosClient({ busca, statusAtivo }: FiltroContratosCli
             onClick={() => selecionarStatus(opt.value)}
             className={`px-3 py-1 text-xs font-semibold rounded-full transition-colors ${
               statusAtivo === opt.value
-                ? 'bg-primary-800 text-white'
-                : 'text-gray-600 hover:bg-gray-100'
+                ? 'bg-primary text-white'
+                : 'text-muted-foreground hover:bg-muted'
             }`}
           >
             {opt.label}

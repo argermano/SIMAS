@@ -13,22 +13,22 @@ interface ValidacaoData {
 }
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
-  validado:     <CheckCircle className="h-4 w-4 text-green-600" />,
+  validado:     <CheckCircle className="h-4 w-4 text-success" />,
   parcial:      <AlertTriangle className="h-4 w-4 text-amber-600" />,
-  nao_validado: <XCircle className="h-4 w-4 text-red-600" />,
-  inconsistente: <XCircle className="h-4 w-4 text-red-600" />,
+  nao_validado: <XCircle className="h-4 w-4 text-destructive" />,
+  inconsistente: <XCircle className="h-4 w-4 text-destructive" />,
 }
 
 const STATUS_BADGE: Record<string, string> = {
-  validado:      'bg-green-100 text-green-700',
-  parcial:       'bg-amber-100 text-amber-700',
-  nao_validado:  'bg-red-100 text-red-700',
-  inconsistente: 'bg-red-100 text-red-700',
+  validado:      'bg-success/10 text-success',
+  parcial:       'bg-warning/10 text-warning',
+  nao_validado:  'bg-destructive/10 text-destructive',
+  inconsistente: 'bg-destructive/10 text-destructive',
 }
 
 function ScoreCircle({ score }: { score: number }) {
-  const cor = score >= 80 ? 'text-green-600' : score >= 60 ? 'text-amber-600' : 'text-red-600'
-  const bgCor = score >= 80 ? 'border-green-200' : score >= 60 ? 'border-amber-200' : 'border-red-200'
+  const cor = score >= 80 ? 'text-success' : score >= 60 ? 'text-amber-600' : 'text-destructive'
+  const bgCor = score >= 80 ? 'border-success/20' : score >= 60 ? 'border-amber-200' : 'border-destructive/20'
   return (
     <div className={`flex h-20 w-20 items-center justify-center rounded-full border-4 ${bgCor}`}>
       <span className={`text-2xl font-bold ${cor}`}>{score}</span>
@@ -45,8 +45,8 @@ export function RelatorioValidacao({ data, onCorrecao }: { data: ValidacaoData; 
           <CardContent className="flex items-center gap-6 py-6">
             <ScoreCircle score={data.score_confianca} />
             <div>
-              <p className="text-lg font-bold text-gray-900">Score de Confiança</p>
-              <p className="text-sm text-gray-500">
+              <p className="text-lg font-bold text-foreground">Score de Confiança</p>
+              <p className="text-sm text-muted-foreground">
                 {data.score_confianca >= 80
                   ? 'Peça com boa qualidade geral'
                   : data.score_confianca >= 60
@@ -84,14 +84,14 @@ export function RelatorioValidacao({ data, onCorrecao }: { data: ValidacaoData; 
             <CardContent>
               <div className="space-y-1">
                 {items.map((item, i) => (
-                  <div key={i} className="flex items-start gap-2 rounded-md bg-gray-50 px-3 py-2 text-xs">
+                  <div key={i} className="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs">
                     {STATUS_ICON[(item as Record<string, string>).status] ?? STATUS_ICON.parcial}
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-foreground">
                         {(item as Record<string, string>).item ?? (item as Record<string, string>).referencia}
                       </p>
                       {((item as Record<string, string>).sugestao ?? (item as Record<string, string>).observacao) && (
-                        <p className="text-gray-500 mt-0.5">
+                        <p className="text-muted-foreground mt-0.5">
                           {(item as Record<string, string>).sugestao ?? (item as Record<string, string>).observacao}
                         </p>
                       )}
@@ -116,14 +116,14 @@ export function RelatorioValidacao({ data, onCorrecao }: { data: ValidacaoData; 
                 <button
                   key={i}
                   onClick={() => onCorrecao?.(c.tipo)}
-                  className="flex w-full items-center justify-between rounded-lg border p-3 text-left transition-all hover:border-primary-300 hover:bg-primary-50"
+                  className="flex w-full items-center justify-between rounded-lg border p-3 text-left transition-all hover:border-primary/30 hover:bg-primary/10"
                 >
                   <div className="text-sm">
-                    <p className="font-medium text-gray-900">{c.descricao}</p>
-                    <p className="text-xs text-gray-500">{c.tipo.replace(/_/g, ' ')}</p>
+                    <p className="font-medium text-foreground">{c.descricao}</p>
+                    <p className="text-xs text-muted-foreground">{c.tipo.replace(/_/g, ' ')}</p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                    c.prioridade === 'alta' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                    c.prioridade === 'alta' ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'
                   }`}>
                     {c.prioridade}
                   </span>

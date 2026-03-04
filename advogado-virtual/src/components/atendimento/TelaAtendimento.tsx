@@ -323,8 +323,8 @@ export function TelaAtendimento({
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center space-y-3">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-800" />
-          <p className="text-sm text-gray-500">Carregando atendimento...</p>
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Carregando atendimento...</p>
         </div>
       </div>
     )
@@ -336,24 +336,24 @@ export function TelaAtendimento({
       {/* Modal de geração com streaming */}
       {mostraModalGeracao && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+          <div className="w-full max-w-lg rounded-2xl bg-card shadow-2xl">
             <div className="border-b px-6 py-4">
-              <h2 className="text-lg font-semibold text-gray-900">Gerando {tipoPecaNome} com IA</h2>
-              <p className="mt-0.5 text-sm text-gray-500">
+              <h2 className="text-lg font-semibold text-foreground">Gerando {tipoPecaNome} com IA</h2>
+              <p className="mt-0.5 text-sm text-muted-foreground">
                 Isto pode levar até 45 segundos. Não feche a janela.
               </p>
             </div>
             <div className="px-6 py-4">
-              <div className="h-52 overflow-y-auto rounded-xl border bg-gray-50 p-3 font-mono text-xs leading-relaxed text-gray-700">
+              <div className="h-52 overflow-y-auto rounded-xl border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-foreground">
                 {textoGerado ? (
                   <>
                     {textoGerado}
                     {gerando && (
-                      <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary-600 ml-0.5 align-middle" />
+                      <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary/70 ml-0.5 align-middle" />
                     )}
                   </>
                 ) : (
-                  <div className="flex items-center gap-2 py-4 text-gray-400">
+                  <div className="flex items-center gap-2 py-4 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Iniciando geração...
                   </div>
@@ -361,7 +361,7 @@ export function TelaAtendimento({
               </div>
             </div>
             <div className="border-t px-6 py-4 text-center">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 {gerando ? 'Gerando...' : 'Finalizando e salvando...'}
               </p>
             </div>
@@ -373,7 +373,7 @@ export function TelaAtendimento({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Users className="h-5 w-5 text-gray-400" />
+            <Users className="h-5 w-5 text-muted-foreground" />
             Cliente
           </CardTitle>
         </CardHeader>
@@ -384,7 +384,7 @@ export function TelaAtendimento({
           />
           {cliente && (
             <div>
-              <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-gray-500">
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
                 <MapPin className="h-3.5 w-3.5" />
                 Localização do cliente
               </p>
@@ -414,19 +414,19 @@ export function TelaAtendimento({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <MessageSquare className="h-5 w-5 text-gray-400" />
+            <MessageSquare className="h-5 w-5 text-muted-foreground" />
             Relato de Caso | Atendimento Cliente
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Tabs: 3 modos de entrada */}
-          <div className="flex rounded-lg border bg-gray-50 p-1 gap-1">
+          <div className="flex rounded-lg border bg-muted/50 p-1 gap-1">
             <button
               onClick={() => setModoInput('durante_reuniao')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                 modoInput === 'durante_reuniao'
-                  ? 'bg-white text-primary-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <UserCheck className="h-4 w-4" />
@@ -436,8 +436,8 @@ export function TelaAtendimento({
               onClick={() => setModoInput('pos_reuniao')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                 modoInput === 'pos_reuniao'
-                  ? 'bg-white text-primary-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Mic className="h-4 w-4" />
@@ -447,8 +447,8 @@ export function TelaAtendimento({
               onClick={() => setModoInput('texto')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                 modoInput === 'texto'
-                  ? 'bg-white text-primary-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Keyboard className="h-4 w-4" />
@@ -459,7 +459,7 @@ export function TelaAtendimento({
           {/* Conteúdo da tab */}
           {modoInput === 'durante_reuniao' && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Grave o áudio <strong>com o cliente presente</strong>. O consentimento LGPD será solicitado antes de iniciar.
               </p>
               <GravadorAudio
@@ -482,7 +482,7 @@ export function TelaAtendimento({
 
           {modoInput === 'pos_reuniao' && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Relate os fatos com <strong>suas próprias palavras</strong> após a reunião. Sem necessidade de consentimento LGPD.
               </p>
               <GravadorAudio
@@ -525,7 +525,7 @@ export function TelaAtendimento({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5 text-gray-400" />
+            <FileText className="h-5 w-5 text-muted-foreground" />
             Pedido específico
           </CardTitle>
         </CardHeader>
@@ -541,7 +541,7 @@ export function TelaAtendimento({
           />
           {podeGravar && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">Ou dite:</span>
+              <span className="text-xs text-muted-foreground">Ou dite:</span>
               <MicrofoneInline
                 onTranscricao={(t) => setPedidoEspecifico(prev => prev ? prev + ' ' + t : t)}
                 disabled={!podeGravar}
@@ -555,7 +555,7 @@ export function TelaAtendimento({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5 text-gray-400" />
+            <FileText className="h-5 w-5 text-muted-foreground" />
             Documentos
           </CardTitle>
         </CardHeader>
@@ -610,7 +610,7 @@ export function TelaAtendimento({
           size="lg"
           onClick={gerarPeca}
           disabled={!podeSalvar || salvando || gerando}
-          className="gap-2 bg-violet-700 hover:bg-violet-800"
+          className="gap-2 bg-primary/80 hover:bg-primary"
         >
           <Zap className="h-5 w-5" />
           Gerar Peça IA

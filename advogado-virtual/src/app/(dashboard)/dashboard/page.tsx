@@ -66,19 +66,19 @@ export default async function DashboardPage() {
           {/* Card de acesso rápido — Análise de Caso */}
           <section>
             <Link href="/analise-caso" className="group block">
-              <div className="flex items-center gap-5 rounded-2xl border-2 border-violet-200 bg-gradient-to-r from-violet-50 to-white p-6 transition-all hover:border-violet-400 hover:shadow-md">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-violet-100">
-                  <Brain className="h-7 w-7 text-violet-700" />
+              <div className="flex items-center gap-5 rounded-2xl border-2 border-primary/20 bg-card p-6 transition-all hover:border-primary/40 hover:shadow-card-hover">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl" style={{ background: 'var(--gradient-primary)' }}>
+                  <Brain className="h-7 w-7 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-bold text-gray-900 group-hover:text-violet-800">
+                  <h2 className="text-lg font-bold text-foreground font-heading group-hover:text-primary">
                     Análise de Caso com IA
                   </h2>
-                  <p className="mt-0.5 text-sm text-gray-500">
+                  <p className="mt-0.5 text-sm text-muted-foreground">
                     Descreva o relato do cliente — a IA identifica a área jurídica, avalia a urgência e orienta os próximos passos
                   </p>
                 </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-violet-400 group-hover:text-violet-700 transition-colors" />
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
               </div>
             </Link>
           </section>
@@ -86,26 +86,31 @@ export default async function DashboardPage() {
           {/* Cards das áreas */}
           <section aria-label="Áreas do Direito">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {areasOrdenadas.map((area) => {
+              {areasOrdenadas.map((area, i) => {
                 const Icone = ICONE_AREA[area.icone] ?? Shield
 
                 if (area.ativo) {
                   return (
-                    <Link key={area.id} href={`/${area.id}`} className="group block">
-                      <Card className="h-full transition-all hover:shadow-card-hover group-hover:border-primary-300">
+                    <Link
+                      key={area.id}
+                      href={`/${area.id}`}
+                      className="group block animate-fade-in"
+                      style={{ animationDelay: `${i * 80}ms` }}
+                    >
+                      <Card className="h-full transition-all duration-200 hover:shadow-card-hover group-hover:border-primary/20">
                         <CardContent className="flex flex-col gap-3 p-6">
                           <div
-                            className={`flex h-14 w-14 items-center justify-center rounded-2xl ${area.corBg}`}
+                            className={`flex h-12 w-12 items-center justify-center rounded-xl ${area.corBg}`}
                           >
-                            <Icone className={`h-7 w-7 ${area.corTexto}`} />
+                            <Icone className={`h-6 w-6 ${area.corTexto}`} />
                           </div>
                           <div className="flex-1">
-                            <h2 className="text-lg font-bold text-gray-900 group-hover:text-primary-800">
+                            <h2 className="text-lg font-bold text-foreground font-heading group-hover:text-primary">
                               {area.nome}
                             </h2>
-                            <p className="mt-1 text-sm text-gray-500">{area.descricao}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">{area.descricao}</p>
                           </div>
-                          <div className={`flex items-center gap-1 text-sm font-semibold ${area.corTexto}`}>
+                          <div className="flex items-center gap-1 text-sm font-semibold text-primary">
                             Acessar <ChevronRight className="h-4 w-4" />
                           </div>
                         </CardContent>
@@ -115,20 +120,20 @@ export default async function DashboardPage() {
                 }
 
                 return (
-                  <div key={area.id} className="block">
+                  <div key={area.id} className="block animate-fade-in" style={{ animationDelay: `${i * 80}ms` }}>
                     <Card className="h-full opacity-60">
                       <CardContent className="flex flex-col gap-3 p-6">
                         <div
-                          className={`flex h-14 w-14 items-center justify-center rounded-2xl ${area.corBg}`}
+                          className={`flex h-12 w-12 items-center justify-center rounded-xl ${area.corBg}`}
                         >
-                          <Icone className={`h-7 w-7 ${area.corTexto}`} />
+                          <Icone className={`h-6 w-6 ${area.corTexto}`} />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <h2 className="text-lg font-bold text-gray-900">{area.nome}</h2>
+                            <h2 className="text-lg font-bold text-foreground font-heading">{area.nome}</h2>
                             <Badge variant="secondary" className="text-xs">Em breve</Badge>
                           </div>
-                          <p className="mt-1 text-sm text-gray-500">{area.descricao}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{area.descricao}</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -142,13 +147,13 @@ export default async function DashboardPage() {
           {ultimosAtendimentos && ultimosAtendimentos.length > 0 && (
             <section>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="flex items-center gap-2 text-xl font-semibold text-gray-900">
-                  <Clock className="h-5 w-5 text-gray-400" />
+                <h2 className="flex items-center gap-2 text-xl font-semibold text-foreground font-heading">
+                  <Clock className="h-5 w-5 text-muted-foreground" />
                   Últimos atendimentos
                 </h2>
                 <Link
                   href="/historico"
-                  className="flex items-center gap-1 text-sm font-medium text-primary-800 hover:underline"
+                  className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                 >
                   Ver todos <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -165,10 +170,10 @@ export default async function DashboardPage() {
                       <Card className="transition-shadow hover:shadow-card-hover">
                         <CardContent className="flex items-center justify-between gap-4 py-4">
                           <div className="min-w-0">
-                            <p className="font-semibold text-gray-900">
+                            <p className="font-semibold text-foreground">
                               {cliente?.nome ?? 'Cliente'}
                             </p>
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-muted-foreground">
                               {LABELS_AREA[area] ?? area} · {formatarDataRelativa(at.created_at)}
                             </p>
                           </div>

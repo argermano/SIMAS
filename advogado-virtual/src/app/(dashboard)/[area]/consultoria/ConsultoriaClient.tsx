@@ -37,9 +37,9 @@ const TITULOS_CONSULTORIA: Record<string, string> = {
 }
 
 const COR_URGENCIA: Record<string, string> = {
-  alta:  'border-red-200 bg-red-50 text-red-800',
+  alta:  'border-destructive/20 bg-destructive/5 text-destructive',
   media: 'border-amber-200 bg-amber-50 text-amber-800',
-  baixa: 'border-green-200 bg-green-50 text-green-800',
+  baixa: 'border-success/20 bg-success/5 text-success',
 }
 const ICONE_URGENCIA: Record<string, React.ComponentType<{ className?: string }>> = {
   alta:  AlertTriangle,
@@ -352,8 +352,8 @@ export function ConsultoriaClient({
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center space-y-3">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary-200 border-t-primary-800" />
-          <p className="text-sm text-gray-500">Carregando atendimento...</p>
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+          <p className="text-sm text-muted-foreground">Carregando atendimento...</p>
         </div>
       </div>
     )
@@ -373,27 +373,27 @@ export function ConsultoriaClient({
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <Users className="h-5 w-5 text-gray-400" />
+              <Users className="h-5 w-5 text-muted-foreground" />
               Informações do Atendimento
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {cliente && (
-              <div className="inline-flex items-center gap-2 rounded-full bg-green-100 px-3 py-1.5 text-sm font-medium text-green-800">
+              <div className="inline-flex items-center gap-2 rounded-full bg-success/10 px-3 py-1.5 text-sm font-medium text-success">
                 <CheckCircle className="h-4 w-4" />
                 {cliente.nome}
               </div>
             )}
             {textoRelato && (
               <div>
-                <p className="mb-1 text-xs font-medium text-gray-500 uppercase tracking-wide">Relato</p>
-                <p className="text-sm text-gray-700 leading-relaxed line-clamp-4">{textoRelato}</p>
+                <p className="mb-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">Relato</p>
+                <p className="text-sm text-foreground leading-relaxed line-clamp-4">{textoRelato}</p>
               </div>
             )}
             {pedidoEspecifico && (
               <div>
-                <p className="mb-1 text-xs font-medium text-gray-500 uppercase tracking-wide">Questão específica</p>
-                <p className="text-sm text-gray-700">{pedidoEspecifico}</p>
+                <p className="mb-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">Questão específica</p>
+                <p className="text-sm text-foreground">{pedidoEspecifico}</p>
               </div>
             )}
           </CardContent>
@@ -401,10 +401,10 @@ export function ConsultoriaClient({
 
         {/* 2. Diagnóstico da IA */}
         {analiseGeral && (
-          <Card className="border-violet-200">
+          <Card className="border-primary/20">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Brain className="h-5 w-5 text-violet-600" />
+                <Brain className="h-5 w-5 text-primary" />
                 Diagnóstico da IA
               </CardTitle>
             </CardHeader>
@@ -427,7 +427,7 @@ export function ConsultoriaClient({
               )}
 
               {/* Resumo */}
-              <p className="text-sm text-gray-700 leading-relaxed">{analiseGeral.resumo_caso}</p>
+              <p className="text-sm text-foreground leading-relaxed">{analiseGeral.resumo_caso}</p>
 
               {/* Áreas */}
               {analiseGeral.areas_identificadas?.length > 0 && (
@@ -437,8 +437,8 @@ export function ConsultoriaClient({
                       key={a.area}
                       className={`rounded-full px-3 py-1 text-xs font-medium ${
                         a.relevancia === 'principal'
-                          ? 'bg-primary-100 text-primary-800'
-                          : 'bg-gray-100 text-gray-600'
+                          ? 'bg-primary/10 text-primary'
+                          : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {a.nome}
@@ -449,20 +449,20 @@ export function ConsultoriaClient({
 
               {/* Recomendação */}
               {analiseGeral.recomendacao_imediata && (
-                <div className="rounded-lg bg-violet-50 border border-violet-100 px-3 py-2.5">
-                  <p className="text-xs font-semibold text-violet-700 mb-1">Recomendação imediata</p>
-                  <p className="text-sm text-violet-900">{analiseGeral.recomendacao_imediata}</p>
+                <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2.5">
+                  <p className="text-xs font-semibold text-primary mb-1">Recomendação imediata</p>
+                  <p className="text-sm text-primary">{analiseGeral.recomendacao_imediata}</p>
                 </div>
               )}
 
               {/* Documentos a solicitar (referência) */}
               {analiseGeral.documentos_solicitar?.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 mb-1.5">Documentos identificados</p>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1.5">Documentos identificados</p>
                   <ul className="space-y-1">
                     {analiseGeral.documentos_solicitar.map((doc, i) => (
-                      <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
-                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-400" />
+                      <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground" />
                         {doc}
                       </li>
                     ))}
@@ -477,18 +477,18 @@ export function ConsultoriaClient({
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-gray-400" />
+              <FileText className="h-5 w-5 text-muted-foreground" />
               Documentos
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {documentosExistentes.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-medium text-gray-500">Já anexados:</p>
+                <p className="text-xs font-medium text-muted-foreground">Já anexados:</p>
                 <ul className="space-y-1">
                   {documentosExistentes.map((doc, i) => (
-                    <li key={i} className="flex items-center gap-2 text-sm text-gray-700">
-                      <FileCheck className="h-4 w-4 shrink-0 text-green-500" />
+                    <li key={i} className="flex items-center gap-2 text-sm text-foreground">
+                      <FileCheck className="h-4 w-4 shrink-0 text-success" />
                       {doc.file_name}
                     </li>
                   ))}
@@ -507,9 +507,9 @@ export function ConsultoriaClient({
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Scale className="h-5 w-5 text-gray-400" />
+                <Scale className="h-5 w-5 text-muted-foreground" />
                 Tipo de Serviço
-                {salvandoTipo && <Loader2 className="h-4 w-4 animate-spin text-gray-400" />}
+                {salvandoTipo && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -518,8 +518,8 @@ export function ConsultoriaClient({
                   onClick={() => salvarTipoServico('administrativo')}
                   className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
                     tipoServico === 'administrativo'
-                      ? 'border-primary-600 bg-primary-50 text-primary-800'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      ? 'border-primary/60 bg-primary/5 text-primary'
+                      : 'border-border text-muted-foreground hover:border-border'
                   }`}
                 >
                   Administrativo
@@ -528,8 +528,8 @@ export function ConsultoriaClient({
                   onClick={() => salvarTipoServico('judicial')}
                   className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
                     tipoServico === 'judicial'
-                      ? 'border-primary-600 bg-primary-50 text-primary-800'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                      ? 'border-primary/60 bg-primary/5 text-primary'
+                      : 'border-border text-muted-foreground hover:border-border'
                   }`}
                 >
                   Judicial
@@ -577,7 +577,7 @@ export function ConsultoriaClient({
             size="md"
             onClick={handleGerarPecaContinuacao}
             disabled={!atendimentoId}
-            className="gap-2 bg-primary-700 hover:bg-primary-800"
+            className="gap-2 bg-primary/80 hover:bg-primary"
           >
             Gerar Peça com IA
             <ArrowRight className="h-4 w-4" />
@@ -601,7 +601,7 @@ export function ConsultoriaClient({
                 onClick={emitirContrato}
                 loading={gerandoContrato}
                 disabled={gerandoContrato}
-                className="gap-2 bg-primary-700 hover:bg-primary-800"
+                className="gap-2 bg-primary/80 hover:bg-primary"
               >
                 {gerandoContrato ? 'Gerando...' : 'Gerar com IA'}
               </Button>
@@ -610,11 +610,11 @@ export function ConsultoriaClient({
         >
           <div className="space-y-4">
             {/* Toggle tipo de valor */}
-            <div className="flex rounded-lg border bg-gray-50 p-1 gap-1">
+            <div className="flex rounded-lg border bg-muted/50 p-1 gap-1">
               <button
                 onClick={() => setTipoValor('fixo')}
                 className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  tipoValor === 'fixo' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                  tipoValor === 'fixo' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Valor fixo (R$)
@@ -622,7 +622,7 @@ export function ConsultoriaClient({
               <button
                 onClick={() => setTipoValor('exito')}
                 className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  tipoValor === 'exito' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                  tipoValor === 'exito' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 % de êxito
@@ -688,14 +688,14 @@ export function ConsultoriaClient({
           }
         >
           {!tipoServico && (
-            <p className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="mb-3 text-xs text-warning bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
               Tipo de serviço não definido. Exibindo lista para <strong>Administrativo</strong>.
             </p>
           )}
           {checklistFaltante.length === 0 ? (
             <div className="py-6 text-center">
-              <CheckCircle className="mx-auto h-10 w-10 text-green-500 mb-2" />
-              <p className="text-sm font-medium text-gray-700">Todos os documentos foram anexados!</p>
+              <CheckCircle className="mx-auto h-10 w-10 text-success mb-2" />
+              <p className="text-sm font-medium text-foreground">Todos os documentos foram anexados!</p>
             </div>
           ) : (
             <ul className="space-y-2">
@@ -703,7 +703,7 @@ export function ConsultoriaClient({
                 <li key={item.id} className="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{item.nome}</p>
+                    <p className="text-sm font-medium text-foreground">{item.nome}</p>
                     {item.obrigatorio && (
                       <span className="text-xs text-amber-600">Obrigatório</span>
                     )}
@@ -744,8 +744,8 @@ export function ConsultoriaClient({
                 onClick={() => setTipoServicoModal('administrativo')}
                 className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
                   tipoServicoModal === 'administrativo'
-                    ? 'border-primary-600 bg-primary-50 text-primary-800'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    ? 'border-primary/60 bg-primary/5 text-primary'
+                    : 'border-border text-muted-foreground hover:border-border'
                 }`}
               >
                 Administrativo
@@ -754,8 +754,8 @@ export function ConsultoriaClient({
                 onClick={() => setTipoServicoModal('judicial')}
                 className={`flex-1 rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
                   tipoServicoModal === 'judicial'
-                    ? 'border-primary-600 bg-primary-50 text-primary-800'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    ? 'border-primary/60 bg-primary/5 text-primary'
+                    : 'border-border text-muted-foreground hover:border-border'
                 }`}
               >
                 Judicial
@@ -786,7 +786,7 @@ export function ConsultoriaClient({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Users className="h-5 w-5 text-gray-400" />
+            <Users className="h-5 w-5 text-muted-foreground" />
             Cliente
           </CardTitle>
         </CardHeader>
@@ -802,19 +802,19 @@ export function ConsultoriaClient({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <MessageSquare className="h-5 w-5 text-gray-400" />
+            <MessageSquare className="h-5 w-5 text-muted-foreground" />
             Relato de Caso | Atendimento Cliente
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Tabs: 3 modos de entrada */}
-          <div className="flex rounded-lg border bg-gray-50 p-1 gap-1">
+          <div className="flex rounded-lg border bg-muted/50 p-1 gap-1">
             <button
               onClick={() => setModoInput('durante_reuniao')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                 modoInput === 'durante_reuniao'
-                  ? 'bg-white text-primary-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <UserCheck className="h-4 w-4" />
@@ -824,8 +824,8 @@ export function ConsultoriaClient({
               onClick={() => setModoInput('pos_reuniao')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                 modoInput === 'pos_reuniao'
-                  ? 'bg-white text-primary-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Mic className="h-4 w-4" />
@@ -835,8 +835,8 @@ export function ConsultoriaClient({
               onClick={() => setModoInput('texto')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                 modoInput === 'texto'
-                  ? 'bg-white text-primary-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Keyboard className="h-4 w-4" />
@@ -846,7 +846,7 @@ export function ConsultoriaClient({
 
           {modoInput === 'durante_reuniao' && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Grave o áudio <strong>com o cliente presente</strong>. O consentimento LGPD será solicitado antes de iniciar.
               </p>
               <GravadorAudio
@@ -868,7 +868,7 @@ export function ConsultoriaClient({
 
           {modoInput === 'pos_reuniao' && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Relate os fatos com <strong>suas próprias palavras</strong> após a reunião. Sem necessidade de consentimento LGPD.
               </p>
               <GravadorAudio
@@ -906,7 +906,7 @@ export function ConsultoriaClient({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Brain className="h-5 w-5 text-gray-400" />
+            <Brain className="h-5 w-5 text-muted-foreground" />
             Questão específica (opcional)
           </CardTitle>
         </CardHeader>
@@ -921,7 +921,7 @@ export function ConsultoriaClient({
           />
           {atendimentoId && (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">Ou dite:</span>
+              <span className="text-xs text-muted-foreground">Ou dite:</span>
               <MicrofoneInline
                 onTranscricao={(t) => setPedidoEspecifico(prev => prev ? prev + ' ' + t : t)}
               />
@@ -934,7 +934,7 @@ export function ConsultoriaClient({
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5 text-gray-400" />
+            <FileText className="h-5 w-5 text-muted-foreground" />
             Documentos
           </CardTitle>
         </CardHeader>
@@ -961,7 +961,7 @@ export function ConsultoriaClient({
           size="lg"
           onClick={analisar}
           disabled={!podeAnalisar || analisando}
-          className="gap-2 bg-violet-700 hover:bg-violet-800 min-w-44"
+          className="gap-2 bg-primary/80 hover:bg-primary min-w-44"
         >
           {analisando ? (
             <>
@@ -980,7 +980,7 @@ export function ConsultoriaClient({
       {/* 6. Relatório da análise */}
       {analise && (
         <div className="space-y-2">
-          <h2 className="text-lg font-semibold text-gray-900">{tituloConsultoria} — Resultado</h2>
+          <h2 className="text-lg font-semibold text-foreground">{tituloConsultoria} — Resultado</h2>
           <RelatorioAnalise data={analise as Parameters<typeof RelatorioAnalise>[0]['data']} onGerarPeca={handleGerarPecaRelatorio} />
         </div>
       )}

@@ -18,13 +18,13 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   const btn = (active?: boolean, disabled?: boolean) =>
     `rounded p-1.5 transition-colors disabled:opacity-40 ${
       active
-        ? 'bg-primary-100 text-primary-700'
+        ? 'bg-primary/10 text-primary'
         : disabled
-          ? 'text-gray-300'
-          : 'text-gray-600 hover:bg-gray-200'
+          ? 'text-border'
+          : 'text-muted-foreground hover:bg-border'
     }`
 
-  const div = <div className="mx-1 h-5 w-px bg-gray-300 shrink-0" />
+  const div = <div className="mx-1 h-5 w-px bg-border shrink-0" />
 
   function insertLink() {
     if (!editor) return
@@ -42,11 +42,11 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b bg-gray-50 px-3 py-1.5 shrink-0">
+    <div className="flex flex-wrap items-center gap-0.5 border-b bg-muted/50 px-3 py-1.5 shrink-0">
 
       {/* Estilo de parágrafo */}
       <select
-        className="mr-2 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer"
+        className="mr-2 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
         value={
           editor.isActive('heading', { level: 1 }) ? '1' :
           editor.isActive('heading', { level: 2 }) ? '2' :
@@ -66,7 +66,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
       {/* Fonte */}
       <select
-        className="mr-2 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer w-36"
+        className="mr-2 rounded border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer w-36"
         defaultValue=""
         onChange={(e) => {
           if (e.target.value) editor.chain().focus().setFontFamily(e.target.value).run()

@@ -72,7 +72,7 @@ export default async function RevisaoPage() {
             />
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-muted-foreground mb-4">
                 {pecas.length} peça{pecas.length > 1 ? 's' : ''} aguardando revisão
               </p>
 
@@ -92,8 +92,8 @@ export default async function RevisaoPage() {
                         <div className="min-w-0 flex-1">
                           {/* Tipo e área */}
                           <div className="flex items-center gap-2 flex-wrap">
-                            <ScrollText className="h-4 w-4 text-emerald-500 shrink-0" />
-                            <span className="font-semibold text-gray-900">
+                            <ScrollText className="h-4 w-4 text-success shrink-0" />
+                            <span className="font-semibold text-foreground">
                               {tipoPeca?.nome ?? peca.tipo}
                             </span>
                             <Badge variant="secondary" className="text-xs">
@@ -106,11 +106,11 @@ export default async function RevisaoPage() {
 
                           {/* Cliente */}
                           {atendimento?.clientes && (
-                            <div className="mt-1.5 flex items-center gap-1.5 text-sm text-gray-600">
-                              <User className="h-3.5 w-3.5 text-gray-400" />
+                            <div className="mt-1.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+                              <User className="h-3.5 w-3.5 text-muted-foreground" />
                               <Link
                                 href={`/clientes/${atendimento.clientes.id}`}
-                                className="font-medium hover:text-primary-800 hover:underline"
+                                className="font-medium hover:text-primary hover:underline"
                               >
                                 {atendimento.clientes.nome}
                               </Link>
@@ -118,9 +118,9 @@ export default async function RevisaoPage() {
                           )}
 
                           {/* Criador e data */}
-                          <div className="mt-1 flex items-center gap-3 text-xs text-gray-400">
+                          <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                             {criador && (
-                              <span>Gerada por <span className="text-gray-600">{criador.nome}</span></span>
+                              <span>Gerada por <span className="text-muted-foreground">{criador.nome}</span></span>
                             )}
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
@@ -135,7 +135,7 @@ export default async function RevisaoPage() {
                         {/* Link para o editor */}
                         <Link
                           href={`/${peca.area}/editor/${peca.id}`}
-                          className="shrink-0 rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                          className="shrink-0 rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-muted-foreground transition-colors"
                           title="Ver peça no editor"
                           target="_blank"
                         >

@@ -29,7 +29,7 @@ export default async function NovoClientePage() {
         acoes={
           <Link
             href="/clientes"
-            className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-800"
+            className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
             Clientes
@@ -39,11 +39,11 @@ export default async function NovoClientePage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-2xl">
-          <div className="mb-6 flex items-center gap-3 rounded-xl bg-primary-50 border border-primary-100 px-5 py-4">
-            <UserPlus className="h-6 w-6 shrink-0 text-primary-800" />
+          <div className="mb-6 flex items-center gap-3 rounded-xl bg-primary/5 border border-primary/10 px-5 py-4">
+            <UserPlus className="h-6 w-6 shrink-0 text-primary" />
             <div>
-              <p className="text-base font-semibold text-primary-900">Cadastro de novo cliente</p>
-              <p className="text-sm text-primary-700">
+              <p className="text-base font-semibold text-primary">Cadastro de novo cliente</p>
+              <p className="text-sm text-primary">
                 Apenas o nome é obrigatório. Os demais dados podem ser adicionados depois.
               </p>
             </div>

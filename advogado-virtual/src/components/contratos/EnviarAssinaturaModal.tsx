@@ -169,27 +169,27 @@ export function EnviarAssinaturaModal({
     >
       <div className="space-y-5">
         {/* Documento */}
-        <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-sm">
-          <FileSignature className="h-4 w-4 text-gray-400 shrink-0" />
-          <span className="text-gray-600">Documento:</span>
-          <span className="font-medium text-gray-900 truncate">{tituloContrato}</span>
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2.5 text-sm">
+          <FileSignature className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground">Documento:</span>
+          <span className="font-medium text-foreground truncate">{tituloContrato}</span>
         </div>
 
         {/* Signatários */}
         <div>
-          <p className="mb-2 text-sm font-semibold text-gray-700">Signatários</p>
+          <p className="mb-2 text-sm font-semibold text-foreground">Signatários</p>
           <div className="space-y-3">
             {signers.map((s, idx) => (
-              <div key={idx} className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+              <div key={idx} className="rounded-lg border border-border bg-muted/50 p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-500">
+                  <span className="text-xs font-medium text-muted-foreground">
                     Signatário {idx + 1}{idx === 0 ? ' (Cliente)' : idx === 1 ? ' (Advogado)' : ''}
                   </span>
                   {signers.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeSigner(idx)}
-                      className="text-gray-300 hover:text-red-500 transition-colors"
+                      className="text-border hover:text-destructive transition-colors"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -236,7 +236,7 @@ export function EnviarAssinaturaModal({
           <button
             type="button"
             onClick={addSigner}
-            className="mt-2 flex items-center gap-1.5 text-sm text-primary-700 hover:text-primary-900 font-medium"
+            className="mt-2 flex items-center gap-1.5 text-sm text-primary hover:text-primary font-medium"
           >
             <Plus className="h-4 w-4" />
             Adicionar signatário
@@ -249,22 +249,22 @@ export function EnviarAssinaturaModal({
             type="checkbox"
             checked={workflow}
             onChange={e => setWorkflow(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-primary-700"
+            className="h-4 w-4 rounded border-border text-primary"
           />
-          <span className="text-sm text-gray-700">Exigir assinatura em ordem sequencial</span>
+          <span className="text-sm text-foreground">Exigir assinatura em ordem sequencial</span>
         </label>
 
         {/* Mensagem */}
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
-            Mensagem para os signatários <span className="font-normal text-gray-400">(opcional)</span>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Mensagem para os signatários <span className="font-normal text-muted-foreground">(opcional)</span>
           </label>
           <textarea
             value={message}
             onChange={e => setMessage(e.target.value)}
             rows={3}
             placeholder="Prezado(a), segue contrato de honorários advocatícios para assinatura..."
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-800 resize-none"
+            className="w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
           />
         </div>
       </div>

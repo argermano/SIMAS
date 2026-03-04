@@ -43,7 +43,7 @@ export function ComandosRapidos({ atendimentoId, disabled }: ComandosRapidosProp
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <Zap className="h-5 w-5 text-gray-400" />
+          <Zap className="h-5 w-5 text-muted-foreground" />
           Comandos rápidos
         </CardTitle>
       </CardHeader>
@@ -60,8 +60,8 @@ export function ComandosRapidos({ atendimentoId, disabled }: ComandosRapidosProp
                 disabled={disabled || !atendimentoId || (loading && !ativo)}
                 className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all text-xs font-medium ${
                   ativo
-                    ? 'border-primary-300 bg-primary-50 text-primary-800'
-                    : 'border-gray-100 bg-white text-gray-700 hover:border-primary-200 hover:bg-primary-50 disabled:opacity-40'
+                    ? 'border-primary/30 bg-primary/5 text-primary'
+                    : 'border-border bg-card text-foreground hover:border-primary/20 hover:bg-primary/10 disabled:opacity-40'
                 }`}
               >
                 <Icone className="h-4 w-4" />
@@ -73,25 +73,25 @@ export function ComandosRapidos({ atendimentoId, disabled }: ComandosRapidosProp
 
         {/* Resultado */}
         {comandoAtivo && (
-          <div className="relative rounded-lg border bg-gray-50 p-4">
+          <div className="relative rounded-lg border bg-muted/50 p-4">
             <button
               onClick={fechar}
-              className="absolute right-2 top-2 rounded-md p-1 text-gray-400 hover:text-gray-700"
+              className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </button>
 
             {error ? (
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-destructive">{error}</p>
             ) : text ? (
-              <div className="prose prose-sm max-w-none whitespace-pre-wrap text-gray-800">
+              <div className="prose prose-sm max-w-none whitespace-pre-wrap text-foreground">
                 {text}
-                {loading && <span className="inline-block h-4 w-1 animate-pulse bg-primary-600 ml-0.5" />}
+                {loading && <span className="inline-block h-4 w-1 animate-pulse bg-primary/70 ml-0.5" />}
               </div>
             ) : loading ? (
               <div className="flex items-center gap-2 py-2">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-200 border-t-primary-800" />
-                <span className="text-sm text-gray-500">Processando...</span>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+                <span className="text-sm text-muted-foreground">Processando...</span>
               </div>
             ) : null}
           </div>
