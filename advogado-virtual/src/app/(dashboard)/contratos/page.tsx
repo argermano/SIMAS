@@ -8,6 +8,7 @@ import { formatarDataRelativa } from '@/lib/utils'
 import { FileSignature, Plus, ChevronRight } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
+import { FiltroContratosClient } from './FiltroContratosClient'
 
 export const metadata = { title: 'Contratos de Honorários' }
 
@@ -42,7 +43,12 @@ type ContratoRow = {
   clientes: { nome: string } | null
 }
 
-export default async function ContratosPage() {
+export default async function ContratosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>
+}) {
+  const { q = '', status = '', page = '1' } = await searchParams
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -56,18 +62,39 @@ export default async function ContratosPage() {
 
   if (!usuario) redirect('/login')
 
-  const { data: contratos } = await supabase
+  const pageNum = parseInt(page)
+  const limit   = 20
+  const offset  = (pageNum - 1) * limit
+
+  let query = supabase
     .from('contratos_honorarios')
-    .select('id, titulo, area, status, valor_fixo, percentual_exito, created_at, clientes(nome)')
+    .select('id, titulo, area, status, valor_fixo, percentual_exito, created_at, clientes(nome)', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
     .order('created_at', { ascending: false })
-    .limit(50)
+    .range(offset, offset + limit - 1)
+
+  if (q) {
+    query = query.or(`titulo.ilike.%${q}%,clientes.nome.ilike.%${q}%`)
+  }
+
+  if (status) {
+    query = query.eq('status', status)
+  }
+
+  const { data: contratos, count } = await query
+
+  const totalPaginas = Math.ceil((count ?? 0) / limit)
+
+  const baseParams = new URLSearchParams()
+  if (q) baseParams.set('q', q)
+  if (status) baseParams.set('status', status)
+  const baseStr = baseParams.toString()
 
   return (
     <>
       <Header
         titulo="Contratos de Honorários"
-        subtitulo="Gerencie contratos de prestação de serviços advocatícios"
+        subtitulo={`${count ?? 0} contrato${(count ?? 0) !== 1 ? 's' : ''}`}
         nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
         acoes={
           <Link
@@ -81,54 +108,90 @@ export default async function ContratosPage() {
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-4xl space-y-5">
+          <FiltroContratosClient busca={q} statusAtivo={status} />
+
           {!contratos || contratos.length === 0 ? (
             <EmptyState
               icon={<FileSignature className="h-10 w-10" />}
-              title="Nenhum contrato ainda"
-              description="Crie seu primeiro contrato de honorários advocatícios com auxílio da IA."
-              action={{ label: 'Criar contrato', href: '/contratos/novo' }}
+              title={q ? 'Nenhum contrato encontrado' : status ? 'Nenhum contrato com esse status' : 'Nenhum contrato ainda'}
+              description={
+                q
+                  ? `Nenhum contrato encontrado para "${q}". Tente outro termo.`
+                  : status
+                    ? 'Nenhum contrato com o status selecionado.'
+                    : 'Crie seu primeiro contrato de honorários advocatícios com auxílio da IA.'
+              }
+              action={
+                q || status
+                  ? undefined
+                  : { label: 'Criar contrato', href: '/contratos/novo' }
+              }
             />
           ) : (
-            <div className="space-y-3">
-              {(contratos ?? []).map(c => {
-                const badge = BADGE_STATUS[c.status] ?? BADGE_STATUS.rascunho
-                const honorario = c.valor_fixo
-                  ? `R$ ${(c.valor_fixo as number).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                  : c.percentual_exito !== null
-                    ? `${c.percentual_exito}% êxito`
-                    : '—'
-                // Supabase returns clientes as array or single object
-                const clienteNome = Array.isArray(c.clientes)
-                  ? (c.clientes[0] as { nome?: string })?.nome
-                  : (c.clientes as { nome?: string } | null)?.nome
+            <>
+              <div className="space-y-3">
+                {(contratos ?? []).map(c => {
+                  const badge = BADGE_STATUS[c.status] ?? BADGE_STATUS.rascunho
+                  const honorario = c.valor_fixo
+                    ? `R$ ${(c.valor_fixo as number).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                    : c.percentual_exito !== null
+                      ? `${c.percentual_exito}% êxito`
+                      : '—'
+                  const clienteNome = Array.isArray(c.clientes)
+                    ? (c.clientes[0] as { nome?: string })?.nome
+                    : (c.clientes as { nome?: string } | null)?.nome
 
-                return (
-                  <Link key={c.id} href={`/contratos/${c.id}`} className="block">
-                    <Card className="transition-shadow hover:shadow-card-hover">
-                      <CardContent className="flex items-center justify-between gap-4 py-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-semibold text-gray-900 truncate">{c.titulo}</p>
-                            <Badge variant={badge.variant}>{badge.label}</Badge>
+                  return (
+                    <Link key={c.id} href={`/contratos/${c.id}`} className="block">
+                      <Card className="transition-shadow hover:shadow-card-hover">
+                        <CardContent className="flex items-center justify-between gap-4 py-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-gray-900 truncate">{c.titulo}</p>
+                              <Badge variant={badge.variant}>{badge.label}</Badge>
+                            </div>
+                            <p className="text-sm text-gray-500 mt-0.5">
+                              {clienteNome ?? 'Sem cliente'}
+                              {c.area ? ` · ${LABEL_AREA[c.area] ?? c.area}` : ''}
+                              {` · ${honorario}`}
+                              {` · ${formatarDataRelativa(c.created_at)}`}
+                            </p>
                           </div>
-                          <p className="text-sm text-gray-500 mt-0.5">
-                            {clienteNome ?? 'Sem cliente'}
-                            {c.area ? ` · ${LABEL_AREA[c.area] ?? c.area}` : ''}
-                            {` · ${honorario}`}
-                            {` · ${formatarDataRelativa(c.created_at)}`}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <BotaoExcluirContrato contratoId={c.id} />
-                          <ChevronRight className="h-4 w-4 text-gray-400" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                )
-              })}
-            </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <BotaoExcluirContrato contratoId={c.id} />
+                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  )
+                })}
+              </div>
+
+              {/* Paginação */}
+              {totalPaginas > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  {pageNum > 1 && (
+                    <Link href={`/contratos?${baseStr}${baseStr ? '&' : ''}page=${pageNum - 1}`}>
+                      <button className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        ← Anterior
+                      </button>
+                    </Link>
+                  )}
+                  <span className="text-sm text-gray-600">
+                    Página {pageNum} de {totalPaginas}
+                  </span>
+                  {pageNum < totalPaginas && (
+                    <Link href={`/contratos?${baseStr}${baseStr ? '&' : ''}page=${pageNum + 1}`}>
+                      <button className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Próxima →
+                      </button>
+                    </Link>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>

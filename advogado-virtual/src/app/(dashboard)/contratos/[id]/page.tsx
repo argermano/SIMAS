@@ -18,8 +18,15 @@ type ContratoDetalhe = {
   valor_fixo: number | null
   percentual_exito: number | null
   forma_pagamento: string | null
-  clientes: { nome: string; cpf?: string; email?: string } | null
+  clientes: { nome: string; cpf?: string; email?: string; telefone?: string } | null
   atendimentos: { area?: string } | null
+}
+
+type TenantProfissional = {
+  nome_responsavel?: string | null
+  email_profissional?: string | null
+  cpf_responsavel?: string | null
+  telefone?: string | null
 }
 
 export default async function ContratoPage({
@@ -41,12 +48,19 @@ export default async function ContratoPage({
 
   if (!usuario) redirect('/login')
 
-  const { data: contrato } = await supabase
-    .from('contratos_honorarios')
-    .select('*, clientes(nome, cpf, email), atendimentos(area)')
-    .eq('id', id)
-    .eq('tenant_id', usuario.tenant_id)
-    .single()
+  const [{ data: contrato }, { data: tenant }] = await Promise.all([
+    supabase
+      .from('contratos_honorarios')
+      .select('*, clientes(nome, cpf, email, telefone), atendimentos(area)')
+      .eq('id', id)
+      .eq('tenant_id', usuario.tenant_id)
+      .single(),
+    supabase
+      .from('tenants')
+      .select('nome_responsavel, email_profissional, cpf_responsavel, telefone')
+      .eq('id', usuario.tenant_id)
+      .single(),
+  ])
 
   if (!contrato) notFound()
 
@@ -92,6 +106,7 @@ export default async function ContratoPage({
             versoes={(versoes ?? []) as { id: string; versao: number; created_at: string }[]}
             role={usuario.role}
             assinatura={assinatura ?? null}
+            tenant={(tenant as TenantProfissional) ?? null}
           />
         </div>
       </main>
