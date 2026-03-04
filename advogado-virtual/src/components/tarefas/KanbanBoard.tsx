@@ -32,11 +32,14 @@ interface Board {
 interface TaskList { id: string; name: string }
 interface TaskTag  { id: string; name: string; color: string }
 
+interface TeamMember { id: string; nome: string }
+
 interface KanbanBoardProps {
   board:           Board
   initialTasks:    TaskData[]
   currentUserId:   string
   currentUserName: string
+  teamMembers:     TeamMember[]
   filters: {
     assignee: string
     period:   string
@@ -46,7 +49,7 @@ interface KanbanBoardProps {
 }
 
 export function KanbanBoard({
-  board, initialTasks, currentUserId, currentUserName, filters,
+  board, initialTasks, currentUserId, currentUserName, teamMembers, filters,
 }: KanbanBoardProps) {
   const { error: toastError } = useToast()
   const [tasks,        setTasks]        = useState<TaskData[]>(initialTasks)
@@ -175,6 +178,7 @@ export function KanbanBoard({
         onSaved={() => { setFormOpen(false); fetchTasks() }}
         currentUserId={currentUserId}
         currentUserName={currentUserName}
+        teamMembers={teamMembers}
         defaultBoardId={board.id}
         defaultColumnId={defaultColId}
       />
@@ -187,6 +191,7 @@ export function KanbanBoard({
           boards={[board]}
           lists={lists}
           tags={tags}
+          teamMembers={teamMembers}
           onClose={() => setDetailTask(null)}
           onSaved={() => { handleSaved(); setDetailTask(null) }}
         />

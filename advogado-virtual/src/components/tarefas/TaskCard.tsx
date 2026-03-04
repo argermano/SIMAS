@@ -11,6 +11,7 @@ export interface TaskData {
   priority:          'baixa' | 'media' | 'alta' | 'urgente'
   completed_at?:     string | null
   created_at?:       string | null
+  assignee_id?:      string | null
   kanban_column_id?: string | null
   task_list_id?:     string | null
   kanban_board_id?:  string | null
