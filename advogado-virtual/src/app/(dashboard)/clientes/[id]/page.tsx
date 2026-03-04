@@ -183,6 +183,14 @@ export default async function DossieClientePage({
 
   const contratosList = contratos.data ?? []
 
+  const contratosPorAtendimento = new Map<string, typeof contratosList>()
+  for (const c of contratosList) {
+    if (!c.atendimento_id) continue
+    const lista = contratosPorAtendimento.get(c.atendimento_id) ?? []
+    lista.push(c)
+    contratosPorAtendimento.set(c.atendimento_id, lista)
+  }
+
   const totalAtendimentos = atendimentos?.length ?? 0
   const totalPecas        = pecas.data?.length ?? 0
   const totalAnalises     = analises.data?.length ?? 0
@@ -307,11 +315,12 @@ export default async function DossieClientePage({
               ) : (
                 <div className="space-y-4">
                   {atendimentos.map((at, idx) => {
-                    const status     = at.status as AtendimentoStatus
-                    const badge      = BADGE_STATUS[status] ?? BADGE_STATUS.caso_novo
-                    const atAnalises = analisesPorAtendimento.get(at.id) ?? []
-                    const atPecas    = pecasPorAtendimento.get(at.id) ?? []
-                    const numDocs    = docsPorAtendimento.get(at.id) ?? 0
+                    const status       = at.status as AtendimentoStatus
+                    const badge        = BADGE_STATUS[status] ?? BADGE_STATUS.caso_novo
+                    const atAnalises   = analisesPorAtendimento.get(at.id) ?? []
+                    const atPecas      = pecasPorAtendimento.get(at.id) ?? []
+                    const atContratos  = contratosPorAtendimento.get(at.id) ?? []
+                    const numDocs      = docsPorAtendimento.get(at.id) ?? 0
                     const corArea    = ICONES_AREA[at.area] ?? 'gray'
                     const isLast     = idx === atendimentos.length - 1
 
@@ -363,7 +372,7 @@ export default async function DossieClientePage({
                                   </div>
 
                                   {/* Sub-itens */}
-                                  {(atAnalises.length > 0 || atPecas.length > 0) && (
+                                  {(atAnalises.length > 0 || atPecas.length > 0 || atContratos.length > 0) && (
                                     <div className="mt-4 border-t pt-3 space-y-2">
                                       {/* Ocultar análises se filtro for apenas 'pecas', e vice-versa */}
                                       {filtro !== 'pecas' && atAnalises.map(analise => {
@@ -410,10 +419,35 @@ export default async function DossieClientePage({
                                           </Link>
                                         )
                                       })}
+                                      {atContratos.map(contrato => {
+                                        const ctBadge = BADGE_CONTRATO_STATUS[contrato.status] ?? BADGE_CONTRATO_STATUS.rascunho
+                                        return (
+                                          <Link key={contrato.id} href={`/contratos/${contrato.id}`}
+                                            className="flex items-center gap-3 rounded-lg bg-blue-50/60 px-3 py-2 text-sm hover:bg-blue-100/60 transition-colors group"
+                                          >
+                                            <FileSignature className="h-4 w-4 text-blue-500 shrink-0" />
+                                            <div className="min-w-0 flex-1">
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-medium text-blue-900 group-hover:text-blue-800">{contrato.titulo}</span>
+                                                <Badge variant={ctBadge.variant} className="text-xs px-1.5 py-0">{ctBadge.label}</Badge>
+                                              </div>
+                                              {(contrato.valor_fixo || contrato.percentual_exito) && (
+                                                <p className="text-xs text-blue-600 mt-0.5">
+                                                  {contrato.valor_fixo ? `R$ ${Number(contrato.valor_fixo).toLocaleString('pt-BR')}` : ''}
+                                                  {contrato.valor_fixo && contrato.percentual_exito ? ' · ' : ''}
+                                                  {contrato.percentual_exito ? `${contrato.percentual_exito}% êxito` : ''}
+                                                </p>
+                                              )}
+                                            </div>
+                                            <span className="text-xs text-gray-400 shrink-0">{formatarDataRelativa(contrato.created_at)}</span>
+                                            <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-blue-500 shrink-0" />
+                                          </Link>
+                                        )
+                                      })}
                                     </div>
                                   )}
 
-                                  {atAnalises.length === 0 && atPecas.length === 0 && (
+                                  {atAnalises.length === 0 && atPecas.length === 0 && atContratos.length === 0 && (
                                     <div className="mt-3 border-t pt-3">
                                       <p className="text-xs text-gray-400 italic">
                                         Nenhuma análise ou peça gerada ainda.{' '}
