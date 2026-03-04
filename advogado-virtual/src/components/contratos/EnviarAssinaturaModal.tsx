@@ -18,13 +18,19 @@ interface Signer {
 }
 
 interface EnviarAssinaturaModalProps {
-  contratoId:    string
-  tituloContrato: string
-  clienteNome?:  string
-  clienteEmail?: string
-  open:          boolean
-  onClose:       () => void
-  onSent:        () => void
+  contratoId:       string
+  tituloContrato:   string
+  clienteNome?:     string
+  clienteEmail?:    string
+  clienteCpf?:      string
+  clienteTelefone?: string
+  tenantNome?:      string | null
+  tenantEmail?:     string | null
+  tenantCpf?:       string | null
+  tenantTelefone?:  string | null
+  open:             boolean
+  onClose:          () => void
+  onSent:           () => void
 }
 
 const ACT_OPTIONS = [
@@ -42,23 +48,34 @@ const AUTH_OPTIONS = [
 
 const STEP_LABELS = ['Gerando documento…', 'Cadastrando signatários…', 'Enviando para assinatura…']
 
-function emptySignerWithClient(clienteNome?: string, clienteEmail?: string): Signer {
+function makeSigner(
+  nome?: string | null,
+  email?: string | null,
+  cpf?: string | null,
+  telefone?: string | null,
+): Signer {
   return {
-    name:        clienteNome  ?? '',
-    email:       clienteEmail ?? '',
-    cpf_cnpj:    '',
-    phone:       '',
+    name:        nome     ?? '',
+    email:       email    ?? '',
+    cpf_cnpj:    cpf      ?? '',
+    phone:       telefone ?? '',
     act:         '1',
     auth_method: 'email',
   }
 }
 
 export function EnviarAssinaturaModal({
-  contratoId, tituloContrato, clienteNome, clienteEmail, open, onClose, onSent,
+  contratoId, tituloContrato,
+  clienteNome, clienteEmail, clienteCpf, clienteTelefone,
+  tenantNome, tenantEmail, tenantCpf, tenantTelefone,
+  open, onClose, onSent,
 }: EnviarAssinaturaModalProps) {
   const { success, error: toastError } = useToast()
 
-  const [signers,   setSigners]   = useState<Signer[]>([emptySignerWithClient(clienteNome, clienteEmail)])
+  const [signers,   setSigners]   = useState<Signer[]>([
+    makeSigner(clienteNome, clienteEmail, clienteCpf, clienteTelefone),
+    makeSigner(tenantNome, tenantEmail, tenantCpf, tenantTelefone),
+  ])
   const [workflow,  setWorkflow]  = useState(false)
   const [message,   setMessage]   = useState('')
   const [enviando,  setEnviando]  = useState(false)
@@ -165,7 +182,9 @@ export function EnviarAssinaturaModal({
             {signers.map((s, idx) => (
               <div key={idx} className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-500">Signatário {idx + 1}</span>
+                  <span className="text-xs font-medium text-gray-500">
+                    Signatário {idx + 1}{idx === 0 ? ' (Cliente)' : idx === 1 ? ' (Advogado)' : ''}
+                  </span>
                   {signers.length > 1 && (
                     <button
                       type="button"

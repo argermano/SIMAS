@@ -6,9 +6,10 @@ import { DocumentEditor } from '@/components/document-editor/DocumentEditor'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { EnviarAssinaturaModal } from '@/components/contratos/EnviarAssinaturaModal'
 import { PainelAssinatura } from '@/components/contratos/PainelAssinatura'
-import { CheckCircle, Loader2, PenLine } from 'lucide-react'
+import { CheckCircle, Loader2, PenLine, ChevronDown, FileDown, Monitor } from 'lucide-react'
 
 interface Signer {
   id:           string
@@ -43,16 +44,22 @@ interface EditorContratoClientProps {
     valor_fixo: number | null
     percentual_exito: number | null
     forma_pagamento: string | null
-    clientes: { nome: string; cpf?: string; email?: string } | null
+    clientes: { nome: string; cpf?: string; email?: string; telefone?: string } | null
     atendimentos: { area?: string } | null
   }
   versoes: { id: string; versao: number; created_at: string }[]
   role: string
   assinatura?: SignatureData | null
+  tenant?: {
+    nome_responsavel?: string | null
+    email_profissional?: string | null
+    cpf_responsavel?: string | null
+    telefone?: string | null
+  } | null
 }
 
 export function EditorContratoClient({
-  contratoId, contrato, role, assinatura: assinaturaInicial,
+  contratoId, contrato, role, assinatura: assinaturaInicial, tenant,
 }: EditorContratoClientProps) {
   const router = useRouter()
   const { success, error: toastError } = useToast()
@@ -63,8 +70,9 @@ export function EditorContratoClient({
   const [confirmarAprovar, setConfirmarAprovar] = useState(false)
   const [showAssinar,      setShowAssinar]      = useState(false)
   const [assinatura,       setAssinatura]       = useState<SignatureData | null>(assinaturaInicial ?? null)
+  const [baixandoPdf,      setBaixandoPdf]      = useState(false)
 
-  const podeAprovar       = ['admin', 'advogado'].includes(role)
+  const podeAprovar        = ['admin', 'advogado'].includes(role)
   const temAssinaturaAtiva = assinatura && assinatura.status !== 'cancelled'
 
   const handleSalvar = useCallback(async (conteudo: string) => {
@@ -107,6 +115,30 @@ export function EditorContratoClient({
     }
   }, [contratoId, success, toastError])
 
+  const handleBaixarPdf = useCallback(async () => {
+    setBaixandoPdf(true)
+    try {
+      const res = await fetch(`/api/contratos/${contratoId}/exportar-pdf`, { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toastError('Erro', d.error ?? 'Não foi possível gerar o PDF')
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${contrato.titulo.replace(/\s+/g, '_')}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      success('PDF gerado!', 'Arquivo baixado para assinatura manual')
+    } catch {
+      toastError('Erro', 'Falha de rede')
+    } finally {
+      setBaixandoPdf(false)
+    }
+  }, [contratoId, contrato.titulo, success, toastError])
+
   const acaoAprovar = podeAprovar && status !== 'aprovado' && status !== 'exportado' ? (
     <Button
       size="sm"
@@ -123,14 +155,25 @@ export function EditorContratoClient({
   ) : null
 
   const acaoAssinar = !temAssinaturaAtiva ? (
-    <Button
-      size="sm"
-      onClick={() => setShowAssinar(true)}
-      className="gap-1.5 bg-violet-700 hover:bg-violet-800"
-    >
-      <PenLine className="h-4 w-4" />
-      Enviar p/ Assinatura
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" className="gap-1.5 bg-violet-700 hover:bg-violet-800">
+          <PenLine className="h-4 w-4" />
+          Assinar
+          <ChevronDown className="h-3.5 w-3.5 ml-0.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={handleBaixarPdf} disabled={baixandoPdf}>
+          <FileDown className="h-4 w-4" />
+          {baixandoPdf ? 'Gerando PDF…' : 'Manual (PDF)'}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setShowAssinar(true)}>
+          <Monitor className="h-4 w-4" />
+          Digital (D4Sign)
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   ) : null
 
   return (
@@ -152,6 +195,12 @@ export function EditorContratoClient({
         tituloContrato={contrato.titulo}
         clienteNome={contrato.clientes?.nome}
         clienteEmail={contrato.clientes?.email}
+        clienteCpf={contrato.clientes?.cpf}
+        clienteTelefone={contrato.clientes?.telefone}
+        tenantNome={tenant?.nome_responsavel}
+        tenantEmail={tenant?.email_profissional}
+        tenantCpf={tenant?.cpf_responsavel}
+        tenantTelefone={tenant?.telefone}
         onSent={() => {
           setShowAssinar(false)
           fetch(`/api/contratos/${contratoId}/assinatura`)
