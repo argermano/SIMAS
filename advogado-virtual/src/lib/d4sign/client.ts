@@ -39,6 +39,18 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
   throw new Error('Retry exhausted')
 }
 
+// ─── Listar cofres (safes) ───────────────────────────────────────────────────
+export async function d4signListSafes(): Promise<{ uuid_safe: string; name_safe: string }[]> {
+  return withRetry(async () => {
+    const res = await fetch(`${base()}/safes${auth()}`, {
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok) throw new Error(`D4Sign listSafes: HTTP ${res.status} — ${await res.text()}`)
+    const data = await res.json()
+    return Array.isArray(data) ? data : []
+  })
+}
+
 // ─── Upload de documento ───────────────────────────────────────────────────────
 export async function d4signUploadDocument(
   safeUuid: string,
