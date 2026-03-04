@@ -14,6 +14,7 @@ import {
   ClipboardCheck,
   UserCog,
   FileSignature,
+  KanbanSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -44,6 +45,13 @@ const MENU_ITEMS = [
     icon:    FileSignature,
     exact:   false,
     ativoSe: (pathname: string) => pathname.startsWith('/contratos'),
+  },
+  {
+    href:    '/tarefas',
+    label:   'Tarefas',
+    icon:    KanbanSquare,
+    exact:   false,
+    ativoSe: (pathname: string) => pathname.startsWith('/tarefas'),
   },
   {
     href:    '/historico',
