@@ -303,7 +303,7 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
       </button>
 
       <motion.aside
-        className="hidden lg:flex lg:shrink-0 lg:flex-col min-h-screen overflow-hidden"
+        className="hidden lg:flex lg:shrink-0 lg:flex-col h-screen overflow-hidden"
         animate={{ width: collapsed ? 68 : 240 }}
         transition={{ type: 'spring', stiffness: 300, damping: 30 }}
       >
