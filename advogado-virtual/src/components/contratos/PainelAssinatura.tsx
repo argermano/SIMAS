@@ -39,13 +39,13 @@ interface PainelAssinaturaProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-  draft:               { label: 'Rascunho',          color: 'bg-gray-100 text-gray-600',    icon: <Clock className="h-3.5 w-3.5" /> },
+  draft:               { label: 'Rascunho',          color: 'bg-muted text-muted-foreground',    icon: <Clock className="h-3.5 w-3.5" /> },
   uploaded:            { label: 'Enviado',            color: 'bg-blue-100 text-blue-700',    icon: <Clock className="h-3.5 w-3.5" /> },
   signers_registered:  { label: 'Signatários ok',     color: 'bg-blue-100 text-blue-700',    icon: <Clock className="h-3.5 w-3.5" /> },
-  waiting_signatures:  { label: 'Aguardando',         color: 'bg-amber-100 text-amber-700',  icon: <Clock className="h-3.5 w-3.5" /> },
-  completed:           { label: 'Concluída',          color: 'bg-green-100 text-green-700',  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  download_ready:      { label: 'Assinado',           color: 'bg-green-100 text-green-700',  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  cancelled:           { label: 'Cancelada',          color: 'bg-red-100 text-red-700',      icon: <XCircle className="h-3.5 w-3.5" /> },
+  waiting_signatures:  { label: 'Aguardando',         color: 'bg-warning/10 text-warning',  icon: <Clock className="h-3.5 w-3.5" /> },
+  completed:           { label: 'Concluída',          color: 'bg-success/10 text-success',  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  download_ready:      { label: 'Assinado',           color: 'bg-success/10 text-success',  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+  cancelled:           { label: 'Cancelada',          color: 'bg-destructive/10 text-destructive',      icon: <XCircle className="h-3.5 w-3.5" /> },
 }
 
 const ACT_LABEL: Record<string, string> = { '1': 'Assinar', '2': 'Aprovar', '5': 'Testemunha' }
@@ -161,7 +161,7 @@ export function PainelAssinatura({ contratoId, initial }: PainelAssinaturaProps)
               onChange={e => setCancelReason(e.target.value)}
               placeholder="Motivo do cancelamento (opcional)"
               rows={2}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              className="w-full rounded-md border border-border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
             />
           </div>
         }
@@ -170,12 +170,12 @@ export function PainelAssinatura({ contratoId, initial }: PainelAssinaturaProps)
         loading={cancelling}
       />
 
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/50">
           <div className="flex items-center gap-2">
-            <FileSignature className="h-4 w-4 text-gray-500" />
-            <span className="text-sm font-semibold text-gray-700">Assinatura Digital</span>
+            <FileSignature className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-semibold text-foreground">Assinatura Digital</span>
           </div>
           <div className="flex items-center gap-2">
             <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusCfg.color}`}>
@@ -187,7 +187,7 @@ export function PainelAssinatura({ contratoId, initial }: PainelAssinaturaProps)
                 onClick={handleRefresh}
                 disabled={refreshing}
                 title="Atualizar status"
-                className="rounded-md p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                className="rounded-md p-1 text-muted-foreground hover:text-muted-foreground hover:bg-muted transition-colors"
               >
                 {refreshing
                   ? <Loader2 className="h-4 w-4 animate-spin" />
@@ -201,7 +201,7 @@ export function PainelAssinatura({ contratoId, initial }: PainelAssinaturaProps)
         {/* Corpo */}
         <div className="px-4 py-3 space-y-3">
           {sig.sent_at && (
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-muted-foreground">
               Enviado em {formatarDataHora(sig.sent_at)}
               {sig.completed_at && ` · Concluído em ${formatarDataHora(sig.completed_at)}`}
               {sig.cancelled_at && ` · Cancelado em ${formatarDataHora(sig.cancelled_at)}`}
@@ -211,26 +211,26 @@ export function PainelAssinatura({ contratoId, initial }: PainelAssinaturaProps)
           {/* Lista de signatários */}
           <div className="space-y-2">
             {sig.contract_signature_signers.map(signer => (
-              <div key={signer.id} className="flex items-start gap-3 rounded-lg bg-gray-50 px-3 py-2.5">
+              <div key={signer.id} className="flex items-start gap-3 rounded-lg bg-muted/50 px-3 py-2.5">
                 {signer.signed
-                  ? <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                  ? <CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" />
                   : <Clock className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
                 }
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-gray-800">{signer.name}</span>
-                    <span className="text-xs text-gray-400">{signer.email}</span>
+                    <span className="text-sm font-medium text-foreground">{signer.name}</span>
+                    <span className="text-xs text-muted-foreground">{signer.email}</span>
                     <Badge variant="secondary" className="text-xs px-1.5 py-0">{ACT_LABEL[signer.act] ?? 'Assinar'}</Badge>
                   </div>
                   {signer.signed && signer.signed_at && (
-                    <p className="text-xs text-green-600 mt-0.5">Assinou em {formatarDataHora(signer.signed_at)}</p>
+                    <p className="text-xs text-success mt-0.5">Assinou em {formatarDataHora(signer.signed_at)}</p>
                   )}
                   {!signer.signed && isActive && (
                     <div className="mt-1.5 flex items-center gap-2">
                       {signer.signing_link && (
                         <button
                           onClick={() => copyLink(signer.signing_link!)}
-                          className="flex items-center gap-1 text-xs text-primary-700 hover:text-primary-900 font-medium"
+                          className="flex items-center gap-1 text-xs text-primary hover:text-primary font-medium"
                         >
                           <Copy className="h-3 w-3" /> Copiar link
                         </button>
@@ -239,7 +239,7 @@ export function PainelAssinatura({ contratoId, initial }: PainelAssinaturaProps)
                         <button
                           onClick={() => handleReenviar(signer.id)}
                           disabled={reenvios[signer.id]}
-                          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 font-medium disabled:opacity-50"
+                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium disabled:opacity-50"
                         >
                           {reenvios[signer.id]
                             ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -256,19 +256,19 @@ export function PainelAssinatura({ contratoId, initial }: PainelAssinaturaProps)
           </div>
 
           {sig.cancel_reason && (
-            <p className="text-xs text-red-500 italic">Motivo: {sig.cancel_reason}</p>
+            <p className="text-xs text-destructive italic">Motivo: {sig.cancel_reason}</p>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border">
           <div>
             {isActive && (
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => setConfirmCancel(true)}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                className="text-destructive hover:text-destructive hover:bg-destructive/5 border-destructive/20"
               >
                 <XCircle className="h-4 w-4" />
                 Cancelar assinatura

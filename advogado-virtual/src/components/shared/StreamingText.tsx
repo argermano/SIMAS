@@ -83,7 +83,7 @@ export function StreamingText({ url, body, onComplete, onError, className }: Str
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
         Erro: {error}
       </div>
     )
@@ -92,15 +92,15 @@ export function StreamingText({ url, body, onComplete, onError, className }: Str
   return (
     <div className={className}>
       {text ? (
-        <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">{text}</div>
+        <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{text}</div>
       ) : loading ? (
         <div className="flex items-center gap-3 py-4">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-200 border-t-primary-800" />
-          <span className="text-sm text-gray-500">Gerando com IA...</span>
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+          <span className="text-sm text-muted-foreground">Gerando com IA...</span>
         </div>
       ) : null}
       {loading && text && (
-        <span className="inline-block h-4 w-1 animate-pulse bg-primary-600 ml-0.5" />
+        <span className="inline-block h-4 w-1 animate-pulse bg-primary/70 ml-0.5" />
       )}
     </div>
   )

@@ -19,9 +19,9 @@ import {
 import { AcessoRapidoFooter } from '@/components/acesso-rapido/AcessoRapidoFooter'
 
 const COR_URGENCIA: Record<string, string> = {
-  alta:  'border-red-200 bg-red-50 text-red-800',
+  alta:  'border-destructive/20 bg-destructive/5 text-destructive',
   media: 'border-amber-200 bg-amber-50 text-amber-800',
-  baixa: 'border-green-200 bg-green-50 text-green-800',
+  baixa: 'border-success/20 bg-success/5 text-success',
 }
 const ICONE_URGENCIA: Record<string, React.ComponentType<{ className?: string }>> = {
   alta:  AlertTriangle,
@@ -235,7 +235,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
 
   if (carregando) {
     return (
-      <div className="flex items-center justify-center py-24 text-gray-400">
+      <div className="flex items-center justify-center py-24 text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
@@ -248,9 +248,9 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Users className="h-5 w-5 text-gray-400" />
+            <Users className="h-5 w-5 text-muted-foreground" />
             Cliente
-            <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+            <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -265,17 +265,17 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <MessageSquare className="h-5 w-5 text-gray-400" />
+            <MessageSquare className="h-5 w-5 text-muted-foreground" />
             Relato de Caso | Atendimento Cliente
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Tabs: 3 modos */}
-          <div className="flex rounded-lg border bg-gray-50 p-1 gap-1">
+          <div className="flex rounded-lg border bg-muted/50 p-1 gap-1">
             <button
               onClick={() => setModoInput('durante_reuniao')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                modoInput === 'durante_reuniao' ? 'bg-white text-primary-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                modoInput === 'durante_reuniao' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <UserCheck className="h-4 w-4" />
@@ -284,7 +284,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
             <button
               onClick={() => setModoInput('pos_reuniao')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                modoInput === 'pos_reuniao' ? 'bg-white text-primary-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                modoInput === 'pos_reuniao' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Mic className="h-4 w-4" />
@@ -293,7 +293,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
             <button
               onClick={() => setModoInput('texto')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                modoInput === 'texto' ? 'bg-white text-primary-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                modoInput === 'texto' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Keyboard className="h-4 w-4" />
@@ -303,7 +303,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
 
           {modoInput === 'durante_reuniao' && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Grave o áudio <strong>com o cliente presente</strong>. O consentimento LGPD será solicitado antes de iniciar.
               </p>
               <GravadorAudio
@@ -325,7 +325,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
 
           {modoInput === 'pos_reuniao' && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted-foreground">
                 Relate os fatos com <strong>suas próprias palavras</strong> após a reunião. Sem necessidade de consentimento LGPD.
               </p>
               <GravadorAudio
@@ -362,9 +362,9 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <HelpCircle className="h-5 w-5 text-gray-400" />
+            <HelpCircle className="h-5 w-5 text-muted-foreground" />
             Questão específica
-            <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+            <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -376,7 +376,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
             rows={2}
           />
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400">Ou dite:</span>
+            <span className="text-xs text-muted-foreground">Ou dite:</span>
             <MicrofoneInline
               onTranscricao={(t) => setPedido(prev => prev ? prev + ' ' + t : t)}
             />
@@ -389,13 +389,13 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-gray-400" />
+              <FileText className="h-5 w-5 text-muted-foreground" />
               Documentos
               {documentosExistentes.length > 0 && (
-                <span className="ml-1 text-xs font-normal text-gray-500">({documentosExistentes.length} anexados)</span>
+                <span className="ml-1 text-xs font-normal text-muted-foreground">({documentosExistentes.length} anexados)</span>
               )}
               {documentosExistentes.length === 0 && (
-                <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+                <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
               )}
             </CardTitle>
           </CardHeader>
@@ -430,7 +430,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           size="lg"
           onClick={analisar}
           disabled={!podeAnalisar || analisando}
-          className="gap-2 bg-violet-700 hover:bg-violet-800 min-w-52"
+          className="gap-2 bg-primary/80 hover:bg-primary min-w-52"
         >
           {analisando ? (
             <><Loader2 className="h-5 w-5 animate-spin" /> Analisando... (até 30s)</>
@@ -442,8 +442,8 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
 
       {/* 4. Resultado */}
       {resultado && (
-        <div className="space-y-4 rounded-2xl border-2 border-violet-200 bg-violet-50/40 p-6">
-          <h2 className="text-xl font-bold text-gray-900">Resultado da Análise</h2>
+        <div className="space-y-4 rounded-2xl border-2 border-primary/20 bg-primary/5 p-6">
+          <h2 className="text-xl font-bold text-foreground">Resultado da Análise</h2>
 
           {/* Urgência */}
           {resultado.urgencia && (
@@ -465,15 +465,15 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           {/* Resumo */}
           <Card>
             <CardContent className="pt-4">
-              <p className="text-sm font-semibold text-gray-500 mb-1">Resumo do caso</p>
-              <p className="text-gray-800 leading-relaxed">{resultado.resumo_caso}</p>
+              <p className="text-sm font-semibold text-muted-foreground mb-1">Resumo do caso</p>
+              <p className="text-foreground leading-relaxed">{resultado.resumo_caso}</p>
             </CardContent>
           </Card>
 
           {/* Áreas identificadas */}
           {resultado.areas_identificadas?.length > 0 && (
             <div>
-              <p className="mb-3 text-sm font-semibold text-gray-500">
+              <p className="mb-3 text-sm font-semibold text-muted-foreground">
                 Área(s) do Direito identificadas
               </p>
               <div className="space-y-2">
@@ -482,20 +482,20 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
                   return (
                     <div
                       key={a.area}
-                      className="flex flex-col gap-2 rounded-xl border-2 border-gray-100 bg-white p-4 sm:flex-row sm:items-center"
+                      className="flex flex-col gap-2 rounded-xl border-2 border-border bg-card p-4 sm:flex-row sm:items-center"
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-semibold text-gray-900">{a.nome}</span>
+                          <span className="font-semibold text-foreground">{a.nome}</span>
                           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                             a.relevancia === 'principal'
-                              ? 'bg-primary-100 text-primary-800'
-                              : 'bg-gray-100 text-gray-600'
+                              ? 'bg-primary/10 text-primary'
+                              : 'bg-muted text-muted-foreground'
                           }`}>
                             {LABEL_RELEVANCIA[a.relevancia] ?? a.relevancia}
                           </span>
                         </div>
-                        <p className="mt-1 text-sm text-gray-500">{a.justificativa}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{a.justificativa}</p>
                       </div>
                       {ativa && (
                         <Button
@@ -509,7 +509,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
                         </Button>
                       )}
                       {!ativa && (
-                        <span className="shrink-0 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-500">
+                        <span className="shrink-0 rounded-lg bg-muted px-3 py-1.5 text-xs text-muted-foreground">
                           Em breve no sistema
                         </span>
                       )}
@@ -525,12 +525,12 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
             <Card>
               <CardHeader className="pb-2 pt-4">
                 <CardTitle className="text-base flex items-center gap-2">
-                  <Brain className="h-4 w-4 text-violet-600" />
+                  <Brain className="h-4 w-4 text-primary" />
                   Recomendação imediata
                 </CardTitle>
               </CardHeader>
               <CardContent className="pb-4">
-                <p className="text-gray-800 leading-relaxed">{resultado.recomendacao_imediata}</p>
+                <p className="text-foreground leading-relaxed">{resultado.recomendacao_imediata}</p>
               </CardContent>
             </Card>
           )}
@@ -542,7 +542,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
                 <CardHeader className="pb-2 pt-4">
                   <CardTitle className="text-base flex items-center justify-between">
                     <span className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-gray-400" />
+                      <FileText className="h-4 w-4 text-muted-foreground" />
                       Documentos a solicitar
                     </span>
                     <span className="flex gap-1">
@@ -570,7 +570,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
                           win.focus()
                           win.print()
                         }}
-                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground transition-colors"
                         title="Imprimir lista"
                       >
                         <Printer className="h-4 w-4" />
@@ -588,7 +588,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
                           const mailto = `mailto:?subject=${assunto}&body=${corpo}`
                           window.open(mailto, '_self')
                         }}
-                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground transition-colors"
                         title="Enviar por e-mail"
                       >
                         <Mail className="h-4 w-4" />
@@ -599,8 +599,8 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
                 <CardContent className="pb-4">
                   <ul className="space-y-1.5">
                     {resultado.documentos_solicitar.map((doc, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500" />
+                      <li key={i} className="flex items-start gap-2 text-sm text-foreground">
+                        <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                         {doc}
                       </li>
                     ))}
@@ -613,15 +613,15 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
               <Card>
                 <CardHeader className="pb-2 pt-4">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <HelpCircle className="h-4 w-4 text-gray-400" />
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
                     Perguntas ao cliente
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pb-4">
                   <ul className="space-y-1.5">
                     {resultado.perguntas_ao_cliente.map((q, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                        <span className="mt-0.5 shrink-0 font-bold text-violet-600">{i + 1}.</span>
+                      <li key={i} className="flex items-start gap-2 text-sm text-foreground">
+                        <span className="mt-0.5 shrink-0 font-bold text-primary">{i + 1}.</span>
                         {q}
                       </li>
                     ))}
@@ -635,7 +635,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           {resultado.observacoes && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-sm font-semibold text-amber-800 mb-1">Observações</p>
-              <p className="text-sm text-amber-700">{resultado.observacoes}</p>
+              <p className="text-sm text-warning">{resultado.observacoes}</p>
             </div>
           )}
 
@@ -643,7 +643,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           <div className="pt-2 flex justify-end">
             <button
               onClick={() => { setResultado(null); setTextoRelato(''); setTranscricao(''); setPedido('') }}
-              className="text-sm font-medium text-gray-500 hover:text-gray-800 underline underline-offset-2"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground underline underline-offset-2"
             >
               Nova análise
             </button>

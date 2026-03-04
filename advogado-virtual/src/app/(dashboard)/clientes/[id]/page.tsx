@@ -210,7 +210,7 @@ export default async function DossieClientePage({
           <div className="flex items-center gap-3">
             <Link
               href="/clientes"
-              className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-800"
+              className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
             >
               <ChevronLeft className="h-4 w-4" />
               Clientes
@@ -249,9 +249,9 @@ export default async function DossieClientePage({
                 )}
                 <DadoItem icone={<Calendar className="h-4 w-4" />} label="Cliente desde" valor={formatarData(cliente.created_at)} />
                 {!cliente.cpf && !cliente.rg && !cliente.telefone && !cliente.email && !cliente.endereco && !cliente.profissao && (
-                  <p className="col-span-2 text-sm text-gray-400 italic">
+                  <p className="col-span-2 text-sm text-muted-foreground italic">
                     Nenhum dado de contato cadastrado.{' '}
-                    <Link href={`/clientes/${id}/editar`} className="text-primary-800 hover:underline">Adicionar dados</Link>
+                    <Link href={`/clientes/${id}/editar`} className="text-primary hover:underline">Adicionar dados</Link>
                   </p>
                 )}
               </CardContent>
@@ -266,11 +266,11 @@ export default async function DossieClientePage({
               </CardHeader>
               <CardContent>
                 {cliente.notas ? (
-                  <p className="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed">{cliente.notas}</p>
+                  <p className="whitespace-pre-wrap text-sm text-foreground leading-relaxed">{cliente.notas}</p>
                 ) : (
-                  <p className="text-sm text-gray-400 italic">
+                  <p className="text-sm text-muted-foreground italic">
                     Nenhuma observação.{' '}
-                    <Link href={`/clientes/${id}/editar`} className="text-primary-800 hover:underline">Adicionar</Link>
+                    <Link href={`/clientes/${id}/editar`} className="text-primary hover:underline">Adicionar</Link>
                   </p>
                 )}
               </CardContent>
@@ -292,8 +292,8 @@ export default async function DossieClientePage({
           {mostrar('atendimentos') && !mostrar('contratos') || (mostrar('atendimentos') && mostrar('analises')) || (mostrar('atendimentos') && mostrar('pecas')) || (!filtro || filtro === 'atendimentos' || filtro === 'analises' || filtro === 'pecas') ? (
             <section>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-gray-400" />
+                <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
                   {filtro === 'atendimentos' ? 'Atendimentos' :
                    filtro === 'analises'     ? 'Análises IA' :
                    filtro === 'pecas'        ? 'Peças Geradas' : 'Dossiê Completo'}
@@ -331,10 +331,10 @@ export default async function DossieClientePage({
 
                     return (
                       <div key={at.id} className="relative">
-                        {!isLast && <div className="absolute left-5 top-14 bottom-0 w-px bg-gray-200" />}
+                        {!isLast && <div className="absolute left-5 top-14 bottom-0 w-px bg-border" />}
                         <div className="relative">
                           <div className={`absolute left-3 top-5 h-4 w-4 rounded-full border-2 border-white shadow-sm ${
-                            status === 'finalizado'  ? 'bg-green-400' :
+                            status === 'finalizado'  ? 'bg-success/60' :
                             status === 'peca_gerada' ? 'bg-blue-400'  : 'bg-amber-400'
                           }`} />
                           <div className="ml-10">
@@ -349,24 +349,24 @@ export default async function DossieClientePage({
                                   <div className="flex items-center justify-between gap-3">
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-base font-semibold text-gray-900">{LABELS_AREA[at.area] ?? at.area}</span>
+                                        <span className="text-base font-semibold text-foreground">{LABELS_AREA[at.area] ?? at.area}</span>
                                         {at.tipo_peca_origem && (
-                                          <span className="text-xs text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">
+                                          <span className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5">
                                             {TIPOS_PECA[at.tipo_peca_origem]?.nome ?? at.tipo_peca_origem}
                                           </span>
                                         )}
                                         <Badge variant={badge.variant} className="text-xs px-2 py-0.5">{badge.label}</Badge>
                                       </div>
-                                      <div className="mt-1 flex items-center gap-3 text-xs text-gray-400">
+                                      <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                                         <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{formatarDataHora(at.created_at)}</span>
                                         {numDocs > 0 && <span className="flex items-center gap-1"><Paperclip className="h-3 w-3" />{numDocs} doc{numDocs > 1 ? 's' : ''}</span>}
                                       </div>
-                                      {at.pedidos_especificos && <p className="mt-1.5 text-sm text-gray-500 line-clamp-2">{at.pedidos_especificos}</p>}
+                                      {at.pedidos_especificos && <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2">{at.pedidos_especificos}</p>}
                                       {at.audio_url && <PlayerAudio atendimentoId={at.id} />}
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                       <BotaoExcluirAtendimento atendimentoId={at.id} />
-                                      <Link href={hrefAtendimento(at)} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors" title="Abrir atendimento">
+                                      <Link href={hrefAtendimento(at)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-muted-foreground transition-colors" title="Abrir atendimento">
                                         <ChevronRight className="h-5 w-5" />
                                       </Link>
                                     </div>
@@ -379,16 +379,16 @@ export default async function DossieClientePage({
                                       {filtro !== 'pecas' && atAnalises.map(analise => {
                                         const anBadge = BADGE_ANALISE_STATUS[analise.status] ?? BADGE_ANALISE_STATUS.gerada
                                         return (
-                                          <div key={analise.id} className="flex items-center gap-3 rounded-lg bg-violet-50/60 px-3 py-2 text-sm">
-                                            <Brain className="h-4 w-4 text-violet-500 shrink-0" />
+                                          <div key={analise.id} className="flex items-center gap-3 rounded-lg bg-primary/5/60 px-3 py-2 text-sm">
+                                            <Brain className="h-4 w-4 text-primary shrink-0" />
                                             <div className="min-w-0 flex-1">
                                               <div className="flex items-center gap-2">
-                                                <span className="font-medium text-violet-900">Análise de Caso</span>
+                                                <span className="font-medium text-primary">Análise de Caso</span>
                                                 <Badge variant={anBadge.variant} className="text-xs px-1.5 py-0">{anBadge.label}</Badge>
                                               </div>
-                                              {analise.tese_principal && <p className="text-xs text-violet-600 truncate mt-0.5">{analise.tese_principal}</p>}
+                                              {analise.tese_principal && <p className="text-xs text-primary truncate mt-0.5">{analise.tese_principal}</p>}
                                             </div>
-                                            <span className="text-xs text-gray-400 shrink-0">{formatarDataRelativa(analise.created_at)}</span>
+                                            <span className="text-xs text-muted-foreground shrink-0">{formatarDataRelativa(analise.created_at)}</span>
                                           </div>
                                         )
                                       })}
@@ -411,12 +411,12 @@ export default async function DossieClientePage({
                                                 <Badge variant={pcBadge.variant} className="text-xs px-1.5 py-0">
                                                   <StatusIcon className="h-3 w-3 mr-0.5" />{pcBadge.label}
                                                 </Badge>
-                                                {peca.versao > 1 && <span className="text-xs text-gray-400">v{peca.versao}</span>}
+                                                {peca.versao > 1 && <span className="text-xs text-muted-foreground">v{peca.versao}</span>}
                                               </div>
                                             </div>
-                                            <span className="text-xs text-gray-400 shrink-0">{formatarDataRelativa(peca.created_at)}</span>
+                                            <span className="text-xs text-muted-foreground shrink-0">{formatarDataRelativa(peca.created_at)}</span>
                                             <BotaoExcluirPeca pecaId={peca.id} />
-                                            <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-gray-500 shrink-0" />
+                                            <ChevronRight className="h-4 w-4 text-border group-hover:text-muted-foreground shrink-0" />
                                           </Link>
                                         )
                                       })}
@@ -440,9 +440,9 @@ export default async function DossieClientePage({
                                                 </p>
                                               )}
                                             </div>
-                                            <span className="text-xs text-gray-400 shrink-0">{formatarDataRelativa(contrato.created_at)}</span>
+                                            <span className="text-xs text-muted-foreground shrink-0">{formatarDataRelativa(contrato.created_at)}</span>
                                             <BotaoExcluirContrato contratoId={contrato.id} />
-                                            <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-blue-500 shrink-0" />
+                                            <ChevronRight className="h-4 w-4 text-border group-hover:text-blue-500 shrink-0" />
                                           </Link>
                                         )
                                       })}
@@ -451,9 +451,9 @@ export default async function DossieClientePage({
 
                                   {atAnalises.length === 0 && atPecas.length === 0 && atContratos.length === 0 && (
                                     <div className="mt-3 border-t pt-3">
-                                      <p className="text-xs text-gray-400 italic">
+                                      <p className="text-xs text-muted-foreground italic">
                                         Nenhuma análise ou peça gerada ainda.{' '}
-                                        <Link href={hrefAtendimento(at)} className="text-primary-700 hover:underline">
+                                        <Link href={hrefAtendimento(at)} className="text-primary hover:underline">
                                           {at.area === 'geral' ? 'Analisar caso' : 'Gerar peça'}
                                         </Link>
                                       </p>
@@ -476,8 +476,8 @@ export default async function DossieClientePage({
           {mostrar('contratos') && (
             <section>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <FileSignature className="h-5 w-5 text-gray-400" />
+                <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                  <FileSignature className="h-5 w-5 text-muted-foreground" />
                   Contratos de Honorários
                   {contratosList.length > 0 && (
                     <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
@@ -507,27 +507,27 @@ export default async function DossieClientePage({
                       <Link
                         key={contrato.id}
                         href={`/contratos/${contrato.id}`}
-                        className="flex items-center gap-3 rounded-xl border bg-white px-4 py-3 text-sm hover:border-blue-200 hover:bg-blue-50/40 transition-colors group"
+                        className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm hover:border-blue-200 hover:bg-blue-50/40 transition-colors group"
                       >
                         <FileSignature className="h-5 w-5 shrink-0 text-blue-500" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-gray-900 group-hover:text-blue-900">{contrato.titulo}</span>
+                            <span className="font-semibold text-foreground group-hover:text-blue-900">{contrato.titulo}</span>
                             <Badge variant={ctBadge.variant} className="text-xs px-1.5 py-0">{ctBadge.label}</Badge>
                             {contrato.area && (
-                              <span className="text-xs text-gray-400 bg-gray-100 rounded px-1.5 py-0.5">
+                              <span className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5">
                                 {LABELS_AREA[contrato.area] ?? contrato.area}
                               </span>
                             )}
                           </div>
-                          <div className="mt-0.5 flex items-center gap-3 text-xs text-gray-400">
+                          <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
                             {contrato.valor_fixo && <span>R$ {Number(contrato.valor_fixo).toLocaleString('pt-BR')}</span>}
                             {contrato.percentual_exito && <span>{contrato.percentual_exito}% êxito</span>}
                             <span>{formatarDataRelativa(contrato.created_at)}</span>
                           </div>
                         </div>
                         <BotaoExcluirContrato contratoId={contrato.id} />
-                        <ChevronRight className="h-4 w-4 text-gray-300 group-hover:text-blue-500 shrink-0" />
+                        <ChevronRight className="h-4 w-4 text-border group-hover:text-blue-500 shrink-0" />
                       </Link>
                     )
                   })}
@@ -540,19 +540,19 @@ export default async function DossieClientePage({
           {mostrar('documentos') && (todosDocumentosCliente.data ?? []).length > 0 && (
             <section>
               <div className="flex items-center gap-2 mb-4">
-                <Paperclip className="h-5 w-5 text-gray-400" />
-                <h2 className="text-xl font-semibold text-gray-900">Documentos do Cliente</h2>
-                <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                <Paperclip className="h-5 w-5 text-muted-foreground" />
+                <h2 className="text-xl font-semibold text-foreground">Documentos do Cliente</h2>
+                <span className="ml-1 rounded-full bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
                   {(todosDocumentosCliente.data ?? []).length}
                 </span>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {(todosDocumentosCliente.data ?? []).map((doc) => (
-                  <div key={doc.id} className="flex items-center gap-3 rounded-lg border bg-white px-3 py-2.5 text-sm">
+                  <div key={doc.id} className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm">
                     <Paperclip className="h-4 w-4 shrink-0 text-amber-500" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-gray-800">{doc.file_name}</p>
-                      <p className="text-xs text-gray-400">{formatarDataRelativa(doc.created_at)}</p>
+                      <p className="truncate font-medium text-foreground">{doc.file_name}</p>
+                      <p className="text-xs text-muted-foreground">{formatarDataRelativa(doc.created_at)}</p>
                     </div>
                   </div>
                 ))}
@@ -578,8 +578,8 @@ function ResumoCard({
   ativo: boolean
 }) {
   const cores = {
-    primary: { bg: 'bg-primary-50',  text: 'text-primary-600',  ring: 'ring-primary-400'  },
-    violet:  { bg: 'bg-violet-50',   text: 'text-violet-600',   ring: 'ring-violet-400'   },
+    primary: { bg: 'bg-primary/5',  text: 'text-primary',  ring: 'ring-primary/40'  },
+    violet:  { bg: 'bg-primary/5',   text: 'text-primary',   ring: 'ring-primary/40'   },
     emerald: { bg: 'bg-emerald-50',  text: 'text-emerald-600',  ring: 'ring-emerald-400'  },
     amber:   { bg: 'bg-amber-50',    text: 'text-amber-600',    ring: 'ring-amber-400'    },
     blue:    { bg: 'bg-blue-50',     text: 'text-blue-600',     ring: 'ring-blue-400'     },
@@ -594,8 +594,8 @@ function ResumoCard({
         <CardContent className="flex items-center gap-3 py-3">
           <div className={cn('rounded-lg p-2', bg, text)}>{icone}</div>
           <div>
-            <p className="text-2xl font-bold text-gray-900">{valor}</p>
-            <p className={cn('text-xs', ativo ? cn('font-semibold', text) : 'text-gray-500')}>{label}</p>
+            <p className="text-2xl font-bold text-foreground">{valor}</p>
+            <p className={cn('text-xs', ativo ? cn('font-semibold', text) : 'text-muted-foreground')}>{label}</p>
           </div>
         </CardContent>
       </Card>
@@ -614,13 +614,13 @@ function DadoItem({
 }) {
   return (
     <div className={`flex items-start gap-3 ${className ?? ''}`}>
-      <div className="mt-0.5 shrink-0 text-gray-400">{icone}</div>
+      <div className="mt-0.5 shrink-0 text-muted-foreground">{icone}</div>
       <div className="min-w-0">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
         {link ? (
-          <a href={link} className="text-base font-medium text-primary-800 hover:underline">{valor}</a>
+          <a href={link} className="text-base font-medium text-primary hover:underline">{valor}</a>
         ) : (
-          <p className="text-base text-gray-900">{valor}</p>
+          <p className="text-base text-foreground">{valor}</p>
         )}
       </div>
     </div>

@@ -49,7 +49,7 @@ export default async function ConfiguracoesPage() {
         acoes={
           <Link
             href="/dashboard"
-            className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-800"
+            className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
             Início
@@ -64,7 +64,7 @@ export default async function ConfiguracoesPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-gray-400" />
+                <Building2 className="h-5 w-5 text-muted-foreground" />
                 Escritório
               </CardTitle>
             </CardHeader>
@@ -97,7 +97,7 @@ export default async function ConfiguracoesPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5 text-gray-400" />
+                <User className="h-5 w-5 text-muted-foreground" />
                 Minha Conta
               </CardTitle>
             </CardHeader>
@@ -121,12 +121,12 @@ export default async function ConfiguracoesPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5 text-gray-400" />
+                <Briefcase className="h-5 w-5 text-muted-foreground" />
                 Dados Profissionais do Escritório
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="mb-4 text-sm text-gray-500">
+              <p className="mb-4 text-sm text-muted-foreground">
                 Esses dados são usados automaticamente na geração de contratos de honorários. Preenchidos uma vez, valem para todos os contratos do escritório.
               </p>
               <FormPerfilProfissional escritorio={{
@@ -155,12 +155,12 @@ export default async function ConfiguracoesPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-gray-400" />
+                  <Users className="h-5 w-5 text-muted-foreground" />
                   Gestão de Equipe
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   Convide colaboradores e gerencie os perfis de acesso do escritório.
                 </p>
                 <Button asChild variant="secondary" size="sm">
@@ -174,29 +174,29 @@ export default async function ConfiguracoesPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-gray-400" />
+                <Shield className="h-5 w-5 text-muted-foreground" />
                 Segurança e Privacidade
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm text-gray-600">
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p className="flex items-start gap-2">
-                <span className="mt-0.5 text-green-600">✓</span>
+                <span className="mt-0.5 text-success">✓</span>
                 Dados transmitidos com criptografia TLS
               </p>
               <p className="flex items-start gap-2">
-                <span className="mt-0.5 text-green-600">✓</span>
+                <span className="mt-0.5 text-success">✓</span>
                 Dados sensíveis (CPF) armazenados com criptografia
               </p>
               <p className="flex items-start gap-2">
-                <span className="mt-0.5 text-green-600">✓</span>
+                <span className="mt-0.5 text-success">✓</span>
                 Isolamento total entre escritórios (Row Level Security)
               </p>
               <p className="flex items-start gap-2">
-                <span className="mt-0.5 text-green-600">✓</span>
+                <span className="mt-0.5 text-success">✓</span>
                 Chave de IA nunca exposta ao navegador
               </p>
               <p className="flex items-start gap-2">
-                <span className="mt-0.5 text-blue-600">ℹ</span>
+                <span className="mt-0.5 text-info">ℹ</span>
                 Em conformidade com a LGPD (Lei 13.709/2018)
               </p>
             </CardContent>
@@ -206,16 +206,16 @@ export default async function ConfiguracoesPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5 text-gray-400" />
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
                 Plano e Uso
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
-                <p className="text-base font-semibold text-amber-900">
+              <div className="rounded-lg bg-warning/5 border border-warning/20 p-4">
+                <p className="text-base font-semibold text-warning">
                   Você está no plano Trial
                 </p>
-                <p className="mt-1 text-sm text-amber-700">
+                <p className="mt-1 text-sm text-warning">
                   O plano trial permite testar todas as funcionalidades.
                   Em breve, planos pagos estarão disponíveis.
                 </p>
@@ -238,8 +238,8 @@ function InfoItem({
 }) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-      <div className="mt-1 text-base text-gray-900">{valor}</div>
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <div className="mt-1 text-base text-foreground">{valor}</div>
     </div>
   )
 }

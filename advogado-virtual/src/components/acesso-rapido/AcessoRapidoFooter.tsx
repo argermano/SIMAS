@@ -379,18 +379,18 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
         }
       >
         {!clienteId && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-warning">
             Selecione um cliente na página para gerar este documento.
           </div>
         )}
         {clienteId && templateExiste && !documentoGerado && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-700">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 px-3 py-2.5 text-sm text-success">
             <CheckCircle className="h-4 w-4 shrink-0" />
             Template salvo — geração instantânea sem IA
           </div>
         )}
         {clienteId && !templateExiste && !documentoGerado && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-warning">
             Nenhum template salvo. A IA irá gerar e salvar automaticamente para uso futuro.
           </div>
         )}
@@ -413,9 +413,9 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
           )}
           {documentoGerado && (
             <div className="flex flex-col items-center gap-3 py-4">
-              <CheckCircle className="h-10 w-10 text-green-500" />
-              <p className="text-sm font-medium text-gray-700">Documento gerado com sucesso!</p>
-              <p className="text-xs text-gray-500">Clique em &quot;Abrir no Editor&quot; para formatar e exportar.</p>
+              <CheckCircle className="h-10 w-10 text-success" />
+              <p className="text-sm font-medium text-foreground">Documento gerado com sucesso!</p>
+              <p className="text-xs text-muted-foreground">Clique em &quot;Abrir no Editor&quot; para formatar e exportar.</p>
             </div>
           )}
         </div>
@@ -428,21 +428,21 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
   return (
     <>
       {/* ── Barra de acesso rápido ── */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="rounded-xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center gap-2">
           <Zap className="h-4 w-4 text-amber-500" />
-          <span className="text-sm font-semibold text-gray-700">Acesso Rápido</span>
+          <span className="text-sm font-semibold text-foreground">Acesso Rápido</span>
         </div>
         <div className="grid grid-cols-3 gap-2">
           {/* Contrato de Honorários */}
           <button
             onClick={() => { setPreviewContrato(''); setModeloTexto(''); setModalAberto('contrato') }}
-            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-gray-100 bg-white p-4 text-center transition-all hover:border-primary-300 hover:bg-primary-50 hover:shadow-sm"
+            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-border bg-card p-4 text-center transition-all hover:border-primary/30 hover:bg-primary/10 hover:shadow-sm"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 group-hover:bg-primary-100 transition-colors">
-              <FileText className="h-5 w-5 text-primary-700" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/5 group-hover:bg-primary/10 transition-colors">
+              <FileText className="h-5 w-5 text-primary" />
             </div>
-            <span className="text-xs font-semibold leading-tight text-gray-800 group-hover:text-primary-800">
+            <span className="text-xs font-semibold leading-tight text-foreground group-hover:text-primary">
               Contrato de Honorários
             </span>
           </button>
@@ -450,12 +450,12 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
           {/* Procuração */}
           <button
             onClick={() => abrirModalDoc('procuracao')}
-            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-gray-100 bg-white p-4 text-center transition-all hover:border-blue-300 hover:bg-blue-50 hover:shadow-sm"
+            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-border bg-card p-4 text-center transition-all hover:border-blue-300 hover:bg-blue-50 hover:shadow-sm"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 group-hover:bg-blue-100 transition-colors">
               <Scale className="h-5 w-5 text-blue-700" />
             </div>
-            <span className="text-xs font-semibold leading-tight text-gray-800 group-hover:text-blue-800">
+            <span className="text-xs font-semibold leading-tight text-foreground group-hover:text-blue-800">
               Procuração Ad Judicia
             </span>
           </button>
@@ -463,12 +463,12 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
           {/* Declaração */}
           <button
             onClick={() => abrirModalDoc('declaracao')}
-            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-gray-100 bg-white p-4 text-center transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-sm"
+            className="group flex flex-col items-center gap-2 rounded-xl border-2 border-border bg-card p-4 text-center transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:shadow-sm"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 group-hover:bg-emerald-100 transition-colors">
               <FileSignature className="h-5 w-5 text-emerald-700" />
             </div>
-            <span className="text-xs font-semibold leading-tight text-gray-800 group-hover:text-emerald-800">
+            <span className="text-xs font-semibold leading-tight text-foreground group-hover:text-emerald-800">
               Decl. Hipossuficiência
             </span>
           </button>
@@ -505,7 +505,7 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
         }
       >
         {!clienteId && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-warning">
             Selecione um cliente na página para gerar o contrato.
           </div>
         )}
@@ -514,10 +514,10 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
           {/* ── Seleção de modelo de contrato ── */}
           {!gerando && !previewContrato && (
             <div>
-              <p className="mb-1.5 text-xs font-medium text-gray-700">Modelo de contrato</p>
+              <p className="mb-1.5 text-xs font-medium text-foreground">Modelo de contrato</p>
 
               {carregandoModelos ? (
-                <div className="flex items-center gap-2 py-3 text-sm text-gray-400">
+                <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" /> Carregando modelos...
                 </div>
               ) : modelosSalvos.length > 0 ? (
@@ -531,13 +531,13 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
                         onClick={() => selecionarModelo(m.id === modeloSelecionadoId ? null : m.id)}
                         className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                           m.id === modeloSelecionadoId
-                            ? 'border-primary-300 bg-primary-50 text-primary-800'
-                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                            ? 'border-primary/30 bg-primary/5 text-primary'
+                            : 'border-border bg-card text-foreground hover:border-border'
                         }`}
                       >
-                        <FolderOpen className={`h-4 w-4 shrink-0 ${m.id === modeloSelecionadoId ? 'text-primary-600' : 'text-gray-400'}`} />
+                        <FolderOpen className={`h-4 w-4 shrink-0 ${m.id === modeloSelecionadoId ? 'text-primary' : 'text-muted-foreground'}`} />
                         <span className="flex-1 truncate font-medium">{m.titulo}</span>
-                        {m.id === modeloSelecionadoId && <CheckCircle className="h-4 w-4 shrink-0 text-primary-600" />}
+                        {m.id === modeloSelecionadoId && <CheckCircle className="h-4 w-4 shrink-0 text-primary" />}
                       </button>
                     ))}
                   </div>
@@ -548,8 +548,8 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
                     onClick={() => { setModeloSelecionadoId(null); setModeloTexto('') }}
                     className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                       !modeloSelecionadoId && !modeloTexto
-                        ? 'border-violet-300 bg-violet-50 text-violet-800'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                        ? 'border-primary/30 bg-primary/5 text-primary'
+                        : 'border-border bg-card text-muted-foreground hover:border-border'
                     }`}
                   >
                     <span className="flex-1">Gerar do zero com IA (sem modelo)</span>
@@ -557,13 +557,13 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
 
                   {/* Separador + upload de novo modelo */}
                   <div className="flex items-center gap-2 pt-1">
-                    <div className="flex-1 border-t border-gray-200" />
-                    <span className="text-xs text-gray-400">ou</span>
-                    <div className="flex-1 border-t border-gray-200" />
+                    <div className="flex-1 border-t border-border" />
+                    <span className="text-xs text-muted-foreground">ou</span>
+                    <div className="flex-1 border-t border-border" />
                   </div>
                 </div>
               ) : (
-                <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-700">
+                <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-warning">
                   Nenhum modelo salvo. Envie um modelo abaixo ou gere com IA.
                 </div>
               )}
@@ -573,7 +573,7 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadandoModelo}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500 hover:border-primary-300 hover:text-primary-700 transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground hover:border-primary/30 hover:text-primary transition-colors"
               >
                 <Upload className="h-4 w-4" />
                 {uploadandoModelo ? 'Extraindo texto e salvando...' : 'Enviar novo modelo PDF/DOCX'}
@@ -584,7 +584,7 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
 
           {/* Indicador de modelo selecionado durante geração */}
           {gerando && temModeloSelecionado && (
-            <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 px-3 py-2 text-sm text-success">
               <CheckCircle className="h-4 w-4 shrink-0" />
               Gerando a partir do modelo selecionado
             </div>
@@ -611,10 +611,10 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
           {/* Preview streaming */}
           {previewContrato && (
             <div>
-              <p className="mb-1.5 text-xs font-medium text-gray-500">Prévia do contrato</p>
-              <div className="max-h-64 overflow-y-auto rounded-lg border bg-gray-50 p-4">
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Prévia do contrato</p>
+              <div className="max-h-64 overflow-y-auto rounded-lg border bg-muted/50 p-4">
                 <MarkdownPreview>{previewContrato}</MarkdownPreview>
-                {gerando && <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary-600 ml-0.5 align-middle" />}
+                {gerando && <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary/70 ml-0.5 align-middle" />}
               </div>
             </div>
           )}
@@ -653,7 +653,7 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
         <textarea
           value={templateConteudo}
           onChange={e => setTemplateConteudo(e.target.value)}
-          className="h-96 w-full resize-none rounded-lg border bg-white p-3 font-mono text-xs text-gray-700 leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary-300"
+          className="h-96 w-full resize-none rounded-lg border bg-card p-3 font-mono text-xs text-foreground leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary/30"
           placeholder="Cole ou edite o template em Markdown..."
         />
       </Dialog>

@@ -158,10 +158,10 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
 
   if (collapsed) {
     return (
-      <div className="flex flex-col items-center border-r bg-gray-50 w-10 shrink-0 py-3">
+      <div className="flex flex-col items-center border-r bg-muted/50 w-10 shrink-0 py-3">
         <button
           onClick={onToggleCollapse}
-          className="rounded p-1.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition-colors"
+          className="rounded p-1.5 text-muted-foreground hover:bg-border hover:text-foreground transition-colors"
           title="Expandir painel"
         >
           <ChevronRight className="h-4 w-4" />
@@ -172,13 +172,13 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
 
   return (
     <>
-      <div className="flex flex-col border-r bg-gray-50 w-56 shrink-0 overflow-y-auto">
+      <div className="flex flex-col border-r bg-muted/50 w-56 shrink-0 overflow-y-auto">
         {/* Header da sidebar */}
-        <div className="flex items-center justify-between px-3 py-2.5 border-b bg-white">
-          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Estrutura</span>
+        <div className="flex items-center justify-between px-3 py-2.5 border-b bg-card">
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Estrutura</span>
           <button
             onClick={onToggleCollapse}
-            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-muted-foreground transition-colors"
             title="Recolher painel"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
@@ -188,7 +188,7 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
         {/* Lista de tópicos */}
         <div className="flex-1 py-2 px-2 space-y-0.5">
           {topics.length === 0 ? (
-            <p className="px-2 py-3 text-xs text-gray-400 italic">
+            <p className="px-2 py-3 text-xs text-muted-foreground italic">
               Nenhum tópico encontrado. Adicione títulos ao documento.
             </p>
           ) : (
@@ -197,8 +197,8 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
                 key={topic.id}
                 className={`group flex items-center justify-between rounded-md px-2 py-1.5 cursor-pointer transition-colors ${
                   activeTopic === topic.id
-                    ? 'bg-primary-50 text-primary-800'
-                    : 'hover:bg-gray-200 text-gray-700'
+                    ? 'bg-primary/5 text-primary'
+                    : 'hover:bg-border text-foreground'
                 }`}
                 style={{ paddingLeft: `${(topic.level - 1) * 0.75 + 0.5}rem` }}
               >
@@ -212,7 +212,7 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
                 <button
                   onClick={(e) => { e.stopPropagation(); setRewriteTarget(topic) }}
                   title="Reescrever com IA"
-                  className="shrink-0 rounded p-0.5 text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-violet-100 hover:text-violet-600 transition-all"
+                  className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-primary/10 hover:text-primary transition-all"
                 >
                   <RefreshCw className="h-3 w-3" />
                 </button>
@@ -232,7 +232,7 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
                 onChange={(e) => setDescTopico(e.target.value)}
                 placeholder="Descreva o novo tópico..."
                 rows={3}
-                className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs resize-none outline-none focus:ring-1 focus:ring-violet-400"
+                className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-xs resize-none outline-none focus:ring-1 focus:ring-primary/40"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) gerarNovoTopico()
                   if (e.key === 'Escape') { setAdicionando(false); setDescTopico('') }
@@ -241,7 +241,7 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
               <div className="flex gap-1.5">
                 <Button
                   size="sm"
-                  className="flex-1 gap-1 bg-violet-600 hover:bg-violet-700 text-xs py-1"
+                  className="flex-1 gap-1 bg-primary/70 hover:bg-primary/80 text-xs py-1"
                   onClick={gerarNovoTopico}
                   disabled={gerandoTopico || !descTopico.trim()}
                 >
@@ -253,7 +253,7 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
                 </Button>
                 <button
                   onClick={() => { setAdicionando(false); setDescTopico(''); abortRef.current?.abort() }}
-                  className="rounded-md px-2 text-xs text-gray-500 hover:bg-gray-200 transition-colors"
+                  className="rounded-md px-2 text-xs text-muted-foreground hover:bg-border transition-colors"
                 >
                   Cancelar
                 </button>
@@ -262,7 +262,7 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
           ) : (
             <button
               onClick={() => setAdicionando(true)}
-              className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium text-violet-600 hover:bg-violet-50 transition-colors"
+              className="flex w-full items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
             >
               <Plus className="h-3.5 w-3.5" />
               Adicionar tópico com IA

@@ -99,7 +99,7 @@ export default async function ContratosPage({
         acoes={
           <Link
             href="/contratos/novo"
-            className="flex items-center gap-2 rounded-lg bg-primary-800 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-900 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 transition-colors"
           >
             <Plus className="h-4 w-4" />
             Novo contrato
@@ -148,10 +148,10 @@ export default async function ContratosPage({
                         <CardContent className="flex items-center justify-between gap-4 py-4">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-semibold text-gray-900 truncate">{c.titulo}</p>
+                              <p className="font-semibold text-foreground truncate">{c.titulo}</p>
                               <Badge variant={badge.variant}>{badge.label}</Badge>
                             </div>
-                            <p className="text-sm text-gray-500 mt-0.5">
+                            <p className="text-sm text-muted-foreground mt-0.5">
                               {clienteNome ?? 'Sem cliente'}
                               {c.area ? ` · ${LABEL_AREA[c.area] ?? c.area}` : ''}
                               {` · ${honorario}`}
@@ -160,7 +160,7 @@ export default async function ContratosPage({
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             <BotaoExcluirContrato contratoId={c.id} />
-                            <ChevronRight className="h-4 w-4 text-gray-400" />
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           </div>
                         </CardContent>
                       </Card>
@@ -174,17 +174,17 @@ export default async function ContratosPage({
                 <div className="flex items-center justify-center gap-2 pt-2">
                   {pageNum > 1 && (
                     <Link href={`/contratos?${baseStr}${baseStr ? '&' : ''}page=${pageNum - 1}`}>
-                      <button className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <button className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted">
                         ← Anterior
                       </button>
                     </Link>
                   )}
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-muted-foreground">
                     Página {pageNum} de {totalPaginas}
                   </span>
                   {pageNum < totalPaginas && (
                     <Link href={`/contratos?${baseStr}${baseStr ? '&' : ''}page=${pageNum + 1}`}>
-                      <button className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <button className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted">
                         Próxima →
                       </button>
                     </Link>

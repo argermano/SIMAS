@@ -246,7 +246,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Users className="h-5 w-5 text-gray-400" />
+            <Users className="h-5 w-5 text-muted-foreground" />
             Cliente
           </CardTitle>
         </CardHeader>
@@ -262,21 +262,21 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5 text-gray-400" />
+            <FileText className="h-5 w-5 text-muted-foreground" />
             Modelo
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {carregandoTemplate ? (
-            <div className="flex items-center gap-2 text-sm text-gray-400">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Verificando modelo salvo...
             </div>
           ) : editandoTemplate ? (
             /* Edição do modelo */
             <div className="space-y-3">
-              <p className="text-xs text-gray-500">
-                Cole ou edite o conteúdo do modelo. Use <code className="rounded bg-gray-100 px-1">{'{{variavel}}'}</code> para campos que mudam por cliente.
+              <p className="text-xs text-muted-foreground">
+                Cole ou edite o conteúdo do modelo. Use <code className="rounded bg-muted px-1">{'{{variavel}}'}</code> para campos que mudam por cliente.
               </p>
               <div className="flex items-center gap-2">
                 <Button
@@ -296,7 +296,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
                   className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f) }}
                 />
-                <span className="text-xs text-gray-400">ou cole o texto abaixo</span>
+                <span className="text-xs text-muted-foreground">ou cole o texto abaixo</span>
               </div>
               <Textarea
                 value={templateRascunho}
@@ -330,15 +330,15 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
           ) : templateExiste ? (
             /* Modelo salvo encontrado */
             <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-lg border border-success/20 bg-success/5 px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span className="text-sm font-medium text-green-800">Modelo salvo — geração instantânea</span>
+                  <CheckCircle className="h-4 w-4 text-success" />
+                  <span className="text-sm font-medium text-success">Modelo salvo — geração instantânea</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => { setTemplateRascunho(templateConteudo); setEditandoTemplate(true) }}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-white hover:text-gray-800 transition-colors"
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-card hover:text-foreground transition-colors"
                     title="Editar modelo"
                   >
                     <Edit3 className="h-3.5 w-3.5" />
@@ -347,7 +347,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
                   <button
                     onClick={excluirTemplate}
                     disabled={deletandoTemplate}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors"
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive transition-colors"
                     title="Excluir modelo"
                   >
                     {deletandoTemplate
@@ -388,8 +388,8 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-gray-400" />
-              Dados adicionais <span className="text-sm font-normal text-gray-400">(opcional)</span>
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              Dados adicionais <span className="text-sm font-normal text-muted-foreground">(opcional)</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -407,8 +407,8 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-gray-400" />
-              Dados adicionais <span className="text-sm font-normal text-gray-400">(opcional)</span>
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              Dados adicionais <span className="text-sm font-normal text-muted-foreground">(opcional)</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -426,8 +426,8 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-gray-400" />
-              Dados do substabelecido <span className="text-sm font-normal text-gray-400">(opcional)</span>
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              Dados do substabelecido <span className="text-sm font-normal text-muted-foreground">(opcional)</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-4">
@@ -455,8 +455,8 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-gray-400" />
-              Dados da notificação <span className="text-sm font-normal text-gray-400">(opcional)</span>
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              Dados da notificação <span className="text-sm font-normal text-muted-foreground">(opcional)</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -481,8 +481,8 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-gray-400" />
-              Honorários <span className="text-sm font-normal text-gray-400">(opcional)</span>
+              <FileText className="h-5 w-5 text-muted-foreground" />
+              Honorários <span className="text-sm font-normal text-muted-foreground">(opcional)</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

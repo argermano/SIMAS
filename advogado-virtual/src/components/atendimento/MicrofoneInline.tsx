@@ -83,7 +83,7 @@ export function MicrofoneInline({ onTranscricao, disabled }: MicrofoneInlineProp
           onClick={iniciar}
           disabled={disabled}
           title="Gravar questão por voz"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 transition-colors hover:border-primary-300 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Mic className="h-4 w-4" />
         </button>
@@ -94,7 +94,7 @@ export function MicrofoneInline({ onTranscricao, disabled }: MicrofoneInlineProp
           type="button"
           onClick={parar}
           title="Parar e transcrever"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-destructive/50 text-white transition-colors hover:bg-destructive"
         >
           <Square className="h-3.5 w-3.5" />
         </button>
@@ -102,18 +102,18 @@ export function MicrofoneInline({ onTranscricao, disabled }: MicrofoneInlineProp
 
       {estado === 'transcrevendo' && (
         <span className="flex h-8 w-8 items-center justify-center">
-          <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         </span>
       )}
 
       {estado === 'gravando' && (
-        <span className="flex items-center gap-1 text-xs text-red-600">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+        <span className="flex items-center gap-1 text-xs text-destructive">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-destructive/50" />
           gravando...
         </span>
       )}
 
-      {erro && <span className="text-xs text-red-500">{erro}</span>}
+      {erro && <span className="text-xs text-destructive">{erro}</span>}
     </div>
   )
 }

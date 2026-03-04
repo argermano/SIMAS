@@ -24,10 +24,10 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-base font-medium text-gray-700"
+            className="block text-base font-medium text-foreground"
           >
             {label}
-            {props.required && <span className="ml-1 text-red-500">*</span>}
+            {props.required && <span className="ml-1 text-destructive">*</span>}
           </label>
         )}
 
@@ -36,13 +36,13 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             id={inputId}
             ref={ref}
             className={cn(
-              'h-11 w-full appearance-none rounded-md border bg-white px-3 pr-10 py-2 text-base',
-              'focus:outline-none focus:ring-2 focus:ring-primary-800 focus:border-transparent',
-              'disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500',
+              'h-11 w-full appearance-none rounded-md border bg-background px-3 pr-10 py-2 text-base',
+              'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
+              'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground',
               'transition-colors cursor-pointer',
               error
-                ? 'border-red-400 focus:ring-red-500'
-                : 'border-gray-300 hover:border-gray-400',
+                ? 'border-destructive focus:ring-destructive'
+                : 'border-input hover:border-ring',
               className
             )}
             {...props}
@@ -58,16 +58,16 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
               </option>
             ))}
           </select>
-          <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">
+          <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
             <ChevronDown className="h-4 w-4" />
           </div>
         </div>
 
         {hint && !error && (
-          <p className="text-sm text-gray-500">{hint}</p>
+          <p className="text-sm text-muted-foreground">{hint}</p>
         )}
         {error && (
-          <p className="text-sm text-red-600 flex items-center gap-1">
+          <p className="text-sm text-destructive flex items-center gap-1">
             <span>⚠</span> {error}
           </p>
         )}

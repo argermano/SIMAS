@@ -24,13 +24,13 @@ export function EmptyState({ icon, title, description, action, className }: Empt
       )}
     >
       {icon && (
-        <div className="mb-4 rounded-full bg-gray-100 p-5 text-gray-400">
+        <div className="mb-4 rounded-full bg-muted p-5 text-muted-foreground">
           {icon}
         </div>
       )}
-      <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
+      <h3 className="text-xl font-semibold text-foreground">{title}</h3>
       {description && (
-        <p className="mt-2 max-w-md text-base text-gray-500">{description}</p>
+        <p className="mt-2 max-w-md text-base text-muted-foreground">{description}</p>
       )}
       {action && (
         action.href ? (

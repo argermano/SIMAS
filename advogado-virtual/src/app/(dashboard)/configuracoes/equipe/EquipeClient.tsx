@@ -54,7 +54,7 @@ export function AlterarRole({ usuarioId, roleAtual }: AlterarRoleProps) {
       <select
         value={role}
         onChange={(e) => setRole(e.target.value)}
-        className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-800"
+        className="rounded-md border border-border bg-card px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         disabled={salvando}
       >
         {OPCOES_ROLE.map(o => (
@@ -65,7 +65,7 @@ export function AlterarRole({ usuarioId, roleAtual }: AlterarRoleProps) {
         <button
           onClick={salvar}
           disabled={salvando}
-          className="flex items-center gap-1 rounded-md bg-primary-800 px-2 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          className="flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/80 disabled:opacity-50"
         >
           <Save className="h-3 w-3" />
           {salvando ? 'Salvando…' : 'Salvar'}
@@ -108,7 +108,7 @@ export function DesativarUsuario({ usuarioId, nomeUsuario }: DesativarUsuarioPro
     <button
       onClick={remover}
       disabled={removendo}
-      className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-50"
+      className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-colors disabled:opacity-50"
       title="Desativar usuário"
     >
       <UserX className="h-4 w-4" />
@@ -156,8 +156,8 @@ export function DefinirPrincipal({ usuarioId, isPrincipal }: DefinirPrincipalPro
       title={isPrincipal ? 'Advogado principal' : 'Definir como advogado principal'}
       className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
         isPrincipal
-          ? 'text-amber-500 cursor-default'
-          : 'text-gray-300 hover:text-amber-400 hover:bg-amber-50'
+          ? 'text-warning cursor-default'
+          : 'text-border hover:text-warning hover:bg-warning/5'
       }`}
     >
       <Star className={`h-4 w-4 ${isPrincipal ? 'fill-current' : ''}`} />
@@ -199,7 +199,7 @@ export function ReenviarConvite({ email }: ReenviarConviteProps) {
       onClick={reenviar}
       disabled={enviando}
       title="Reenviar convite"
-      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
     >
       <RefreshCw className={`h-3 w-3 ${enviando ? 'animate-spin' : ''}`} />
       Reenviar

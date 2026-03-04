@@ -30,7 +30,6 @@ export function Dialog({
   footer,
   size = 'md',
 }: DialogProps) {
-  // Fecha com Escape
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -48,46 +47,41 @@ export function Dialog({
       aria-modal="true"
       aria-labelledby="dialog-title"
     >
-      {/* Overlay */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Conteúdo */}
       <div
         className={cn(
-          'relative w-full rounded-xl bg-white shadow-xl',
+          'relative w-full rounded-xl bg-card shadow-xl',
           SIZES[size]
         )}
       >
-        {/* Header */}
         <div className="flex items-start justify-between p-6 pb-4">
           <div>
-            <h2 id="dialog-title" className="text-xl font-semibold text-gray-900">
+            <h2 id="dialog-title" className="text-xl font-semibold text-foreground">
               {title}
             </h2>
             {description && (
-              <p className="mt-1 text-sm text-gray-500">{description}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="ml-4 rounded-md p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            className="ml-4 rounded-md p-1 text-muted-foreground hover:text-foreground transition-colors"
             aria-label="Fechar"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Body */}
         {children && (
           <div className="px-6 pb-4">{children}</div>
         )}
 
-        {/* Footer */}
         {footer && (
-          <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+          <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
             {footer}
           </div>
         )}
@@ -145,7 +139,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      <div className="text-base text-gray-600">{description}</div>
+      <div className="text-base text-muted-foreground">{description}</div>
     </Dialog>
   )
 }

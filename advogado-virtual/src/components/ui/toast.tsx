@@ -18,17 +18,17 @@ interface ToastProps extends ToastData {
 }
 
 const ICONS: Record<ToastType, React.ReactNode> = {
-  success: <CheckCircle className="h-5 w-5 text-green-600" />,
-  error:   <XCircle    className="h-5 w-5 text-red-600" />,
-  warning: <AlertTriangle className="h-5 w-5 text-amber-600" />,
-  info:    <Info       className="h-5 w-5 text-blue-600" />,
+  success: <CheckCircle className="h-5 w-5 text-success" />,
+  error:   <XCircle    className="h-5 w-5 text-destructive" />,
+  warning: <AlertTriangle className="h-5 w-5 text-warning" />,
+  info:    <Info       className="h-5 w-5 text-info" />,
 }
 
 const STYLES: Record<ToastType, string> = {
-  success: 'border-green-200 bg-green-50',
-  error:   'border-red-200 bg-red-50',
-  warning: 'border-amber-200 bg-amber-50',
-  info:    'border-blue-200 bg-blue-50',
+  success: 'border-success/20 bg-success/5',
+  error:   'border-destructive/20 bg-destructive/5',
+  warning: 'border-warning/20 bg-warning/5',
+  info:    'border-info/20 bg-info/5',
 }
 
 export function Toast({ id, type, title, message, onClose }: ToastProps) {
@@ -49,12 +49,12 @@ export function Toast({ id, type, title, message, onClose }: ToastProps) {
     >
       <div className="mt-0.5 shrink-0">{ICONS[type]}</div>
       <div className="flex-1 min-w-0">
-        <p className="text-base font-semibold text-gray-900">{title}</p>
-        {message && <p className="mt-0.5 text-sm text-gray-600">{message}</p>}
+        <p className="text-base font-semibold text-foreground">{title}</p>
+        {message && <p className="mt-0.5 text-sm text-muted-foreground">{message}</p>}
       </div>
       <button
         onClick={() => onClose(id)}
-        className="shrink-0 rounded p-0.5 text-gray-400 hover:text-gray-600 transition-colors"
+        className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
         aria-label="Fechar"
       >
         <X className="h-4 w-4" />

@@ -54,21 +54,21 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary-800 to-primary-900 p-4">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/90 p-4">
       <div className="w-full max-w-md">
 
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg">
-            <Scale className="h-9 w-9 text-primary-800" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-lg">
+            <Scale className="h-9 w-9 text-primary" />
           </div>
           <h1 className="text-3xl font-bold text-white">SIMAS</h1>
-          <p className="mt-1 text-primary-200">Sistema jurídico inteligente</p>
+          <p className="mt-1 text-primary/20">Sistema jurídico inteligente</p>
         </div>
 
         {/* Card de login */}
-        <div className="rounded-2xl bg-white p-8 shadow-xl">
-          <h2 className="mb-6 text-2xl font-semibold text-gray-900">Entrar no sistema</h2>
+        <div className="rounded-2xl bg-card p-8 shadow-xl">
+          <h2 className="mb-6 text-2xl font-semibold text-foreground">Entrar no sistema</h2>
 
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
             <Input
@@ -99,7 +99,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setVerSenha(v => !v)}
-                className="mt-1.5 flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                className="mt-1.5 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                 tabIndex={-1}
               >
                 {verSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -110,7 +110,7 @@ export default function LoginPage() {
             <div className="flex justify-end -mt-1">
               <Link
                 href="/esqueci-senha"
-                className="text-sm text-primary-800 hover:underline"
+                className="text-sm text-primary hover:underline"
               >
                 Esqueci minha senha
               </Link>
@@ -126,14 +126,14 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 flex flex-col items-center gap-3 border-t border-gray-100 pt-5 text-sm">
-            <p className="text-gray-500">
+          <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-sm">
+            <p className="text-muted-foreground">
               Acesso somente por convite do administrador.
             </p>
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-primary-300">
+        <p className="mt-6 text-center text-xs text-primary/30">
           © {new Date().getFullYear()} SIMAS · Dados protegidos pela LGPD
         </p>
       </div>

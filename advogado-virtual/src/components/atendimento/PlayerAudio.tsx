@@ -45,7 +45,7 @@ export function PlayerAudio({ atendimentoId }: PlayerAudioProps) {
     <div className="mt-2">
       <button
         onClick={toggle}
-        className="flex items-center gap-1.5 text-xs font-medium text-primary-700 hover:text-primary-900 transition-colors"
+        className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary transition-colors"
       >
         {loading ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -59,14 +59,14 @@ export function PlayerAudio({ atendimentoId }: PlayerAudioProps) {
 
       {aberto && (
         <div className="mt-2 space-y-2">
-          {erro && <p className="text-xs text-red-500">{erro}</p>}
+          {erro && <p className="text-xs text-destructive">{erro}</p>}
           {urls.length === 0 && !erro && (
-            <p className="text-xs text-gray-400 italic">Áudio não disponível.</p>
+            <p className="text-xs text-muted-foreground italic">Áudio não disponível.</p>
           )}
           {urls.map((url, i) => (
             <div key={i} className="flex items-center gap-2">
               {urls.length > 1 && (
-                <span className="shrink-0 text-xs text-gray-400">Parte {i + 1}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">Parte {i + 1}</span>
               )}
               <audio
                 controls

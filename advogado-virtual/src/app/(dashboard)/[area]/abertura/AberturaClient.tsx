@@ -196,7 +196,7 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Users className="h-5 w-5 text-gray-400" />
+            <Users className="h-5 w-5 text-muted-foreground" />
             Cliente
           </CardTitle>
         </CardHeader>
@@ -212,7 +212,7 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <Scale className="h-5 w-5 text-gray-400" />
+            <Scale className="h-5 w-5 text-muted-foreground" />
             Classificação do Serviço
           </CardTitle>
         </CardHeader>
@@ -220,7 +220,7 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
 
           {/* Tipo administrativo / judicial */}
           <div>
-            <p className="mb-2 text-sm font-medium text-gray-700">Tipo de serviço</p>
+            <p className="mb-2 text-sm font-medium text-foreground">Tipo de serviço</p>
             <div className="flex gap-3">
               {(['administrativo', 'judicial'] as TipoServico[]).map((tipo) => (
                 <button
@@ -229,8 +229,8 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
                   disabled={!atendimentoId}
                   className={`flex-1 rounded-xl border-2 py-3 px-4 text-sm font-medium transition-all disabled:opacity-40 ${
                     tipoServico === tipo
-                      ? 'border-primary-600 bg-primary-50 text-primary-800'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      ? 'border-primary/60 bg-primary/5 text-primary'
+                      : 'border-border bg-card text-muted-foreground hover:border-border'
                   }`}
                 >
                   {tipo === 'administrativo' ? 'Administrativo' : 'Judicial'}
@@ -242,14 +242,14 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
           {/* Tipo de processo (só para judicial) */}
           {tipoServico === 'judicial' && (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
+              <label className="mb-1.5 block text-sm font-medium text-foreground">
                 Tipo de processo
               </label>
               <select
                 value={tipoProcesso}
                 onChange={(e) => { setTipoProcesso(e.target.value); setClassificado(false); setEntregues({}) }}
                 disabled={!atendimentoId}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-600 disabled:opacity-40"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-40"
               >
                 <option value="">Selecione o tipo de processo...</option>
                 {processosArea.map((p) => (
@@ -281,15 +281,15 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <CheckSquare className="h-5 w-5 text-gray-400" />
+                <CheckSquare className="h-5 w-5 text-muted-foreground" />
                 Documentos Necessários
-                <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
                   {checklist.length - pendentes.length}/{checklist.length} entregues
                 </span>
               </CardTitle>
               <button
                 onClick={exportarPendentes}
-                className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
                 title="Exportar pendências como PDF"
               >
                 <FileDown className="h-3.5 w-3.5" />
@@ -311,7 +311,7 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
                     >
                       <button
                         onClick={() => toggleEntregue(doc.id, entregue)}
-                        className="shrink-0 text-primary-700 hover:text-primary-900 transition-colors"
+                        className="shrink-0 text-primary hover:text-primary transition-colors"
                         aria-label={entregue ? 'Marcar como pendente' : 'Marcar como entregue'}
                       >
                         {entregue
@@ -320,15 +320,15 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
                         }
                       </button>
                       <div className="flex-1 min-w-0">
-                        <span className={`text-sm font-medium ${entregue ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                        <span className={`text-sm font-medium ${entregue ? 'line-through text-muted-foreground' : 'text-foreground'}`}>
                           {doc.nome}
                         </span>
                         {!doc.obrigatorio && (
-                          <span className="ml-2 text-xs text-gray-400">(se houver)</span>
+                          <span className="ml-2 text-xs text-muted-foreground">(se houver)</span>
                         )}
                       </div>
                       {entregue && (
-                        <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                        <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
                           Entregue
                         </span>
                       )}
@@ -339,8 +339,8 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
 
             {/* Documentos gerados pelo escritório */}
             {checklist.some(d => d.geradoPeloEscritorio) && (
-              <div className="mt-6 rounded-xl border border-primary-100 bg-primary-50 p-4">
-                <p className="mb-3 text-sm font-semibold text-primary-800">
+              <div className="mt-6 rounded-xl border border-primary/10 bg-primary/5 p-4">
+                <p className="mb-3 text-sm font-semibold text-primary">
                   Documentos gerados pelo escritório
                 </p>
                 <div className="space-y-2">
@@ -352,12 +352,12 @@ export function AberturaClient({ area, areaNome }: AberturaClientProps) {
                         href={`/${area}/modelos/${doc.modeloId}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-lg border border-primary-200 bg-white px-3 py-2.5 text-sm font-medium text-primary-800 hover:bg-primary-100 transition-colors"
+                        className="flex items-center gap-2 rounded-lg border border-primary/20 bg-card px-3 py-2.5 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
                       >
                         <ExternalLink className="h-4 w-4 shrink-0" />
                         Gerar {doc.nome}
                         {!doc.obrigatorio && (
-                          <span className="ml-auto text-xs font-normal text-gray-400">(se aplicável)</span>
+                          <span className="ml-auto text-xs font-normal text-muted-foreground">(se aplicável)</span>
                         )}
                       </a>
                     ))}

@@ -46,12 +46,12 @@ export function DocumentHeader({
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b bg-white px-4 py-2.5 shrink-0">
+    <div className="flex items-center justify-between gap-3 border-b bg-card px-4 py-2.5 shrink-0">
       {/* Esquerda: Voltar + título */}
       <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onVoltar}
-          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors shrink-0"
+          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
         >
           <ChevronLeft className="h-4 w-4" />
           Voltar
@@ -67,15 +67,15 @@ export function DocumentHeader({
               if (e.key === 'Enter') confirmar()
               if (e.key === 'Escape') setEditando(false)
             }}
-            className="border-b border-primary-400 bg-transparent text-sm font-semibold text-gray-900 outline-none px-1 min-w-48"
+            className="border-b border-primary/40 bg-transparent text-sm font-semibold text-foreground outline-none px-1 min-w-48"
           />
         ) : (
           <button
             onClick={() => { setRascunho(titulo); setEditando(true) }}
-            className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 hover:text-primary-700 transition-colors truncate max-w-xs"
+            className="flex items-center gap-1.5 text-sm font-semibold text-foreground hover:text-primary transition-colors truncate max-w-xs"
           >
             <span className="truncate">{titulo}</span>
-            <Pencil className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+            <Pencil className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           </button>
         )}
       </div>
@@ -83,14 +83,14 @@ export function DocumentHeader({
       {/* Direita: ações */}
       <div className="flex items-center gap-2 shrink-0">
         {/* Badge IA */}
-        <div className="flex items-center gap-1.5 rounded-full bg-violet-100 px-3 py-1 text-xs font-medium text-violet-700">
+        <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
           <Sparkles className="h-3.5 w-3.5" />
           IA
         </div>
 
         {/* Buscar Jurisprudência — placeholder */}
         <button
-          className="hidden sm:flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+          className="hidden sm:flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
           title="Em breve"
           disabled
         >
@@ -101,7 +101,7 @@ export function DocumentHeader({
         {/* Copiar */}
         <button
           onClick={onCopiar}
-          className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+          className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
         >
           <Copy className="h-3.5 w-3.5" />
           Copiar

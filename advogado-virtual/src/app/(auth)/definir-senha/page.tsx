@@ -12,7 +12,7 @@ import { useToast } from '@/components/ui/toast'
 export default function DefinirSenhaPage() {
   return (
     <Suspense fallback={
-      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary-800 to-primary-900 p-4">
+      <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/90 p-4">
         <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
       </main>
     }>
@@ -75,35 +75,35 @@ function DefinirSenhaContent() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary-800 to-primary-900 p-4">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/90 p-4">
       <div className="w-full max-w-md">
 
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg">
-            <Scale className="h-9 w-9 text-primary-800" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-lg">
+            <Scale className="h-9 w-9 text-primary" />
           </div>
           <h1 className="text-3xl font-bold text-white">SIMAS</h1>
-          <p className="mt-1 text-primary-200">Sistema jurídico inteligente</p>
+          <p className="mt-1 text-primary/20">Sistema jurídico inteligente</p>
         </div>
 
-        <div className="rounded-2xl bg-white p-8 shadow-xl">
+        <div className="rounded-2xl bg-card p-8 shadow-xl">
           {verificando && (
             <div className="text-center py-6">
-              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-primary-800 border-t-transparent" />
-              <p className="text-sm text-gray-500">Verificando link…</p>
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <p className="text-sm text-muted-foreground">Verificando link…</p>
             </div>
           )}
 
           {!verificando && (linkInvalido || !temSessao) && (
             <div className="text-center py-4">
-              <p className="text-base font-semibold text-gray-800 mb-2">Link inválido ou expirado</p>
-              <p className="text-sm text-gray-500 mb-5">
+              <p className="text-base font-semibold text-foreground mb-2">Link inválido ou expirado</p>
+              <p className="text-sm text-muted-foreground mb-5">
                 O link pode ter expirado. Solicite um novo link de acesso.
               </p>
               <Link
                 href="/esqueci-senha"
-                className="rounded-lg bg-primary-800 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/80"
               >
                 Solicitar novo link
               </Link>
@@ -112,8 +112,8 @@ function DefinirSenhaContent() {
 
           {!verificando && temSessao && !concluido && (
             <>
-              <h2 className="mb-2 text-2xl font-semibold text-gray-900">Definir senha</h2>
-              <p className="mb-6 text-sm text-gray-500">
+              <h2 className="mb-2 text-2xl font-semibold text-foreground">Definir senha</h2>
+              <p className="mb-6 text-sm text-muted-foreground">
                 Crie uma senha segura para acessar o sistema.
               </p>
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
@@ -133,7 +133,7 @@ function DefinirSenhaContent() {
                   <button
                     type="button"
                     onClick={() => setVerSenha(v => !v)}
-                    className="mt-1.5 flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                    className="mt-1.5 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
                     tabIndex={-1}
                   >
                     {verSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -160,14 +160,14 @@ function DefinirSenhaContent() {
 
           {concluido && (
             <div className="text-center py-6">
-              <CheckCircle className="mx-auto mb-3 h-12 w-12 text-green-500" />
-              <p className="text-base font-semibold text-gray-800">Senha definida com sucesso!</p>
-              <p className="mt-1 text-sm text-gray-500">Redirecionando…</p>
+              <CheckCircle className="mx-auto mb-3 h-12 w-12 text-success" />
+              <p className="text-base font-semibold text-foreground">Senha definida com sucesso!</p>
+              <p className="mt-1 text-sm text-muted-foreground">Redirecionando…</p>
             </div>
           )}
         </div>
 
-        <p className="mt-6 text-center text-xs text-primary-300">
+        <p className="mt-6 text-center text-xs text-primary/30">
           © {new Date().getFullYear()} SIMAS · Dados protegidos pela LGPD
         </p>
       </div>

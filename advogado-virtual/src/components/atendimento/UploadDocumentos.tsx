@@ -112,14 +112,14 @@ export function UploadDocumentos({
       {/* Seletor de tipo + Upload */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[160px]">
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
+          <label className="mb-1.5 block text-sm font-medium text-foreground">
             Tipo do documento
           </label>
           <select
             value={tipoAtual}
             onChange={(e) => setTipoAtual(e.target.value)}
             disabled={desabilitado}
-            className="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-sm focus:border-primary-800 focus:outline-none focus:ring-2 focus:ring-primary-800/20"
+            className="h-11 w-full rounded-md border border-border bg-card px-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
           >
             {tiposDocumento.map(tipo => (
               <option key={tipo} value={tipo}>
@@ -161,14 +161,14 @@ export function UploadDocumentos({
         <div
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation() }}
           onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleUpload(e.dataTransfer.files) }}
-          className="flex items-center justify-center rounded-lg border-2 border-dashed border-gray-200 bg-gray-50 px-6 py-8 text-center transition-colors hover:border-primary-300 hover:bg-primary-50"
+          className="flex items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/50 px-6 py-8 text-center transition-colors hover:border-primary/30 hover:bg-primary/10"
         >
           <div>
-            <Upload className="mx-auto mb-2 h-6 w-6 text-gray-400" />
-            <p className="text-sm text-gray-500">
+            <Upload className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
               Arraste arquivos aqui ou clique em &ldquo;Enviar arquivo&rdquo;
             </p>
-            <p className="mt-1 text-xs text-gray-400">PDF, DOCX, JPG, PNG — máx. 10 MB</p>
+            <p className="mt-1 text-xs text-muted-foreground">PDF, DOCX, JPG, PNG — máx. 10 MB</p>
           </div>
         </div>
       )}
@@ -176,23 +176,23 @@ export function UploadDocumentos({
       {/* Lista de documentos enviados */}
       {documentos.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-gray-700">
+          <p className="text-sm font-medium text-foreground">
             Documentos enviados ({documentos.length})
           </p>
           {documentos.map((doc) => (
             <div
               key={doc.id}
-              className="flex items-center gap-3 rounded-lg border bg-white px-4 py-3"
+              className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3"
             >
-              <FileText className="h-5 w-5 shrink-0 text-primary-800" />
+              <FileText className="h-5 w-5 shrink-0 text-primary" />
               <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium text-gray-900">{doc.file_name}</p>
+                <p className="truncate text-sm font-medium text-foreground">{doc.file_name}</p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Badge variant="secondary" className="text-xs">
                     {LABELS_TIPO[doc.tipo] ?? doc.tipo}
                   </Badge>
                   {doc.texto_extraido && (
-                    <span className="flex items-center gap-1 text-xs text-green-600">
+                    <span className="flex items-center gap-1 text-xs text-success">
                       <Check className="h-3 w-3" /> Texto extraído
                     </span>
                   )}
@@ -200,7 +200,7 @@ export function UploadDocumentos({
               </div>
               <button
                 onClick={() => removerDoc(doc.id)}
-                className="rounded p-1 text-gray-400 hover:text-red-600"
+                className="rounded p-1 text-muted-foreground hover:text-destructive"
                 title="Remover"
               >
                 <X className="h-4 w-4" />
@@ -211,7 +211,7 @@ export function UploadDocumentos({
       )}
 
       {/* Erro */}
-      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      {erro && <p className="text-sm text-destructive">{erro}</p>}
     </div>
   )
 }

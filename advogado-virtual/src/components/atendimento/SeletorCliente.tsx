@@ -112,12 +112,12 @@ export function SeletorCliente({ onSelecionado, clienteSelecionado }: SeletorCli
   // Se já tem cliente selecionado, mostra chip
   if (clienteSelecionado) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border-2 border-green-200 bg-green-50 px-4 py-3">
-        <Check className="h-4 w-4 text-green-600" />
-        <span className="font-semibold text-green-800">{clienteSelecionado.nome}</span>
+      <div className="flex items-center gap-2 rounded-lg border-2 border-success/20 bg-success/5 px-4 py-3">
+        <Check className="h-4 w-4 text-success" />
+        <span className="font-semibold text-success">{clienteSelecionado.nome}</span>
         <button
           onClick={() => onSelecionado(null as unknown as { id: string; nome: string })}
-          className="ml-auto rounded p-1 text-green-600 hover:bg-green-100"
+          className="ml-auto rounded p-1 text-success hover:bg-success/10"
           title="Trocar cliente"
         >
           <X className="h-4 w-4" />
@@ -129,8 +129,8 @@ export function SeletorCliente({ onSelecionado, clienteSelecionado }: SeletorCli
   // Formulário de novo cliente inline
   if (modoNovo) {
     return (
-      <div className="space-y-3 rounded-lg border-2 border-dashed border-primary-200 bg-primary-50 p-4">
-        <p className="text-sm font-semibold text-primary-800">Cadastrar novo cliente</p>
+      <div className="space-y-3 rounded-lg border-2 border-dashed border-primary/20 bg-primary/5 p-4">
+        <p className="text-sm font-semibold text-primary">Cadastrar novo cliente</p>
         <Input
           label="Nome completo"
           value={novoNome}
@@ -182,11 +182,11 @@ export function SeletorCliente({ onSelecionado, clienteSelecionado }: SeletorCli
 
       {/* Dropdown de resultados */}
       {aberto && (busca.length >= 2) && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-lg border bg-white shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-auto rounded-lg border bg-card shadow-lg">
           {carregando ? (
-            <div className="px-4 py-3 text-sm text-gray-400">Buscando...</div>
+            <div className="px-4 py-3 text-sm text-muted-foreground">Buscando...</div>
           ) : resultados.length === 0 ? (
-            <div className="px-4 py-3 text-sm text-gray-500">
+            <div className="px-4 py-3 text-sm text-muted-foreground">
               Nenhum cliente encontrado.
             </div>
           ) : (
@@ -194,14 +194,14 @@ export function SeletorCliente({ onSelecionado, clienteSelecionado }: SeletorCli
               <button
                 key={c.id}
                 onClick={() => selecionar(c)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-primary-50 transition-colors"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-primary/10 transition-colors"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-800">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                   {c.nome.charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-gray-900">{c.nome}</p>
-                  {c.email && <p className="truncate text-xs text-gray-400">{c.email}</p>}
+                  <p className="truncate font-medium text-foreground">{c.nome}</p>
+                  {c.email && <p className="truncate text-xs text-muted-foreground">{c.email}</p>}
                 </div>
               </button>
             ))
@@ -210,7 +210,7 @@ export function SeletorCliente({ onSelecionado, clienteSelecionado }: SeletorCli
           {/* Botão criar novo */}
           <button
             onClick={() => { setAberto(false); setModoNovo(true); setNovoNome(busca) }}
-            className="flex w-full items-center gap-2 border-t px-4 py-3 text-left text-sm font-medium text-primary-800 hover:bg-primary-50"
+            className="flex w-full items-center gap-2 border-t px-4 py-3 text-left text-sm font-medium text-primary hover:bg-primary/10"
           >
             <Plus className="h-4 w-4" />
             Cadastrar &ldquo;{busca}&rdquo; como novo cliente

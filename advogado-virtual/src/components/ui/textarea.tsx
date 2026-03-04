@@ -16,10 +16,10 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="block text-base font-medium text-gray-700"
+            className="block text-base font-medium text-foreground"
           >
             {label}
-            {props.required && <span className="ml-1 text-red-500">*</span>}
+            {props.required && <span className="ml-1 text-destructive">*</span>}
           </label>
         )}
 
@@ -27,24 +27,24 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={inputId}
           ref={ref}
           className={cn(
-            'w-full rounded-md border bg-white px-3 py-2.5 text-base',
-            'placeholder:text-gray-400',
-            'focus:outline-none focus:ring-2 focus:ring-primary-800 focus:border-transparent',
-            'disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500',
+            'w-full rounded-md border bg-background px-3 py-2.5 text-base',
+            'placeholder:text-muted-foreground',
+            'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
+            'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground',
             'transition-colors resize-y min-h-[100px]',
             error
-              ? 'border-red-400 focus:ring-red-500'
-              : 'border-gray-300 hover:border-gray-400',
+              ? 'border-destructive focus:ring-destructive'
+              : 'border-input hover:border-ring',
             className
           )}
           {...props}
         />
 
         {hint && !error && (
-          <p className="text-sm text-gray-500">{hint}</p>
+          <p className="text-sm text-muted-foreground">{hint}</p>
         )}
         {error && (
-          <p className="text-sm text-red-600 flex items-center gap-1">
+          <p className="text-sm text-destructive flex items-center gap-1">
             <span>⚠</span> {error}
           </p>
         )}

@@ -52,17 +52,17 @@ export function EditorPeca({ pecaId, conteudo, versao, status, onConteudoChange 
         <div className="flex items-center gap-3">
           <CardTitle className="text-base">
             Editor da peça
-            <span className="ml-2 text-xs font-normal text-gray-400">v{versao} · {status}</span>
+            <span className="ml-2 text-xs font-normal text-muted-foreground">v{versao} · {status}</span>
           </CardTitle>
 
           {/* Toggle Visualizar / Editar */}
-          <div className="flex rounded-lg border bg-gray-50 p-0.5">
+          <div className="flex rounded-lg border bg-muted/50 p-0.5">
             <button
               onClick={() => setModo('preview')}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 modo === 'preview'
-                  ? 'bg-white text-primary-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Eye className="h-3.5 w-3.5" />
@@ -72,8 +72,8 @@ export function EditorPeca({ pecaId, conteudo, versao, status, onConteudoChange 
               onClick={() => setModo('editar')}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 modo === 'editar'
-                  ? 'bg-white text-primary-800 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -111,43 +111,43 @@ export function EditorPeca({ pecaId, conteudo, versao, status, onConteudoChange 
               <ReactMarkdown
                 components={{
                   h1: ({ children }) => (
-                    <h1 className="text-xl font-bold text-gray-900 mt-6 mb-3 pb-2 border-b">{children}</h1>
+                    <h1 className="text-xl font-bold text-foreground mt-6 mb-3 pb-2 border-b">{children}</h1>
                   ),
                   h2: ({ children }) => (
-                    <h2 className="text-lg font-bold text-gray-900 mt-6 mb-2 uppercase tracking-wide">{children}</h2>
+                    <h2 className="text-lg font-bold text-foreground mt-6 mb-2 uppercase tracking-wide">{children}</h2>
                   ),
                   h3: ({ children }) => (
-                    <h3 className="text-base font-semibold text-gray-800 mt-4 mb-2">{children}</h3>
+                    <h3 className="text-base font-semibold text-foreground mt-4 mb-2">{children}</h3>
                   ),
                   p: ({ children }) => (
-                    <p className="text-sm leading-7 text-gray-800 mb-3 text-justify">{children}</p>
+                    <p className="text-sm leading-7 text-foreground mb-3 text-justify">{children}</p>
                   ),
                   strong: ({ children }) => (
-                    <strong className="font-bold text-gray-900">{children}</strong>
+                    <strong className="font-bold text-foreground">{children}</strong>
                   ),
                   blockquote: ({ children }) => (
-                    <blockquote className="border-l-4 border-primary-300 bg-primary-50 pl-4 py-2 my-3 italic text-sm text-gray-700">
+                    <blockquote className="border-l-4 border-primary/30 bg-primary/5 pl-4 py-2 my-3 italic text-sm text-foreground">
                       {children}
                     </blockquote>
                   ),
                   ol: ({ children }) => (
-                    <ol className="list-decimal pl-6 space-y-1.5 my-3 text-sm text-gray-800">{children}</ol>
+                    <ol className="list-decimal pl-6 space-y-1.5 my-3 text-sm text-foreground">{children}</ol>
                   ),
                   ul: ({ children }) => (
-                    <ul className="list-disc pl-6 space-y-1.5 my-3 text-sm text-gray-800">{children}</ul>
+                    <ul className="list-disc pl-6 space-y-1.5 my-3 text-sm text-foreground">{children}</ul>
                   ),
                   li: ({ children }) => (
                     <li className="leading-relaxed">{children}</li>
                   ),
                   hr: () => (
-                    <hr className="my-6 border-gray-300" />
+                    <hr className="my-6 border-border" />
                   ),
                 }}
               >
                 {conteudo}
               </ReactMarkdown>
             ) : (
-              <p className="text-gray-400 text-sm">O conteúdo da peça aparecerá aqui...</p>
+              <p className="text-muted-foreground text-sm">O conteúdo da peça aparecerá aqui...</p>
             )}
           </div>
         )}

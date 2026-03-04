@@ -290,11 +290,11 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
         }
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-600 leading-relaxed">
+          <p className="text-sm text-muted-foreground leading-relaxed">
             Em conformidade com a <strong>Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018)</strong>,
             a gravação de voz do cliente requer autorização expressa do titular.
           </p>
-          <p className="text-sm text-gray-600 leading-relaxed">
+          <p className="text-sm text-muted-foreground leading-relaxed">
             O áudio será utilizado exclusivamente para transcrição e apoio no registro do atendimento,
             sendo armazenado de forma segura e vinculado ao prontuário do cliente.
           </p>
@@ -303,7 +303,7 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
               type="checkbox"
               checked={checkboxMarcado}
               onChange={e => setCheckboxMarcado(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600"
+              className="mt-0.5 h-4 w-4 rounded border-border text-primary"
             />
             <span className="text-sm font-medium text-amber-900">
               Confirmo que o cliente autorizou expressamente a gravação desta consulta
@@ -355,7 +355,7 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
           )}
 
           {estado === 'enviando' && (
-            <div className="flex items-center gap-2 text-primary-800">
+            <div className="flex items-center gap-2 text-primary">
               <Loader2 className="h-5 w-5 animate-spin" />
               <span className="text-sm font-medium">Transcrevendo com IA...</span>
             </div>
@@ -365,13 +365,13 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
           {(estado === 'gravando' || estado === 'pausado') && (
             <div className="flex items-center gap-2">
               {estado === 'gravando' && (
-                <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
+                <span className="h-3 w-3 animate-pulse rounded-full bg-destructive/50" />
               )}
-              <span className="font-mono text-lg font-bold text-gray-700">
+              <span className="font-mono text-lg font-bold text-foreground">
                 {formatarTempo(tempo)}
               </span>
               {processandoChunk && (
-                <span className="text-xs text-gray-400 flex items-center gap-1">
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   salvando...
                 </span>
@@ -382,7 +382,7 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
 
         {/* Dica */}
         {estado === 'idle' && !desabilitado && (
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-muted-foreground">
             {requerConsentimento
               ? 'Grave o atendimento com o cliente. O áudio será transcrito automaticamente pela IA. Limite de 60 minutos.'
               : 'Relate os fatos do caso com suas próprias palavras. O áudio será transcrito automaticamente pela IA. Limite de 60 minutos.'}
@@ -397,7 +397,7 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
 
         {/* Erro */}
         {erro && (
-          <p className="text-sm text-red-600">{erro}</p>
+          <p className="text-sm text-destructive">{erro}</p>
         )}
       </div>
     </>

@@ -46,23 +46,23 @@ export default function EsqueciSenhaPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary-800 to-primary-900 p-4">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/90 p-4">
       <div className="w-full max-w-md">
 
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg">
-            <Scale className="h-9 w-9 text-primary-800" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-lg">
+            <Scale className="h-9 w-9 text-primary" />
           </div>
           <h1 className="text-3xl font-bold text-white">SIMAS</h1>
-          <p className="mt-1 text-primary-200">Sistema jurídico inteligente</p>
+          <p className="mt-1 text-primary/20">Sistema jurídico inteligente</p>
         </div>
 
-        <div className="rounded-2xl bg-white p-8 shadow-xl">
+        <div className="rounded-2xl bg-card p-8 shadow-xl">
           {!enviado ? (
             <>
-              <h2 className="mb-2 text-2xl font-semibold text-gray-900">Esqueci minha senha</h2>
-              <p className="mb-6 text-sm text-gray-500">
+              <h2 className="mb-2 text-2xl font-semibold text-foreground">Esqueci minha senha</h2>
+              <p className="mb-6 text-sm text-muted-foreground">
                 Informe seu e-mail e enviaremos um link para você criar uma nova senha.
               </p>
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
@@ -85,29 +85,29 @@ export default function EsqueciSenhaPage() {
             </>
           ) : (
             <div className="text-center py-4">
-              <CheckCircle className="mx-auto mb-3 h-12 w-12 text-green-500" />
-              <p className="text-base font-semibold text-gray-800">Verifique seu e-mail</p>
-              <p className="mt-2 text-sm text-gray-500">
+              <CheckCircle className="mx-auto mb-3 h-12 w-12 text-success" />
+              <p className="text-base font-semibold text-foreground">Verifique seu e-mail</p>
+              <p className="mt-2 text-sm text-muted-foreground">
                 Enviamos um link de redefinição para <strong>{email}</strong>.
                 Clique no link para criar uma nova senha.
               </p>
-              <p className="mt-3 text-xs text-gray-400">
+              <p className="mt-3 text-xs text-muted-foreground">
                 Não recebeu? Verifique a pasta de spam.
               </p>
             </div>
           )}
 
-          <div className="mt-6 border-t border-gray-100 pt-5 text-center">
+          <div className="mt-6 border-t border-border pt-5 text-center">
             <Link
               href="/login"
-              className="text-sm font-medium text-primary-800 hover:underline"
+              className="text-sm font-medium text-primary hover:underline"
             >
               ← Voltar para o login
             </Link>
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-primary-300">
+        <p className="mt-6 text-center text-xs text-primary/30">
           © {new Date().getFullYear()} SIMAS · Dados protegidos pela LGPD
         </p>
       </div>

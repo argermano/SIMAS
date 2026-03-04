@@ -1,27 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
-  LayoutDashboard,
-  Users,
-  History,
-  Settings,
-  Scale,
-  LogOut,
-  Menu,
-  X,
-  ClipboardCheck,
-  UserCog,
-  FileSignature,
-  KanbanSquare,
+  LayoutDashboard, Users, History, Settings, LogOut,
+  Menu, X, ClipboardCheck, UserCog, FileSignature,
+  KanbanSquare, Scale, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
-import { useState } from 'react'
 
-// Prefixos que contam como "Início" ativo (áreas do direito)
 const PREFIXOS_HOME = ['/dashboard', '/previdenciario', '/trabalhista', '/civel', '/criminal', '/tributario', '/empresarial']
 
 const MENU_ITEMS = [
@@ -29,43 +19,31 @@ const MENU_ITEMS = [
     href:    '/dashboard',
     label:   'Início',
     icon:    LayoutDashboard,
-    exact:   false,
-    ativoSe: (pathname: string) => PREFIXOS_HOME.some(p => pathname === p || pathname.startsWith(p + '/')),
+    ativoSe: (p: string) => PREFIXOS_HOME.some(x => p === x || p.startsWith(x + '/')),
   },
   {
     href:    '/clientes',
     label:   'Clientes',
     icon:    Users,
-    exact:   false,
-    ativoSe: (pathname: string) => pathname.startsWith('/clientes'),
+    ativoSe: (p: string) => p.startsWith('/clientes'),
   },
   {
     href:    '/contratos',
     label:   'Contratos',
     icon:    FileSignature,
-    exact:   false,
-    ativoSe: (pathname: string) => pathname.startsWith('/contratos'),
+    ativoSe: (p: string) => p.startsWith('/contratos'),
   },
   {
     href:    '/tarefas',
     label:   'Tarefas',
     icon:    KanbanSquare,
-    exact:   false,
-    ativoSe: (pathname: string) => pathname.startsWith('/tarefas'),
+    ativoSe: (p: string) => p.startsWith('/tarefas'),
   },
   {
     href:    '/historico',
     label:   'Histórico',
     icon:    History,
-    exact:   false,
-    ativoSe: (pathname: string) => pathname.startsWith('/historico') || pathname.startsWith('/atendimentos'),
-  },
-  {
-    href:    '/configuracoes',
-    label:   'Configurações',
-    icon:    Settings,
-    exact:   false,
-    ativoSe: (pathname: string) => pathname.startsWith('/configuracoes'),
+    ativoSe: (p: string) => p.startsWith('/historico') || p.startsWith('/atendimentos'),
   },
 ]
 
@@ -78,10 +56,26 @@ interface SidebarProps {
 
 const ROLES_COM_REVISAO = ['admin', 'advogado']
 
+function initials(nome: string) {
+  return nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+}
+
 export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: SidebarProps) {
-  const pathname  = usePathname()
-  const router    = useRouter()
+  const pathname = usePathname()
+  const router   = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [collapsed,  setCollapsed]  = useState(false)
+
+  useEffect(() => {
+    const saved = localStorage.getItem('sidebar-collapsed')
+    if (saved === 'true') setCollapsed(true)
+  }, [])
+
+  function toggleCollapse() {
+    const next = !collapsed
+    setCollapsed(next)
+    localStorage.setItem('sidebar-collapsed', String(next))
+  }
 
   async function sair() {
     const supabase = createClient()
@@ -90,154 +84,246 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
     router.refresh()
   }
 
-  function isAtivo(item: typeof MENU_ITEMS[number]) {
-    return item.ativoSe(pathname)
-  }
+  const allItems = [
+    ...MENU_ITEMS,
+    ...(roleRaw && ROLES_COM_REVISAO.includes(roleRaw) ? [{
+      href:    '/revisao',
+      label:   'Revisão',
+      icon:    ClipboardCheck,
+      ativoSe: (p: string) => p.startsWith('/revisao'),
+    }] : []),
+    ...(roleRaw === 'admin' ? [{
+      href:    '/configuracoes/equipe',
+      label:   'Equipe',
+      icon:    UserCog,
+      ativoSe: (p: string) => p.startsWith('/configuracoes/equipe'),
+    }] : []),
+  ]
 
-  const conteudo = (
-    <div className="flex h-full flex-col">
-      {/* Logo / Nome do escritório */}
-      <div className="flex items-center gap-3 border-b border-primary-700 px-5 py-5">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent">
-          <Scale className="h-6 w-6 text-primary-800" />
+  const isConfigAtivo = pathname.startsWith('/configuracoes') && !pathname.startsWith('/configuracoes/equipe')
+
+  const sidebarContent = (isCollapsed: boolean) => (
+    <div className="flex h-full flex-col" style={{ background: 'var(--gradient-sidebar)' }}>
+      {/* Logo */}
+      <div className={cn('flex items-center gap-3 border-b border-sidebar-border px-4 py-5', isCollapsed && 'justify-center px-2')}>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: 'var(--gradient-primary)' }}>
+          <Scale className="h-5 w-5 text-white" />
         </div>
-        <div className="min-w-0">
-          <p className="truncate text-base font-bold text-white">SIMAS</p>
-          <p className="text-xs text-primary-300 leading-tight break-words">{nomeEscritorio}</p>
-        </div>
+        <AnimatePresence>
+          {!isCollapsed && (
+            <motion.div
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: 'auto' }}
+              exit={{ opacity: 0, width: 0 }}
+              className="min-w-0 overflow-hidden"
+            >
+              <p className="truncate text-base font-bold text-white font-heading">SIMAS</p>
+              <p className="text-[11px] uppercase tracking-wider text-sidebar-muted leading-tight">Sistema Jurídico</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
+      {/* Toggle colapso (desktop only) */}
+      <div className="hidden lg:flex justify-end px-3 pt-3">
+        <button
+          onClick={toggleCollapse}
+          className="rounded-md p-1.5 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors"
+          aria-label={isCollapsed ? 'Expandir menu' : 'Colapsar menu'}
+        >
+          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </button>
+      </div>
+
+      {/* Label MENU */}
+      <AnimatePresence>
+        {!isCollapsed && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="px-5 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted"
+          >
+            Menu
+          </motion.p>
+        )}
+      </AnimatePresence>
+
       {/* Navegação */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Menu principal">
+      <nav className="flex-1 overflow-y-auto px-3 py-1" aria-label="Menu principal">
         <ul className="space-y-1">
-          {MENU_ITEMS.map(item => {
-            const ativo = isAtivo(item)
+          {allItems.map(item => {
+            const ativo = item.ativoSe(pathname)
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors',
+                    'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                    isCollapsed && 'justify-center px-2',
                     ativo
-                      ? 'bg-white/15 text-white'
-                      : 'text-primary-200 hover:bg-white/10 hover:text-white'
+                      ? 'bg-sidebar-accent text-white'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-white'
                   )}
                   aria-current={ativo ? 'page' : undefined}
+                  title={isCollapsed ? item.label : undefined}
                 >
-                  <item.icon
-                    className={cn('h-5 w-5 shrink-0', ativo ? 'text-accent' : '')}
-                    aria-hidden="true"
-                  />
-                  {item.label}
+                  {ativo && (
+                    <motion.div
+                      layoutId="sidebar-indicator"
+                      className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-card"
+                      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+                    />
+                  )}
+                  <item.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  <AnimatePresence>
+                    {!isCollapsed && (
+                      <motion.span
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        className="overflow-hidden whitespace-nowrap"
+                      >
+                        {item.label}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </Link>
               </li>
             )
           })}
-
-          {/* Fila de revisão — visível apenas para revisores/advogados/admins */}
-          {roleRaw && ROLES_COM_REVISAO.includes(roleRaw) && (() => {
-            const ativo = pathname.startsWith('/revisao')
-            return (
-              <li>
-                <Link
-                  href="/revisao"
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors',
-                    ativo
-                      ? 'bg-white/15 text-white'
-                      : 'text-primary-200 hover:bg-white/10 hover:text-white'
-                  )}
-                  aria-current={ativo ? 'page' : undefined}
-                >
-                  <ClipboardCheck
-                    className={cn('h-5 w-5 shrink-0', ativo ? 'text-accent' : '')}
-                    aria-hidden="true"
-                  />
-                  Revisão
-                </Link>
-              </li>
-            )
-          })()}
-
-          {/* Gestão de equipe — visível apenas para admin */}
-          {roleRaw === 'admin' && (() => {
-            const ativo = pathname.startsWith('/configuracoes/equipe')
-            return (
-              <li>
-                <Link
-                  href="/configuracoes/equipe"
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    'flex items-center gap-3 rounded-lg px-4 py-3 text-base font-medium transition-colors',
-                    ativo
-                      ? 'bg-white/15 text-white'
-                      : 'text-primary-200 hover:bg-white/10 hover:text-white'
-                  )}
-                  aria-current={ativo ? 'page' : undefined}
-                >
-                  <UserCog
-                    className={cn('h-5 w-5 shrink-0', ativo ? 'text-accent' : '')}
-                    aria-hidden="true"
-                  />
-                  Equipe
-                </Link>
-              </li>
-            )
-          })()}
         </ul>
       </nav>
 
-      {/* Perfil + Sair */}
-      <div className="border-t border-primary-700 p-4">
-        <div className="mb-3 rounded-lg bg-primary-700/50 px-3 py-2.5">
-          <p className="truncate text-sm font-semibold text-white">{nomeUsuario}</p>
-          <p className="text-xs text-primary-300">{roleUsuario}</p>
-        </div>
-        <button
-          onClick={sair}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-primary-300 hover:bg-white/10 hover:text-white transition-colors"
+      {/* Rodapé */}
+      <div className="border-t border-sidebar-border p-3">
+        {/* Configurações */}
+        <Link
+          href="/configuracoes"
+          onClick={() => setMobileOpen(false)}
+          className={cn(
+            'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors mb-3',
+            isCollapsed && 'justify-center px-2',
+            isConfigAtivo
+              ? 'bg-sidebar-accent text-white'
+              : 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-white'
+          )}
+          title={isCollapsed ? 'Configurações' : undefined}
         >
-          <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
-          Sair do sistema
-        </button>
+          {isConfigAtivo && (
+            <motion.div
+              layoutId="sidebar-indicator"
+              className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-card"
+              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+            />
+          )}
+          <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <AnimatePresence>
+            {!isCollapsed && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="overflow-hidden whitespace-nowrap"
+              >
+                Configurações
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </Link>
+
+        {/* Avatar / Perfil */}
+        <div className={cn('rounded-lg bg-sidebar-accent/40 px-3 py-2.5', isCollapsed && 'px-2')}>
+          <div className={cn('flex items-center gap-3', isCollapsed && 'justify-center')}>
+            <div className="relative shrink-0">
+              <div className="rounded-full p-[2px]" style={{ background: 'var(--gradient-primary)' }}>
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar text-xs font-bold text-white">
+                  {initials(nomeUsuario)}
+                </div>
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar bg-success/50" />
+            </div>
+
+            <AnimatePresence>
+              {!isCollapsed && (
+                <motion.div
+                  initial={{ opacity: 0, width: 0 }}
+                  animate={{ opacity: 1, width: 'auto' }}
+                  exit={{ opacity: 0, width: 0 }}
+                  className="flex-1 min-w-0 overflow-hidden"
+                >
+                  <p className="truncate text-sm font-semibold text-white">{nomeUsuario}</p>
+                  <p className="text-xs text-sidebar-muted">{roleUsuario}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {!isCollapsed && (
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={sair}
+                  className="shrink-0 rounded-md p-1.5 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors"
+                  aria-label="Sair do sistema"
+                  title="Sair do sistema"
+                >
+                  <LogOut className="h-4 w-4" />
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {isCollapsed && (
+          <button
+            onClick={sair}
+            className="mt-2 flex w-full items-center justify-center rounded-lg p-2 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors"
+            aria-label="Sair do sistema"
+            title="Sair do sistema"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   )
 
   return (
     <>
-      {/* Botão hambúrguer mobile */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-40 rounded-lg bg-primary-800 p-2 text-white shadow-lg lg:hidden"
+        className="fixed left-4 top-4 z-40 rounded-lg bg-primary p-2 text-white shadow-lg lg:hidden"
         aria-label="Abrir menu"
       >
         <Menu className="h-5 w-5" />
       </button>
 
-      {/* Sidebar desktop */}
-      <aside className="hidden lg:flex lg:w-64 lg:shrink-0 lg:flex-col bg-primary-800 min-h-screen">
-        {conteudo}
-      </aside>
+      <motion.aside
+        className="hidden lg:flex lg:shrink-0 lg:flex-col min-h-screen overflow-hidden"
+        animate={{ width: collapsed ? 68 : 240 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      >
+        {sidebarContent(collapsed)}
+      </motion.aside>
 
-      {/* Sidebar mobile (drawer) */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
-            className="absolute inset-0 bg-black/60"
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 w-72 bg-primary-800 shadow-xl">
+          <aside className="absolute inset-y-0 left-0 w-72 shadow-xl">
             <button
               onClick={() => setMobileOpen(false)}
-              className="absolute right-4 top-4 rounded-md p-1 text-primary-300 hover:text-white"
+              className="absolute right-3 top-4 z-10 rounded-md p-1 text-sidebar-muted hover:text-white transition-colors"
               aria-label="Fechar menu"
             >
               <X className="h-5 w-5" />
             </button>
-            {conteudo}
+            {sidebarContent(false)}
           </aside>
         </div>
       )}

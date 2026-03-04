@@ -103,7 +103,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
   const contextoDocumento = `Documento: ${titulo}\n\n${getMarkdown().slice(0, 500)}`
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-white">
+    <div className="fixed inset-0 z-40 flex flex-col bg-card">
       {/* Header */}
       <DocumentHeader
         titulo={titulo}
@@ -130,9 +130,9 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         />
 
         {/* Área do documento */}
-        <div className="flex-1 overflow-y-auto bg-gray-100 py-8 px-4">
+        <div className="flex-1 overflow-y-auto bg-muted py-8 px-4">
           <div className="mx-auto max-w-3xl">
-            <div className="rounded-sm bg-white shadow-sm ring-1 ring-gray-200 min-h-[700px] p-10">
+            <div className="rounded-sm bg-white shadow-sm ring-1 ring-border min-h-[700px] p-10">
               <EditorContent editor={editor} className="h-full" />
             </div>
           </div>

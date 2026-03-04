@@ -90,7 +90,7 @@ export default async function ContratoPage({
         acoes={
           <Link
             href="/contratos"
-            className="flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-800"
+            className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
             Contratos

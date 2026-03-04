@@ -73,7 +73,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
       {...listeners}
       onClick={onClick}
       className={cn(
-        'cursor-pointer rounded-lg bg-white shadow-sm ring-1 ring-gray-100',
+        'cursor-pointer rounded-lg bg-card shadow-sm ring-1 ring-border',
         'border-l-4 p-3 transition-shadow hover:shadow-md',
         task.completed_at && 'opacity-60'
       )}
@@ -94,13 +94,13 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
       )}
 
       {/* Descrição */}
-      <p className="line-clamp-2 text-sm font-medium text-gray-800">
+      <p className="line-clamp-2 text-sm font-medium text-foreground">
         {task.description}
       </p>
 
       {/* Processo vinculado */}
       {task.atendimentos && (
-        <p className="mt-1 line-clamp-1 text-xs text-gray-400">
+        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
           {task.atendimentos.area}
         </p>
       )}
@@ -112,13 +112,13 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
             <span
               key={u.id}
               title={u.nome}
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-700 text-[10px] font-bold text-white"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/80 text-[10px] font-bold text-white"
             >
               {initials(u.nome)}
             </span>
           ))}
           {extra > 0 && (
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-600">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
               +{extra}
             </span>
           )}
@@ -126,8 +126,8 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
 
         {task.due_date && (
           <span className={cn(
-            'text-xs text-gray-400',
-            new Date(task.due_date) < new Date() && !task.completed_at && 'text-red-500 font-medium'
+            'text-xs text-muted-foreground',
+            new Date(task.due_date) < new Date() && !task.completed_at && 'text-destructive font-medium'
           )}>
             {formatDate(task.due_date)}
           </span>
