@@ -119,6 +119,7 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
             >
               <p className="truncate text-base font-bold text-white font-heading">SIMAS</p>
               <p className="text-[11px] uppercase tracking-wider text-sidebar-muted leading-tight">Sistema Jurídico</p>
+              <p className="truncate text-[11px] text-sidebar-muted/70 leading-tight">{nomeEscritorio}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -253,7 +254,7 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
                   exit={{ opacity: 0, width: 0 }}
                   className="flex-1 min-w-0 overflow-hidden"
                 >
-                  <p className="truncate text-sm font-semibold text-white">{nomeUsuario}</p>
+                  <p className="truncate text-sm font-semibold text-white">{nomeUsuario.split(' ')[0]}</p>
                   <p className="text-xs text-sidebar-muted">{roleUsuario}</p>
                 </motion.div>
               )}
