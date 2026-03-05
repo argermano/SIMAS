@@ -13,7 +13,9 @@ import { MicrofoneInline } from './MicrofoneInline'
 import { PlayerAudio } from './PlayerAudio'
 import { UploadDocumentos } from './UploadDocumentos'
 import { SeletorTribunais } from './SeletorTribunais'
+import { ConfirmarDadosModal } from './ConfirmarDadosModal'
 import type { ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
+import type { DadosExtraidosAutor, DadosExtraidosReu } from '@/lib/prompts/extracao/dados-cliente'
 import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, Loader2, UserCheck, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -74,6 +76,10 @@ export function TelaAtendimento({
   const [localizacao, setLocalizacao] = useState({ cidade: '', estado: '' })
   const localizacaoOriginalRef = useRef({ cidade: '', estado: '' })
   const [hasAudio, setHasAudio] = useState(false)
+  const [extraindo, setExtraindo] = useState(false)
+  const [dadosExtraidos, setDadosExtraidos] = useState<{ autor: DadosExtraidosAutor; reu?: DadosExtraidosReu } | null>(null)
+  const [dadosAtuaisCliente, setDadosAtuaisCliente] = useState<Partial<DadosExtraidosAutor>>({})
+  const qualificacaoRef = useRef<{ autor?: DadosExtraidosAutor; reu?: DadosExtraidosReu } | undefined>(undefined)
 
   // Carregar atendimento existente
   useEffect(() => {
@@ -220,7 +226,7 @@ export function TelaAtendimento({
       if (res.ok) {
         setSalvo(true)
         success('Atendimento salvo!', 'O caso foi registrado com sucesso.')
-        setTimeout(() => router.push(`/${area}`), 1500)
+        setTimeout(() => setSalvo(false), 2000)
       } else {
         const data = await res.json()
         toastError('Erro ao salvar', data.error ?? 'Tente novamente')
@@ -232,7 +238,7 @@ export function TelaAtendimento({
     }
   }
 
-  // Gerar peça com IA (salva + stream + redireciona para editor)
+  // Gerar peça com IA — Fase 1: salva, extrai dados dos documentos, mostra modal de confirmação
   async function gerarPeca() {
     if (!atendimentoId) return
 
@@ -265,7 +271,89 @@ export function TelaAtendimento({
       setSalvando(false)
     }
 
-    // 2. Abre o modal de geração e inicia streaming
+    // 2. Extrair dados dos documentos
+    setExtraindo(true)
+    try {
+      const res = await fetch('/api/ia/extrair-dados-cliente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ atendimentoId }),
+      })
+      if (res.ok) {
+        const dados = await res.json()
+        // Se encontrou dados relevantes, mostra modal de confirmação
+        if (dados.autor && Object.values(dados.autor).some(Boolean)) {
+          // Buscar dados atuais do cliente para comparação
+          if (cliente) {
+            try {
+              const resCliente = await fetch(`/api/clientes/${cliente.id}`)
+              if (resCliente.ok) {
+                const { cliente: cl } = await resCliente.json()
+                setDadosAtuaisCliente({
+                  nome: cl?.nome, cpf: cl?.cpf, rg: cl?.rg,
+                  orgao_expedidor: cl?.orgao_expedidor, estado_civil: cl?.estado_civil,
+                  nacionalidade: cl?.nacionalidade, profissao: cl?.profissao,
+                  endereco: cl?.endereco, bairro: cl?.bairro, cidade: cl?.cidade,
+                  estado: cl?.estado, cep: cl?.cep, telefone: cl?.telefone, email: cl?.email,
+                })
+              }
+            } catch { /* silencioso */ }
+          }
+          setDadosExtraidos(dados)
+          setExtraindo(false)
+          return // Aguarda confirmação do modal antes de continuar
+        }
+      }
+    } catch {
+      console.warn('[gerarPeca] Falha ao extrair dados (não crítico)')
+    }
+    setExtraindo(false)
+
+    // Se não encontrou dados ou falhou, continua direto
+    continuarGeracao()
+  }
+
+  // Confirmação do modal de dados: atualiza cliente e continua geração
+  async function handleConfirmarDados(dados: { autor: DadosExtraidosAutor; reu?: DadosExtraidosReu }) {
+    setDadosExtraidos(null)
+
+    // Atualizar cadastro do cliente com os dados confirmados
+    if (cliente && dados.autor) {
+      try {
+        const update: Record<string, string | null> = {}
+        const fields: (keyof DadosExtraidosAutor)[] = [
+          'cpf', 'rg', 'orgao_expedidor', 'estado_civil', 'nacionalidade',
+          'profissao', 'endereco', 'bairro', 'cidade', 'estado', 'cep', 'telefone', 'email',
+        ]
+        for (const f of fields) {
+          if (dados.autor[f]) update[f] = dados.autor[f]!
+        }
+        if (Object.keys(update).length > 0) {
+          await fetch(`/api/clientes/${cliente.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(update),
+          })
+        }
+      } catch {
+        console.warn('[gerarPeca] Falha ao atualizar cliente (não crítico)')
+      }
+    }
+
+    qualificacaoRef.current = dados
+    continuarGeracao(dados)
+  }
+
+  // Pular confirmação de dados
+  function handlePularDados() {
+    setDadosExtraidos(null)
+    continuarGeracao()
+  }
+
+  // Fase 2: streaming da peça + redirecionamento
+  async function continuarGeracao(qualificacao?: { autor?: DadosExtraidosAutor; reu?: DadosExtraidosReu }) {
+    if (!atendimentoId) return
+
     setMostraModalGeracao(true)
 
     const resultado = await startStream('/api/ia/gerar-peca', {
@@ -274,6 +362,7 @@ export function TelaAtendimento({
       area,
       jurisprudencia,
       tribunais: tribunaisSelecionados,
+      qualificacao: qualificacao ?? qualificacaoRef.current,
     })
 
     if (!resultado) {
@@ -317,7 +406,7 @@ export function TelaAtendimento({
   }
 
   const podeGravar = !!atendimentoId
-  const podeSalvar = !!atendimentoId && (textoRelato.trim().length > 0 || transcricao.trim().length > 0)
+  const podeSalvar = !!atendimentoId && (textoRelato.trim().length > 0 || transcricao.trim().length > 0 || pedidoEspecifico.trim().length > 0)
 
   if (carregando) {
     return (
@@ -367,6 +456,29 @@ export function TelaAtendimento({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de extração de dados em andamento */}
+      {extraindo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="rounded-2xl bg-card shadow-2xl px-8 py-6 text-center space-y-3">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+            <p className="text-sm font-medium text-foreground">Extraindo dados dos documentos...</p>
+            <p className="text-xs text-muted-foreground">Analisando documentos com IA para preencher qualificação</p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação de dados extraídos */}
+      {dadosExtraidos && (
+        <ConfirmarDadosModal
+          open={!!dadosExtraidos}
+          onClose={() => setDadosExtraidos(null)}
+          dadosExtraidos={dadosExtraidos}
+          dadosAtuaisCliente={dadosAtuaisCliente}
+          onConfirmar={handleConfirmarDados}
+          onPular={handlePularDados}
+        />
       )}
 
       {/* 1. Seleção de Cliente */}
@@ -590,7 +702,7 @@ export function TelaAtendimento({
           variant="secondary"
           size="lg"
           onClick={salvar}
-          disabled={!podeSalvar || salvando || salvo || gerando}
+          disabled={!podeSalvar || salvando || gerando}
           loading={salvando}
           className="gap-2"
         >
@@ -609,7 +721,7 @@ export function TelaAtendimento({
         <Button
           size="lg"
           onClick={gerarPeca}
-          disabled={!podeSalvar || salvando || gerando}
+          disabled={!podeSalvar || salvando || gerando || extraindo}
           className="gap-2 bg-primary/80 hover:bg-primary"
         >
           <Zap className="h-5 w-5" />

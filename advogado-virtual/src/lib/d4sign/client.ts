@@ -23,17 +23,27 @@ function auth() {
   return `?tokenAPI=${token}&cryptKey=${crypt}`
 }
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3): Promise<T> {
-  let delay = 50
+/** Pausa entre chamadas sequenciais à API D4Sign (respeitar rate limit) */
+export function d4signDelay(ms = 2000): Promise<void> {
+  return new Promise(r => setTimeout(r, ms))
+}
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  let delay = 5000
   for (let i = 0; i < retries; i++) {
     try {
       return await fn()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      const isRetryable = msg.includes('429') || msg.includes('5')
-      if (i === retries - 1 || !isRetryable) throw err
+      // D4Sign retorna HTTP 401 com "tempo limite" para rate limit — NÃO fazer retry
+      // pois retries só pioram o bloqueio. Apenas fazer retry em erros de servidor (5xx).
+      const isD4SignRateLimit = msg.includes('tempo limite')
+      if (isD4SignRateLimit) throw err
+      const isServerError = /HTTP\s+5\d{2}/.test(msg)
+      if (i === retries - 1 || !isServerError) throw err
+      console.warn(`[D4Sign] Retry ${i + 1}/${retries} após ${delay}ms: ${msg}`)
       await new Promise(r => setTimeout(r, delay))
-      delay *= 4
+      delay *= 3
     }
   }
   throw new Error('Retry exhausted')
@@ -56,11 +66,12 @@ export async function d4signUploadDocument(
   safeUuid: string,
   fileBuffer: Buffer,
   fileName: string,
+  mimeType = 'application/pdf',
 ): Promise<D4SignUploadResponse> {
   return withRetry(async () => {
     const form = new FormData()
     form.append('file', new Blob([new Uint8Array(fileBuffer)], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      type: mimeType,
     }), fileName)
     form.append('uuid_folder', '')
 
@@ -93,32 +104,41 @@ export async function d4signAddSigners(
   })
 }
 
-// ─── Posicionar assinatura no documento ───────────────────────────────────────
-export async function d4signAddSignaturePosition(
+// ─── Posicionar assinaturas no documento (página específica) ─────────────────
+export interface PinPosition {
+  email: string
+  page: string
+  positionX: string
+  positionY: string
+  type?: '0' | '1' | '2'   // 0=assinatura, 1=rubrica, 2=carimbo
+}
+
+export async function d4signAddPins(
   docUuid: string,
-  email: string,
-  positionX: string,
-  positionY: string,
-  type: '0' | '1' | '2' = '0', // 0=assinatura, 1=rubrica, 2=carimbo
+  pins: PinPosition[],
 ): Promise<void> {
   return withRetry(async () => {
     const body = {
-      email,
-      position_x: positionX,
-      position_y: positionY,
-      page_height: '1097',
-      page_width: '790',
-      type,
+      pins: pins.map(p => ({
+        document:    docUuid,
+        email:       p.email,
+        page:        p.page,
+        page_height: '1097',
+        page_width:  '790',
+        position_x:  p.positionX,
+        position_y:  p.positionY,
+        type:        p.type ?? '0',
+      })),
     }
-    console.log('[D4Sign] addSignaturePosition:', body)
-    const res = await fetch(`${base()}/documents/${docUuid}/addpinswithreplics${auth()}`, {
+    console.log('[D4Sign] addPins:', JSON.stringify(body, null, 2))
+    const res = await fetch(`${base()}/documents/${docUuid}/addpins${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify(body),
     })
     const responseText = await res.text()
-    console.log('[D4Sign] addSignaturePosition response:', res.status, responseText)
-    if (!res.ok) throw new Error(`D4Sign addSignaturePosition: HTTP ${res.status} — ${responseText}`)
+    console.log('[D4Sign] addPins response:', res.status, responseText)
+    if (!res.ok) throw new Error(`D4Sign addPins: HTTP ${res.status} — ${responseText}`)
   })
 }
 
@@ -146,7 +166,7 @@ export async function d4signSendToSign(
       workflow:   options?.workflow   ?? '0',
     }
     console.log('[D4Sign] sendToSign request:', { docUuid, body })
-    const res = await fetch(`${base()}/documents/${docUuid}/sendtosign${auth()}`, {
+    const res = await fetch(`${base()}/documents/${docUuid}/sendtosigner${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify(body),

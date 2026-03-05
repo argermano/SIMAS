@@ -1,122 +1,179 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
-import {
-  Document, Packer, Paragraph, TextRun, HeadingLevel,
-  AlignmentType, BorderStyle, PageBreak,
-} from 'docx'
+import { jsPDF } from 'jspdf'
 import {
   d4signUploadDocument,
   d4signAddSigners,
-  d4signAddSignaturePosition,
-  d4signRegisterWebhook,
+  d4signAddPins,
   d4signSendToSign,
-  d4signGetSigningLink,
   d4signListSafes,
+  d4signDelay,
 } from '@/lib/d4sign/client'
 import { taskService } from '@/services/task-service'
 import type { D4SignSignerInput } from '@/lib/d4sign/types'
 
-// ─── Reusar parser markdown→docx do exportar-docx ─────────────────────────────
-function parseBoldRuns(text: string): TextRun[] {
-  const runs: TextRun[] = []
-  const parts = text.split(/(\*\*[^*]+\*\*)/)
-  for (const part of parts) {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      runs.push(new TextRun({ text: part.slice(2, -2), bold: true }))
-    } else if (part) {
-      runs.push(new TextRun({ text: part }))
-    }
-  }
-  return runs.length > 0 ? runs : [new TextRun({ text: '' })]
+// ─── Markdown → PDF (jsPDF) ──────────────────────────────────────────────────
+
+interface SignerPosition {
+  signerIndex: number
+  page: number       // página (1-based)
+  xMm: number        // posição X em mm
+  yMm: number        // posição Y em mm (na linha de assinatura)
 }
 
-function markdownToDocxParagraphs(markdown: string): Paragraph[] {
-  const lines      = markdown.split('\n')
-  const paragraphs: Paragraph[] = []
-  for (const raw of lines) {
-    const t = raw.trim()
-    if (t.startsWith('# ')) {
-      paragraphs.push(new Paragraph({ text: t.slice(2), heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, spacing: { before: 400, after: 200 } }))
-    } else if (t.startsWith('## ')) {
-      paragraphs.push(new Paragraph({ text: t.slice(3), heading: HeadingLevel.HEADING_2, spacing: { before: 320, after: 120 } }))
-    } else if (t.startsWith('### ')) {
-      paragraphs.push(new Paragraph({ text: t.slice(4), heading: HeadingLevel.HEADING_3, spacing: { before: 200, after: 80 } }))
-    } else if (t === '---') {
-      paragraphs.push(new Paragraph({ border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '999999' } }, spacing: { before: 80, after: 80 } }))
-    } else if (t === '') {
-      paragraphs.push(new Paragraph({ spacing: { before: 80, after: 80 } }))
-    } else if (t.startsWith('> ')) {
-      paragraphs.push(new Paragraph({ children: parseBoldRuns(t.slice(2)), indent: { left: 720 }, spacing: { before: 80, after: 80 } }))
-    } else if (t.startsWith('- ') || t.startsWith('* ')) {
-      paragraphs.push(new Paragraph({ children: [new TextRun({ text: '• ' }), ...parseBoldRuns(t.slice(2))], indent: { left: 360 }, spacing: { before: 60, after: 60 } }))
-    } else if (t === '\\pagebreak' || t === '[pagebreak]') {
-      paragraphs.push(new Paragraph({ children: [new PageBreak()] }))
-    } else {
-      paragraphs.push(new Paragraph({ children: parseBoldRuns(t), spacing: { before: 80, after: 80 } }))
-    }
-  }
-  return paragraphs
-}
-
-function buildSignatureBlocks(signers: { name: string; cpf_cnpj?: string }[]): Paragraph[] {
-  const paragraphs: Paragraph[] = []
-
-  // Espaçamento antes das assinaturas
-  paragraphs.push(new Paragraph({ spacing: { before: 600, after: 200 } }))
-  paragraphs.push(new Paragraph({
-    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '999999' } },
-    spacing: { before: 80, after: 200 },
-  }))
-
-  for (const signer of signers) {
-    // Espaço para assinatura
-    paragraphs.push(new Paragraph({ spacing: { before: 600, after: 0 } }))
-
-    // Linha de assinatura
-    paragraphs.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: '________________________________________', size: 24 })],
-      spacing: { before: 0, after: 40 },
-    }))
-
-    // Nome do signatário
-    paragraphs.push(new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: signer.name, bold: true, size: 22 })],
-      spacing: { before: 0, after: 0 },
-    }))
-
-    // CPF se disponível
-    if (signer.cpf_cnpj) {
-      paragraphs.push(new Paragraph({
-        alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: `CPF/CNPJ: ${signer.cpf_cnpj}`, size: 20, color: '666666' })],
-        spacing: { before: 0, after: 0 },
-      }))
-    }
-  }
-
-  return paragraphs
-}
-
-async function gerarDocxBuffer(
+function gerarPdfBuffer(
   markdown: string,
-  titulo: string,
+  _titulo: string,
   signers?: { name: string; cpf_cnpj?: string }[],
-): Promise<Buffer> {
-  const contentParagraphs = markdownToDocxParagraphs(markdown)
-  const signatureBlocks = signers?.length ? buildSignatureBlocks(signers) : []
+): { buffer: Buffer; totalPages: number; signerPositions: SignerPosition[] } {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  const pageWidth = 210
+  const pageHeight = 297
+  const margin = 20
+  const usableWidth = pageWidth - 2 * margin
+  const bottomLimit = pageHeight - margin
+  let y = margin
 
-  const doc = new Document({
-    styles: { default: { document: { run: { font: 'Times New Roman', size: 24 } } } },
-    sections: [{
-      properties: { page: { margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 } } },
-      children: [...contentParagraphs, ...signatureBlocks],
-    }],
-  })
-  const buf = await Packer.toBuffer(doc)
-  return Buffer.from(buf)
+  doc.setFont('times', 'normal')
+
+  function checkPage(needed: number) {
+    if (y + needed > bottomLimit) {
+      doc.addPage()
+      y = margin
+    }
+  }
+
+  function renderText(text: string, x: number, fontSize: number, maxWidth: number) {
+    doc.setFontSize(fontSize)
+    const clean = text.replace(/\*\*/g, '')
+    const lines = doc.splitTextToSize(clean, maxWidth)
+    const lineHeight = fontSize * 0.45
+    for (const line of lines) {
+      checkPage(lineHeight)
+      doc.text(line, x, y)
+      y += lineHeight
+    }
+  }
+
+  function renderHeading(text: string, level: 1 | 2 | 3) {
+    const sizes = { 1: 16, 2: 14, 3: 12 }
+    const spaceBefore = { 1: 6, 2: 5, 3: 3 }
+    const spaceAfter = { 1: 4, 2: 3, 3: 2 }
+    const fontSize = sizes[level]
+
+    y += spaceBefore[level]
+    checkPage(fontSize * 0.5 + spaceAfter[level])
+
+    doc.setFontSize(fontSize)
+    doc.setFont('times', 'bold')
+    const clean = text.replace(/\*\*/g, '')
+    const lines = doc.splitTextToSize(clean, usableWidth)
+    const lineHeight = fontSize * 0.45
+
+    for (const line of lines) {
+      checkPage(lineHeight)
+      if (level === 1) {
+        doc.text(line, pageWidth / 2, y, { align: 'center' })
+      } else {
+        doc.text(line, margin, y)
+      }
+      y += lineHeight
+    }
+
+    doc.setFont('times', 'normal')
+    y += spaceAfter[level]
+  }
+
+  // Renderizar conteúdo markdown
+  for (const raw of markdown.split('\n')) {
+    const t = raw.trim()
+
+    if (t === '') { y += 3; continue }
+
+    if (t === '---') {
+      checkPage(6)
+      doc.setDrawColor(150)
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 6
+      continue
+    }
+
+    if (t === '\\pagebreak' || t === '[pagebreak]') {
+      doc.addPage()
+      y = margin
+      continue
+    }
+
+    if (t.startsWith('# ') && !t.startsWith('## ')) { renderHeading(t.slice(2), 1); continue }
+    if (t.startsWith('## ') && !t.startsWith('### ')) { renderHeading(t.slice(3), 2); continue }
+    if (t.startsWith('### ')) { renderHeading(t.slice(4), 3); continue }
+
+    if (t.startsWith('> ')) {
+      doc.setFont('times', 'italic')
+      renderText(t.slice(2), margin + 10, 12, usableWidth - 20)
+      doc.setFont('times', 'normal')
+      y += 1
+      continue
+    }
+
+    if (t.startsWith('- ') || t.startsWith('* ')) {
+      checkPage(5)
+      doc.setFontSize(12)
+      doc.text('\u2022', margin + 3, y)
+      renderText(t.slice(2), margin + 8, 12, usableWidth - 8)
+      y += 1
+      continue
+    }
+
+    doc.setFont('times', 'normal')
+    renderText(t, margin, 12, usableWidth)
+    y += 1
+  }
+
+  // Blocos de assinatura — rastreando posição exata de cada um
+  const signerPositions: SignerPosition[] = []
+  if (signers?.length) {
+    y += 10
+    checkPage(20)
+    doc.setDrawColor(150)
+    doc.line(margin, y, pageWidth - margin, y)
+    y += 8
+
+    for (let idx = 0; idx < signers.length; idx++) {
+      const signer = signers[idx]
+      const blockHeight = signer.cpf_cnpj ? 30 : 25
+      checkPage(blockHeight)
+
+      y += 15
+      // Registrar posição ACIMA da linha de assinatura e levemente à esquerda
+      // D4Sign renderiza o selo a partir do ponto: deslocar 12mm acima e 15mm à esquerda do centro
+      signerPositions.push({
+        signerIndex: idx,
+        page: doc.getNumberOfPages(),
+        xMm: (pageWidth / 2) - 15,  // à esquerda do centro
+        yMm: y - 12,                // acima da linha ________
+      })
+      doc.setFontSize(12)
+      doc.text('________________________________________', pageWidth / 2, y, { align: 'center' })
+      y += 5
+      doc.setFont('times', 'bold')
+      doc.text(signer.name, pageWidth / 2, y, { align: 'center' })
+      doc.setFont('times', 'normal')
+      if (signer.cpf_cnpj) {
+        y += 4
+        doc.setFontSize(10)
+        doc.setTextColor(100)
+        doc.text(`CPF/CNPJ: ${signer.cpf_cnpj}`, pageWidth / 2, y, { align: 'center' })
+        doc.setTextColor(0)
+      }
+      y += 5
+    }
+  }
+
+  const totalPages = doc.getNumberOfPages()
+  const arrayBuffer = doc.output('arraybuffer')
+  return { buffer: Buffer.from(arrayBuffer), totalPages, signerPositions }
 }
 
 // ─── Validação do body ─────────────────────────────────────────────────────────
@@ -158,10 +215,10 @@ export async function POST(
     return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
   }
 
-  // Buscar contrato
+  // Buscar contrato com dados do cliente
   const { data: contrato } = await supabase
     .from('contratos_honorarios')
-    .select('id, titulo, conteudo_markdown, status')
+    .select('id, titulo, conteudo_markdown, status, area, clientes(nome)')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -206,29 +263,36 @@ export async function POST(
   }
 
   try {
-    // 1. Gerar DOCX em buffer (com blocos de assinatura para cada signatário)
-    const fileBuffer = await gerarDocxBuffer(
+    // 1. Gerar PDF em buffer (com blocos de assinatura para cada signatário)
+    const { buffer: fileBuffer, signerPositions } = gerarPdfBuffer(
       contrato.conteudo_markdown,
       contrato.titulo,
       signers.map(s => ({ name: s.name, cpf_cnpj: s.cpf_cnpj })),
     )
-    const fileName   = `${(contrato.titulo ?? 'contrato').replace(/[^a-zA-Z0-9\s_-]/g, '').trim()}.docx`
+    // Nome: [Cliente] + [Área] + [Tipo do documento]
+    const clienteNome = (contrato.clientes as { nome?: string } | null)?.nome ?? ''
+    const areaNome = contrato.area ? contrato.area.charAt(0).toUpperCase() + contrato.area.slice(1) : ''
+    const tipoDoc = 'Contrato'
+    const partes = [clienteNome, areaNome, tipoDoc].filter(Boolean)
+    const fileLabel = partes.join(' - ').replace(/[^a-zA-Z0-9À-ÿ\s_-]/g, '').trim()
+    const fileName = fileLabel ? `${fileLabel}.pdf` : 'contrato.pdf'
 
     // 2. Upload na D4Sign
-    const { uuid: d4signUuid } = await d4signUploadDocument(safeUuid, fileBuffer, fileName)
+    console.log('[assinar] Fazendo upload do documento PDF:', fileName)
+    const { uuid: d4signUuid } = await d4signUploadDocument(safeUuid, fileBuffer, fileName, 'application/pdf')
+    console.log('[assinar] Upload ok, docUuid:', d4signUuid)
+
+    // Pausa para respeitar rate limit da D4Sign
+    await d4signDelay(3000)
 
     // 3. Montar signatários no formato D4Sign
     const d4signSigners: D4SignSignerInput[] = signers.map(s => {
-      // Determinar método de notificação
       const method = s.auth_method === 'pix' ? 'email' : s.auth_method
-
-      // Formatar telefone com código do país (+55) para WhatsApp/SMS
       let whatsappNumber: string | undefined
       if ((method === 'whatsapp' || method === 'sms') && s.phone) {
         const digits = s.phone.replace(/\D/g, '')
         whatsappNumber = digits.startsWith('55') ? digits : `55${digits}`
       }
-
       return {
         email:                 s.email,
         act:                   s.act,
@@ -243,35 +307,32 @@ export async function POST(
       }
     })
 
-    // 4. Cadastrar signatários
-    console.log('[assinar] Cadastrando signatários:', JSON.stringify(d4signSigners, null, 2))
+    // 4. Cadastrar signatários (chamada 2/4 à API D4Sign)
+    console.log('[assinar] Cadastrando signatários...')
     const signerResponses = await d4signAddSigners(d4signUuid, d4signSigners)
     console.log('[assinar] Signatários cadastrados:', JSON.stringify(signerResponses))
 
-    // 4.5. Posicionar assinaturas no documento (parte inferior, espaçadas)
-    // Página A4: 790x1097 pixels. Posição Y base ~900 (parte inferior)
-    const baseY = 880
-    const spacing = 80
-    for (let i = 0; i < signers.length; i++) {
-      try {
-        await d4signAddSignaturePosition(
-          d4signUuid,
-          signers[i].email,
-          '300',                              // centralizado horizontalmente
-          String(baseY + (i * spacing)),      // espaçado verticalmente
-        )
-      } catch (err) {
-        console.warn(`[assinar] Falha ao posicionar assinatura de ${signers[i].email}:`, err)
-      }
+    await d4signDelay(3000)
+
+    // 4.5. Posicionar assinaturas (chamada 3/4 à API D4Sign)
+    // Coordenadas calculadas a partir das posições reais no PDF gerado
+    // Conversão: D4Sign usa 790x1097 para A4, jsPDF usa 210x297 mm
+    try {
+      const pins = signerPositions.map((pos, idx) => ({
+        email:     signers[idx].email,
+        page:      String(pos.page),
+        positionX: String(Math.round((pos.xMm / 210) * 790)),
+        positionY: String(Math.round((pos.yMm / 297) * 1097)),
+      }))
+      console.log('[assinar] Posicionando assinaturas:', JSON.stringify(pins))
+      await d4signAddPins(d4signUuid, pins)
+      await d4signDelay(3000)
+    } catch (err) {
+      console.warn('[assinar] Falha ao posicionar assinaturas (não crítico):', err)
     }
 
-    // 5. Registrar webhook (ignorar falha — não é crítico)
-    const webhookUrl = process.env.D4SIGN_WEBHOOK_URL
-    if (webhookUrl) {
-      try { await d4signRegisterWebhook(d4signUuid, webhookUrl) } catch { /* silencioso */ }
-    }
-
-    // 6. Enviar para assinatura
+    // 5. Enviar para assinatura (chamada 4/4 à API D4Sign)
+    // NOTA: D4Sign tem limite de 10 req/hora. Fluxo otimizado para 4 chamadas.
     console.log('[assinar] Enviando para assinatura, docUuid:', d4signUuid)
     const sendResult = await d4signSendToSign(d4signUuid, {
       message:  message ?? 'Por favor, assine o contrato de honorários advocatícios.',
@@ -279,14 +340,8 @@ export async function POST(
     })
     console.log('[assinar] Resultado sendToSign:', JSON.stringify(sendResult))
 
-    // 7. Buscar links de assinatura individuais
+    // Links de assinatura não buscados para economizar quota (D4Sign envia por email/whatsapp)
     const linksMap: Record<string, string> = {}
-    for (const s of signers) {
-      try {
-        const link = await d4signGetSigningLink(d4signUuid, s.email)
-        if (link) linksMap[s.email] = link
-      } catch { /* silencioso */ }
-    }
 
     // 8. Salvar no banco
     const { data: signature, error: sigError } = await supabase

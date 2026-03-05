@@ -18,6 +18,7 @@ import { Markdown } from 'tiptap-markdown'
 import { DocumentHeader } from './DocumentHeader'
 import { EditorToolbar } from './EditorToolbar'
 import { TopicSidebar } from './TopicSidebar'
+import { AiComandoDialog } from './AiComandoDialog'
 import { useToast } from '@/components/ui/toast'
 
 interface DocumentEditorProps {
@@ -34,6 +35,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
   const [titulo, setTitulo]           = useState(tituloInicial)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [baixando, setBaixando]       = useState(false)
+  const [comandoIaOpen, setComandoIaOpen] = useState(false)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -115,6 +117,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         onSalvar={onSalvar ? () => onSalvar(getMarkdown()) : undefined}
         salvando={salvando}
         extraAcoes={extraAcoes}
+        onComandoIa={() => setComandoIaOpen(true)}
       />
 
       {/* Toolbar */}
@@ -127,6 +130,15 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
           contextoDocumento={contextoDocumento}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(v => !v)}
+          getMarkdown={getMarkdown}
+          onInsertContent={(md) => {
+            if (editor) {
+              editor.chain().focus().insertContentAt(
+                editor.state.doc.content.size,
+                `\n\n${md}`
+              ).run()
+            }
+          }}
         />
 
         {/* Área do documento */}
@@ -138,6 +150,21 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
           </div>
         </div>
       </div>
+
+      {/* Dialog de comando IA livre */}
+      <AiComandoDialog
+        open={comandoIaOpen}
+        onClose={() => setComandoIaOpen(false)}
+        documentoMarkdown={getMarkdown()}
+        onAceitar={(conteudo) => {
+          if (editor) {
+            editor.chain().focus().insertContentAt(
+              editor.state.doc.content.size,
+              `\n\n${conteudo}`
+            ).run()
+          }
+        }}
+      />
     </div>
   )
 }

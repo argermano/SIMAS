@@ -10,12 +10,25 @@ import { buildPromptPeticaoInicialTrab, SYSTEM_PETICAO_TRAB } from '@/lib/prompt
 import { buildPromptContestacaoTrab, SYSTEM_CONTESTACAO_TRAB } from '@/lib/prompts/pecas/trabalhista/contestacao'
 import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
 
+type QualificacaoPartes = {
+  autor?: {
+    nome?: string; cpf?: string; rg?: string; orgao_expedidor?: string
+    estado_civil?: string; nacionalidade?: string; profissao?: string
+    endereco?: string; bairro?: string; cidade?: string; estado?: string; cep?: string
+    telefone?: string; email?: string
+  }
+  reu?: {
+    nome?: string; cnpj_cpf?: string; endereco?: string; cidade?: string; estado?: string
+  }
+}
+
 type PromptBuilder = (dados: {
   analise?: Record<string, unknown>
   transcricao: string
   pedido_especifico?: string
   documentos: Array<{ tipo: string; texto_extraido: string; file_name: string }>
   localizacao?: { cidade?: string; estado?: string }
+  qualificacao?: QualificacaoPartes
 }) => string
 
 const PROMPT_MAP: Record<string, Record<string, { system: string; build: PromptBuilder }>> = {
@@ -34,13 +47,14 @@ export async function POST(req: NextRequest) {
   const start = Date.now()
 
   try {
-    const { atendimentoId, analiseId, tipo, area, jurisprudencia, tribunais } = await req.json() as {
+    const { atendimentoId, analiseId, tipo, area, jurisprudencia, tribunais, qualificacao } = await req.json() as {
       atendimentoId: string
       analiseId?: string
       tipo: string
       area: string
       jurisprudencia?: ResultadoJurisprudencia[]
       tribunais?: string[]
+      qualificacao?: QualificacaoPartes
     }
 
     if (!atendimentoId || !tipo || !area) {
@@ -152,6 +166,7 @@ export async function POST(req: NextRequest) {
         pedido_especifico: atendimento.pedidos_especificos,
         documentos: documentosFiltrados,
         localizacao,
+        qualificacao,
       })
 
       if (jurisprudenciaTexto) {
@@ -194,6 +209,7 @@ export async function POST(req: NextRequest) {
       pedido_especifico: atendimento.pedidos_especificos,
       documentos,
       localizacao,
+      qualificacao,
     })
 
     if (jurisprudenciaTexto) {
