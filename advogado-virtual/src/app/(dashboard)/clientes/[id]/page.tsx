@@ -10,6 +10,7 @@ import { ClienteAcoesClient } from './ClienteAcoesClient'
 import { BotaoExcluirAtendimento } from '@/components/atendimento/BotaoExcluirAtendimento'
 import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
 import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
+import { DocumentoLink } from '@/components/clientes/DocumentoLink'
 import { PlayerAudio } from '@/components/atendimento/PlayerAudio'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import {
@@ -548,13 +549,12 @@ export default async function DossieClientePage({
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {(todosDocumentosCliente.data ?? []).map((doc) => (
-                  <div key={doc.id} className="flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm">
-                    <Paperclip className="h-4 w-4 shrink-0 text-amber-500" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-foreground">{doc.file_name}</p>
-                      <p className="text-xs text-muted-foreground">{formatarDataRelativa(doc.created_at)}</p>
-                    </div>
-                  </div>
+                  <DocumentoLink
+                    key={doc.id}
+                    docId={doc.id}
+                    fileName={doc.file_name}
+                    dataRelativa={formatarDataRelativa(doc.created_at)}
+                  />
                 ))}
               </div>
             </section>
