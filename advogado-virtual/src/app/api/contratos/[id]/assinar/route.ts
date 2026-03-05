@@ -243,7 +243,9 @@ export async function POST(
     })
 
     // 4. Cadastrar signatários
+    console.log('[assinar] Cadastrando signatários:', JSON.stringify(d4signSigners, null, 2))
     const signerResponses = await d4signAddSigners(d4signUuid, d4signSigners)
+    console.log('[assinar] Signatários cadastrados:', JSON.stringify(signerResponses))
 
     // 5. Registrar webhook (ignorar falha — não é crítico)
     const webhookUrl = process.env.D4SIGN_WEBHOOK_URL
@@ -252,10 +254,12 @@ export async function POST(
     }
 
     // 6. Enviar para assinatura
-    await d4signSendToSign(d4signUuid, {
+    console.log('[assinar] Enviando para assinatura, docUuid:', d4signUuid)
+    const sendResult = await d4signSendToSign(d4signUuid, {
       message:  message ?? 'Por favor, assine o contrato de honorários advocatícios.',
       workflow: workflow ? '1' : '0',
     })
+    console.log('[assinar] Resultado sendToSign:', JSON.stringify(sendResult))
 
     // 7. Buscar links de assinatura individuais
     const linksMap: Record<string, string> = {}
