@@ -30,12 +30,16 @@ export async function streamCompletion(params: {
   let inputTokens = 0
   let outputTokens = 0
 
+  const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS
+
   const anthropicStream = client.messages.stream({
     model: params.model ?? DEFAULT_MODEL,
-    max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
+    max_tokens: maxTokens,
     system: params.system,
     messages: [{ role: 'user', content: params.prompt }],
-  })
+  }, maxTokens > 16384 ? {
+    headers: { 'anthropic-beta': 'output-128k-2025-02-19' },
+  } : undefined)
 
   const readable = new ReadableStream({
     async start(controller) {
@@ -48,7 +52,8 @@ export async function streamCompletion(params: {
       anthropicStream.on('message', (message) => {
         inputTokens = message.usage.input_tokens
         outputTokens = message.usage.output_tokens
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', inputTokens, outputTokens })}\n\n`))
+        const stopReason = message.stop_reason
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done', inputTokens, outputTokens, stopReason })}\n\n`))
         controller.close()
       })
 

@@ -18,6 +18,7 @@ import { Markdown } from 'tiptap-markdown'
 import { DocumentHeader } from './DocumentHeader'
 import { EditorToolbar } from './EditorToolbar'
 import { TopicSidebar } from './TopicSidebar'
+import { PreencherSidebar } from './PreencherSidebar'
 import { AiComandoDialog } from './AiComandoDialog'
 import { useToast } from '@/components/ui/toast'
 
@@ -34,6 +35,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
   const { success, error: toastError } = useToast()
   const [titulo, setTitulo]           = useState(tituloInicial)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
   const [baixando, setBaixando]       = useState(false)
   const [comandoIaOpen, setComandoIaOpen] = useState(false)
 
@@ -149,6 +151,13 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
             </div>
           </div>
         </div>
+
+        {/* Painel direito: campos pendentes */}
+        <PreencherSidebar
+          editor={editor}
+          collapsed={rightPanelCollapsed}
+          onToggleCollapse={() => setRightPanelCollapsed(v => !v)}
+        />
       </div>
 
       {/* Dialog de comando IA livre */}

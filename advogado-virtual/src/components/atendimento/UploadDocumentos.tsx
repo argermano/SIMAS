@@ -3,13 +3,19 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Upload, FileText, X, Loader2, Check } from 'lucide-react'
+import { Upload, FileText, X, Loader2, Check, Circle, AlertCircle } from 'lucide-react'
 
 interface Documento {
   id: string
   file_name: string
   tipo: string
   texto_extraido?: string
+}
+
+interface ArquivoProgresso {
+  nome: string
+  status: 'aguardando' | 'enviando' | 'concluido' | 'erro'
+  erro?: string
 }
 
 interface UploadDocumentosProps {
@@ -53,6 +59,7 @@ export function UploadDocumentos({
   const [enviando, setEnviando]       = useState(false)
   const [erro, setErro]               = useState('')
   const [tipoAtual, setTipoAtual]     = useState(tiposDocumento[0] ?? 'outro')
+  const [progresso, setProgresso]     = useState<ArquivoProgresso[]>([])
   const inputRef                       = useRef<HTMLInputElement>(null)
 
   // Carregar documentos iniciais quando a prop mudar
@@ -74,7 +81,17 @@ export function UploadDocumentos({
     setErro('')
     setEnviando(true)
 
-    for (const arquivo of Array.from(files)) {
+    const arquivos = Array.from(files)
+
+    // Inicializar progresso com todos em "aguardando"
+    setProgresso(arquivos.map(f => ({ nome: f.name, status: 'aguardando' })))
+
+    for (let i = 0; i < arquivos.length; i++) {
+      const arquivo = arquivos[i]
+
+      // Marcar como "enviando"
+      setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'enviando' } : p))
+
       try {
         const formData = new FormData()
         formData.append('arquivo', arquivo)
@@ -88,19 +105,26 @@ export function UploadDocumentos({
         const data = await res.json()
 
         if (!res.ok) {
-          setErro(data.error ?? 'Erro ao enviar documento')
+          const msg = data.error ?? 'Erro ao enviar documento'
+          setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'erro', erro: msg } : p))
+          setErro(msg)
         } else if (data.documento) {
           const novoDoc: Documento = data.documento
           setDocumentos(prev => [...prev, novoDoc])
           onDocumentoAdicionado?.(novoDoc)
+          setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'concluido' } : p))
         }
       } catch {
+        setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'erro', erro: 'Erro de rede' } : p))
         setErro('Erro de rede ao enviar documento')
       }
     }
 
     setEnviando(false)
     if (inputRef.current) inputRef.current.value = ''
+
+    // Limpar progresso após 2s
+    setTimeout(() => setProgresso([]), 2000)
   }
 
   function removerDoc(id: string) {
@@ -170,6 +194,71 @@ export function UploadDocumentos({
             </p>
             <p className="mt-1 text-xs text-muted-foreground">PDF, DOCX, JPG, PNG — máx. 10 MB</p>
           </div>
+        </div>
+      )}
+
+      {/* Progresso de upload */}
+      {progresso.length > 0 && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <p className="text-sm font-medium text-foreground">
+              Processando documentos...
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            {progresso.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-2.5">
+                {item.status === 'aguardando' && (
+                  <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                )}
+                {item.status === 'enviando' && (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                )}
+                {item.status === 'concluido' && (
+                  <Check className="h-4 w-4 shrink-0 text-success" />
+                )}
+                {item.status === 'erro' && (
+                  <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                )}
+                <span className={`text-sm truncate ${
+                  item.status === 'concluido' ? 'text-success' :
+                  item.status === 'erro' ? 'text-destructive' :
+                  item.status === 'enviando' ? 'text-foreground font-medium' :
+                  'text-muted-foreground'
+                }`}>
+                  {item.nome}
+                </span>
+                <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+                  {item.status === 'aguardando' && 'Aguardando'}
+                  {item.status === 'enviando' && 'Enviando e extraindo texto...'}
+                  {item.status === 'concluido' && 'Concluído'}
+                  {item.status === 'erro' && (item.erro ?? 'Erro')}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Barra de progresso */}
+          {(() => {
+            const concluidos = progresso.filter(p => p.status === 'concluido' || p.status === 'erro').length
+            const total = progresso.length
+            const pct = total > 0 ? (concluidos / total) * 100 : 0
+            return (
+              <div className="space-y-1">
+                <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-500 ease-out"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground text-right">
+                  {concluidos} de {total} documento{total > 1 ? 's' : ''}
+                </p>
+              </div>
+            )
+          })()}
         </div>
       )}
 
