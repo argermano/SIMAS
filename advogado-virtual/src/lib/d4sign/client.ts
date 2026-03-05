@@ -93,6 +93,35 @@ export async function d4signAddSigners(
   })
 }
 
+// ─── Posicionar assinatura no documento ───────────────────────────────────────
+export async function d4signAddSignaturePosition(
+  docUuid: string,
+  email: string,
+  positionX: string,
+  positionY: string,
+  type: '0' | '1' | '2' = '0', // 0=assinatura, 1=rubrica, 2=carimbo
+): Promise<void> {
+  return withRetry(async () => {
+    const body = {
+      email,
+      position_x: positionX,
+      position_y: positionY,
+      page_height: '1097',
+      page_width: '790',
+      type,
+    }
+    console.log('[D4Sign] addSignaturePosition:', body)
+    const res = await fetch(`${base()}/documents/${docUuid}/addpinswithreplics${auth()}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body:    JSON.stringify(body),
+    })
+    const responseText = await res.text()
+    console.log('[D4Sign] addSignaturePosition response:', res.status, responseText)
+    if (!res.ok) throw new Error(`D4Sign addSignaturePosition: HTTP ${res.status} — ${responseText}`)
+  })
+}
+
 // ─── Registrar webhook ────────────────────────────────────────────────────────
 export async function d4signRegisterWebhook(docUuid: string, url: string): Promise<void> {
   return withRetry(async () => {
