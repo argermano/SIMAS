@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
-import { extractTextFromImage } from '@/lib/anthropic/client'
+import { extractTextFromImage, extractTextFromPdf } from '@/lib/anthropic/client'
 
 // POST /api/atendimentos/[id]/documentos — upload de documento + extração de texto
 export async function POST(
@@ -80,20 +80,24 @@ export async function POST(
       }
     }
 
-    if (IMAGE_TYPES.includes(arquivo.type) || (arquivo.type === 'application/pdf' && !textoExtraido)) {
-      // Imagens e PDFs escaneados: OCR via Claude Vision
+    if (IMAGE_TYPES.includes(arquivo.type)) {
+      // Imagens: OCR via Claude Vision
       try {
-        if (IMAGE_TYPES.includes(arquivo.type)) {
-          const base64 = Buffer.from(arrayBuffer).toString('base64')
-          textoExtraido = await extractTextFromImage({
-            imageBase64: base64,
-            mediaType: arquivo.type as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-          })
-        }
-        // Para PDFs escaneados sem texto, registramos que não conseguimos extrair
-        // (futuramente pode-se converter PDF→imagem→Vision)
+        const base64 = Buffer.from(arrayBuffer).toString('base64')
+        textoExtraido = await extractTextFromImage({
+          imageBase64: base64,
+          mediaType: arquivo.type as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+        })
       } catch {
-        textoExtraido = textoExtraido || ''
+        textoExtraido = ''
+      }
+    } else if (arquivo.type === 'application/pdf' && !textoExtraido) {
+      // PDFs escaneados (sem texto via pdf-parse): extração via Claude Document
+      try {
+        const base64 = Buffer.from(arrayBuffer).toString('base64')
+        textoExtraido = await extractTextFromPdf({ pdfBase64: base64 })
+      } catch {
+        textoExtraido = ''
       }
     }
 
