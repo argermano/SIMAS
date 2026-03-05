@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     .from('tasks')
     .select(`
       id, description, due_date, priority, origin, completed_at, created_at, updated_at,
-      task_list_id, process_id, assignee_id, kanban_board_id, kanban_column_id,
+      task_list_id, process_id, assignee_id, kanban_board_id, kanban_column_id, origin_reference,
       task_lists(name),
       atendimentos(id, area),
       users!tasks_assignee_id_fkey(id, nome),

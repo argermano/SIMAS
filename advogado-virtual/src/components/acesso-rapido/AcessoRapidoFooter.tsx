@@ -228,6 +228,7 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
           try {
             const ev = JSON.parse(line.slice(6))
             if (ev.type === 'text') { conteudo += ev.text; setPreviewContrato(conteudo) }
+            if (ev.type === 'error') { toastError('Erro na IA', ev.error ?? 'Falha na geração'); return }
           } catch { /* linha parcial */ }
         }
       }

@@ -53,7 +53,10 @@ export async function streamCompletion(params: {
       })
 
       anthropicStream.on('error', (error) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`))
+        const msg = error.message?.includes('credit balance')
+          ? 'Créditos da IA esgotados. Acesse o painel da Anthropic para adicionar créditos.'
+          : error.message ?? 'Erro desconhecido na geração'
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: msg })}\n\n`))
         controller.close()
       })
     },

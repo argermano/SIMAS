@@ -19,6 +19,7 @@ export interface TaskData {
   task_tag_links?:   { tag_id: string; task_tags: { id: string; name: string; color: string } | null }[]
   task_assignees?:   { user_id: string; users: { id: string; nome: string } | null }[]
   atendimentos?:     { id: string; area: string } | null
+  origin_reference?: string | null
 }
 
 const PRIORITY_COLORS: Record<string, string> = {

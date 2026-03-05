@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import {
   X, Calendar, User, Flag, Layers, Tag,
-  CheckCircle2, Trash2, Loader2, Pencil, Check,
+  CheckCircle2, Trash2, Loader2, Pencil, Check, ExternalLink,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TaskData } from './TaskCard'
@@ -158,13 +158,19 @@ export function TaskDetailModal({
     setCompleting(true)
     try {
       const now = isCompleted ? null : new Date().toISOString()
+      // Ao concluir, mover para última coluna (Concluída); ao reabrir, mover para primeira (A Fazer)
+      const cols = [...(currentBoard?.kanban_columns ?? [])].sort((a, b) => a.position - b.position)
+      const targetCol = now ? cols[cols.length - 1] : cols[0]
+      const patchBody: Record<string, unknown> = { completed_at: now }
+      if (targetCol) patchBody.kanban_column_id = targetCol.id
       const res = await fetch(`/api/tasks/${task.id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ completed_at: now }),
+        body: JSON.stringify(patchBody),
       })
       if (res.ok) {
         setIsCompleted(!isCompleted)
+        if (targetCol) setColumnId(targetCol.id)
         success(isCompleted ? 'Reaberta!' : 'Concluída!', '')
         onSaved()
       }
@@ -276,6 +282,25 @@ export function TaskDetailModal({
               </button>
             )}
           </div>
+
+          {/* ── Link para item de origem (revisão) ── */}
+          {task.origin_reference?.startsWith('revisao_peca:') && (() => {
+            const pecaId = task.origin_reference!.replace('revisao_peca:', '')
+            const areaMatch = task.description.match(/\(([^)]+)\)/)
+            const area = areaMatch?.[1]?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-')
+            if (!area) return null
+            return (
+              <div className="px-6 pb-3">
+                <a
+                  href={`/${area}/editor/${pecaId}`}
+                  className="inline-flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Abrir peça para revisão
+                </a>
+              </div>
+            )
+          })()}
 
           {/* ── Campos ── */}
           <div className="grid grid-cols-2 gap-4 px-6 pb-4">
