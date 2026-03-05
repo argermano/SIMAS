@@ -23,69 +23,66 @@ const PREENCHER_REGEX = /\[PREENCHER(?::\s*([^\]]+))?\]/g
 const VERIFICAR_REGEX = /\[VERIFICAR(?::\s*([^\]]+))?\]/g
 
 /**
- * Extracts a meaningful label from the text surrounding a placeholder.
- * Looks at the text before the match for keywords like "nº", "de", etc.
+ * Extracts a short label from the text immediately before a placeholder
+ * within a single text node line.
  */
-function extrairLabel(markdown: string, matchIndex: number, matchLength: number): string {
-  // Get ~80 chars before the match
-  const antes = markdown.substring(Math.max(0, matchIndex - 80), matchIndex)
+function extrairLabel(textoAntes: string): string {
+  // Trim and take only the last 60 chars
+  const trecho = textoAntes.trimEnd().slice(-60)
 
-  // Try to find a label pattern like "RG nº [PREENCHER]" or "portadora do CPF [PREENCHER]"
-  // Look for the last meaningful word(s) before the placeholder
-  const patterns = [
-    /(?:(?:do|da|de|dos|das|ao|à|no|na)\s+)?(\w[\w\s/]*?)(?:\s+(?:nº|n[°º.]?|número))?\s*$/i,
-  ]
-
-  for (const p of patterns) {
-    const m = antes.match(p)
-    if (m?.[1]) {
-      const label = m[1].trim()
-      if (label.length > 2 && label.length < 50) return label
-    }
+  // Try patterns like "RG nº", "CPF", "portador do RG"
+  const m = trecho.match(/(?:(?:do|da|de|dos|das)\s+)?([A-ZÁÉÍÓÚÇÃÕÂÊÎÔÛ][\w/.\-]+(?:\s+[\w/.\-]+)?)(?:\s+(?:nº|n[°º.]?|número|:))?\s*$/i)
+  if (m?.[1]) {
+    const label = m[1].trim()
+    if (label.length >= 2 && label.length < 50) return label
   }
 
-  // Fallback: look for the nearest heading
-  const headingMatch = markdown.substring(0, matchIndex).match(/#{1,3}\s+(.+)/g)
-  if (headingMatch) {
-    const lastHeading = headingMatch[headingMatch.length - 1].replace(/^#+\s+/, '').trim()
-    if (lastHeading.length < 60) return lastHeading
-  }
+  // Fallback: last 2-3 meaningful words
+  const palavras = trecho.split(/\s+/).filter(p => p.length > 2).slice(-3)
+  if (palavras.length > 0) return palavras.join(' ')
 
-  return `Campo ${matchIndex}`
+  return 'Campo'
 }
 
-function detectarCampos(markdown: string): CampoPreencher[] {
+function detectarCampos(editor: Editor): CampoPreencher[] {
   const campos: CampoPreencher[] = []
-  let match: RegExpExecArray | null
   let idx = 0
 
-  // Reset regex state
-  PREENCHER_REGEX.lastIndex = 0
-  while ((match = PREENCHER_REGEX.exec(markdown)) !== null) {
-    const descricao = match[1]?.trim()
-    const label = descricao || extrairLabel(markdown, match.index, match[0].length)
-    campos.push({
-      id: `preencher-${idx}`,
-      fullMatch: match[0],
-      label,
-      contexto: descricao ? 'preencher' : 'preencher',
-      index: idx,
-    })
-    idx++
-  }
+  // Walk ProseMirror document nodes to find placeholders with local context
+  editor.state.doc.descendants((node) => {
+    if (!node.isText || !node.text) return
 
-  VERIFICAR_REGEX.lastIndex = 0
-  while ((match = VERIFICAR_REGEX.exec(markdown)) !== null) {
-    const descricao = match[1]?.trim()
-    campos.push({
-      id: `verificar-${idx}`,
-      fullMatch: match[0],
-      label: descricao || 'Verificar',
-      contexto: 'verificar',
-      index: idx,
-    })
-    idx++
-  }
+    const text = node.text
+
+    PREENCHER_REGEX.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = PREENCHER_REGEX.exec(text)) !== null) {
+      const descricao = match[1]?.trim()
+      const textoAntes = text.substring(0, match.index)
+      campos.push({
+        id: `preencher-${idx}`,
+        fullMatch: match[0],
+        label: descricao || extrairLabel(textoAntes),
+        contexto: 'preencher',
+        index: idx,
+      })
+      idx++
+    }
+
+    VERIFICAR_REGEX.lastIndex = 0
+    while ((match = VERIFICAR_REGEX.exec(text)) !== null) {
+      const descricao = match[1]?.trim()
+      const textoAntes = text.substring(0, match.index)
+      campos.push({
+        id: `verificar-${idx}`,
+        fullMatch: match[0],
+        label: descricao || extrairLabel(textoAntes) || 'Verificar',
+        contexto: 'verificar',
+        index: idx,
+      })
+      idx++
+    }
+  })
 
   return campos
 }
@@ -97,9 +94,7 @@ export function PreencherSidebar({ editor, collapsed, onToggleCollapse }: Preenc
 
   const atualizarCampos = useCallback(() => {
     if (!editor) return
-    // Use getText() — plain text without markdown escaping of brackets
-    const texto = editor.getText()
-    const novosCampos = detectarCampos(texto)
+    const novosCampos = detectarCampos(editor)
     setCampos(novosCampos)
 
     // Clean up values for removed fields
@@ -124,23 +119,39 @@ export function PreencherSidebar({ editor, collapsed, onToggleCollapse }: Preenc
     const valor = valores[campo.id]?.trim()
     if (!valor) return
 
-    const html = editor.getHTML()
+    // Walk ProseMirror doc to find exact position of the placeholder
+    const { doc } = editor.state
+    let found = false
 
-    // Escape special regex chars in the match
-    const escaped = campo.fullMatch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(escaped)
+    doc.descendants((node, pos) => {
+      if (found) return false
+      if (!node.isText || !node.text) return
 
-    const novoHtml = html.replace(regex, valor)
-    if (novoHtml === html) return // nothing changed
+      const idx = node.text.indexOf(campo.fullMatch)
+      if (idx === -1) return
 
-    editor.chain().setContent(novoHtml).run()
+      const from = pos + idx
+      const to = from + campo.fullMatch.length
 
-    // Clear value and refresh
-    setValores(prev => {
-      const next = { ...prev }
-      delete next[campo.id]
-      return next
+      // Select the placeholder text and replace with the value
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from, to })
+        .insertContent(valor)
+        .run()
+
+      found = true
+      return false
     })
+
+    if (found) {
+      setValores(prev => {
+        const next = { ...prev }
+        delete next[campo.id]
+        return next
+      })
+    }
   }
 
   function irAoCampo(campo: CampoPreencher) {
