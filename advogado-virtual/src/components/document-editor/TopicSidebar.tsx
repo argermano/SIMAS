@@ -12,9 +12,11 @@ interface TopicSidebarProps {
   contextoDocumento: string
   collapsed: boolean
   onToggleCollapse: () => void
+  getMarkdown?: () => string
+  onInsertContent?: (markdown: string) => void
 }
 
-export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCollapse }: TopicSidebarProps) {
+export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCollapse, getMarkdown, onInsertContent }: TopicSidebarProps) {
   const [topics,         setTopics]         = useState<DocumentTopic[]>([])
   const [activeTopic,    setActiveTopic]     = useState<string | null>(null)
   const [rewriteTarget,  setRewriteTarget]   = useState<DocumentTopic | null>(null)
@@ -280,6 +282,7 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
         contextoDocumento={contextoDocumento}
         onAceitar={handleAceitarReescrita}
       />
+
     </>
   )
 }

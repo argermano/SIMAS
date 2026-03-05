@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { streamCompletion } from '@/lib/anthropic/client'
 
-type Acao = 'reescrever' | 'gerar_topico'
+type Acao = 'reescrever' | 'gerar_topico' | 'comando_livre'
 
 const SYSTEM_EDITOR = `Você é um especialista jurídico brasileiro especializado em redação de documentos jurídicos formais.
 Sua tarefa é auxiliar na criação e revisão de documentos jurídicos, mantendo o padrão formal, técnico e preciso exigido pela advocacia brasileira.
@@ -18,11 +18,13 @@ REGRAS:
 // POST /api/ia/editor-documento — gerar ou reescrever seção de documento com streaming
 export async function POST(req: NextRequest) {
   try {
-    const { acao, conteudo, descricao, contexto_documento } = await req.json() as {
+    const { acao, conteudo, descricao, contexto_documento, instrucao, documento_completo } = await req.json() as {
       acao: Acao
       conteudo?: string
       descricao?: string
       contexto_documento?: string
+      instrucao?: string
+      documento_completo?: string
     }
 
     if (!acao) {
@@ -46,6 +48,19 @@ SEÇÃO A REESCREVER:
 ${conteudo}
 
 Retorne APENAS o conteúdo reescrito da seção em Markdown, sem explicações.`
+    } else if (acao === 'comando_livre') {
+      if (!instrucao) return NextResponse.json({ error: 'instrucao é obrigatória para comando_livre' }, { status: 400 })
+      prompt = `Você recebeu uma instrução do advogado para modificar ou complementar o documento jurídico abaixo.
+
+DOCUMENTO COMPLETO:
+${documento_completo ?? contexto_documento ?? '(documento vazio)'}
+
+INSTRUÇÃO DO ADVOGADO:
+${instrucao}
+
+Execute a instrução solicitada. Retorne APENAS o conteúdo Markdown resultante (a seção nova ou modificada), sem explicações.
+Se a instrução pedir para adicionar conteúdo, gere a nova seção com heading (##) apropriado.
+Se a instrução pedir para modificar algo existente, retorne a versão corrigida da seção afetada.`
     } else {
       // gerar_topico
       if (!descricao) return NextResponse.json({ error: 'descricao é obrigatória para gerar_topico' }, { status: 400 })

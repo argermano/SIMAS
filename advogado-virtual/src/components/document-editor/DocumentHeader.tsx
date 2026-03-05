@@ -15,6 +15,7 @@ interface DocumentHeaderProps {
   onSalvar?: () => void
   salvando?: boolean
   extraAcoes?: ReactNode
+  onComandoIa?: () => void
 }
 
 export function DocumentHeader({
@@ -27,6 +28,7 @@ export function DocumentHeader({
   onSalvar,
   salvando,
   extraAcoes,
+  onComandoIa,
 }: DocumentHeaderProps) {
   const [salvo, setSalvo] = useState(false)
 
@@ -82,11 +84,15 @@ export function DocumentHeader({
 
       {/* Direita: ações */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Badge IA */}
-        <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+        {/* Botão IA — abre comando livre */}
+        <button
+          onClick={onComandoIa}
+          className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+          title="Comando IA — peça para a IA modificar ou complementar o documento"
+        >
           <Sparkles className="h-3.5 w-3.5" />
           IA
-        </div>
+        </button>
 
         {/* Buscar Jurisprudência — placeholder */}
         <button
