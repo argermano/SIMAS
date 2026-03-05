@@ -114,16 +114,35 @@ export function KanbanBoard({
 
     if (!destColId) { setActiveTask(null); return }
 
+    // Verificar se está indo para a última coluna (Concluída) ou saindo dela
+    const lastCol = columns[columns.length - 1]
+    const isMovingToConcluida = destColId === lastCol?.id
+    const movedTask = tasks.find(t => t.id === taskId)
+    const wasCompleted = !!movedTask?.completed_at
+
+    const patchBody: Record<string, unknown> = { kanban_column_id: destColId }
+    if (isMovingToConcluida && !wasCompleted) {
+      patchBody.completed_at = new Date().toISOString()
+    } else if (!isMovingToConcluida && wasCompleted) {
+      patchBody.completed_at = null
+    }
+
     // Optimistic update
     setTasks(prev => prev.map(t =>
-      t.id === taskId ? { ...t, kanban_column_id: destColId } : t
+      t.id === taskId ? {
+        ...t,
+        kanban_column_id: destColId,
+        completed_at: isMovingToConcluida && !wasCompleted
+          ? new Date().toISOString()
+          : !isMovingToConcluida && wasCompleted ? null : t.completed_at,
+      } : t
     ))
     setActiveTask(null)
 
     const res = await fetch(`/api/tasks/${taskId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kanban_column_id: destColId }),
+      body: JSON.stringify(patchBody),
     })
     if (!res.ok) {
       toastError('Erro', 'Não foi possível mover a tarefa')
