@@ -154,7 +154,8 @@ export function EditorContratoClient({
     </Button>
   ) : null
 
-  const acaoAssinar = !temAssinaturaAtiva ? (
+  // TODO: restaurar condição !temAssinaturaAtiva após testes
+  const acaoAssinar = true ? (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button size="sm" className="gap-1.5 bg-primary/80 hover:bg-primary">
