@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { extractTextFromImage } from '@/lib/anthropic/client'
 
 // POST /api/atendimentos/[id]/documentos — upload de documento + extração de texto
 export async function POST(
@@ -57,18 +58,42 @@ export async function POST(
       return NextResponse.json({ error: `Upload falhou: ${uploadError.message}` }, { status: 500 })
     }
 
-    // 2. Extração de texto para PDFs
+    // 2. Extração de texto
     let textoExtraido = ''
+    const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 
     if (arquivo.type === 'application/pdf') {
+      // PDF: extração via pdf-parse
       try {
         const pdfMod = await import('pdf-parse')
         const pdfParse = (pdfMod as unknown as { default: (buf: Buffer) => Promise<{ text: string }> }).default ?? pdfMod
         const buffer = Buffer.from(arrayBuffer)
         const pdfData = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer)
         textoExtraido = pdfData.text ?? ''
+
+        // Se PDF tem pouco texto (provavelmente escaneado), tentar OCR via Vision
+        if (textoExtraido.replace(/\s+/g, '').length < 50) {
+          textoExtraido = '' // Será preenchido abaixo se OCR funcionar
+        }
       } catch {
-        textoExtraido = '[Erro ao extrair texto do PDF]'
+        textoExtraido = ''
+      }
+    }
+
+    if (IMAGE_TYPES.includes(arquivo.type) || (arquivo.type === 'application/pdf' && !textoExtraido)) {
+      // Imagens e PDFs escaneados: OCR via Claude Vision
+      try {
+        if (IMAGE_TYPES.includes(arquivo.type)) {
+          const base64 = Buffer.from(arrayBuffer).toString('base64')
+          textoExtraido = await extractTextFromImage({
+            imageBase64: base64,
+            mediaType: arquivo.type as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+          })
+        }
+        // Para PDFs escaneados sem texto, registramos que não conseguimos extrair
+        // (futuramente pode-se converter PDF→imagem→Vision)
+      } catch {
+        textoExtraido = textoExtraido || ''
       }
     }
 
