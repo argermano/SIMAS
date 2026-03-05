@@ -24,10 +24,10 @@ export async function POST(
   const body = await req.json().catch(() => ({}))
   const prazoRevisao = body.prazo_revisao ?? null
 
-  // Buscar dados da peça para a descrição da tarefa
+  // Buscar dados da peça com nome do cliente via atendimento
   const { data: peca } = await supabase
     .from('pecas')
-    .select('id, tipo, area, status, atendimento_id')
+    .select('id, tipo, area, status, atendimento_id, atendimentos(clientes(nome))')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -38,6 +38,9 @@ export async function POST(
       { status: 404 }
     )
   }
+
+  const nomeCliente = (peca.atendimentos as { clientes?: { nome?: string } } | null)
+    ?.clientes?.nome ?? 'Cliente'
 
   // Atualizar status da peça
   const { error: updateError } = await supabase
@@ -69,7 +72,7 @@ export async function POST(
   try {
     const tipoFormatado = peca.tipo.replace(/_/g, ' ')
     await taskService.createAutomatic({
-      description:     `Revisar peça: ${tipoFormatado} (${peca.area}) — enviada por ${usuario.nome}`,
+      description:     `Revisar peça: ${tipoFormatado} (${peca.area}) — ${nomeCliente}`,
       assigneeId:      revisorId,
       tenantId:        usuario.tenant_id,
       createdBy:       usuario.id,

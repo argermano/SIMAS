@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { TaskDueNotification } from '@/components/layout/TaskDueNotification'
 import { LABELS_ROLE } from '@/types'
 
 export default async function DashboardLayout({
@@ -35,6 +36,7 @@ export default async function DashboardLayout({
         roleRaw={roleRaw}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
+        <TaskDueNotification />
         {children}
       </div>
     </div>
