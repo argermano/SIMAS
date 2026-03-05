@@ -109,6 +109,42 @@ export async function extractTextFromImage(params: {
 }
 
 /**
+ * Extrai texto de um PDF usando Claude (suporte nativo a documentos)
+ */
+export async function extractTextFromPdf(params: {
+  pdfBase64: string
+}): Promise<string> {
+  const client = getAnthropicClient()
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 4096,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: params.pdfBase64,
+          },
+        },
+        {
+          type: 'text',
+          text: 'Extraia TODO o texto visível neste documento PDF. Transcreva fielmente nomes completos, números (CPF, RG, CNPJ, OAB), datas, endereços completos, estado civil, nacionalidade, profissão, e qualquer outro dado pessoal ou jurídico. Retorne apenas o texto extraído, sem explicações.',
+        },
+      ],
+    }],
+  })
+
+  return message.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+}
+
+/**
  * Faz uma chamada sem streaming (para JSON responses)
  */
 export async function completionJSON<T = unknown>(params: {
