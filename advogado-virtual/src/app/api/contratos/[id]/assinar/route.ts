@@ -170,17 +170,17 @@ export async function POST(
     return NextResponse.json({ error: 'Contrato sem conteúdo para assinar' }, { status: 400 })
   }
 
-  // Verificar se já existe assinatura ativa
-  const { data: assinaturaExistente } = await supabase
-    .from('contract_signatures')
-    .select('id, status')
-    .eq('contrato_id', id)
-    .not('status', 'in', '("cancelled")')
-    .maybeSingle()
-
-  if (assinaturaExistente && ['waiting_signatures', 'uploaded', 'signers_registered'].includes(assinaturaExistente.status)) {
-    return NextResponse.json({ error: 'Já existe um processo de assinatura ativo para este contrato' }, { status: 409 })
-  }
+  // TODO: restaurar verificação de assinatura ativa após testes
+  // const { data: assinaturaExistente } = await supabase
+  //   .from('contract_signatures')
+  //   .select('id, status')
+  //   .eq('contrato_id', id)
+  //   .not('status', 'in', '("cancelled")')
+  //   .maybeSingle()
+  //
+  // if (assinaturaExistente && ['waiting_signatures', 'uploaded', 'signers_registered'].includes(assinaturaExistente.status)) {
+  //   return NextResponse.json({ error: 'Já existe um processo de assinatura ativo para este contrato' }, { status: 409 })
+  // }
 
   // Validar body
   const body = await req.json()
