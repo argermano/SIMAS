@@ -217,18 +217,30 @@ export async function POST(
     const { uuid: d4signUuid } = await d4signUploadDocument(safeUuid, fileBuffer, fileName)
 
     // 3. Montar signatários no formato D4Sign
-    const d4signSigners: D4SignSignerInput[] = signers.map(s => ({
-      email:                 s.email,
-      act:                   s.act,
-      foreign:               '0',
-      certificadoicpbr:      '0',
-      assinatura_presencial: '0',
-      docauth:               '0',
-      docauthandselfie:      '0',
-      embed_methodauth:      s.auth_method === 'pix' ? 'email' : s.auth_method,
-      whatsapp_number:       s.phone ?? undefined,
-      auth_pix:              s.auth_method === 'pix' ? '1' : '0',
-    }))
+    const d4signSigners: D4SignSignerInput[] = signers.map(s => {
+      // Determinar método de notificação
+      const method = s.auth_method === 'pix' ? 'email' : s.auth_method
+
+      // Formatar telefone com código do país (+55) para WhatsApp/SMS
+      let whatsappNumber: string | undefined
+      if ((method === 'whatsapp' || method === 'sms') && s.phone) {
+        const digits = s.phone.replace(/\D/g, '')
+        whatsappNumber = digits.startsWith('55') ? digits : `55${digits}`
+      }
+
+      return {
+        email:                 s.email,
+        act:                   s.act,
+        foreign:               '0',
+        certificadoicpbr:      '0',
+        assinatura_presencial: '0',
+        docauth:               '0',
+        docauthandselfie:      '0',
+        embed_methodauth:      method,
+        whatsapp_number:       whatsappNumber,
+        auth_pix:              s.auth_method === 'pix' ? '1' : '0',
+      }
+    })
 
     // 4. Cadastrar signatários
     const signerResponses = await d4signAddSigners(d4signUuid, d4signSigners)
