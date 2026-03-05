@@ -322,7 +322,7 @@ export function TelaAtendimento({
       try {
         const update: Record<string, string | null> = {}
         const fields: (keyof DadosExtraidosAutor)[] = [
-          'cpf', 'rg', 'orgao_expedidor', 'estado_civil', 'nacionalidade',
+          'nome', 'cpf', 'rg', 'orgao_expedidor', 'estado_civil', 'nacionalidade',
           'profissao', 'endereco', 'bairro', 'cidade', 'estado', 'cep', 'telefone', 'email',
         ]
         for (const f of fields) {

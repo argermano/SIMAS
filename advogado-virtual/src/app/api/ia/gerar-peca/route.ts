@@ -8,6 +8,8 @@ import { buildPromptPeticaoInicialPrev, SYSTEM_PETICAO_PREV } from '@/lib/prompt
 import { buildPromptContestacaoPrev, SYSTEM_CONTESTACAO_PREV } from '@/lib/prompts/pecas/previdenciario/contestacao'
 import { buildPromptPeticaoInicialTrab, SYSTEM_PETICAO_TRAB } from '@/lib/prompts/pecas/trabalhista/peticao-inicial'
 import { buildPromptContestacaoTrab, SYSTEM_CONTESTACAO_TRAB } from '@/lib/prompts/pecas/trabalhista/contestacao'
+import { buildPromptPeticaoInicialCivel, SYSTEM_PETICAO_CIVEL } from '@/lib/prompts/pecas/civel/peticao-inicial'
+import { buildPromptContestacaoCivel, SYSTEM_CONTESTACAO_CIVEL } from '@/lib/prompts/pecas/civel/contestacao'
 import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
 
 type QualificacaoPartes = {
@@ -39,6 +41,10 @@ const PROMPT_MAP: Record<string, Record<string, { system: string; build: PromptB
   trabalhista: {
     peticao_inicial: { system: SYSTEM_PETICAO_TRAB, build: buildPromptPeticaoInicialTrab },
     contestacao:     { system: SYSTEM_CONTESTACAO_TRAB, build: buildPromptContestacaoTrab },
+  },
+  civel: {
+    peticao_inicial: { system: SYSTEM_PETICAO_CIVEL, build: buildPromptPeticaoInicialCivel },
+    contestacao:     { system: SYSTEM_CONTESTACAO_CIVEL, build: buildPromptContestacaoCivel },
   },
 }
 
@@ -75,19 +81,48 @@ export async function POST(req: NextRequest) {
     // Colaboradores não podem publicar diretamente — peça vai para fila de revisão
     const statusInicial = usuario.role === 'colaborador' ? 'aguardando_revisao' : 'rascunho'
 
-    // Buscar atendimento + documentos + localização do cliente
+    // Buscar atendimento + documentos + dados completos do cliente
     const { data: atendimento } = await supabase
       .from('atendimentos')
-      .select('*, documentos(*), clientes(cidade, estado)')
+      .select('*, documentos(*), clientes(nome, cpf, rg, orgao_expedidor, estado_civil, nacionalidade, profissao, endereco, bairro, cidade, estado, cep, telefone, email)')
       .eq('id', atendimentoId)
       .eq('tenant_id', usuario.tenant_id)
       .single()
     if (!atendimento) return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
 
+    type ClienteDB = {
+      nome?: string; cpf?: string; rg?: string; orgao_expedidor?: string
+      estado_civil?: string; nacionalidade?: string; profissao?: string
+      endereco?: string; bairro?: string; cidade?: string; estado?: string; cep?: string
+      telefone?: string; email?: string
+    } | null
+    const clienteDB = atendimento.clientes as ClienteDB
+
     const localizacao = {
-      cidade: (atendimento.clientes as { cidade?: string; estado?: string } | null)?.cidade ?? undefined,
-      estado: (atendimento.clientes as { cidade?: string; estado?: string } | null)?.estado ?? undefined,
+      cidade: clienteDB?.cidade ?? undefined,
+      estado: clienteDB?.estado ?? undefined,
     }
+
+    // Construir qualificação base a partir do cadastro do cliente
+    // Dados do request (extração por IA) complementam/sobrescrevem dados do BD
+    const qualificacaoBase: QualificacaoPartes = { autor: {}, reu: qualificacao?.reu }
+    if (clienteDB) {
+      const campos: (keyof NonNullable<QualificacaoPartes['autor']>)[] = [
+        'nome', 'cpf', 'rg', 'orgao_expedidor', 'estado_civil', 'nacionalidade',
+        'profissao', 'endereco', 'bairro', 'cidade', 'estado', 'cep', 'telefone', 'email',
+      ]
+      for (const c of campos) {
+        const dbVal = clienteDB[c as keyof ClienteDB]
+        if (dbVal) qualificacaoBase.autor![c] = dbVal as string
+      }
+    }
+    // Merge: dados da extração (request) sobrescrevem campos vazios do BD
+    if (qualificacao?.autor) {
+      for (const [k, v] of Object.entries(qualificacao.autor)) {
+        if (v) (qualificacaoBase.autor as Record<string, string>)[k] = v
+      }
+    }
+    const qualificacaoFinal = qualificacaoBase
 
     // Buscar análise (se existir)
     let analise: Record<string, unknown> | undefined
@@ -166,7 +201,7 @@ export async function POST(req: NextRequest) {
         pedido_especifico: atendimento.pedidos_especificos,
         documentos: documentosFiltrados,
         localizacao,
-        qualificacao,
+        qualificacao: qualificacaoFinal,
       })
 
       if (jurisprudenciaTexto) {
@@ -209,7 +244,7 @@ export async function POST(req: NextRequest) {
       pedido_especifico: atendimento.pedidos_especificos,
       documentos,
       localizacao,
-      qualificacao,
+      qualificacao: qualificacaoFinal,
     })
 
     if (jurisprudenciaTexto) {

@@ -72,6 +72,43 @@ export async function streamCompletion(params: {
 }
 
 /**
+ * Extrai texto de uma imagem usando Claude Vision (OCR)
+ */
+export async function extractTextFromImage(params: {
+  imageBase64: string
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+}): Promise<string> {
+  const client = getAnthropicClient()
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 4096,
+    messages: [{
+      role: 'user',
+      content: [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: params.mediaType,
+            data: params.imageBase64,
+          },
+        },
+        {
+          type: 'text',
+          text: 'Extraia TODO o texto visível nesta imagem de documento. Transcreva fielmente nomes, números (CPF, RG, CNPJ), datas, endereços e qualquer outro texto presente. Retorne apenas o texto extraído, sem explicações.',
+        },
+      ],
+    }],
+  })
+
+  return message.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+}
+
+/**
  * Faz uma chamada sem streaming (para JSON responses)
  */
 export async function completionJSON<T = unknown>(params: {
