@@ -80,7 +80,7 @@ export function ConsultoriaClient({
 
   // Estados exclusivos do modo continuação
   const [analiseGeral, setAnaliseGeral]   = useState<ResultadoAnaliseGeral | null>(null)
-  const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ tipo: string; file_name: string }>>([])
+  const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ id: string; tipo: string; file_name: string; texto_extraido?: string }>>([])
   const [tipoServico, setTipoServico]     = useState<TipoServico | null>(null)
   const [tipoProcesso, setTipoProcesso]   = useState('')
   const [salvandoTipo, setSalvandoTipo]   = useState(false)
@@ -498,6 +498,7 @@ export function ConsultoriaClient({
             <UploadDocumentos
               atendimentoId={atendimentoId}
               tiposDocumento={tiposDocumento}
+              documentosIniciais={documentosExistentes}
             />
           </CardContent>
         </Card>
@@ -943,6 +944,7 @@ export function ConsultoriaClient({
             atendimentoId={atendimentoId}
             tiposDocumento={tiposDocumento}
             disabled={!atendimentoId}
+            documentosIniciais={documentosExistentes}
           />
         </CardContent>
       </Card>

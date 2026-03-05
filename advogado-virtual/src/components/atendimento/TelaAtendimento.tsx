@@ -77,6 +77,7 @@ export function TelaAtendimento({
   const localizacaoOriginalRef = useRef({ cidade: '', estado: '' })
   const [hasAudio, setHasAudio] = useState(false)
   const [extraindo, setExtraindo] = useState(false)
+  const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string }>>([])
   const [dadosExtraidos, setDadosExtraidos] = useState<{ autor: DadosExtraidosAutor; reu?: DadosExtraidosReu } | null>(null)
   const [dadosAtuaisCliente, setDadosAtuaisCliente] = useState<Partial<DadosExtraidosAutor>>({})
   const qualificacaoRef = useRef<{ autor?: DadosExtraidosAutor; reu?: DadosExtraidosReu } | undefined>(undefined)
@@ -111,6 +112,7 @@ export function TelaAtendimento({
         setTranscricao(at.transcricao_editada ?? at.transcricao_raw ?? '')
         setPedidoEspecifico(at.pedidos_especificos ?? '')
         if (at.audio_url) setHasAudio(true)
+        if (at.documentos) setDocumentosExistentes(at.documentos)
       } catch {
         toastError('Erro', 'Não foi possível carregar o atendimento')
       } finally {
@@ -676,6 +678,7 @@ export function TelaAtendimento({
             atendimentoId={atendimentoId}
             tiposDocumento={tiposDocumento}
             disabled={!podeGravar}
+            documentosIniciais={documentosExistentes}
           />
         </CardContent>
       </Card>
