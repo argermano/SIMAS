@@ -8,6 +8,7 @@ import {
 import {
   d4signUploadDocument,
   d4signAddSigners,
+  d4signAddSignaturePosition,
   d4signRegisterWebhook,
   d4signSendToSign,
   d4signGetSigningLink,
@@ -246,6 +247,23 @@ export async function POST(
     console.log('[assinar] Cadastrando signatários:', JSON.stringify(d4signSigners, null, 2))
     const signerResponses = await d4signAddSigners(d4signUuid, d4signSigners)
     console.log('[assinar] Signatários cadastrados:', JSON.stringify(signerResponses))
+
+    // 4.5. Posicionar assinaturas no documento (parte inferior, espaçadas)
+    // Página A4: 790x1097 pixels. Posição Y base ~900 (parte inferior)
+    const baseY = 880
+    const spacing = 80
+    for (let i = 0; i < signers.length; i++) {
+      try {
+        await d4signAddSignaturePosition(
+          d4signUuid,
+          signers[i].email,
+          '300',                              // centralizado horizontalmente
+          String(baseY + (i * spacing)),      // espaçado verticalmente
+        )
+      } catch (err) {
+        console.warn(`[assinar] Falha ao posicionar assinatura de ${signers[i].email}:`, err)
+      }
+    }
 
     // 5. Registrar webhook (ignorar falha — não é crítico)
     const webhookUrl = process.env.D4SIGN_WEBHOOK_URL
