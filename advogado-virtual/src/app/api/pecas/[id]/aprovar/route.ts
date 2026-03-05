@@ -46,5 +46,37 @@ export async function POST(
     )
   }
 
+  // Auto-concluir tarefa de revisão associada no kanban
+  const { data: taskRevisao } = await supabase
+    .from('tasks')
+    .select('id, kanban_board_id')
+    .eq('tenant_id', usuario.tenant_id)
+    .eq('origin_reference', `revisao_peca:${id}`)
+    .is('completed_at', null)
+    .single()
+
+  if (taskRevisao) {
+    // Buscar última coluna (Concluída) do board
+    let concluídaColumnId: string | null = null
+    if (taskRevisao.kanban_board_id) {
+      const { data: cols } = await supabase
+        .from('kanban_columns')
+        .select('id, position')
+        .eq('board_id', taskRevisao.kanban_board_id)
+        .order('position', { ascending: false })
+        .limit(1)
+
+      concluídaColumnId = cols?.[0]?.id ?? null
+    }
+
+    await supabase
+      .from('tasks')
+      .update({
+        completed_at: new Date().toISOString(),
+        ...(concluídaColumnId ? { kanban_column_id: concluídaColumnId } : {}),
+      })
+      .eq('id', taskRevisao.id)
+  }
+
   return NextResponse.json({ ok: true, peca })
 }
