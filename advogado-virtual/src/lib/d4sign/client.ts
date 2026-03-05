@@ -109,19 +109,23 @@ export async function d4signRegisterWebhook(docUuid: string, url: string): Promi
 export async function d4signSendToSign(
   docUuid: string,
   options?: D4SignSendOptions,
-): Promise<void> {
+): Promise<unknown> {
   return withRetry(async () => {
     const body = {
       message:    options?.message    ?? '',
       skip_email: options?.skip_email ?? '0',
       workflow:   options?.workflow   ?? '0',
     }
+    console.log('[D4Sign] sendToSign request:', { docUuid, body })
     const res = await fetch(`${base()}/documents/${docUuid}/sendtosign${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify(body),
     })
-    if (!res.ok) throw new Error(`D4Sign sendToSign: HTTP ${res.status} — ${await res.text()}`)
+    const responseText = await res.text()
+    console.log('[D4Sign] sendToSign response:', res.status, responseText)
+    if (!res.ok) throw new Error(`D4Sign sendToSign: HTTP ${res.status} — ${responseText}`)
+    try { return JSON.parse(responseText) } catch { return responseText }
   })
 }
 
