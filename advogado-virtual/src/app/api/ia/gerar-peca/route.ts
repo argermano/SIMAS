@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
         prompt += `\n\n${jurisprudenciaTexto}\n\nUse a jurisprudência acima como referência para fundamentar a peça. Cite os processos relevantes quando aplicável.`
       }
 
-      const { stream } = await streamCompletion({ system: fallback.system, prompt })
+      const { stream } = await streamCompletion({ system: fallback.system, prompt, maxTokens: 32768 })
 
       // Salvar peça (vazia por enquanto — será atualizada ao final do stream no frontend)
       const { data: peca } = await supabase
@@ -271,6 +271,7 @@ export async function POST(req: NextRequest) {
     const { stream, getUsage } = await streamCompletion({
       system: promptConfig.system,
       prompt,
+      maxTokens: 32768,
     })
 
     // Log assíncrono (não bloqueia o stream)
