@@ -50,21 +50,23 @@ export function ConfirmarDadosModal({
   onPular,
   loading,
 }: ConfirmarDadosModalProps) {
-  const [autor, setAutor] = useState<DadosExtraidosAutor>(dadosExtraidos.autor)
-  const [reu,   setReu]   = useState<DadosExtraidosReu | undefined>(dadosExtraidos.reu)
+  // Merge: dados extraídos sobrescrevem dados atuais do cliente
+  const mergedAutor: DadosExtraidosAutor = {
+    ...(dadosAtuaisCliente ?? {}),
+    ...Object.fromEntries(
+      Object.entries(dadosExtraidos.autor).filter(([, v]) => !!v)
+    ),
+  }
 
-  // Reset quando abre com novos dados
-  useState(() => {
-    setAutor(dadosExtraidos.autor)
-    setReu(dadosExtraidos.reu)
-  })
+  const [autor, setAutor] = useState<DadosExtraidosAutor>(mergedAutor)
+  const [reu,   setReu]   = useState<DadosExtraidosReu | undefined>(dadosExtraidos.reu)
 
   function updateAutor(key: keyof DadosExtraidosAutor, value: string) {
     setAutor(prev => ({ ...prev, [key]: value || undefined }))
   }
 
   function updateReu(key: keyof DadosExtraidosReu, value: string) {
-    setReu(prev => prev ? { ...prev, [key]: value || undefined } : undefined)
+    setReu(prev => ({ ...(prev ?? {}), [key]: value || undefined }))
   }
 
   function isChanged(key: keyof DadosExtraidosAutor): boolean {
@@ -106,22 +108,22 @@ export function ConfirmarDadosModal({
           </h3>
           <div className="grid grid-cols-2 gap-3">
             {(Object.keys(LABELS_AUTOR) as (keyof DadosExtraidosAutor)[]).map(key => {
-              const extraido = autor[key]
-              const atual = dadosAtuaisCliente?.[key]
-              if (!extraido && !atual) return null
+              const valorAtual = autor[key]
+              const valorAnterior = dadosAtuaisCliente?.[key]
               return (
                 <div key={key} className={key === 'endereco' ? 'col-span-2' : ''}>
                   <label className="block text-xs font-medium text-muted-foreground mb-1">
                     {LABELS_AUTOR[key]}
-                    {isChanged(key) && atual && (
-                      <span className="ml-1 text-warning text-[10px]">(era: {atual})</span>
+                    {isChanged(key) && valorAnterior && (
+                      <span className="ml-1 text-warning text-[10px]">(era: {valorAnterior})</span>
                     )}
                   </label>
                   <input
                     type="text"
-                    value={extraido ?? ''}
+                    value={valorAtual ?? ''}
                     onChange={e => updateAutor(key, e.target.value)}
-                    className="w-full rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary/40"
+                    placeholder={`Preencher ${LABELS_AUTOR[key].toLowerCase()}`}
+                    className="w-full rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/40"
                   />
                 </div>
               )
@@ -130,33 +132,31 @@ export function ConfirmarDadosModal({
         </div>
 
         {/* Réu */}
-        {reu && Object.values(reu).some(Boolean) && (
-          <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
-              <Building2 className="h-4 w-4 text-destructive" />
-              Réu (Parte contrária)
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {(Object.keys(LABELS_REU) as (keyof DadosExtraidosReu)[]).map(key => {
-                const value = reu[key]
-                if (!value) return null
-                return (
-                  <div key={key} className={key === 'endereco' ? 'col-span-2' : ''}>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">
-                      {LABELS_REU[key]}
-                    </label>
-                    <input
-                      type="text"
-                      value={value ?? ''}
-                      onChange={e => updateReu(key, e.target.value)}
-                      className="w-full rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary/40"
-                    />
-                  </div>
-                )
-              })}
-            </div>
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
+            <Building2 className="h-4 w-4 text-destructive" />
+            Réu (Parte contrária)
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            {(Object.keys(LABELS_REU) as (keyof DadosExtraidosReu)[]).map(key => {
+              const value = reu?.[key]
+              return (
+                <div key={key} className={key === 'endereco' ? 'col-span-2' : ''}>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">
+                    {LABELS_REU[key]}
+                  </label>
+                  <input
+                    type="text"
+                    value={value ?? ''}
+                    onChange={e => updateReu(key, e.target.value)}
+                    placeholder={`Preencher ${LABELS_REU[key].toLowerCase()}`}
+                    className="w-full rounded-md border border-border bg-card px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/40"
+                  />
+                </div>
+              )
+            })}
           </div>
-        )}
+        </div>
       </div>
     </Dialog>
   )
