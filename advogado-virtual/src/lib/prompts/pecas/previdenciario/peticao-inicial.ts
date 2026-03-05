@@ -27,7 +27,8 @@ function formatarQualificacao(q?: {
     if (endReu) linhas.push(`- Endereço: ${endReu}`)
   }
 
-  linhas.push('Use estes dados na qualificação das partes. Para dados não fornecidos, use [PREENCHER].')
+  linhas.push('')
+  linhas.push('**OBRIGATÓRIO:** Use EXATAMENTE os dados acima na qualificação das partes. NÃO use [PREENCHER] para dados que foram fornecidos aqui. Copie nome, CPF, RG, endereço, cidade, estado e demais dados LITERALMENTE como informados acima. Use [PREENCHER] APENAS para campos que NÃO aparecem na lista acima.')
   return linhas.join('\n')
 }
 
