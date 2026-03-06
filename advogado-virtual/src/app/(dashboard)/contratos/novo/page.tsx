@@ -7,7 +7,13 @@ import { ChevronLeft } from 'lucide-react'
 
 export const metadata = { title: 'Novo Contrato de Honorários' }
 
-export default async function NovoContratoPage() {
+export default async function NovoContratoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cliente_id?: string }>
+}) {
+  const { cliente_id } = await searchParams
+
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -15,11 +21,23 @@ export default async function NovoContratoPage() {
 
   const { data: usuario } = await supabase
     .from('users')
-    .select('nome, role')
+    .select('nome, role, tenant_id')
     .eq('auth_user_id', user.id)
     .single()
 
   if (!usuario) redirect('/login')
+
+  // Se veio do dossiê do cliente, buscar nome para pré-preencher
+  let clienteInicial: { id: string; nome: string } | undefined
+  if (cliente_id) {
+    const { data: cli } = await supabase
+      .from('clientes')
+      .select('id, nome')
+      .eq('id', cliente_id)
+      .eq('tenant_id', usuario.tenant_id)
+      .single()
+    if (cli) clienteInicial = { id: cli.id, nome: cli.nome }
+  }
 
   return (
     <>
@@ -40,7 +58,7 @@ export default async function NovoContratoPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-3xl">
-          <ContratoFormClient role={usuario.role} />
+          <ContratoFormClient role={usuario.role} clienteInicial={clienteInicial} />
         </div>
       </main>
     </>
