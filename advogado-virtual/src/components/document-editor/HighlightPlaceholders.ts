@@ -2,7 +2,7 @@ import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 
-const PLACEHOLDER_REGEX = /\[(PREENCHER|VERIFICAR)(?::\s*[^\]]+)?\]/g
+const PLACEHOLDER_REGEX = /\[(PREENCHER|VERIFICAR)(?:[:\s]\s*[^\]]+)?\]/g
 
 /**
  * TipTap extension that highlights [PREENCHER] and [VERIFICAR] placeholders
