@@ -33,12 +33,19 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Rotas públicas (não precisam de auth)
-  const rotasPublicas = ['/login', '/registro', '/esqueci-senha', '/definir-senha', '/auth/callback']
+  const rotasPublicas = ['/login', '/registro', '/esqueci-senha', '/definir-senha', '/auth/callback', '/api/contato']
   const isRotaPublica = rotasPublicas.some(r => pathname.startsWith(r))
   const isRaiz = pathname === '/'
 
-  // Redireciona para login se não autenticado
-  if (!user && !isRotaPublica) {
+  // Landing page (/) é pública — mas redireciona para dashboard se autenticado
+  if (isRaiz && user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // Redireciona para login se não autenticado em rota protegida
+  if (!user && !isRotaPublica && !isRaiz) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
@@ -46,13 +53,6 @@ export async function updateSession(request: NextRequest) {
 
   // Redireciona para dashboard se autenticado tentando acessar login/registro
   if (user && isRotaPublica) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
-  }
-
-  // Redireciona raiz para dashboard
-  if (user && isRaiz) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

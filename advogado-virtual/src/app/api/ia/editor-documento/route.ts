@@ -58,9 +58,13 @@ ${documento_completo ?? contexto_documento ?? '(documento vazio)'}
 INSTRUÇÃO DO ADVOGADO:
 ${instrucao}
 
-Execute a instrução solicitada. Retorne APENAS o conteúdo Markdown resultante (a seção nova ou modificada), sem explicações.
-Se a instrução pedir para adicionar conteúdo, gere a nova seção com heading (##) apropriado.
-Se a instrução pedir para modificar algo existente, retorne a versão corrigida da seção afetada.`
+REGRAS IMPORTANTES:
+- Retorne SEMPRE o documento COMPLETO com a modificação aplicada, não apenas a parte alterada.
+- Mantenha TODO o conteúdo original que não foi afetado pela instrução.
+- Aplique SOMENTE as alterações solicitadas na instrução.
+- Não adicione explicações, comentários ou notas — retorne apenas o Markdown do documento modificado.
+- Se a instrução pedir para adicionar conteúdo novo, inclua-o na posição mais adequada dentro do documento.
+- Se a instrução pedir mudanças de formatação (espaçamento, numeração, negrito, etc.), aplique em todo o documento conforme solicitado.`
     } else {
       // gerar_topico
       if (!descricao) return NextResponse.json({ error: 'descricao é obrigatória para gerar_topico' }, { status: 400 })

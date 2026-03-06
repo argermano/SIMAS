@@ -23,7 +23,7 @@ export async function GET(
 
   const { data: atendimento, error } = await supabase
     .from('atendimentos')
-    .select('*, clientes(id, nome), documentos(*), analises(id, plano_a, resumo_fatos, status, created_at)')
+    .select('*, clientes(id, nome), documentos(*), analises(id, plano_a, resumo_fatos, status, created_at), pecas(id, tipo, area, versao, status, created_at)')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -32,7 +32,14 @@ export async function GET(
     return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
   }
 
-  return NextResponse.json({ atendimento })
+  // Fetch contratos linked to this atendimento
+  const { data: contratos } = await supabase
+    .from('contratos_honorarios')
+    .select('id, titulo, status, area, created_at')
+    .eq('atendimento_id', id)
+    .order('created_at', { ascending: false })
+
+  return NextResponse.json({ atendimento, contratos: contratos ?? [] })
 }
 
 const schemaUpdate = z.object({

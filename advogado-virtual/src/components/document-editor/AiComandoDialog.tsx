@@ -83,7 +83,7 @@ export function AiComandoDialog({
       open={open}
       onClose={handleClose}
       title="Comando IA"
-      description="Digite uma instrução para a IA modificar ou complementar o documento."
+      description="Digite uma instrução para a IA modificar, formatar ou complementar o documento."
       size="lg"
       footer={
         <>
@@ -109,7 +109,7 @@ export function AiComandoDialog({
               className="gap-1.5"
             >
               <Check className="h-4 w-4" />
-              Aceitar e inserir
+              Aceitar e aplicar
             </Button>
           )}
         </>
@@ -124,7 +124,7 @@ export function AiComandoDialog({
           <textarea
             value={instrucao}
             onChange={(e) => setInstrucao(e.target.value)}
-            placeholder="Ex: Adicione uma seção sobre danos morais com fundamentação no art. 186 do CC..."
+            placeholder="Ex: Adicione espaço de parágrafo no texto / Remova a numeração dos tópicos / Adicione uma seção sobre danos morais..."
             rows={3}
             className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm resize-none outline-none focus:ring-1 focus:ring-primary/40"
             onKeyDown={(e) => {

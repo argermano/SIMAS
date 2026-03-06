@@ -21,6 +21,7 @@ import { EditorToolbar } from './EditorToolbar'
 import { TopicSidebar } from './TopicSidebar'
 import { PreencherSidebar } from './PreencherSidebar'
 import { AiComandoDialog } from './AiComandoDialog'
+import { JurisprudenciaDialog } from './JurisprudenciaDialog'
 import { useToast } from '@/components/ui/toast'
 
 interface DocumentEditorProps {
@@ -39,6 +40,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
   const [baixando, setBaixando]       = useState(false)
   const [comandoIaOpen, setComandoIaOpen] = useState(false)
+  const [jurisprudenciaOpen, setJurisprudenciaOpen] = useState(false)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -122,6 +124,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         salvando={salvando}
         extraAcoes={extraAcoes}
         onComandoIa={() => setComandoIaOpen(true)}
+        onBuscarJurisprudencia={() => setJurisprudenciaOpen(true)}
       />
 
       {/* Toolbar */}
@@ -162,17 +165,29 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         />
       </div>
 
+      {/* Dialog de busca de jurisprudência */}
+      <JurisprudenciaDialog
+        open={jurisprudenciaOpen}
+        onClose={() => setJurisprudenciaOpen(false)}
+        onInserir={(texto) => {
+          if (editor) {
+            editor.chain().focus().insertContentAt(
+              editor.state.doc.content.size,
+              texto
+            ).run()
+          }
+        }}
+      />
+
       {/* Dialog de comando IA livre */}
       <AiComandoDialog
         open={comandoIaOpen}
         onClose={() => setComandoIaOpen(false)}
         documentoMarkdown={getMarkdown()}
-        onAceitar={(conteudo) => {
+        onAceitar={(novoConteudo) => {
           if (editor) {
-            editor.chain().focus().insertContentAt(
-              editor.state.doc.content.size,
-              `\n\n${conteudo}`
-            ).run()
+            // Replace entire document content with the AI-modified version
+            editor.commands.setContent(novoConteudo)
           }
         }}
       />

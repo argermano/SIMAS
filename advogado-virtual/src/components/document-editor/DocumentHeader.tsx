@@ -16,6 +16,7 @@ interface DocumentHeaderProps {
   salvando?: boolean
   extraAcoes?: ReactNode
   onComandoIa?: () => void
+  onBuscarJurisprudencia?: () => void
 }
 
 export function DocumentHeader({
@@ -29,6 +30,7 @@ export function DocumentHeader({
   salvando,
   extraAcoes,
   onComandoIa,
+  onBuscarJurisprudencia,
 }: DocumentHeaderProps) {
   const [salvo, setSalvo] = useState(false)
 
@@ -94,15 +96,17 @@ export function DocumentHeader({
           IA
         </button>
 
-        {/* Buscar Jurisprudência — placeholder */}
-        <button
-          className="hidden sm:flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
-          title="Em breve"
-          disabled
-        >
-          <Search className="h-3.5 w-3.5" />
-          Buscar Jurisprudência
-        </button>
+        {/* Buscar Jurisprudência */}
+        {onBuscarJurisprudencia && (
+          <button
+            onClick={onBuscarJurisprudencia}
+            className="hidden sm:flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+            title="Buscar jurisprudência no DataJud (CNJ)"
+          >
+            <Search className="h-3.5 w-3.5" />
+            Buscar Jurisprudência
+          </button>
+        )}
 
         {/* Copiar */}
         <button
