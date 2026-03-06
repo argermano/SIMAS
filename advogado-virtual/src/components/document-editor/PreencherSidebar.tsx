@@ -21,6 +21,9 @@ interface PreencherSidebarProps {
 
 const PREENCHER_REGEX = /\[PREENCHER(?:[:\s]\s*([^\]]+))?\]/g
 const VERIFICAR_REGEX = /\[VERIFICAR(?:[:\s]\s*([^\]]+))?\]/g
+// Matches generic bracket placeholders like [Xª], [número], [nome do juiz], etc.
+// Excludes PREENCHER/VERIFICAR (handled above) and pure numbers like [1], [2]
+const GENERICO_REGEX = /\[(?!PREENCHER|VERIFICAR)([^\]\n]{1,50})\]/g
 
 /**
  * Extracts a meaningful label from the block text before a placeholder.
@@ -81,13 +84,16 @@ function detectarCampos(editor: Editor): CampoPreencher[] {
 
     // Get full text of the block (across all formatted spans)
     const blocoTexto = textoDoBloco(node)
-    if (!blocoTexto.includes('[PREENCHER') && !blocoTexto.includes('[VERIFICAR')) return
+    if (!blocoTexto.includes('[')) return
 
     PREENCHER_REGEX.lastIndex = 0
     let match: RegExpExecArray | null
+    const matchedRanges: Array<[number, number]> = []
+
     while ((match = PREENCHER_REGEX.exec(blocoTexto)) !== null) {
       const descricao = match[1]?.trim().replace(/^[-–—]\s*/, '')
       const textoAntes = blocoTexto.substring(0, match.index)
+      matchedRanges.push([match.index, match.index + match[0].length])
       campos.push({
         id: `preencher-${idx}`,
         fullMatch: match[0],
@@ -102,10 +108,34 @@ function detectarCampos(editor: Editor): CampoPreencher[] {
     while ((match = VERIFICAR_REGEX.exec(blocoTexto)) !== null) {
       const descricao = match[1]?.trim().replace(/^[-–—]\s*/, '')
       const textoAntes = blocoTexto.substring(0, match.index)
+      matchedRanges.push([match.index, match.index + match[0].length])
       campos.push({
         id: `verificar-${idx}`,
         fullMatch: match[0],
         label: descricao || extrairLabel(textoAntes) || 'Verificar',
+        contexto: 'verificar',
+        index: idx,
+      })
+      idx++
+    }
+
+    // Detect generic bracket placeholders like [Xª], [número], [nome do juiz]
+    GENERICO_REGEX.lastIndex = 0
+    while ((match = GENERICO_REGEX.exec(blocoTexto)) !== null) {
+      // Skip if already matched by PREENCHER/VERIFICAR
+      const start = match.index
+      const end = start + match[0].length
+      if (matchedRanges.some(([s, e]) => start >= s && end <= e)) continue
+
+      const inner = match[1].trim()
+      // Skip pure numbers like [1], [2] (footnote-like references)
+      if (/^\d+$/.test(inner)) continue
+
+      const textoAntes = blocoTexto.substring(0, match.index)
+      campos.push({
+        id: `verificar-${idx}`,
+        fullMatch: match[0],
+        label: inner || extrairLabel(textoAntes) || 'Ajustar',
         contexto: 'verificar',
         index: idx,
       })

@@ -3,34 +3,26 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Scale, Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Scale, Phone, User, Mail, Loader2, CheckCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 
 export default function LoginPage() {
   const router = useRouter()
   const { error: toastError } = useToast()
 
-  const [email, setEmail]         = useState('')
-  const [senha, setSenha]         = useState('')
-  const [verSenha, setVerSenha]   = useState(false)
-  const [loading, setLoading]     = useState(false)
-  const [erros, setErros]         = useState<{ email?: string; senha?: string }>({})
+  const [email, setEmail]       = useState('')
+  const [senha, setSenha]       = useState('')
+  const [loading, setLoading]   = useState(false)
 
-  function validar(): boolean {
-    const novos: typeof erros = {}
-    if (!email.trim())   novos.email = 'Informe seu e-mail'
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) novos.email = 'E-mail inválido'
-    if (!senha)          novos.senha = 'Informe sua senha'
-    setErros(novos)
-    return Object.keys(novos).length === 0
-  }
+  const [mostrarContato, setMostrarContato]   = useState(false)
+  const [contato, setContato]                 = useState({ nome: '', email: '', telefone: '' })
+  const [enviandoContato, setEnviandoContato] = useState(false)
+  const [contatoEnviado, setContatoEnviado]   = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!validar()) return
+    if (!email.trim() || !senha) return
 
     setLoading(true)
     try {
@@ -53,89 +45,182 @@ export default function LoginPage() {
     }
   }
 
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary to-primary/90 p-4">
-      <div className="w-full max-w-md">
+  async function handleContato() {
+    if (!contato.nome.trim() || !contato.email.trim()) return
+    setEnviandoContato(true)
+    try {
+      const res = await fetch('/api/contato', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contato),
+      })
+      if (res.ok) {
+        setContatoEnviado(true)
+      } else {
+        toastError('Erro', 'Não foi possível enviar. Tente novamente.')
+      }
+    } catch {
+      toastError('Erro', 'Falha de rede. Tente novamente.')
+    } finally {
+      setEnviandoContato(false)
+    }
+  }
 
+  const inputClass =
+    'w-full rounded-full border-2 border-border bg-background px-5 py-3 text-base text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50 transition-colors disabled:opacity-50'
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-card px-8 py-10 shadow-lg">
         {/* Logo */}
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-card shadow-lg">
-            <Scale className="h-9 w-9 text-primary" />
+        <div className="mb-10 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2.5">
+            <Scale className="h-10 w-10 text-primary" />
+            <span className="font-heading text-4xl font-extrabold tracking-tight text-foreground">
+              SIMAS
+            </span>
           </div>
-          <h1 className="text-3xl font-bold text-white">SIMAS</h1>
-          <p className="mt-1 text-primary/20">Sistema jurídico inteligente</p>
         </div>
 
-        {/* Card de login */}
-        <div className="rounded-2xl bg-card p-8 shadow-xl">
-          <h2 className="mb-6 text-2xl font-semibold text-foreground">Entrar no sistema</h2>
+        {!mostrarContato ? (
+          <>
+            {/* Login form */}
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Digite seu email"
+                autoComplete="email"
+                autoFocus
+                disabled={loading}
+                className={inputClass}
+              />
 
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-            <Input
-              label="E-mail"
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              error={erros.email}
-              placeholder="seu@email.com.br"
-              autoComplete="email"
-              autoFocus
-              leftIcon={<Mail className="h-5 w-5" />}
-              disabled={loading}
-            />
-
-            <div>
-              <Input
-                label="Senha"
-                type={verSenha ? 'text' : 'password'}
+              <input
+                type="password"
                 value={senha}
                 onChange={e => setSenha(e.target.value)}
-                error={erros.senha}
-                placeholder="••••••••"
+                placeholder="Digite sua senha"
                 autoComplete="current-password"
                 disabled={loading}
-                leftIcon={<Lock className="h-5 w-5" />}
+                className={inputClass}
               />
-              <button
-                type="button"
-                onClick={() => setVerSenha(v => !v)}
-                className="mt-1.5 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-                tabIndex={-1}
-              >
-                {verSenha ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                {verSenha ? 'Ocultar' : 'Mostrar'} senha
-              </button>
-            </div>
 
-            <div className="flex justify-end -mt-1">
+              <button
+                type="submit"
+                disabled={loading || !email.trim() || !senha}
+                className="w-full rounded-full bg-primary py-3.5 text-base font-bold uppercase tracking-wide text-primary-foreground shadow-md transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                ENTRAR
+              </button>
+            </form>
+
+            {/* Links */}
+            <div className="mt-6 flex flex-col items-center gap-4">
               <Link
                 href="/esqueci-senha"
-                className="text-sm text-primary hover:underline"
+                className="font-heading text-sm font-bold text-primary hover:underline"
               >
-                Esqueci minha senha
+                ESQUECEU SUA SENHA?
               </Link>
+
+              <button
+                type="button"
+                onClick={() => { setMostrarContato(true); setContatoEnviado(false) }}
+                className="font-heading text-sm font-bold text-primary hover:underline"
+              >
+                ENTRE EM CONTATO
+              </button>
+
+              <p className="mt-2 text-center text-xs leading-relaxed text-muted-foreground">
+                Acesso somente por convite do administrador.<br />
+                Ao entrar você concorda com os Termos de Uso e a Política de Privacidade do SIMAS.
+              </p>
             </div>
+          </>
+        ) : (
+          <>
+            {!contatoEnviado ? (
+              <div className="space-y-4">
+                <p className="text-center text-sm text-muted-foreground mb-2">
+                  Preencha seus dados e entraremos em contato.
+                </p>
 
-            <Button
-              type="submit"
-              size="lg"
-              loading={loading}
-              className="w-full mt-2"
-            >
-              Entrar
-            </Button>
-          </form>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-muted-foreground/50" />
+                  <input
+                    type="text"
+                    placeholder="Seu nome"
+                    value={contato.nome}
+                    onChange={e => setContato(p => ({ ...p, nome: e.target.value }))}
+                    disabled={enviandoContato}
+                    className={`${inputClass} pl-11`}
+                    autoFocus
+                  />
+                </div>
 
-          <div className="mt-6 flex flex-col items-center gap-3 border-t border-border pt-5 text-sm">
-            <p className="text-muted-foreground">
-              Acesso somente por convite do administrador.
-            </p>
-          </div>
-        </div>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-muted-foreground/50" />
+                  <input
+                    type="email"
+                    placeholder="Seu e-mail"
+                    value={contato.email}
+                    onChange={e => setContato(p => ({ ...p, email: e.target.value }))}
+                    disabled={enviandoContato}
+                    className={`${inputClass} pl-11`}
+                  />
+                </div>
 
-        <p className="mt-6 text-center text-xs text-primary/30">
-          © {new Date().getFullYear()} SIMAS · Dados protegidos pela LGPD
-        </p>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-muted-foreground/50" />
+                  <input
+                    type="tel"
+                    placeholder="Telefone (opcional)"
+                    value={contato.telefone}
+                    onChange={e => setContato(p => ({ ...p, telefone: e.target.value }))}
+                    disabled={enviandoContato}
+                    className={`${inputClass} pl-11`}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleContato}
+                  disabled={enviandoContato || !contato.nome.trim() || !contato.email.trim()}
+                  className="w-full rounded-full bg-primary py-3.5 text-base font-bold uppercase tracking-wide text-primary-foreground shadow-md transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {enviandoContato && <Loader2 className="h-4 w-4 animate-spin" />}
+                  ENVIAR
+                </button>
+
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarContato(false)}
+                    className="font-heading text-sm font-bold text-primary hover:underline"
+                  >
+                    Voltar ao login
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <CheckCircle className="h-12 w-12 text-emerald-500 mx-auto mb-3" />
+                <p className="text-base font-semibold text-foreground">Mensagem enviada!</p>
+                <p className="text-sm text-muted-foreground mt-1">Entraremos em contato em breve.</p>
+                <button
+                  type="button"
+                  onClick={() => { setMostrarContato(false); setContatoEnviado(false) }}
+                  className="mt-6 text-sm font-semibold uppercase tracking-wide text-primary hover:underline"
+                >
+                  Voltar ao login
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </main>
   )
