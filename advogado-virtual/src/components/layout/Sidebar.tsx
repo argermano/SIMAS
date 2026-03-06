@@ -118,8 +118,8 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
               className="flex-1 min-w-0"
             >
               <p className="truncate text-base font-bold text-white font-heading">SIMAS</p>
-              <p className="text-[11px] tracking-wider text-sidebar-muted leading-tight">Sistema Inteligente Multijurídico para Advocacia e Serviços</p>
-              <p className="mt-2 text-[11px] font-medium text-white/90 leading-tight">{nomeEscritorio}</p>
+              <p className="text-[11px] tracking-wider text-sidebar-muted leading-tight">Solução de IA para Maximizar a produtividade de Advogados com Segurança</p>
+              <p className="mt-2 text-[11px] font-medium text-blue-300/80 leading-tight">{nomeEscritorio}</p>
             </motion.div>
           )}
         </AnimatePresence>
