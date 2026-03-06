@@ -29,6 +29,8 @@ const PRAZO_OPTIONS = [
 
 export function EditorPecaClient({
   pecaId,
+  atendimentoId,
+  area,
   tipo,
   tipoNome,
   conteudoInicial,
@@ -141,7 +143,7 @@ export function EditorPecaClient({
     <DocumentEditor
       titulo={tipoNome ?? tipo}
       conteudo={conteudoInicial}
-      onVoltar={() => router.back()}
+      onVoltar={() => router.push(`/${area}/pecas/${tipo}?id=${atendimentoId}`)}
       onSalvar={handleSalvar}
       salvando={salvando}
       extraAcoes={botaoRevisao}
