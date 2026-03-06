@@ -256,6 +256,20 @@
   pointer-events: none;
 }
 
+/* Destaque de campos [PREENCHER] e [VERIFICAR] */
+.ProseMirror .placeholder-preencher {
+  background-color: rgba(234, 179, 8, 0.25);
+  border-bottom: 2px solid rgb(234, 179, 8);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.ProseMirror .placeholder-verificar {
+  background-color: rgba(251, 146, 60, 0.25);
+  border-bottom: 2px solid rgb(251, 146, 60);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
 /* ─────────────────────────────────────────────────────────────
    Animações e Utilitários
    ───────────────────────────────────────────────────────────── */

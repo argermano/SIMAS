@@ -15,6 +15,7 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import FontFamily from '@tiptap/extension-font-family'
 import { Markdown } from 'tiptap-markdown'
 
+import { HighlightPlaceholders } from './HighlightPlaceholders'
 import { DocumentHeader } from './DocumentHeader'
 import { EditorToolbar } from './EditorToolbar'
 import { TopicSidebar } from './TopicSidebar'
@@ -58,6 +59,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         transformCopiedText: true,
         transformPastedText: true,
       }),
+      HighlightPlaceholders,
     ],
     content: conteudo,
   })
