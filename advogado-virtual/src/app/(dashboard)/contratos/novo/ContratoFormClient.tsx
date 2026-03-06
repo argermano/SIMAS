@@ -55,12 +55,13 @@ interface TemplateContrato {
 
 interface ContratoFormClientProps {
   role: string
+  clienteInicial?: { id: string; nome: string }
 }
 
-export function ContratoFormClient({ role: _role }: ContratoFormClientProps) {
+export function ContratoFormClient({ role: _role, clienteInicial }: ContratoFormClientProps) {
   const { success, error: toastError } = useToast()
 
-  const [cliente,           setCliente]           = useState<{ id: string; nome: string } | null>(null)
+  const [cliente,           setCliente]           = useState<{ id: string; nome: string } | null>(clienteInicial ?? null)
   const [atendimentoId,     setAtendimentoId]     = useState<string>('')
   const [atendimentos,      setAtendimentos]      = useState<AtendimentoOpcao[]>([])
   const [carregandoAts,     setCarregandoAts]     = useState(false)
