@@ -19,46 +19,75 @@ interface PreencherSidebarProps {
   onToggleCollapse: () => void
 }
 
-const PREENCHER_REGEX = /\[PREENCHER(?::\s*([^\]]+))?\]/g
-const VERIFICAR_REGEX = /\[VERIFICAR(?::\s*([^\]]+))?\]/g
+const PREENCHER_REGEX = /\[PREENCHER(?:[:\s]\s*([^\]]+))?\]/g
+const VERIFICAR_REGEX = /\[VERIFICAR(?:[:\s]\s*([^\]]+))?\]/g
 
 /**
- * Extracts a short label from the text immediately before a placeholder
- * within a single text node line.
+ * Extracts a meaningful label from the block text before a placeholder.
+ * Uses the full paragraph text (across formatting nodes) for context.
  */
 function extrairLabel(textoAntes: string): string {
-  // Trim and take only the last 60 chars
-  const trecho = textoAntes.trimEnd().slice(-60)
+  // Clean up and take last 80 chars
+  const trecho = textoAntes.replace(/\s+/g, ' ').trimEnd().slice(-80)
 
-  // Try patterns like "RG nº", "CPF", "portador do RG"
-  const m = trecho.match(/(?:(?:do|da|de|dos|das)\s+)?([A-ZÁÉÍÓÚÇÃÕÂÊÎÔÛ][\w/.\-]+(?:\s+[\w/.\-]+)?)(?:\s+(?:nº|n[°º.]?|número|:))?\s*$/i)
-  if (m?.[1]) {
-    const label = m[1].trim()
+  // Pattern 1: "Nome do Cliente:", "CPF nº", "RG n.", "Endereço:"
+  const m1 = trecho.match(/([A-ZÁÉÍÓÚÇÃÕÂÊÎÔÛ][\w\s/.\-]{2,40}?)(?:\s*(?:nº|n[°º.]?|número))?\s*:?\s*$/i)
+  if (m1?.[1]) {
+    const label = m1[1].trim()
     if (label.length >= 2 && label.length < 50) return label
   }
 
-  // Fallback: last 2-3 meaningful words
-  const palavras = trecho.split(/\s+/).filter(p => p.length > 2).slice(-3)
+  // Pattern 2: "portador(a) do CPF", "inscrito no CNPJ", "residente na Rua"
+  const m2 = trecho.match(/(?:portador[a]?\s+d[eo]|inscrit[oa]\s+n[oa]|residente\s+n[ao]|com\s+sede\s+n[ao]|lotad[oa]\s+n[ao])\s+(.{2,30})\s*$/i)
+  if (m2?.[1]) return m2[1].trim()
+
+  // Pattern 3: last meaningful phrase before placeholder (words after last punctuation)
+  const m3 = trecho.match(/[,;.]\s+(.{3,40})\s*$/)
+  if (m3?.[1]) {
+    const palavras = m3[1].trim().split(/\s+/).filter(p => p.length > 2)
+    if (palavras.length > 0 && palavras.length <= 5) return palavras.join(' ')
+  }
+
+  // Fallback: last 2-4 meaningful words
+  const palavras = trecho.split(/\s+/).filter(p => p.length > 2).slice(-4)
   if (palavras.length > 0) return palavras.join(' ')
 
   return 'Campo'
+}
+
+/**
+ * Collects all text content from a block node (paragraph, heading, etc.)
+ * by concatenating all text children, regardless of formatting marks.
+ */
+function textoDoBloco(node: { isText: boolean; text?: string | null; childCount: number; child: (i: number) => { isText: boolean; text?: string | null; childCount: number; child: (i: number) => unknown } }): string {
+  if (node.isText) return node.text ?? ''
+  let result = ''
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i)
+    if (child.isText) result += child.text ?? ''
+  }
+  return result
 }
 
 function detectarCampos(editor: Editor): CampoPreencher[] {
   const campos: CampoPreencher[] = []
   let idx = 0
 
-  // Walk ProseMirror document nodes to find placeholders with local context
+  // Walk block-level nodes (paragraphs, headings, list items, etc.)
   editor.state.doc.descendants((node) => {
-    if (!node.isText || !node.text) return
+    // Only process block nodes that have inline content
+    if (!node.isBlock || node.isAtom) return
+    if (node.childCount === 0) return
 
-    const text = node.text
+    // Get full text of the block (across all formatted spans)
+    const blocoTexto = textoDoBloco(node)
+    if (!blocoTexto.includes('[PREENCHER') && !blocoTexto.includes('[VERIFICAR')) return
 
     PREENCHER_REGEX.lastIndex = 0
     let match: RegExpExecArray | null
-    while ((match = PREENCHER_REGEX.exec(text)) !== null) {
+    while ((match = PREENCHER_REGEX.exec(blocoTexto)) !== null) {
       const descricao = match[1]?.trim()
-      const textoAntes = text.substring(0, match.index)
+      const textoAntes = blocoTexto.substring(0, match.index)
       campos.push({
         id: `preencher-${idx}`,
         fullMatch: match[0],
@@ -70,9 +99,9 @@ function detectarCampos(editor: Editor): CampoPreencher[] {
     }
 
     VERIFICAR_REGEX.lastIndex = 0
-    while ((match = VERIFICAR_REGEX.exec(text)) !== null) {
+    while ((match = VERIFICAR_REGEX.exec(blocoTexto)) !== null) {
       const descricao = match[1]?.trim()
-      const textoAntes = text.substring(0, match.index)
+      const textoAntes = blocoTexto.substring(0, match.index)
       campos.push({
         id: `verificar-${idx}`,
         fullMatch: match[0],
@@ -82,6 +111,9 @@ function detectarCampos(editor: Editor): CampoPreencher[] {
       })
       idx++
     }
+
+    // Don't recurse into children — we already processed the full block text
+    return false
   })
 
   return campos
