@@ -86,7 +86,7 @@ function detectarCampos(editor: Editor): CampoPreencher[] {
     PREENCHER_REGEX.lastIndex = 0
     let match: RegExpExecArray | null
     while ((match = PREENCHER_REGEX.exec(blocoTexto)) !== null) {
-      const descricao = match[1]?.trim()
+      const descricao = match[1]?.trim().replace(/^[-–—]\s*/, '')
       const textoAntes = blocoTexto.substring(0, match.index)
       campos.push({
         id: `preencher-${idx}`,
@@ -100,7 +100,7 @@ function detectarCampos(editor: Editor): CampoPreencher[] {
 
     VERIFICAR_REGEX.lastIndex = 0
     while ((match = VERIFICAR_REGEX.exec(blocoTexto)) !== null) {
-      const descricao = match[1]?.trim()
+      const descricao = match[1]?.trim().replace(/^[-–—]\s*/, '')
       const textoAntes = blocoTexto.substring(0, match.index)
       campos.push({
         id: `verificar-${idx}`,
