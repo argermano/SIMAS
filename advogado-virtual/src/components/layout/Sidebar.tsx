@@ -136,19 +136,8 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
         </button>
       </div>
 
-      {/* Label MENU */}
-      <AnimatePresence>
-        {!isCollapsed && (
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="px-5 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-wider text-sidebar-muted"
-          >
-            Menu
-          </motion.p>
-        )}
-      </AnimatePresence>
+      {/* Espaçamento antes da navegação */}
+      {!isCollapsed && <div className="pt-4" />}
 
       {/* Navegação */}
       <nav className="flex-1 overflow-y-auto px-3 py-1" aria-label="Menu principal">
