@@ -33,20 +33,23 @@ export async function POST(req: NextRequest) {
     if (process.env.RESEND_API_KEY) {
       try {
         const { Resend } = await import('resend')
+        const { emailTemplate } = await import('@/lib/email')
         const resend = new Resend(process.env.RESEND_API_KEY)
         await resend.emails.send({
           from: 'SIMAS <contato@simas.app>',
           to: 'argermano@gmail.com',
           subject: `Novo contato SIMAS — ${nome.trim()}`,
-          html: `
-            <h2>Novo contato via SIMAS</h2>
-            <table style="border-collapse:collapse;font-family:sans-serif;">
-              <tr><td style="padding:6px 12px;font-weight:bold;">Nome</td><td style="padding:6px 12px;">${nome.trim()}</td></tr>
-              <tr><td style="padding:6px 12px;font-weight:bold;">E-mail</td><td style="padding:6px 12px;">${email.trim()}</td></tr>
-              <tr><td style="padding:6px 12px;font-weight:bold;">Telefone</td><td style="padding:6px 12px;">${telefone?.trim() || '—'}</td></tr>
-            </table>
-            <p style="margin-top:16px;color:#666;font-size:13px;">Enviado via formulário de contato da página de login.</p>
-          `,
+          html: emailTemplate({
+            titulo: 'Novo contato via landing page',
+            conteudo: `
+              <table style="border-collapse:collapse;width:100%;">
+                <tr><td style="padding:8px 12px;font-weight:600;color:#1e293b;width:100px;">Nome</td><td style="padding:8px 12px;color:#475569;">${nome.trim()}</td></tr>
+                <tr style="background:#f8f9fc;"><td style="padding:8px 12px;font-weight:600;color:#1e293b;">E-mail</td><td style="padding:8px 12px;color:#475569;">${email.trim()}</td></tr>
+                <tr><td style="padding:8px 12px;font-weight:600;color:#1e293b;">Telefone</td><td style="padding:8px 12px;color:#475569;">${telefone?.trim() || '—'}</td></tr>
+              </table>
+            `,
+            rodape: 'Enviado via formulário de contato da página de login do SIMAS.',
+          }),
         })
       } catch (mailErr) {
         console.warn('[contato] Email send failed:', mailErr)

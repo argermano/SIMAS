@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { UserPlus, Save, UserX, Star, RefreshCw } from 'lucide-react'
+import { UserPlus, Save, UserX, UserCheck, Star, RefreshCw } from 'lucide-react'
 
 const OPCOES_ROLE = [
   { value: 'admin',       label: 'Administrador'  },
@@ -75,43 +75,62 @@ export function AlterarRole({ usuarioId, roleAtual }: AlterarRoleProps) {
   )
 }
 
-// ─── Desativar usuário ────────────────────────────────────────────────────────
+// ─── Toggle status (ativar/desativar) ─────────────────────────────────────────
 
-interface DesativarUsuarioProps {
+interface ToggleStatusUsuarioProps {
   usuarioId: string
   nomeUsuario: string
+  statusAtual: 'ativo' | 'inativo'
 }
 
-export function DesativarUsuario({ usuarioId, nomeUsuario }: DesativarUsuarioProps) {
+export function ToggleStatusUsuario({ usuarioId, nomeUsuario, statusAtual }: ToggleStatusUsuarioProps) {
   const router = useRouter()
   const { success, error: toastError } = useToast()
-  const [removendo, setRemovendo] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  async function remover() {
-    if (!confirm(`Desativar ${nomeUsuario}? O usuário perderá acesso ao sistema.`)) return
-    setRemovendo(true)
+  const isAtivo = statusAtual === 'ativo'
+
+  async function toggle() {
+    const novoStatus = isAtivo ? 'inativo' : 'ativo'
+    const msg = isAtivo
+      ? `Desativar ${nomeUsuario}? O usuário perderá acesso ao sistema.`
+      : `Reativar ${nomeUsuario}? O usuário voltará a ter acesso ao sistema.`
+    if (!confirm(msg)) return
+
+    setLoading(true)
     try {
-      const res = await fetch(`/api/usuarios/${usuarioId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/usuarios/${usuarioId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ status: novoStatus }),
+      })
       const data = await res.json()
       if (!res.ok) {
-        toastError('Erro', data.error ?? 'Falha ao remover usuário')
+        toastError('Erro', data.error ?? 'Falha ao alterar status')
         return
       }
-      success('Usuário desativado', `${nomeUsuario} foi removido do escritório.`)
+      success(
+        isAtivo ? 'Usuário desativado' : 'Usuário reativado',
+        isAtivo ? `${nomeUsuario} foi desativado.` : `${nomeUsuario} foi reativado.`,
+      )
       router.refresh()
     } finally {
-      setRemovendo(false)
+      setLoading(false)
     }
   }
 
   return (
     <button
-      onClick={remover}
-      disabled={removendo}
-      className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/5 hover:text-destructive transition-colors disabled:opacity-50"
-      title="Desativar usuário"
+      onClick={toggle}
+      disabled={loading}
+      className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
+        isAtivo
+          ? 'text-muted-foreground hover:bg-destructive/5 hover:text-destructive'
+          : 'text-muted-foreground hover:bg-success/5 hover:text-success'
+      }`}
+      title={isAtivo ? 'Desativar usuário' : 'Reativar usuário'}
     >
-      <UserX className="h-4 w-4" />
+      {isAtivo ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
     </button>
   )
 }

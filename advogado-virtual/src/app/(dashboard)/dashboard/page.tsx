@@ -165,8 +165,13 @@ export default async function DashboardPage() {
                   const badge   = BADGE_STATUS[status] ?? BADGE_STATUS.caso_novo
                   const cliente = at.clientes as { nome?: string } | null
                   const area    = at.area as AreaJuridica
+                  const href = at.area === 'geral'
+                    ? `/analise-caso?atendimentoId=${at.id}`
+                    : at.tipo_peca_origem
+                      ? `/${at.area}/pecas/${at.tipo_peca_origem}?id=${at.id}`
+                      : `/${at.area}`
                   return (
-                    <Link key={at.id} href={at.tipo_peca_origem ? `/${at.area}/pecas/${at.tipo_peca_origem}?id=${at.id}` : `/${at.area}`} className="block">
+                    <Link key={at.id} href={href} className="block">
                       <Card className="transition-shadow hover:shadow-card-hover">
                         <CardContent className="flex items-center justify-between gap-4 py-4">
                           <div className="min-w-0">

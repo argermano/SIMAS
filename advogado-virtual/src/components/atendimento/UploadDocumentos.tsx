@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Upload, FileText, X, Loader2, Check, Circle, AlertCircle } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 interface Documento {
   id: string
@@ -27,6 +28,8 @@ interface UploadDocumentosProps {
   documentosIniciais?: Documento[]
 }
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
+
 const LABELS_TIPO: Record<string, string> = {
   cnis: 'CNIS',
   indeferimento: 'Indeferimento',
@@ -48,6 +51,12 @@ const LABELS_TIPO: Record<string, string> = {
   outro: 'Outro',
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export function UploadDocumentos({
   atendimentoId,
   tiposDocumento,
@@ -62,7 +71,6 @@ export function UploadDocumentos({
   const [progresso, setProgresso]     = useState<ArquivoProgresso[]>([])
   const inputRef                       = useRef<HTMLInputElement>(null)
 
-  // Carregar documentos iniciais quando a prop mudar
   useEffect(() => {
     if (documentosIniciais && documentosIniciais.length > 0) {
       setDocumentos(prev => {
@@ -83,47 +91,97 @@ export function UploadDocumentos({
 
     const arquivos = Array.from(files)
 
-    // Inicializar progresso com todos em "aguardando"
+    // Validação de tamanho antes do upload
+    for (const arquivo of arquivos) {
+      if (arquivo.size > MAX_FILE_SIZE) {
+        setErro(`O arquivo "${arquivo.name}" (${formatFileSize(arquivo.size)}) excede o limite de 50 MB`)
+        setEnviando(false)
+        if (inputRef.current) inputRef.current.value = ''
+        return
+      }
+    }
+
     setProgresso(arquivos.map(f => ({ nome: f.name, status: 'aguardando' })))
 
     for (let i = 0; i < arquivos.length; i++) {
       const arquivo = arquivos[i]
 
-      // Marcar como "enviando"
       setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'enviando' } : p))
 
       try {
-        const formData = new FormData()
-        formData.append('arquivo', arquivo)
-        formData.append('tipo', tipoAtual)
-
+        // 1. Solicita signed URL para upload direto ao Supabase Storage
         const res = await fetch(`/api/atendimentos/${atendimentoId}/documentos`, {
           method: 'POST',
-          body: formData,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: arquivo.name,
+            fileType: arquivo.type,
+            fileSize: arquivo.size,
+            tipo: tipoAtual,
+          }),
         })
 
         const data = await res.json()
 
         if (!res.ok) {
-          const msg = data.error ?? 'Erro ao enviar documento'
+          const msg = data.error ?? `Erro ao preparar upload de "${arquivo.name}"`
           setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'erro', erro: msg } : p))
           setErro(msg)
-        } else if (data.documento) {
-          const novoDoc: Documento = data.documento
-          setDocumentos(prev => [...prev, novoDoc])
-          onDocumentoAdicionado?.(novoDoc)
-          setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'concluido' } : p))
+          continue
         }
+
+        // 2. Upload direto ao Supabase Storage via signed URL (contorna limite de 4.5MB do Vercel)
+        const supabase = createClient()
+        const { error: uploadError } = await supabase.storage
+          .from('documentos')
+          .uploadToSignedUrl(data.storagePath, data.uploadToken, arquivo, {
+            contentType: arquivo.type || 'application/octet-stream',
+          })
+
+        if (uploadError) {
+          const msg = `Erro ao enviar "${arquivo.name}": ${uploadError.message}`
+          setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'erro', erro: msg } : p))
+          setErro(msg)
+          continue
+        }
+
+        // 3. Extração de texto em background (não bloqueia o upload)
+        fetch(`/api/atendimentos/${atendimentoId}/documentos`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            documentoId: data.documento.id,
+            storagePath: data.storagePath,
+            fileType: arquivo.type,
+          }),
+        }).then(async (extractRes) => {
+          if (extractRes.ok) {
+            const extractData = await extractRes.json()
+            if (extractData.documento?.texto_extraido) {
+              setDocumentos(prev => prev.map(d =>
+                d.id === data.documento.id
+                  ? { ...d, texto_extraido: extractData.documento.texto_extraido }
+                  : d
+              ))
+            }
+          }
+        }).catch(() => { /* extração falhou silenciosamente */ })
+
+        const novoDoc: Documento = data.documento
+        setDocumentos(prev => [...prev, novoDoc])
+        onDocumentoAdicionado?.(novoDoc)
+        setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'concluido' } : p))
+
       } catch {
-        setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'erro', erro: 'Erro de rede' } : p))
-        setErro('Erro de rede ao enviar documento')
+        const msg = `Erro de rede ao enviar "${arquivo.name}"`
+        setProgresso(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'erro', erro: msg } : p))
+        setErro(msg)
       }
     }
 
     setEnviando(false)
     if (inputRef.current) inputRef.current.value = ''
 
-    // Limpar progresso após 2s
     setTimeout(() => setProgresso([]), 2000)
   }
 
@@ -192,7 +250,7 @@ export function UploadDocumentos({
             <p className="text-sm text-muted-foreground">
               Arraste arquivos aqui ou clique em &ldquo;Enviar arquivo&rdquo;
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">PDF, DOCX, JPG, PNG — máx. 10 MB</p>
+            <p className="mt-1 text-xs text-muted-foreground">PDF, DOCX, JPG, PNG — máx. 50 MB</p>
           </div>
         </div>
       )}
@@ -232,7 +290,7 @@ export function UploadDocumentos({
                 </span>
                 <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
                   {item.status === 'aguardando' && 'Aguardando'}
-                  {item.status === 'enviando' && 'Enviando e extraindo texto...'}
+                  {item.status === 'enviando' && 'Enviando...'}
                   {item.status === 'concluido' && 'Concluído'}
                   {item.status === 'erro' && (item.erro ?? 'Erro')}
                 </span>
