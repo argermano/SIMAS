@@ -9,6 +9,31 @@ const schema = z.object({
   role:  z.enum(['admin', 'advogado', 'colaborador']),
 })
 
+import { emailTemplate } from '@/lib/email'
+
+async function enviarEmailConvite(nome: string, email: string, link: string) {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('[convite] RESEND_API_KEY não configurada — e-mail não enviado')
+    return
+  }
+  const { Resend } = await import('resend')
+  const resend = new Resend(process.env.RESEND_API_KEY)
+  await resend.emails.send({
+    from: 'SIMAS <contato@simas.app>',
+    to: email,
+    subject: 'Convite para acessar o SIMAS',
+    html: emailTemplate({
+      titulo: `Olá, ${nome}!`,
+      conteudo: `
+        <p>Você foi convidado(a) para acessar o <strong>SIMAS</strong> — Sistema de IA para Maximizar a Advocacia de forma Simples.</p>
+        <p>Clique no botão abaixo para criar sua senha e começar a usar o sistema:</p>
+      `,
+      botao: { texto: 'Criar minha senha', url: link },
+      rodape: 'Este link expira em 24 horas. Se você não solicitou este acesso, ignore este e-mail.',
+    }),
+  })
+}
+
 // POST /api/usuarios/convite — convida usuário para o escritório (admin only)
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -51,20 +76,34 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  // Envia e-mail de convite — cria o auth.user e retorna o ID
-  const { data: convite, error: conviteError } = await adminSupabase.auth.admin.inviteUserByEmail(email, {
-    data: { nome },
-    redirectTo: `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/auth/callback?next=/definir-senha`,
+  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+
+  // Gera link de convite sem enviar email (Supabase gera o token, nós enviamos via Resend)
+  const { data: linkData, error: linkError } = await adminSupabase.auth.admin.generateLink({
+    type: 'invite',
+    email,
+    options: {
+      data: { nome },
+      redirectTo: `${baseUrl}/auth/callback?next=/definir-senha`,
+    },
   })
 
-  if (conviteError) {
-    // Se o usuário já existe no auth mas não no tenant, usa o ID existente
-    if (!conviteError.message.includes('already been registered')) {
-      return NextResponse.json({ error: `Erro ao enviar convite: ${conviteError.message}` }, { status: 500 })
+  if (linkError) {
+    if (!linkError.message.includes('already been registered')) {
+      return NextResponse.json({ error: `Erro ao gerar convite: ${linkError.message}` }, { status: 500 })
     }
   }
 
-  const authUserId = convite?.user?.id ?? null
+  const authUserId = linkData?.user?.id ?? null
+
+  // Envia e-mail personalizado via Resend
+  if (linkData?.properties?.action_link) {
+    try {
+      await enviarEmailConvite(nome, email, linkData.properties.action_link)
+    } catch (mailErr) {
+      console.error('[convite] Erro ao enviar e-mail:', mailErr)
+    }
+  }
 
   // Cria o registro na tabela users (vinculado ao tenant do admin)
   const { data: novoUsuario, error: userError } = await adminSupabase

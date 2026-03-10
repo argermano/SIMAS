@@ -52,7 +52,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redireciona para dashboard se autenticado tentando acessar login/registro
-  if (user && isRotaPublica) {
+  // (exceto /definir-senha — usuário precisa acessar mesmo autenticado para definir a senha via convite)
+  if (user && isRotaPublica && !pathname.startsWith('/definir-senha')) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)

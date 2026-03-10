@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Zap, FileText, Brain, ChevronRight } from 'lucide-react'
+import { Zap, FileText, Brain, ChevronRight, RefreshCw } from 'lucide-react'
 import { TIPOS_PECA, MODELOS_PRONTOS } from '@/lib/constants/tipos-peca'
 import type { Area } from '@/lib/constants/areas'
 
@@ -65,6 +65,24 @@ export function PainelArea({ area }: PainelAreaProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Refinamento de Peça */}
+      <Link href={`/${area.id}/refinamento`} className="group block">
+        <div className="flex items-center gap-5 rounded-2xl border-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-6 transition-all hover:border-emerald-400 hover:shadow-md">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-100">
+            <RefreshCw className="h-7 w-7 text-emerald-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-bold text-foreground group-hover:text-emerald-700">
+              Refinamento de Peça
+            </h2>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Envie sua peça e os documentos do cliente — a IA analisa tudo e gera uma versão refinada e melhorada
+            </p>
+          </div>
+          <ChevronRight className="h-5 w-5 shrink-0 text-emerald-400 group-hover:text-emerald-600 transition-colors" />
+        </div>
+      </Link>
 
       {/* Grupo 2: Modelos Prontos */}
       <Card>

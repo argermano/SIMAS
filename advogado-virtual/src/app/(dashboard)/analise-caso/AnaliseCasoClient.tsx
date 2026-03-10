@@ -17,6 +17,7 @@ import {
   Printer, Mail,
 } from 'lucide-react'
 import { AcessoRapidoFooter } from '@/components/acesso-rapido/AcessoRapidoFooter'
+import { ChatDiagnostico } from '@/components/atendimento/ChatDiagnostico'
 
 const COR_URGENCIA: Record<string, string> = {
   alta:  'border-destructive/20 bg-destructive/5 text-destructive',
@@ -534,6 +535,13 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
               </CardContent>
             </Card>
           )}
+
+          {/* Chat com IA sobre o diagnóstico */}
+          <ChatDiagnostico
+            diagnostico={resultado as unknown as Record<string, unknown>}
+            transcricao={textoRelato}
+            pedidoEspecifico={pedido}
+          />
 
           {/* Documentos + Perguntas lado a lado */}
           <div className="grid gap-4 sm:grid-cols-2">

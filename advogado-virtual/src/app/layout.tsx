@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { ToastProvider } from '@/components/ui/toast'
+import { HashTokenHandler } from '@/components/auth/HashTokenHandler'
 
 export const metadata: Metadata = {
   title: {
@@ -24,6 +25,7 @@ export default function RootLayout({
       </head>
       <body>
         <ToastProvider>
+          <HashTokenHandler />
           {children}
         </ToastProvider>
       </body>

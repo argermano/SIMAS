@@ -4,9 +4,9 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
-import { AlterarRole, DesativarUsuario, FormConvite, DefinirPrincipal, ReenviarConvite } from './EquipeClient'
+import { AlterarRole, ToggleStatusUsuario, FormConvite, DefinirPrincipal, ReenviarConvite } from './EquipeClient'
 import { LABELS_ROLE } from '@/types'
-import { Users, UserPlus, Clock, ChevronLeft } from 'lucide-react'
+import { Users, UserPlus, Clock, ChevronLeft, UserX } from 'lucide-react'
 import Link from 'next/link'
 import { formatarDataRelativa } from '@/lib/utils'
 
@@ -35,17 +35,17 @@ export default async function EquipePage() {
   // Apenas administradores acessam esta página
   if (admin.role !== 'admin') redirect('/configuracoes')
 
-  // Todos os usuários ativos do escritório
+  // Todos os usuários do escritório (ativos e inativos)
   const { data: usuarios } = await supabase
     .from('users')
     .select('id, nome, email, role, status, created_at, auth_user_id, is_advogado_principal')
     .eq('tenant_id', admin.tenant_id)
-    .eq('status', 'ativo')
     .order('created_at', { ascending: true })
 
   const listaUsuarios = usuarios ?? []
-  const pendentes     = listaUsuarios.filter(u => !u.auth_user_id)
-  const ativos        = listaUsuarios.filter(u => !!u.auth_user_id)
+  const pendentes     = listaUsuarios.filter(u => u.status === 'ativo' && !u.auth_user_id)
+  const ativos        = listaUsuarios.filter(u => u.status === 'ativo' && !!u.auth_user_id)
+  const inativos      = listaUsuarios.filter(u => u.status === 'inativo')
 
   return (
     <>
@@ -109,7 +109,7 @@ export default async function EquipePage() {
                         </Badge>
                         <span className="text-xs text-warning">Aguardando aceite</span>
                         <ReenviarConvite email={u.email} />
-                        <DesativarUsuario usuarioId={u.id} nomeUsuario={u.nome} />
+                        <ToggleStatusUsuario usuarioId={u.id} nomeUsuario={u.nome} statusAtual="ativo" />
                       </div>
                     </div>
                   ))}
@@ -174,7 +174,8 @@ export default async function EquipePage() {
                           ) : (
                             <>
                               <AlterarRole usuarioId={u.id} roleAtual={u.role} />
-                              <DesativarUsuario usuarioId={u.id} nomeUsuario={u.nome} />
+                              <ReenviarConvite email={u.email} />
+                              <ToggleStatusUsuario usuarioId={u.id} nomeUsuario={u.nome} statusAtual="ativo" />
                             </>
                           )}
                         </div>
@@ -185,6 +186,42 @@ export default async function EquipePage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Membros inativos */}
+          {inativos.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <UserX className="h-4 w-4 text-muted-foreground" />
+                  Membros inativos
+                  <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                    {inativos.length}
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="divide-y">
+                  {inativos.map((u) => (
+                    <div key={u.id} className="flex items-center justify-between py-3 gap-4 opacity-60">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-muted-foreground">
+                          {u.nome.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground">{u.nome}</p>
+                          <p className="text-sm text-muted-foreground truncate">{u.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <Badge variant="secondary" className="text-xs">Inativo</Badge>
+                        <ToggleStatusUsuario usuarioId={u.id} nomeUsuario={u.nome} statusAtual="inativo" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
         </div>
       </main>
