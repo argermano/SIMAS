@@ -2,16 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { writeFile, readFile, unlink, readdir, mkdir } from 'fs/promises'
 
 // Vercel Pro: até 300s
 export const maxDuration = 120
 
 const MAX_AUDIO_SIZE = 500 * 1024 * 1024 // 500 MB
-const GROQ_LIMIT     = 25 * 1024 * 1024  // 25 MB
-const SEGMENT_TIME   = 600                // 10 minutos por chunk
+const CHUNK_SIZE     = 24 * 1024 * 1024   // 24 MB por chunk (limite Groq = 25MB)
 
 // POST — gera signed URL para upload direto ao Supabase Storage
 export async function POST(req: Request) {
@@ -78,7 +74,7 @@ export async function POST(req: Request) {
   })
 }
 
-// PATCH — transcreve áudio já enviado ao Storage (com chunking automático se > 25MB)
+// PATCH — transcreve áudio já enviado ao Storage (com chunking automático se > 24MB)
 export async function PATCH(req: Request) {
   const supabase = await createClient()
 
@@ -123,16 +119,17 @@ export async function PATCH(req: Request) {
 
   const buffer = Buffer.from(await fileData.arrayBuffer())
   const groq = new Groq({ apiKey: groqKey })
+  const ext = storagePath.split('.').pop() || 'mp3'
 
   let transcricao = ''
 
   try {
-    if (buffer.length <= GROQ_LIMIT) {
+    if (buffer.length <= CHUNK_SIZE) {
       // Arquivo cabe em uma única requisição
-      transcricao = await transcreverBuffer(groq, buffer, storagePath)
+      transcricao = await transcreverBuffer(groq, buffer, ext)
     } else {
-      // Arquivo grande: dividir com ffmpeg e transcrever por partes
-      transcricao = await transcreverComChunking(groq, buffer, storagePath)
+      // Arquivo grande: dividir em chunks de ~24MB e transcrever cada um
+      transcricao = await transcreverComChunking(groq, buffer, ext)
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
@@ -171,8 +168,7 @@ export async function PATCH(req: Request) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function transcreverBuffer(groq: Groq, buffer: Buffer, fileName: string): Promise<string> {
-  const ext = fileName.split('.').pop() || 'webm'
+async function transcreverBuffer(groq: Groq, buffer: Buffer, ext: string): Promise<string> {
   const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
   const file = new File([ab], `audio.${ext}`, { type: mimeFromExt(ext) })
 
@@ -188,86 +184,30 @@ async function transcreverBuffer(groq: Groq, buffer: Buffer, fileName: string): 
     : (transcription as { text?: string }).text ?? ''
 }
 
-async function transcreverComChunking(groq: Groq, buffer: Buffer, originalName: string): Promise<string> {
-  const ext = originalName.split('.').pop() || 'mp3'
-  const workDir = join(tmpdir(), `simas_audio_${Date.now()}`)
-  await mkdir(workDir, { recursive: true })
+async function transcreverComChunking(groq: Groq, buffer: Buffer, ext: string): Promise<string> {
+  // Divide o buffer em pedaços de CHUNK_SIZE bytes
+  const totalChunks = Math.ceil(buffer.length / CHUNK_SIZE)
+  const resultados: string[] = []
 
-  const inputPath = join(workDir, `input.${ext}`)
-  await writeFile(inputPath, buffer)
+  // Processa em lotes de 3 para não sobrecarregar a API
+  const BATCH_SIZE = 3
 
-  try {
-    // Usa ffmpeg para dividir em segmentos de 10 min
-    const chunkPaths = await splitWithFfmpeg(inputPath, workDir, ext)
+  for (let i = 0; i < totalChunks; i += BATCH_SIZE) {
+    const batchEnd = Math.min(i + BATCH_SIZE, totalChunks)
+    const batchPromises: Promise<string>[] = []
 
-    if (chunkPaths.length === 0) {
-      // Fallback: tenta transcrever o arquivo inteiro (pode falhar se > 25MB)
-      return await transcreverBuffer(groq, buffer, originalName)
+    for (let j = i; j < batchEnd; j++) {
+      const start = j * CHUNK_SIZE
+      const end = Math.min(start + CHUNK_SIZE, buffer.length)
+      const chunkBuffer = buffer.subarray(start, end)
+      batchPromises.push(transcreverBuffer(groq, Buffer.from(chunkBuffer), ext))
     }
 
-    // Transcreve cada chunk em paralelo (máximo 3 simultâneos)
-    const resultados: string[] = []
-    const BATCH_SIZE = 3
-
-    for (let i = 0; i < chunkPaths.length; i += BATCH_SIZE) {
-      const batch = chunkPaths.slice(i, i + BATCH_SIZE)
-      const batchResults = await Promise.all(
-        batch.map(async (chunkPath) => {
-          const chunkBuffer = await readFile(chunkPath)
-          return transcreverBuffer(groq, chunkBuffer, chunkPath)
-        })
-      )
-      resultados.push(...batchResults)
-    }
-
-    return resultados.filter(Boolean).join('\n')
-  } finally {
-    // Limpa arquivos temporários
-    try {
-      const files = await readdir(workDir)
-      await Promise.all(files.map(f => unlink(join(workDir, f)).catch(() => {})))
-      const { rmdir } = await import('fs/promises')
-      await rmdir(workDir).catch(() => {})
-    } catch { /* silencioso */ }
-  }
-}
-
-async function splitWithFfmpeg(inputPath: string, outputDir: string, ext: string): Promise<string[]> {
-  const ffmpegPath = await getFfmpegPath()
-  if (!ffmpegPath) {
-    throw new Error('ffmpeg não disponível no servidor')
+    const batchResults = await Promise.all(batchPromises)
+    resultados.push(...batchResults)
   }
 
-  const outputPattern = join(outputDir, `chunk_%03d.${ext}`)
-
-  const { execFile } = await import('child_process')
-  const { promisify } = await import('util')
-  const execFileAsync = promisify(execFile)
-
-  await execFileAsync(ffmpegPath, [
-    '-i', inputPath,
-    '-f', 'segment',
-    '-segment_time', String(SEGMENT_TIME),
-    '-c', 'copy',
-    '-y',
-    outputPattern,
-  ], { timeout: 60000 })
-
-  const files = await readdir(outputDir)
-  return files
-    .filter(f => f.startsWith('chunk_'))
-    .sort()
-    .map(f => join(outputDir, f))
-}
-
-async function getFfmpegPath(): Promise<string | null> {
-  try {
-    const ffmpegStatic = await import('ffmpeg-static')
-    const p = (ffmpegStatic as unknown as { default: string }).default ?? ffmpegStatic
-    return typeof p === 'string' ? p : null
-  } catch {
-    return null
-  }
+  return resultados.filter(Boolean).join('\n')
 }
 
 function mimeFromExt(ext: string): string {
