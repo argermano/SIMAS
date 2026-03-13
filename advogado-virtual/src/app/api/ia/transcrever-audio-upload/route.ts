@@ -87,10 +87,11 @@ export async function PATCH(req: Request) {
 
   if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
-  const { storagePath, atendimentoId, transcricaoAcumulada } = await req.json() as {
+  const { storagePath, atendimentoId, transcricaoAcumulada, timeOffset } = await req.json() as {
     storagePath: string
     atendimentoId: string
     transcricaoAcumulada?: string // texto acumulado de chunks anteriores (client envia junto no último)
+    timeOffset?: number // offset em segundos para ajustar timestamps de chunks
   }
 
   if (!storagePath || !atendimentoId) {
@@ -132,12 +133,16 @@ export async function PATCH(req: Request) {
       file,
       model:           'whisper-large-v3',
       language:        'pt',
-      response_format: 'text',
+      response_format: 'verbose_json',
     })
 
-    transcricao = typeof transcription === 'string'
-      ? transcription
-      : (transcription as { text?: string }).text ?? ''
+    // verbose_json retorna segments com timestamps
+    const result = transcription as { text?: string; segments?: Array<{ start: number; end: number; text: string }> }
+    if (result.segments && result.segments.length > 0) {
+      transcricao = formatSegments(result.segments, timeOffset || 0)
+    } else {
+      transcricao = result.text ?? (typeof transcription === 'string' ? transcription : '')
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     return NextResponse.json({ error: `Erro na transcrição: ${message}` }, { status: 500 })
@@ -176,6 +181,47 @@ export async function PATCH(req: Request) {
     .eq('id', atendimentoId)
 
   return NextResponse.json({ transcricao: transcricaoFinal })
+}
+
+function formatTimestamp(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  return h > 0
+    ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    : `${m}:${String(s).padStart(2, '0')}`
+}
+
+function formatSegments(segments: Array<{ start: number; end: number; text: string }>, offset: number = 0): string {
+  const PAUSE_THRESHOLD = 2.0 // segundos de pausa para criar novo parágrafo
+  const lines: string[] = []
+  let currentParagraph = ''
+  let paragraphStart = -1
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i]
+    const text = seg.text.trim()
+    if (!text) continue
+
+    const isNewParagraph = i === 0
+      || (seg.start - segments[i - 1].end > PAUSE_THRESHOLD)
+
+    if (isNewParagraph && currentParagraph) {
+      lines.push(`[${formatTimestamp(paragraphStart + offset)}] ${currentParagraph.trim()}`)
+      currentParagraph = ''
+    }
+
+    if (!currentParagraph) {
+      paragraphStart = seg.start
+    }
+    currentParagraph += ' ' + text
+  }
+
+  if (currentParagraph) {
+    lines.push(`[${formatTimestamp(paragraphStart + offset)}] ${currentParagraph.trim()}`)
+  }
+
+  return lines.join('\n\n')
 }
 
 function mimeFromExt(ext: string): string {

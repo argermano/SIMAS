@@ -130,11 +130,11 @@ export function UploadAudioTranscricao({
   }
 
   // Transcrever um arquivo já no Storage
-  async function transcrever(storagePath: string, transcricaoAcumulada?: string): Promise<string> {
+  async function transcrever(storagePath: string, transcricaoAcumulada?: string, timeOffset?: number): Promise<string> {
     const res = await fetch('/api/ia/transcrever-audio-upload', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ storagePath, atendimentoId, transcricaoAcumulada }),
+      body: JSON.stringify({ storagePath, atendimentoId, transcricaoAcumulada, timeOffset }),
     })
     if (!res.ok) {
       const data = await res.json()
@@ -191,9 +191,11 @@ export function UploadAudioTranscricao({
 
           // No último chunk, envia a transcrição acumulada para salvar tudo junto
           const isLast = i === chunks.length - 1
+          const timeOffset = i * CHUNK_DURATION_S
           const transcricao = await transcrever(
             storagePath,
-            isLast ? transcricaoAcumulada : undefined
+            isLast ? transcricaoAcumulada : undefined,
+            timeOffset
           )
 
           if (isLast) {
