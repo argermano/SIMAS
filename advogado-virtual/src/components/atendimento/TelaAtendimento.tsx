@@ -11,12 +11,13 @@ import { SeletorCliente } from './SeletorCliente'
 import { GravadorAudio } from './GravadorAudio'
 import { MicrofoneInline } from './MicrofoneInline'
 import { PlayerAudio } from './PlayerAudio'
+import { UploadAudioTranscricao } from './UploadAudioTranscricao'
 import { UploadDocumentos } from './UploadDocumentos'
 import { SeletorTribunais } from './SeletorTribunais'
 import { ConfirmarDadosModal } from './ConfirmarDadosModal'
 import type { ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import type { DadosExtraidosAutor, DadosExtraidosReu } from '@/lib/prompts/extracao/dados-cliente'
-import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, Loader2, UserCheck, MapPin, ScrollText, ExternalLink, FileSignature, FilePlus } from 'lucide-react'
+import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, Loader2, UserCheck, MapPin, ScrollText, ExternalLink, FileSignature, FilePlus, Download, ClipboardCopy } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { AcessoRapidoFooter } from '@/components/acesso-rapido/AcessoRapidoFooter'
@@ -35,6 +36,45 @@ const ESTADOS_BR = [
   { value: 'RO', label: 'RO' }, { value: 'RR', label: 'RR' }, { value: 'SC', label: 'SC' },
   { value: 'SP', label: 'SP' }, { value: 'SE', label: 'SE' }, { value: 'TO', label: 'TO' },
 ]
+
+function TranscricaoActions({ texto }: { texto: string }) {
+  const [copiado, setCopiado] = useState(false)
+
+  const copiar = useCallback(async () => {
+    await navigator.clipboard.writeText(texto)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }, [texto])
+
+  const exportar = useCallback(() => {
+    const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `transcricao_${new Date().toISOString().slice(0, 10)}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [texto])
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={copiar}
+        className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        title="Copiar transcrição"
+      >
+        {copiado ? <Check className="h-3.5 w-3.5 text-green-600" /> : <ClipboardCopy className="h-3.5 w-3.5" />}
+      </button>
+      <button
+        onClick={exportar}
+        className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        title="Exportar como .txt"
+      >
+        <Download className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+}
 
 interface TelaAtendimentoProps {
   area: string
@@ -727,14 +767,34 @@ export function TelaAtendimento({
                 disabled={!podeGravar}
                 requerConsentimento={false}
               />
+
+              {/* Separador */}
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">ou</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              {/* Upload de arquivo de áudio */}
+              <UploadAudioTranscricao
+                onTranscricao={handleTranscricao}
+                atendimentoId={atendimentoId}
+                disabled={!podeGravar}
+              />
+
               {transcricao && (
-                <Textarea
-                  label="Transcrição (edite se necessário)"
-                  value={textoRelato}
-                  onChange={(e) => setTextoRelato(e.target.value)}
-                  placeholder="A transcrição aparecerá aqui..."
-                  rows={8}
-                />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-foreground">Transcrição (edite se necessário)</span>
+                    <TranscricaoActions texto={textoRelato} />
+                  </div>
+                  <Textarea
+                    value={textoRelato}
+                    onChange={(e) => setTextoRelato(e.target.value)}
+                    placeholder="A transcrição aparecerá aqui..."
+                    rows={8}
+                  />
+                </div>
               )}
             </div>
           )}
