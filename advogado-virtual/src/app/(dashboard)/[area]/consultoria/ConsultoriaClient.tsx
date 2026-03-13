@@ -4,12 +4,12 @@ import { useState, useCallback, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
 import { GravadorAudio } from '@/components/atendimento/GravadorAudio'
+import { UploadAudioTranscricao } from '@/components/atendimento/UploadAudioTranscricao'
 import { MicrofoneInline } from '@/components/atendimento/MicrofoneInline'
 import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
 import { RelatorioAnalise } from '@/components/analise/RelatorioAnalise'
@@ -47,14 +47,6 @@ const ICONE_URGENCIA: Record<string, React.ComponentType<{ className?: string }>
   baixa: CheckCircle,
 }
 
-const OPCOES_FORMA_PAGAMENTO = [
-  { value: 'À vista',            label: 'À vista'            },
-  { value: 'Mensal',             label: 'Mensal'             },
-  { value: 'Na condenação',      label: 'Na condenação'      },
-  { value: 'Entrada + parcelas', label: 'Entrada + parcelas' },
-  { value: 'Êxito',              label: 'Somente êxito'      },
-]
-
 export function ConsultoriaClient({
   area,
   tiposDocumento,
@@ -86,15 +78,8 @@ export function ConsultoriaClient({
   const [salvandoTipo, setSalvandoTipo]   = useState(false)
 
   // Estados dos dialogs
-  const [showModalContrato, setShowModalContrato]         = useState(false)
   const [showModalDocs, setShowModalDocs]                 = useState(false)
   const [showModalGerarPeca, setShowModalGerarPeca]       = useState(false)
-  // Modal contrato
-  const [tipoValor, setTipoValor]         = useState<'fixo' | 'exito'>('fixo')
-  const [valorFixo, setValorFixo]         = useState('')
-  const [percentualExito, setPercentualExito] = useState('')
-  const [formaPagamento, setFormaPagamento]   = useState('')
-  const [gerandoContrato, setGerandoContrato] = useState(false)
   // Modal tipo serviço (gerar peça)
   const [tipoServicoModal, setTipoServicoModal] = useState<TipoServico>('judicial')
   const [tipoProcessoModal, setTipoProcessoModal] = useState('')
@@ -251,54 +236,6 @@ export function ConsultoriaClient({
       if (ts === 'administrativo') setTipoProcesso('')
     } catch { /* silencioso */ }
     finally { setSalvandoTipo(false) }
-  }
-
-  async function emitirContrato() {
-    if (!cliente || !atendimentoId) return
-    setGerandoContrato(true)
-    try {
-      // 1. Criar contrato
-      const resC = await fetch('/api/contratos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cliente_id:       cliente.id,
-          atendimento_id:   atendimentoId,
-          area,
-          valor_fixo:       tipoValor === 'fixo' && valorFixo ? parseFloat(valorFixo) : null,
-          percentual_exito: tipoValor === 'exito' && percentualExito ? parseFloat(percentualExito) : null,
-          forma_pagamento:  formaPagamento || null,
-        }),
-      })
-      const dataC = await resC.json()
-      if (!resC.ok) {
-        toastError('Erro', dataC.error ?? 'Não foi possível criar o contrato')
-        return
-      }
-      const contratoId = dataC.contrato.id
-
-      // 2. Gerar com IA (streaming — aguardar conclusão)
-      const resIA = await fetch('/api/ia/gerar-contrato', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contratoId }),
-      })
-      if (resIA.ok && resIA.body) {
-        const reader  = resIA.body.getReader()
-        while (true) {
-          const { done } = await reader.read()
-          if (done) break
-        }
-      }
-
-      setShowModalContrato(false)
-      success('Contrato gerado!', 'Redirecionando para o editor...')
-      router.push(`/contratos/${contratoId}`)
-    } catch {
-      toastError('Erro', 'Falha ao gerar contrato')
-    } finally {
-      setGerandoContrato(false)
-    }
   }
 
   async function confirmarEGerarPeca() {
@@ -567,7 +504,7 @@ export function ConsultoriaClient({
           <Button
             variant="secondary"
             size="md"
-            onClick={() => setShowModalContrato(true)}
+            onClick={() => router.push(`/contratos/novo?cliente_id=${cliente?.id ?? ''}`)}
             disabled={!cliente}
             className="gap-2"
           >
@@ -584,84 +521,6 @@ export function ConsultoriaClient({
             <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
-
-        {/* ── Dialog A: Emitir Contrato de Honorários ── */}
-        <Dialog
-          open={showModalContrato}
-          onClose={() => setShowModalContrato(false)}
-          title="Emitir Contrato de Honorários"
-          description={cliente ? `Cliente: ${cliente.nome} · Área: ${area}` : undefined}
-          size="md"
-          footer={
-            <>
-              <Button variant="secondary" size="md" onClick={() => setShowModalContrato(false)} disabled={gerandoContrato}>
-                Cancelar
-              </Button>
-              <Button
-                size="md"
-                onClick={emitirContrato}
-                loading={gerandoContrato}
-                disabled={gerandoContrato}
-                className="gap-2 bg-primary/80 hover:bg-primary"
-              >
-                {gerandoContrato ? 'Gerando...' : 'Gerar com IA'}
-              </Button>
-            </>
-          }
-        >
-          <div className="space-y-4">
-            {/* Toggle tipo de valor */}
-            <div className="flex rounded-lg border bg-muted/50 p-1 gap-1">
-              <button
-                onClick={() => setTipoValor('fixo')}
-                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  tipoValor === 'fixo' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Valor fixo (R$)
-              </button>
-              <button
-                onClick={() => setTipoValor('exito')}
-                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  tipoValor === 'exito' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                % de êxito
-              </button>
-            </div>
-
-            {tipoValor === 'fixo' ? (
-              <Input
-                label="Valor fixo (R$)"
-                type="number"
-                min="0"
-                step="0.01"
-                value={valorFixo}
-                onChange={(e) => setValorFixo(e.target.value)}
-                placeholder="Ex.: 3000.00"
-              />
-            ) : (
-              <Input
-                label="Percentual de êxito (%)"
-                type="number"
-                min="0"
-                max="100"
-                step="0.5"
-                value={percentualExito}
-                onChange={(e) => setPercentualExito(e.target.value)}
-                placeholder="Ex.: 30"
-              />
-            )}
-
-            <Select
-              label="Forma de pagamento"
-              value={formaPagamento}
-              onChange={(e) => setFormaPagamento(e.target.value)}
-              options={OPCOES_FORMA_PAGAMENTO}
-              placeholder="Selecione..."
-            />
-          </div>
-        </Dialog>
 
         {/* ── Dialog B: Documentos Faltantes ── */}
         <Dialog
@@ -878,6 +737,21 @@ export function ConsultoriaClient({
                 disabled={!atendimentoId}
                 requerConsentimento={false}
               />
+
+              {/* Separador */}
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">ou</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              {/* Upload de arquivo de áudio */}
+              <UploadAudioTranscricao
+                onTranscricao={handleTranscricao}
+                atendimentoId={atendimentoId}
+                disabled={!atendimentoId}
+              />
+
               {transcricao && (
                 <Textarea
                   label="Transcrição (edite se necessário)"

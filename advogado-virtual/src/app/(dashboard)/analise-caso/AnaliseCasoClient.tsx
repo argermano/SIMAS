@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
 import { GravadorAudio } from '@/components/atendimento/GravadorAudio'
+import { UploadAudioTranscricao } from '@/components/atendimento/UploadAudioTranscricao'
 import type { ResultadoAnaliseGeral } from '@/app/api/ia/analise-geral/route'
 import { MicrofoneInline } from '@/components/atendimento/MicrofoneInline'
 import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
@@ -335,6 +336,21 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
                 disabled={false}
                 requerConsentimento={false}
               />
+
+              {/* Separador */}
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">ou</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              {/* Upload de arquivo de áudio */}
+              <UploadAudioTranscricao
+                onTranscricao={handleTranscricao}
+                atendimentoId={atendimentoId}
+                disabled={false}
+              />
+
               {transcricao && (
                 <Textarea
                   label="Transcrição (edite se necessário)"
