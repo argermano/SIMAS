@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/toast'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
 import { GravadorAudio } from '@/components/atendimento/GravadorAudio'
 import { UploadAudioTranscricao } from '@/components/atendimento/UploadAudioTranscricao'
+import { TranscricaoActions } from '@/components/atendimento/TranscricaoActions'
 import type { ResultadoAnaliseGeral } from '@/app/api/ia/analise-geral/route'
 import { MicrofoneInline } from '@/components/atendimento/MicrofoneInline'
 import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
@@ -352,12 +353,17 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
               />
 
               {transcricao && (
-                <Textarea
-                  label="Transcrição (edite se necessário)"
-                  value={textoRelato}
-                  onChange={(e) => setTextoRelato(e.target.value)}
-                  rows={8}
-                />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-foreground">Transcrição (edite se necessário)</span>
+                    <TranscricaoActions texto={textoRelato} />
+                  </div>
+                  <Textarea
+                    value={textoRelato}
+                    onChange={(e) => setTextoRelato(e.target.value)}
+                    rows={8}
+                  />
+                </div>
               )}
             </div>
           )}
