@@ -3,11 +3,9 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
 
-// Vercel Pro: até 300s
 export const maxDuration = 120
 
 const MAX_AUDIO_SIZE = 500 * 1024 * 1024 // 500 MB
-const CHUNK_SIZE     = 24 * 1024 * 1024   // 24 MB por chunk (limite Groq = 25MB)
 
 // POST — gera signed URL para upload direto ao Supabase Storage
 export async function POST(req: Request) {
@@ -38,7 +36,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Arquivo excede o limite de 500 MB' }, { status: 400 })
   }
 
-  // Verifica se o atendimento pertence ao tenant
   const { data: atendimento } = await supabase
     .from('atendimentos')
     .select('id')
@@ -74,7 +71,8 @@ export async function POST(req: Request) {
   })
 }
 
-// PATCH — transcreve áudio já enviado ao Storage (com chunking automático se > 24MB)
+// PATCH — transcreve um arquivo de áudio já enviado ao Storage (deve ser <= 25MB)
+// Para arquivos grandes, o client faz o chunking e envia múltiplos WAV chunks
 export async function PATCH(req: Request) {
   const supabase = await createClient()
 
@@ -89,9 +87,10 @@ export async function PATCH(req: Request) {
 
   if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
-  const { storagePath, atendimentoId } = await req.json() as {
+  const { storagePath, atendimentoId, transcricaoAcumulada } = await req.json() as {
     storagePath: string
     atendimentoId: string
+    transcricaoAcumulada?: string // texto acumulado de chunks anteriores (client envia junto no último)
   }
 
   if (!storagePath || !atendimentoId) {
@@ -109,32 +108,45 @@ export async function PATCH(req: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const { data: fileData, error: downloadError } = await adminSupabase.storage
+  const { data: fileBlob, error: downloadError } = await adminSupabase.storage
     .from('documentos')
     .download(storagePath)
 
-  if (downloadError || !fileData) {
+  if (downloadError || !fileBlob) {
     return NextResponse.json({ error: 'Erro ao baixar áudio do storage' }, { status: 500 })
   }
 
-  const buffer = Buffer.from(await fileData.arrayBuffer())
+  // Determina extensão e mime type do arquivo
+  const ext = storagePath.split('.').pop()?.toLowerCase() || 'wav'
+  const mimeType = fileBlob.type || mimeFromExt(ext)
+
+  // Cria File diretamente do Blob (preserva bytes originais)
+  const file = new File([fileBlob], `audio.${ext}`, { type: mimeType })
+
   const groq = new Groq({ apiKey: groqKey })
-  const ext = storagePath.split('.').pop() || 'mp3'
 
   let transcricao = ''
 
   try {
-    if (buffer.length <= CHUNK_SIZE) {
-      // Arquivo cabe em uma única requisição
-      transcricao = await transcreverBuffer(groq, buffer, ext)
-    } else {
-      // Arquivo grande: dividir em chunks de ~24MB e transcrever cada um
-      transcricao = await transcreverComChunking(groq, buffer, ext)
-    }
+    const transcription = await groq.audio.transcriptions.create({
+      file,
+      model:           'whisper-large-v3',
+      language:        'pt',
+      response_format: 'text',
+    })
+
+    transcricao = typeof transcription === 'string'
+      ? transcription
+      : (transcription as { text?: string }).text ?? ''
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     return NextResponse.json({ error: `Erro na transcrição: ${message}` }, { status: 500 })
   }
+
+  // Se há transcrição acumulada de chunks anteriores, concatena
+  const transcricaoFinal = transcricaoAcumulada
+    ? transcricaoAcumulada + '\n' + transcricao
+    : transcricao
 
   // Salva no atendimento
   const { data: atData } = await supabase
@@ -158,56 +170,12 @@ export async function PATCH(req: Request) {
     .from('atendimentos')
     .update({
       audio_url:       JSON.stringify(audioPaths),
-      transcricao_raw: transcricao,
+      transcricao_raw: transcricaoFinal,
       modo_input:      'audio',
     })
     .eq('id', atendimentoId)
 
-  return NextResponse.json({ transcricao })
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-async function transcreverBuffer(groq: Groq, buffer: Buffer, ext: string): Promise<string> {
-  const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer
-  const file = new File([ab], `audio.${ext}`, { type: mimeFromExt(ext) })
-
-  const transcription = await groq.audio.transcriptions.create({
-    file,
-    model:           'whisper-large-v3',
-    language:        'pt',
-    response_format: 'text',
-  })
-
-  return typeof transcription === 'string'
-    ? transcription
-    : (transcription as { text?: string }).text ?? ''
-}
-
-async function transcreverComChunking(groq: Groq, buffer: Buffer, ext: string): Promise<string> {
-  // Divide o buffer em pedaços de CHUNK_SIZE bytes
-  const totalChunks = Math.ceil(buffer.length / CHUNK_SIZE)
-  const resultados: string[] = []
-
-  // Processa em lotes de 3 para não sobrecarregar a API
-  const BATCH_SIZE = 3
-
-  for (let i = 0; i < totalChunks; i += BATCH_SIZE) {
-    const batchEnd = Math.min(i + BATCH_SIZE, totalChunks)
-    const batchPromises: Promise<string>[] = []
-
-    for (let j = i; j < batchEnd; j++) {
-      const start = j * CHUNK_SIZE
-      const end = Math.min(start + CHUNK_SIZE, buffer.length)
-      const chunkBuffer = buffer.subarray(start, end)
-      batchPromises.push(transcreverBuffer(groq, Buffer.from(chunkBuffer), ext))
-    }
-
-    const batchResults = await Promise.all(batchPromises)
-    resultados.push(...batchResults)
-  }
-
-  return resultados.filter(Boolean).join('\n')
+  return NextResponse.json({ transcricao: transcricaoFinal })
 }
 
 function mimeFromExt(ext: string): string {
@@ -221,5 +189,5 @@ function mimeFromExt(ext: string): string {
     mpeg: 'audio/mpeg',
     mpga: 'audio/mpeg',
   }
-  return map[ext.toLowerCase()] || 'audio/mpeg'
+  return map[ext] || 'audio/mpeg'
 }

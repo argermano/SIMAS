@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button'
 import { Upload, Loader2, FileAudio, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
-const MAX_AUDIO_SIZE = 500 * 1024 * 1024 // 500 MB
+const MAX_AUDIO_SIZE  = 500 * 1024 * 1024 // 500 MB
+const GROQ_LIMIT      = 25 * 1024 * 1024  // 25 MB
+const CHUNK_DURATION_S = 240               // 4 minutos por chunk WAV (~19MB a 16kHz mono 16-bit)
 const ACCEPT_AUDIO = 'audio/*,.mp3,.wav,.m4a,.webm,.mp4,.ogg,.mpeg,.mpga'
 
 interface UploadAudioTranscricaoProps {
@@ -14,7 +16,7 @@ interface UploadAudioTranscricaoProps {
   disabled?: boolean
 }
 
-type Estado = 'idle' | 'enviando' | 'transcrevendo' | 'concluido' | 'erro'
+type Estado = 'idle' | 'processando' | 'enviando' | 'transcrevendo' | 'concluido' | 'erro'
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -22,20 +24,125 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+// ─── WAV encoding helpers ────────────────────────────────────────────────────
+
+function writeString(view: DataView, offset: number, str: string) {
+  for (let i = 0; i < str.length; i++) {
+    view.setUint8(offset + i, str.charCodeAt(i))
+  }
+}
+
+function encodeWav(samples: Float32Array, sampleRate: number): Blob {
+  const bytesPerSample = 2
+  const dataLength = samples.length * bytesPerSample
+  const buffer = new ArrayBuffer(44 + dataLength)
+  const view = new DataView(buffer)
+
+  writeString(view, 0, 'RIFF')
+  view.setUint32(4, 36 + dataLength, true)
+  writeString(view, 8, 'WAVE')
+  writeString(view, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)      // PCM
+  view.setUint16(22, 1, true)      // mono
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * bytesPerSample, true)
+  view.setUint16(32, bytesPerSample, true)
+  view.setUint16(34, 16, true)     // bits per sample
+  writeString(view, 36, 'data')
+  view.setUint32(40, dataLength, true)
+
+  let offset = 44
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
+    offset += 2
+  }
+
+  return new Blob([buffer], { type: 'audio/wav' })
+}
+
+async function decodeAudioFile(file: File): Promise<AudioBuffer> {
+  const arrayBuffer = await file.arrayBuffer()
+  const ctx = new AudioContext({ sampleRate: 16000 })
+  try {
+    return await ctx.decodeAudioData(arrayBuffer)
+  } finally {
+    await ctx.close()
+  }
+}
+
+function splitIntoWavChunks(audioBuffer: AudioBuffer): Blob[] {
+  const sampleRate = audioBuffer.sampleRate
+  const samples = audioBuffer.getChannelData(0) // mono (canal 0)
+  const samplesPerChunk = CHUNK_DURATION_S * sampleRate
+  const totalChunks = Math.ceil(samples.length / samplesPerChunk)
+  const chunks: Blob[] = []
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * samplesPerChunk
+    const end = Math.min(start + samplesPerChunk, samples.length)
+    const segment = samples.slice(start, end)
+    chunks.push(encodeWav(segment, sampleRate))
+  }
+
+  return chunks
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export function UploadAudioTranscricao({
   onTranscricao,
   atendimentoId,
   disabled,
 }: UploadAudioTranscricaoProps) {
-  const [estado, setEstado]     = useState<Estado>('idle')
-  const [erro, setErro]         = useState('')
-  const [arquivo, setArquivo]   = useState<File | null>(null)
+  const [estado, setEstado]       = useState<Estado>('idle')
+  const [erro, setErro]           = useState('')
+  const [arquivo, setArquivo]     = useState<File | null>(null)
   const [progresso, setProgresso] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
-  const dragRef  = useRef<HTMLDivElement>(null)
+  const inputRef  = useRef<HTMLInputElement>(null)
   const [dragAtivo, setDragAtivo] = useState(false)
 
   const desabilitado = disabled || !atendimentoId
+
+  // Upload de um blob para Supabase Storage via signed URL
+  async function uploadBlob(blob: Blob, fileName: string): Promise<string> {
+    const res = await fetch('/api/ia/transcrever-audio-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName, fileSize: blob.size, atendimentoId }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Erro ao iniciar upload')
+    }
+    const { uploadToken, storagePath } = await res.json()
+
+    const supabase = createClient()
+    const { error: uploadError } = await supabase.storage
+      .from('documentos')
+      .uploadToSignedUrl(storagePath, uploadToken, blob, {
+        contentType: blob.type || 'audio/wav',
+      })
+
+    if (uploadError) throw new Error(`Upload falhou: ${uploadError.message}`)
+    return storagePath
+  }
+
+  // Transcrever um arquivo já no Storage
+  async function transcrever(storagePath: string, transcricaoAcumulada?: string): Promise<string> {
+    const res = await fetch('/api/ia/transcrever-audio-upload', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ storagePath, atendimentoId, transcricaoAcumulada }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      throw new Error(data.error || 'Erro na transcrição')
+    }
+    const { transcricao } = await res.json()
+    return transcricao
+  }
 
   const processarArquivo = useCallback(async (file: File) => {
     if (!atendimentoId) return
@@ -47,68 +154,68 @@ export function UploadAudioTranscricao({
 
     setArquivo(file)
     setErro('')
-    setEstado('enviando')
-    setProgresso('Enviando áudio...')
 
     try {
-      // Step 1: Get signed upload URL
-      const urlRes = await fetch('/api/ia/transcrever-audio-upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName:      file.name,
-          fileSize:      file.size,
-          atendimentoId,
-        }),
-      })
+      if (file.size <= GROQ_LIMIT) {
+        // ── Arquivo pequeno: envio direto ──
+        setEstado('enviando')
+        setProgresso('Enviando áudio...')
+        const storagePath = await uploadBlob(file, file.name)
 
-      if (!urlRes.ok) {
-        const data = await urlRes.json()
-        throw new Error(data.error || 'Erro ao iniciar upload')
+        setEstado('transcrevendo')
+        setProgresso('Transcrevendo áudio com IA...')
+        const transcricao = await transcrever(storagePath)
+
+        setEstado('concluido')
+        setProgresso('')
+        onTranscricao(transcricao)
+      } else {
+        // ── Arquivo grande: chunking no browser ──
+        setEstado('processando')
+        setProgresso('Decodificando áudio...')
+
+        const audioBuffer = await decodeAudioFile(file)
+        const chunks = splitIntoWavChunks(audioBuffer)
+
+        let transcricaoAcumulada = ''
+
+        for (let i = 0; i < chunks.length; i++) {
+          const label = `Parte ${i + 1} de ${chunks.length}`
+
+          setEstado('enviando')
+          setProgresso(`${label} — enviando...`)
+          const storagePath = await uploadBlob(chunks[i], `chunk_${i}.wav`)
+
+          setEstado('transcrevendo')
+          setProgresso(`${label} — transcrevendo...`)
+
+          // No último chunk, envia a transcrição acumulada para salvar tudo junto
+          const isLast = i === chunks.length - 1
+          const transcricao = await transcrever(
+            storagePath,
+            isLast ? transcricaoAcumulada : undefined
+          )
+
+          if (isLast) {
+            // O server já concatenou e salvou
+            transcricaoAcumulada = transcricao
+          } else {
+            // Acumula localmente
+            transcricaoAcumulada += (transcricaoAcumulada ? '\n' : '') + transcricao
+          }
+        }
+
+        setEstado('concluido')
+        setProgresso('')
+        onTranscricao(transcricaoAcumulada)
       }
-
-      const { uploadUrl, uploadToken, storagePath } = await urlRes.json()
-
-      // Step 2: Upload directly to Supabase Storage
-      const supabase = createClient()
-      const { error: uploadError } = await supabase.storage
-        .from('documentos')
-        .uploadToSignedUrl(storagePath, uploadToken, file, {
-          contentType: file.type || 'audio/mpeg',
-        })
-
-      if (uploadError) {
-        throw new Error(`Upload falhou: ${uploadError.message}`)
-      }
-
-      // Step 3: Trigger transcription
-      setEstado('transcrevendo')
-      const sizeLabel = file.size > 25 * 1024 * 1024
-        ? 'Transcrevendo áudio (arquivo grande, pode levar alguns minutos)...'
-        : 'Transcrevendo áudio com IA...'
-      setProgresso(sizeLabel)
-
-      const transcRes = await fetch('/api/ia/transcrever-audio-upload', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storagePath, atendimentoId }),
-      })
-
-      if (!transcRes.ok) {
-        const data = await transcRes.json()
-        throw new Error(data.error || 'Erro na transcrição')
-      }
-
-      const { transcricao } = await transcRes.json()
-      setEstado('concluido')
-      setProgresso('')
-      onTranscricao(transcricao)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro desconhecido'
       setErro(message)
       setEstado('erro')
       setProgresso('')
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atendimentoId, onTranscricao])
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,7 +240,7 @@ export function UploadAudioTranscricao({
     setProgresso('')
   }, [])
 
-  const processando = estado === 'enviando' || estado === 'transcrevendo'
+  const processando = estado === 'processando' || estado === 'enviando' || estado === 'transcrevendo'
 
   return (
     <div className="space-y-2">
@@ -148,7 +255,6 @@ export function UploadAudioTranscricao({
 
       {estado === 'idle' || estado === 'erro' ? (
         <div
-          ref={dragRef}
           onDragOver={(e) => { e.preventDefault(); setDragAtivo(true) }}
           onDragLeave={() => setDragAtivo(false)}
           onDrop={handleDrop}
