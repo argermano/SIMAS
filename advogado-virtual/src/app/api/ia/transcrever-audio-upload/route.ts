@@ -131,17 +131,23 @@ export async function PATCH(req: Request) {
   try {
     const transcription = await groq.audio.transcriptions.create({
       file,
-      model:           'whisper-large-v3',
-      language:        'pt',
-      response_format: 'verbose_json',
+      model:                  'whisper-large-v3',
+      language:               'pt',
+      response_format:        'verbose_json',
+      timestamp_granularities: ['segment'],
     })
 
     // verbose_json retorna segments com timestamps
-    const result = transcription as { text?: string; segments?: Array<{ start: number; end: number; text: string }> }
-    if (result.segments && result.segments.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = transcription as any
+    console.log('[transcrever-audio] response keys:', Object.keys(result), 'segments count:', result?.segments?.length ?? 0)
+
+    if (result?.segments && Array.isArray(result.segments) && result.segments.length > 0) {
       transcricao = formatSegments(result.segments, timeOffset || 0)
-    } else {
-      transcricao = result.text ?? (typeof transcription === 'string' ? transcription : '')
+    } else if (result?.text) {
+      transcricao = result.text
+    } else if (typeof transcription === 'string') {
+      transcricao = transcription
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
