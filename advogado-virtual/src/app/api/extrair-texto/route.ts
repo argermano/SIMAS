@@ -24,6 +24,28 @@ export async function POST(req: Request) {
     } catch {
       texto = ''
     }
+  } else if (
+    file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    file.name.endsWith('.docx')
+  ) {
+    try {
+      const mammoth = await import('mammoth')
+      const result = await mammoth.convertToHtml({ buffer: Buffer.from(arrayBuffer) })
+      // Strip HTML tags to get plain text, preserve paragraphs
+      texto = result.value
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    } catch {
+      texto = ''
+    }
   } else if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
     texto = new TextDecoder().decode(arrayBuffer)
   }
