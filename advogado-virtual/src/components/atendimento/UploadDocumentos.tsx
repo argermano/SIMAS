@@ -45,6 +45,7 @@ const LABELS_TIPO: Record<string, string> = {
   holerites: 'Holerites',
   contrato_trabalho: 'Contrato Trabalho',
   acordo_coletivo: 'Acordo Coletivo',
+  extrato_fgts: 'Extrato de FGTS',
   sentenca: 'Sentença',
   acordao: 'Acórdão',
   ata_audiencia: 'Ata de Audiência',
