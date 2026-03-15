@@ -249,14 +249,14 @@ export function TelaRefinamento({
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Cole o conteúdo da peça que deseja refinar ou faça upload do arquivo (PDF ou TXT).
+            Cole o conteúdo da peça que deseja refinar ou faça upload do arquivo (Word, PDF ou TXT).
           </p>
 
           <div className="flex gap-2">
             <input
               ref={inputPecaRef}
               type="file"
-              accept=".pdf,.txt,.md"
+              accept=".pdf,.txt,.md,.docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
               className="hidden"
               onChange={(e) => handleUploadPeca(e.target.files)}
             />
