@@ -57,15 +57,10 @@ export async function POST(req: NextRequest) {
   let textoExtraido = ''
   try {
     if (arquivo.type === 'application/pdf') {
-      const { PDFParse } = await import('pdf-parse')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parser = new PDFParse(new Uint8Array(buffer)) as any
-      await parser.load()
-      const result = await parser.getText()
-      textoExtraido = (result as { pages: Array<{ text: string }> }).pages
-        .map((p: { text: string }) => p.text)
-        .join('\n\n')
-        .trim()
+      const pdfMod = await import('pdf-parse')
+      const pdfParse = (pdfMod as unknown as { default: (buf: Buffer) => Promise<{ text: string }> }).default
+      const pdfData = await pdfParse(buffer)
+      textoExtraido = pdfData.text?.trim() ?? ''
     } else {
       // DOCX: extração com mammoth
       const mammoth = await import('mammoth')
