@@ -34,13 +34,32 @@ export const REGRAS_FORMATACAO_FORENSE = `
 3. Nome da peça — **MAIÚSCULAS E NEGRITO**, centralizado
 4. Qualificação do Réu — Em face de: **NOME EM MAIÚSCULAS E NEGRITO**, [qualificação disponível], pelos fatos e fundamentos jurídicos a seguir expostos:
 
-### Corpo da Peça — NUMERAÇÃO ROMANA OBRIGATÓRIA
-Todos os títulos e subtítulos do corpo recebem algarismo romano maiúsculo + travessão (–) — nunca hífen (-) — + nome em MAIÚSCULAS e negrito:
-- Título principal: **I – DOS FATOS**
-- Subtítulo: **I.I – DO CONTRATO CELEBRADO**
-- Sub-subtítulo: **I.I.I – DAS CLÁUSULAS ABUSIVAS**
-- Segundo título: **II – DO DIREITO**
-- Subtítulo: **II.I – DA RESPONSABILIDADE CIVIL** | **II.II – DO DANO MORAL**
+### Corpo da Peça — NUMERAÇÃO ROMANA OBRIGATÓRIA EM TODOS OS NÍVEIS
+ATENÇÃO: Todos os títulos e subtítulos usam EXCLUSIVAMENTE algarismos romanos (I, II, III, IV, V...). NUNCA use algarismos arábicos (1, 2, 3) nos títulos. Use travessão (–) e nunca hífen (-). Títulos em MAIÚSCULAS e negrito.
+
+CORRETO:
+- **I – DOS FATOS**
+- **I.I – DA FRAUDE CONTRATUAL**
+- **I.I.I – DAS CLÁUSULAS ABUSIVAS**
+- **I.II – DO DESVIO DE FUNÇÃO**
+- **I.III – DAS HORAS EXTRAS**
+- **II – DO DIREITO**
+- **II.I – DA RESPONSABILIDADE CIVIL**
+- **II.II – DO DANO MORAL**
+- **III – DOS PEDIDOS**
+
+ERRADO (NUNCA FAÇA ISSO):
+- I.1 ← ERRADO, deve ser I.I
+- I.2 ← ERRADO, deve ser I.II
+- 1. DOS FATOS ← ERRADO, deve ser I – DOS FATOS
+- 1.1 ← ERRADO, deve ser I.I
+
+### Formatação de Parágrafos
+- Cada parágrafo deve iniciar com recuo (use 4 espaços ou tab no início)
+- Separe parágrafos com uma linha em branco
+- Parágrafos devem ter boa extensão (3 a 5 linhas)
+- Use Markdown: ## para seções, ### para subseções, **negrito** para termos importantes
+- Use > blockquote para citações de legislação, jurisprudência e doutrina
 
 ### Dos Pedidos — cada pedido com numeral romano individual
 Exemplo:
@@ -82,9 +101,11 @@ Sem limite fixo. A peça deve ter o tamanho que o caso exige. Evite prolixidade 
 export const SYSTEM_REGRAS_FORENSE = `Ao redigir peças processuais, aplique obrigatoriamente estas regras de redação forense brasileira:
 - Voz ativa, terceira pessoa, linguagem técnica e objetiva
 - MAIÚSCULAS para nomes das partes e nome da peça; negrito para títulos e subtítulos
-- Numeração romana (I, II, III) com travessão (–) nos títulos do corpo da peça (nunca hífen)
+- NUMERAÇÃO ROMANA OBRIGATÓRIA EM TODOS OS NÍVEIS DE TÍTULO: I, I.I, I.II, I.III, II, II.I, etc. NUNCA use algarismos arábicos (1, 2, 3, 1.1, 1.2) nos títulos — sempre romanos (I, I.I, I.II)
+- Travessão (–) após cada numeral romano nos títulos, nunca hífen (-)
 - Preâmbulo (endereçamento, qualificação, nome da peça) SEM numeração
 - Pedidos com numeral romano individual (I –, II –, III –)
+- Parágrafos com recuo no início (4 espaços) e linha em branco entre eles
 - Latim em itálico sem acento e sem hífen (exceto habeas corpus, habeas data, mandamus)
 - apud e et al. nunca em itálico
 - Artigos: "art." minúsculo; incisos por extenso; "Lei n." com ponto

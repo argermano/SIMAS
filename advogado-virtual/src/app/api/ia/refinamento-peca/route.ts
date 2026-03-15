@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
+import { SYSTEM_REGRAS_FORENSE } from '@/lib/prompts/pecas/regras-formatacao'
 
 const LABELS_AREA: Record<string, string> = {
   previdenciario: 'Previdenciário',
@@ -23,7 +24,9 @@ REGRAS:
 - Siga as instruções específicas do advogado
 - Use formatação Markdown (##, **, etc.) para estruturar a peça
 - Campos que não puderem ser determinados devem usar [PREENCHER]
-- NÃO inclua comentários, explicações ou metadados — apenas a peça refinada`
+- NÃO inclua comentários, explicações ou metadados — apenas a peça refinada
+
+${SYSTEM_REGRAS_FORENSE}`
 
 // POST /api/ia/refinamento-peca — gera peça refinada com streaming
 export async function POST(req: NextRequest) {
