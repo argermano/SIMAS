@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
         } else if (doc.mime_type === 'application/pdf') {
           // Tenta pdf-parse primeiro
           try {
-            const pdfMod = await import('pdf-parse')
-            const pdfParse = (pdfMod as unknown as { default: (buf: Buffer) => Promise<{ text: string }> }).default
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string }>
             const pdfData = await pdfParse(Buffer.from(arrayBuffer))
             texto = pdfData.text ?? ''
           } catch { /* ignore */ }

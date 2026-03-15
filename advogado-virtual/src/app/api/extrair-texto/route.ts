@@ -25,9 +25,9 @@ export async function POST(req: Request) {
 
   if (isPdf) {
     try {
-      // pdf-parse v1: default export é a função
-      const pdfMod = await import('pdf-parse')
-      const pdfParse = (pdfMod as unknown as { default: (buf: Buffer) => Promise<{ text: string }> }).default
+      // Importa lib interna para evitar o test runner do index.js
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string }>
       const pdfData = await pdfParse(buffer)
       texto = pdfData.text ?? ''
     } catch (err) {

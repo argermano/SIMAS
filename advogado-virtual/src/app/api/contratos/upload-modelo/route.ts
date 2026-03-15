@@ -57,8 +57,8 @@ export async function POST(req: NextRequest) {
   let textoExtraido = ''
   try {
     if (arquivo.type === 'application/pdf') {
-      const pdfMod = await import('pdf-parse')
-      const pdfParse = (pdfMod as unknown as { default: (buf: Buffer) => Promise<{ text: string }> }).default
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string }>
       const pdfData = await pdfParse(buffer)
       textoExtraido = pdfData.text?.trim() ?? ''
     } else {
