@@ -41,6 +41,7 @@ export const AREAS = {
     ],
     tipos_documento: [
       'ctps', 'trct', 'holerites', 'contrato_trabalho', 'acordo_coletivo',
+      'extrato_fgts', 'cnis',
       'sentenca', 'acordao', 'ata_audiencia', 'procuracao', 'rg_cpf', 'outro',
     ],
   },
