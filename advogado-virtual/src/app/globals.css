@@ -139,8 +139,6 @@
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid #d1d5db;
-  padding-bottom: 0.5rem;
   margin-top: 1.5rem;
   margin-bottom: 1rem;
 }
@@ -190,9 +188,7 @@
 .ProseMirror li { margin-bottom: 0.25rem; }
 
 .ProseMirror hr {
-  border: none;
-  border-top: 1px solid #d1d5db;
-  margin: 1.5rem 0;
+  display: none;
 }
 
 .ProseMirror blockquote {
@@ -275,6 +271,27 @@
   border-bottom: 2px solid rgb(251, 146, 60);
   border-radius: 2px;
   padding: 0 2px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Simulação de Página A4
+   ───────────────────────────────────────────────────────────── */
+
+.editor-a4-page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 30mm 20mm 20mm 30mm; /* ABNT: 3cm top, 2cm right, 2cm bottom, 3cm left */
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  margin: 0 auto;
+}
+
+@media (max-width: 900px) {
+  .editor-a4-page {
+    width: 100%;
+    min-height: auto;
+    padding: 2rem 1.5rem;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────

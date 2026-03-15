@@ -94,6 +94,23 @@ Mesmo formato da jurisprudência (blockquote, itálico + aspas, referência fora
 - Livro: SOBRENOME, Nome. *Título da obra*. ed. Cidade: Editora, ano. p. ___
 - Capítulo: AUTOR. Título do capítulo. In: COORD. *Obra coletiva*. Cidade: Editora, ano. p. ___
 
+### Linhas Divisórias — PROIBIDO
+- NUNCA use linhas horizontais (---, ___, ***) ou qualquer tipo de separador visual/divisória na peça
+- NUNCA use border-bottom, underline decorativo ou qualquer elemento gráfico para dividir seções
+- A separação entre seções é feita APENAS por espaçamento e títulos em negrito
+- Isso se aplica a todo o documento: preâmbulo, corpo, pedidos e encerramento
+
+### Endereçamento e Vara — PESQUISAR CORRETAMENTE
+- O endereçamento deve conter a Vara correta para o tipo de ação e comarca
+- Pesquise e use o endereçamento adequado conforme a competência:
+  - Ações cíveis: Vara Cível da Comarca de [cidade]
+  - Ações trabalhistas: Vara do Trabalho de [cidade]
+  - Ações previdenciárias/federais: Vara Federal de [cidade] ou Juizado Especial Federal
+  - Ações de família: Vara de Família da Comarca de [cidade]
+  - Ações criminais: Vara Criminal da Comarca de [cidade]
+- Se a cidade tiver múltiplas varas, use __ VARA (lacuna) para o número
+- Use o nome completo da comarca, sem abreviações
+
 ### Extensão
 Sem limite fixo. A peça deve ter o tamanho que o caso exige. Evite prolixidade e redundâncias por qualidade, não por restrição de volume.
 `
@@ -111,4 +128,6 @@ export const SYSTEM_REGRAS_FORENSE = `Ao redigir peças processuais, aplique obr
 - Artigos: "art." minúsculo; incisos por extenso; "Lei n." com ponto
 - Jurisprudência: ementa em blockquote com itálico + aspas, dados fora das aspas, supressão com [...]
 - Proibido: "através de", "ao invés de", "implicar em", "a nível de"
-- Prefira "ao juízo" em vez de "ao juiz"`
+- Prefira "ao juízo" em vez de "ao juiz"
+- PROIBIDO linhas divisórias (---, ___, ***) — separar seções apenas com espaçamento e títulos
+- Endereçamento deve conter a Vara correta para o tipo de ação e comarca`
