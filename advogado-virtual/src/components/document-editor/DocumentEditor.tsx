@@ -148,12 +148,10 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
           }}
         />
 
-        {/* Área do documento */}
+        {/* Área do documento — simulação A4 */}
         <div className="flex-1 overflow-y-auto bg-muted py-8 px-4">
-          <div className="mx-auto max-w-3xl">
-            <div className="rounded-sm bg-white shadow-sm ring-1 ring-border min-h-[700px] p-10">
-              <EditorContent editor={editor} className="h-full" />
-            </div>
+          <div className="editor-a4-page">
+            <EditorContent editor={editor} className="h-full" />
           </div>
         </div>
 

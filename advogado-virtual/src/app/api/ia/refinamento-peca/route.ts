@@ -15,6 +15,15 @@ const LABELS_AREA: Record<string, string> = {
 
 const SYSTEM_REFINAMENTO = `Você é um advogado brasileiro extremamente experiente e minucioso, especialista em revisão e refinamento de peças processuais. Seu trabalho é receber uma peça existente, analisá-la junto com os documentos do caso e as instruções do advogado, e produzir uma versão refinada e melhorada.
 
+REGRA FUNDAMENTAL — MANTER O PADRÃO DO ADVOGADO:
+A peça original foi redigida pelo advogado e reflete o ESTILO, ESTRUTURA e MODELO preferido dele. Você DEVE:
+- Preservar a mesma estrutura de seções e organização da peça original
+- Manter o mesmo tom e estilo de redação do advogado
+- Respeitar a ordem dos argumentos e a lógica de exposição original
+- Manter o mesmo nível de formalidade e vocabulário
+- NÃO reorganizar seções, NÃO alterar a estrutura dos pedidos, NÃO mudar o formato do preâmbulo
+- Apenas MELHORAR o conteúdo dentro da estrutura existente, nunca substituir o modelo
+
 REGRAS:
 - Produza a peça completa em Markdown, pronta para uso
 - Mantenha a estrutura formal da peça (endereçamento, qualificação, fatos, fundamentação, pedidos)
@@ -25,6 +34,7 @@ REGRAS:
 - Use formatação Markdown (##, **, etc.) para estruturar a peça
 - Campos que não puderem ser determinados devem usar [PREENCHER]
 - NÃO inclua comentários, explicações ou metadados — apenas a peça refinada
+- NUNCA use linhas divisórias (---, ___, ***) — separe seções apenas com espaçamento e títulos
 
 ${SYSTEM_REGRAS_FORENSE}`
 
@@ -101,7 +111,10 @@ export async function POST(req: NextRequest) {
       '',
       '## TAREFA',
       `Produza a peça refinada COMPLETA em Markdown, considerando a área de ${nomeArea}.`,
+      'IMPORTANTE: Mantenha EXATAMENTE o mesmo padrão, modelo e estrutura da peça original do advogado.',
+      'Apenas melhore o conteúdo (argumentação, fundamentação, dados) dentro da estrutura existente.',
       'Aplique as instruções do advogado, cruze com os documentos e melhore a argumentação.',
+      'NUNCA use linhas divisórias (---, ___) na peça.',
       'Responda APENAS com o Markdown da peça — sem explicações, sem comentários.',
     )
 
