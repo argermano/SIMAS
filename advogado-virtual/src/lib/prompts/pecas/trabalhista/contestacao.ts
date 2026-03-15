@@ -1,3 +1,5 @@
+import { REGRAS_FORMATACAO_FORENSE, SYSTEM_REGRAS_FORENSE } from '../regras-formatacao'
+
 function formatarQualificacao(q?: {
   autor?: Record<string, string | undefined>
   reu?: Record<string, string | undefined>
@@ -63,18 +65,10 @@ ${formatarQualificacao(dados.qualificacao)}
 - Linguagem técnica jurídica formal
 - GERE A PEÇA COMPLETA do início ao fim, sem interrupções
 
-## FORMATAÇÃO
-- Use Markdown bem estruturado
-- Use ## para títulos de seções principais
-- Use ### para subtítulos dentro de seções
-- Use **negrito** para termos e conceitos jurídicos importantes
-- Separe parágrafos com uma linha em branco entre eles
-- Use listas numeradas (1. 2. 3.) para pedidos
-- Use > para citações de legislação ou doutrina
-- Mantenha parágrafos com boa extensão (3-5 linhas cada)
+${REGRAS_FORMATACAO_FORENSE}
 
 Responda com a contestação COMPLETA em Markdown bem formatado. Não interrompa a geração.
 `.trim()
 }
 
-export const SYSTEM_CONTESTACAO_TRAB = `Você é um advogado trabalhista sênior redigindo peças de defesa. Escreva a peça COMPLETA em Markdown bem formatado, com linguagem jurídica formal. NUNCA interrompa a geração — sempre conclua a peça inteira.`
+export const SYSTEM_CONTESTACAO_TRAB = `Você é um advogado trabalhista sênior redigindo peças de defesa. Escreva a peça COMPLETA em Markdown bem formatado, com linguagem jurídica formal. NUNCA interrompa a geração — sempre conclua a peça inteira. ${SYSTEM_REGRAS_FORENSE}`
