@@ -56,11 +56,15 @@ export async function POST(req: NextRequest) {
         } else if (doc.mime_type === 'application/pdf') {
           // Tenta pdf-parse primeiro
           try {
-            const pdfMod = await import('pdf-parse')
-            const pdfParse = (pdfMod as unknown as { default: (buf: Buffer) => Promise<{ text: string }> }).default ?? pdfMod
-            const buffer = Buffer.from(arrayBuffer)
-            const pdfData = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer)
-            texto = pdfData.text ?? ''
+            const { PDFParse } = await import('pdf-parse')
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const parser = new PDFParse(new Uint8Array(arrayBuffer)) as any
+            await parser.load()
+            const result = await parser.getText()
+            texto = (result as { pages: Array<{ text: string }> }).pages
+              .map((p: { text: string }) => p.text)
+              .join('\n\n')
+              .trim()
           } catch { /* ignore */ }
 
           // Se pouco texto, tenta via Claude Document

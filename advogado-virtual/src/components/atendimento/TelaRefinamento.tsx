@@ -107,10 +107,12 @@ export function TelaRefinamento({
             setPecaOriginal(data.texto)
             success('Peça carregada', `Texto extraído de "${file.name}".`)
           } else {
-            toastError('Aviso', 'Não foi possível extrair texto do arquivo. Cole o conteúdo manualmente.')
+            const detalhe = data.erro ? ` (${data.erro})` : ''
+            toastError('Aviso', `Não foi possível extrair texto do arquivo${detalhe}. Cole o conteúdo manualmente.`)
           }
         } else {
-          toastError('Erro', 'Falha ao processar o arquivo. Cole o conteúdo manualmente.')
+          const errData = await res.json().catch(() => null)
+          toastError('Erro', errData?.error ?? 'Falha ao processar o arquivo. Cole o conteúdo manualmente.')
         }
       }
     } catch {
