@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, type ReactNode } from 'react'
+import { useState, useCallback, useMemo, type ReactNode } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -13,8 +13,8 @@ import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TextStyle } from '@tiptap/extension-text-style'
 import FontFamily from '@tiptap/extension-font-family'
-import { Markdown } from 'tiptap-markdown'
 import { marked } from 'marked'
+import TurndownService from 'turndown'
 
 import { HighlightPlaceholders } from './HighlightPlaceholders'
 import { DocumentHeader } from './DocumentHeader'
@@ -24,6 +24,24 @@ import { PreencherSidebar } from './PreencherSidebar'
 import { AiComandoDialog } from './AiComandoDialog'
 import { JurisprudenciaDialog } from './JurisprudenciaDialog'
 import { useToast } from '@/components/ui/toast'
+
+// Markdown → HTML (entrada)
+function mdToHtml(md: string): string {
+  return marked.parse(md, { async: false }) as string
+}
+
+// HTML → Markdown (saída)
+const turndown = new TurndownService({
+  headingStyle: 'atx',
+  bulletListMarker: '-',
+  codeBlockStyle: 'fenced',
+  emDelimiter: '*',
+  strongDelimiter: '**',
+})
+
+function htmlToMd(html: string): string {
+  return turndown.turndown(html)
+}
 
 interface DocumentEditorProps {
   titulo: string
@@ -43,6 +61,9 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
   const [comandoIaOpen, setComandoIaOpen] = useState(false)
   const [jurisprudenciaOpen, setJurisprudenciaOpen] = useState(false)
 
+  // Converte o markdown inicial para HTML uma vez
+  const conteudoHtml = useMemo(() => mdToHtml(conteudo), [conteudo])
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -57,21 +78,15 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
       TableHeader,
       TextStyle,
       FontFamily,
-      Markdown.configure({
-        html: true,
-        transformCopiedText: true,
-        transformPastedText: true,
-      }),
       HighlightPlaceholders,
     ],
-    content: marked.parse(conteudo, { async: false }) as string,
+    content: conteudoHtml,
   })
 
   // Exporta o conteúdo atual como markdown
   function getMarkdown(): string {
     if (!editor) return conteudo
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (editor.storage as any).markdown.getMarkdown()
+    return htmlToMd(editor.getHTML())
   }
 
   const copiar = useCallback(() => {
@@ -141,10 +156,9 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
           getMarkdown={getMarkdown}
           onInsertContent={(md) => {
             if (editor) {
-              const html = marked.parse(md, { async: false }) as string
               editor.chain().focus().insertContentAt(
                 editor.state.doc.content.size,
-                html
+                mdToHtml(md)
               ).run()
             }
           }}
@@ -171,10 +185,9 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         onClose={() => setJurisprudenciaOpen(false)}
         onInserir={(texto) => {
           if (editor) {
-            const html = marked.parse(texto, { async: false }) as string
             editor.chain().focus().insertContentAt(
               editor.state.doc.content.size,
-              html
+              mdToHtml(texto)
             ).run()
           }
         }}
@@ -187,8 +200,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         documentoMarkdown={getMarkdown()}
         onAceitar={(novoConteudo) => {
           if (editor) {
-            const html = marked.parse(novoConteudo, { async: false }) as string
-            editor.commands.setContent(html)
+            editor.commands.setContent(mdToHtml(novoConteudo))
           }
         }}
       />
