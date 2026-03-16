@@ -52,6 +52,9 @@ const PROHIBITED_EXPRESSIONS: [RegExp, string][] = [
 export function formatarPeca(markdown: string): string {
   let result = markdown
 
+  // 0. Remover blocos de código markdown que a IA pode adicionar
+  result = removerBlocoCodigo(result)
+
   // 1. Remover linhas divisórias (---, ___, ***, ou variações)
   result = removerLinhasDivisorias(result)
 
@@ -76,6 +79,15 @@ export function formatarPeca(markdown: string): string {
   // 8. Limpar artefatos residuais
   result = limparArtefatos(result)
 
+  return result.trim()
+}
+
+// ─── 0. Remover blocos de código que a IA envolve a peça ────
+function removerBlocoCodigo(text: string): string {
+  let result = text.trim()
+  // Remove ```markdown ... ``` ou ``` ... ``` que envolve todo o conteúdo
+  result = result.replace(/^```(?:markdown|md|text|html)?\s*\n?/i, '')
+  result = result.replace(/\n?```\s*$/, '')
   return result.trim()
 }
 
