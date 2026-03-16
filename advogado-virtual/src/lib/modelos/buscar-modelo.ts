@@ -7,7 +7,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 export async function buscarModeloPadrao(
   supabase: SupabaseClient,
   tenantId: string,
-  tipo: 'peca' | 'contrato' | 'procuracao' | 'declaracao',
+  tipo: 'peca' | 'contrato' | 'procuracao' | 'declaracao' | 'substabelecimento',
   subtipo: string,
 ): Promise<string | null> {
   // 1. Buscar modelo específico para o subtipo

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const TIPOS_VALIDOS = ['peca', 'contrato', 'procuracao', 'declaracao']
+const TIPOS_VALIDOS = ['peca', 'contrato', 'procuracao', 'declaracao', 'substabelecimento']
 
 // GET /api/modelos-documento?tipo=peca — lista modelos do tenant
 export async function GET(req: NextRequest) {

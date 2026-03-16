@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import {
   FileText, Upload, Trash2, Loader2, Plus, Eye, X,
-  FileSignature, ScrollText, Scale, FileCheck, Lightbulb,
+  FileSignature, ScrollText, Scale, FileCheck, Lightbulb, ArrowRightLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -15,6 +15,7 @@ const TIPOS = [
   { id: 'contrato', label: 'Contratos', icon: FileSignature },
   { id: 'procuracao', label: 'Procurações', icon: ScrollText },
   { id: 'declaracao', label: 'Declarações', icon: FileCheck },
+  { id: 'substabelecimento', label: 'Substabelecimentos', icon: ArrowRightLeft },
 ] as const
 
 type TipoModelo = (typeof TIPOS)[number]['id']
@@ -61,11 +62,18 @@ const SUBTIPOS_DECLARACAO: { value: string; label: string }[] = [
   { value: 'declaracao_dependentes', label: 'Dependentes' },
 ]
 
+const SUBTIPOS_SUBSTABELECIMENTO: { value: string; label: string }[] = [
+  { value: 'todos', label: 'Todos (padrão geral)' },
+  { value: 'substabelecimento_com_reserva', label: 'Com Reserva de Poderes' },
+  { value: 'substabelecimento_sem_reserva', label: 'Sem Reserva de Poderes' },
+]
+
 const SUBTIPOS_MAP: Record<TipoModelo, { value: string; label: string }[]> = {
   peca: SUBTIPOS_PECA,
   contrato: SUBTIPOS_CONTRATO,
   procuracao: SUBTIPOS_PROCURACAO,
   declaracao: SUBTIPOS_DECLARACAO,
+  substabelecimento: SUBTIPOS_SUBSTABELECIMENTO,
 }
 
 const DICAS: Record<TipoModelo, string> = {
@@ -73,6 +81,7 @@ const DICAS: Record<TipoModelo, string> = {
   contrato: 'Cadastre modelos de contrato. A IA respeitará o conteúdo e a estrutura do modelo, apenas preenchendo os dados do cliente e do caso. Não será gerado conteúdo adicional além do previsto no modelo.',
   procuracao: 'Cadastre modelos de procuração. A IA respeitará integralmente o conteúdo do modelo, apenas inserindo os dados das partes, poderes e informações do caso.',
   declaracao: 'Cadastre modelos de declaração. A IA seguirá exatamente o conteúdo e formato do modelo, preenchendo apenas os dados necessários do cliente.',
+  substabelecimento: 'Cadastre modelos de substabelecimento. A IA respeitará integralmente o conteúdo e formato do modelo, preenchendo os dados do advogado substabelecente, substabelecido, poderes e informações do processo.',
 }
 
 interface Modelo {
