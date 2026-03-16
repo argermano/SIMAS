@@ -67,6 +67,30 @@ export const AREAS = {
       'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'comprovante_residencia', 'outro',
     ],
   },
+  familia: {
+    id: 'familia',
+    nome: 'Família',
+    icone: 'Heart',
+    cor: '#E91E63',
+    corBg: 'bg-[#E91E63]/10',
+    corTexto: 'text-[#E91E63]',
+    corBorda: 'border-[#E91E63]/20',
+    ativo: true,
+    descricao: 'Divórcio, guarda, alimentos, inventário e sucessões',
+    pecas: [
+      'peticao_inicial', 'contestacao', 'replica', 'apelacao', 'agravo',
+      'embargos', 'recurso_especial', 'tutela', 'cumprimento', 'contrarrazoes', 'acordo',
+    ],
+    modelos: [
+      'procuracao', 'contrato_honorarios', 'substabelecimento', 'declaracao_hipossuficiencia',
+    ],
+    tipos_documento: [
+      'certidao_casamento', 'certidao_nascimento', 'certidao_obito',
+      'pacto_antenupcial', 'escritura_uniao_estavel', 'comprovante_renda',
+      'declaracao_ir', 'escritura_imovel', 'extrato_bancario',
+      'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'comprovante_residencia', 'outro',
+    ],
+  },
   criminal: {
     id: 'criminal',
     nome: 'Criminal',
@@ -131,30 +155,6 @@ export const AREAS = {
     tipos_documento: [
       'contrato_social', 'balancete', 'ata_assembleia', 'certidao', 'nota_fiscal',
       'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'cnpj', 'outro',
-    ],
-  },
-  familia: {
-    id: 'familia',
-    nome: 'Família/Sucessões',
-    icone: 'Heart',
-    cor: '#E91E63',
-    corBg: 'bg-[#E91E63]/10',
-    corTexto: 'text-[#E91E63]',
-    corBorda: 'border-[#E91E63]/20',
-    ativo: true,
-    descricao: 'Divórcio, guarda, alimentos, inventário e sucessões',
-    pecas: [
-      'peticao_inicial', 'contestacao', 'replica', 'apelacao', 'agravo',
-      'embargos', 'recurso_especial', 'tutela', 'cumprimento', 'contrarrazoes', 'acordo',
-    ],
-    modelos: [
-      'procuracao', 'contrato_honorarios', 'substabelecimento', 'declaracao_hipossuficiencia',
-    ],
-    tipos_documento: [
-      'certidao_casamento', 'certidao_nascimento', 'certidao_obito',
-      'pacto_antenupcial', 'escritura_uniao_estavel', 'comprovante_renda',
-      'declaracao_ir', 'escritura_imovel', 'extrato_bancario',
-      'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'comprovante_residencia', 'outro',
     ],
   },
   medico: {
