@@ -15,6 +15,7 @@ import { buildPromptContestacaoFamilia, SYSTEM_CONTESTACAO_FAMILIA } from '@/lib
 import { buildPromptPeticaoInicialMedico, SYSTEM_PETICAO_MEDICO } from '@/lib/prompts/pecas/medico/peticao-inicial'
 import { buildPromptContestacaoMedico, SYSTEM_CONTESTACAO_MEDICO } from '@/lib/prompts/pecas/medico/contestacao'
 import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
+import { buscarModeloPadrao } from '@/lib/modelos/buscar-modelo'
 
 type QualificacaoPartes = {
   autor?: {
@@ -202,6 +203,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Buscar modelo padrão do escritório (se cadastrado)
+    let modeloPadrao: string | null = null
+    try {
+      modeloPadrao = await buscarModeloPadrao(supabase, usuario.tenant_id, 'peca', tipo)
+    } catch {
+      // Falha silenciosa — segue sem modelo
+    }
+
     // Selecionar prompt
     const promptConfig = PROMPT_MAP[area]?.[tipo]
     if (!promptConfig) {
@@ -215,6 +224,10 @@ export async function POST(req: NextRequest) {
         localizacao,
         qualificacao: qualificacaoFinal,
       })
+
+      if (modeloPadrao) {
+        prompt += `\n\n## MODELO PADRÃO DO ESCRITÓRIO (OBRIGATÓRIO)\nO escritório cadastrou o seguinte modelo como padrão. Você DEVE seguir EXATAMENTE a mesma formatação, estrutura visual, fontes, espaçamentos, cabeçalhos e rodapés deste modelo. Adapte apenas o conteúdo jurídico ao caso concreto, mantendo o layout idêntico:\n\n${modeloPadrao}`
+      }
 
       if (jurisprudenciaTexto) {
         prompt += `\n\n${jurisprudenciaTexto}\n\nUse a jurisprudência acima como referência para fundamentar a peça. Cite os processos relevantes quando aplicável.`
@@ -258,6 +271,10 @@ export async function POST(req: NextRequest) {
       localizacao,
       qualificacao: qualificacaoFinal,
     })
+
+    if (modeloPadrao) {
+      prompt += `\n\n## MODELO PADRÃO DO ESCRITÓRIO (OBRIGATÓRIO)\nO escritório cadastrou o seguinte modelo como padrão. Você DEVE seguir EXATAMENTE a mesma formatação, estrutura visual, fontes, espaçamentos, cabeçalhos e rodapés deste modelo. Adapte apenas o conteúdo jurídico ao caso concreto, mantendo o layout idêntico:\n\n${modeloPadrao}`
+    }
 
     if (jurisprudenciaTexto) {
       prompt += `\n\n${jurisprudenciaTexto}\n\nUse a jurisprudência acima como referência para fundamentar a peça. Cite os processos relevantes quando aplicável.`
