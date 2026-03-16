@@ -1,22 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { Settings, Brain } from 'lucide-react'
+import { Settings, Brain, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ConfiguracoesTabsProps {
   configuracoes: React.ReactNode
   consumo: React.ReactNode
+  padroes: React.ReactNode
 }
 
 const TABS = [
   { id: 'config', label: 'Configurações', icon: Settings },
+  { id: 'padroes', label: 'Padrões de Documentos', icon: FileText },
   { id: 'consumo', label: 'Consumo de IA', icon: Brain },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
 
-export function ConfiguracoesTabs({ configuracoes, consumo }: ConfiguracoesTabsProps) {
+export function ConfiguracoesTabs({ configuracoes, consumo, padroes }: ConfiguracoesTabsProps) {
   const [aba, setAba] = useState<TabId>('config')
 
   return (
@@ -46,6 +48,7 @@ export function ConfiguracoesTabs({ configuracoes, consumo }: ConfiguracoesTabsP
 
       {/* Tab content */}
       {aba === 'config' && <div className="space-y-6">{configuracoes}</div>}
+      {aba === 'padroes' && <div className="space-y-4">{padroes}</div>}
       {aba === 'consumo' && <div className="space-y-4">{consumo}</div>}
     </div>
   )
