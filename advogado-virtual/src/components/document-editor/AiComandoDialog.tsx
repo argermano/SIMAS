@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Loader2, Sparkles, Check, X } from 'lucide-react'
+import { formatarPeca } from '@/lib/format/formatar-peca'
 
 interface AiComandoDialogProps {
   open: boolean
@@ -74,7 +75,7 @@ export function AiComandoDialog({
   }
 
   function handleAceitar() {
-    onAceitar(resultado)
+    onAceitar(formatarPeca(resultado))
     handleClose()
   }
 

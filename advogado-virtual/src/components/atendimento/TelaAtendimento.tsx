@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { useStreaming } from '@/components/shared/StreamingText'
+import { formatarPeca } from '@/lib/format/formatar-peca'
 import { SeletorCliente } from './SeletorCliente'
 import { GravadorAudio } from './GravadorAudio'
 import { MicrofoneInline } from './MicrofoneInline'
@@ -391,11 +392,14 @@ export function TelaAtendimento({
       return
     }
 
-    // 3. Salva o conteúdo gerado no banco
+    // 3. Aplica formatação forense padronizada antes de salvar
+    const conteudoFormatado = formatarPeca(fullText)
+
+    // 4. Salva o conteúdo formatado no banco
     await fetch('/api/ia/salvar-peca', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pecaId, conteudo: fullText }),
+      body: JSON.stringify({ pecaId, conteudo: conteudoFormatado }),
     })
 
     // 4. Atualiza status do atendimento para peca_gerada
