@@ -10,6 +10,7 @@ import { formatarData } from '@/lib/utils'
 import { LABELS_ROLE } from '@/types'
 import { FormPerfilProfissional } from '@/components/configuracoes/FormPerfilProfissional'
 import { PainelConsumoIA } from '@/components/configuracoes/PainelConsumoIA'
+import { PadroesDocumentos } from '@/components/configuracoes/PadroesDocumentos'
 import { ConfiguracoesTabs } from '@/components/configuracoes/ConfiguracoesTabs'
 
 export const metadata = { title: 'Configurações' }
@@ -210,6 +211,7 @@ export default async function ConfiguracoesPage() {
   )
 
   const conteudoConsumo = <PainelConsumoIA />
+  const conteudoPadroes = <PadroesDocumentos />
 
   return (
     <>
@@ -233,6 +235,7 @@ export default async function ConfiguracoesPage() {
           <ConfiguracoesTabs
             configuracoes={conteudoConfiguracoes}
             consumo={conteudoConsumo}
+            padroes={conteudoPadroes}
           />
         </div>
       </main>
