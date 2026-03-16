@@ -81,7 +81,7 @@ export interface ClienteComAtendimentos extends Cliente {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type AreaJuridica = 'previdenciario' | 'trabalhista' | 'civel' | 'criminal' | 'tributario' | 'empresarial'
+export type AreaJuridica = 'previdenciario' | 'trabalhista' | 'civel' | 'criminal' | 'tributario' | 'empresarial' | 'familia' | 'medico'
 export type AtendimentoStatus = 'caso_novo' | 'peca_gerada' | 'finalizado'
 
 export interface Atendimento {
@@ -241,6 +241,8 @@ export const LABELS_AREA: Record<AreaJuridica, string> = {
   criminal:       'Criminal',
   tributario:     'Tributário',
   empresarial:    'Empresarial',
+  familia:        'Família/Sucessões',
+  medico:         'Direito Médico',
 }
 
 export const LABELS_STATUS_ATENDIMENTO: Record<AtendimentoStatus, string> = {

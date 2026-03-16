@@ -10,6 +10,10 @@ import { buildPromptPeticaoInicialTrab, SYSTEM_PETICAO_TRAB } from '@/lib/prompt
 import { buildPromptContestacaoTrab, SYSTEM_CONTESTACAO_TRAB } from '@/lib/prompts/pecas/trabalhista/contestacao'
 import { buildPromptPeticaoInicialCivel, SYSTEM_PETICAO_CIVEL } from '@/lib/prompts/pecas/civel/peticao-inicial'
 import { buildPromptContestacaoCivel, SYSTEM_CONTESTACAO_CIVEL } from '@/lib/prompts/pecas/civel/contestacao'
+import { buildPromptPeticaoInicialFamilia, SYSTEM_PETICAO_FAMILIA } from '@/lib/prompts/pecas/familia/peticao-inicial'
+import { buildPromptContestacaoFamilia, SYSTEM_CONTESTACAO_FAMILIA } from '@/lib/prompts/pecas/familia/contestacao'
+import { buildPromptPeticaoInicialMedico, SYSTEM_PETICAO_MEDICO } from '@/lib/prompts/pecas/medico/peticao-inicial'
+import { buildPromptContestacaoMedico, SYSTEM_CONTESTACAO_MEDICO } from '@/lib/prompts/pecas/medico/contestacao'
 import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
 
 type QualificacaoPartes = {
@@ -45,6 +49,14 @@ const PROMPT_MAP: Record<string, Record<string, { system: string; build: PromptB
   civel: {
     peticao_inicial: { system: SYSTEM_PETICAO_CIVEL, build: buildPromptPeticaoInicialCivel },
     contestacao:     { system: SYSTEM_CONTESTACAO_CIVEL, build: buildPromptContestacaoCivel },
+  },
+  familia: {
+    peticao_inicial: { system: SYSTEM_PETICAO_FAMILIA, build: buildPromptPeticaoInicialFamilia },
+    contestacao:     { system: SYSTEM_CONTESTACAO_FAMILIA, build: buildPromptContestacaoFamilia },
+  },
+  medico: {
+    peticao_inicial: { system: SYSTEM_PETICAO_MEDICO, build: buildPromptPeticaoInicialMedico },
+    contestacao:     { system: SYSTEM_CONTESTACAO_MEDICO, build: buildPromptContestacaoMedico },
   },
 }
 
@@ -350,6 +362,8 @@ function extrairTermosBusca(pedidos: string, transcricao: string, area: string):
     criminal:       'habeas corpus defesa criminal ação penal',
     tributario:     'tributo imposto lançamento fiscal autuação',
     empresarial:    'contrato empresarial societário recuperação judicial',
+    familia:        'divórcio guarda alimentos pensão inventário sucessão família',
+    medico:         'erro médico responsabilidade civil médica plano saúde dano paciente',
   }
   return termosPorArea[area] ?? 'direito jurisprudência'
 }

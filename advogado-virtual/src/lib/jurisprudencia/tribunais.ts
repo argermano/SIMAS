@@ -72,6 +72,8 @@ export const TRIBUNAIS_DEFAULT: Record<string, string[]> = {
   criminal:       ['stj', 'tjsp', 'tjrj', 'tjmg'],
   tributario:     ['stj', 'trf1', 'trf3', 'trf4'],
   empresarial:    ['stj', 'tjsp', 'tjrj', 'tjmg'],
+  familia:        ['stj', 'tjsp', 'tjrj', 'tjmg'],
+  medico:         ['stj', 'tjsp', 'tjrj', 'tjmg'],
 }
 
 /** Grupos para UI */

@@ -49,6 +49,25 @@ const LABELS_TIPO: Record<string, string> = {
   sentenca: 'Sentença',
   acordao: 'Acórdão',
   ata_audiencia: 'Ata de Audiência',
+  // Família/Sucessões
+  certidao_casamento: 'Certidão de Casamento',
+  certidao_nascimento: 'Certidão de Nascimento',
+  certidao_obito: 'Certidão de Óbito',
+  pacto_antenupcial: 'Pacto Antenupcial',
+  escritura_uniao_estavel: 'Escritura de União Estável',
+  comprovante_renda: 'Comprovante de Renda',
+  declaracao_ir: 'Declaração de IR',
+  escritura_imovel: 'Escritura de Imóvel',
+  extrato_bancario: 'Extrato Bancário',
+  // Direito Médico
+  prontuario_medico: 'Prontuário Médico',
+  exame: 'Exame',
+  receita_medica: 'Receita Médica',
+  nota_fiscal_medica: 'Nota Fiscal Médica',
+  contrato_plano_saude: 'Contrato Plano de Saúde',
+  negativa_plano: 'Negativa do Plano',
+  termo_consentimento: 'Termo de Consentimento',
+  atestado_obito: 'Atestado de Óbito',
   outro: 'Outro',
 }
 
