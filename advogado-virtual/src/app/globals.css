@@ -127,50 +127,60 @@
 .ProseMirror {
   outline: none;
   font-family: 'Times New Roman', Times, serif;
-  font-size: 14px;
-  line-height: 1.8;
-  color: #1f2937;
+  font-size: 12pt;
+  line-height: 1.5;
+  color: #111827;
+}
+
+/* Endereçamento ao juiz — primeira linha do documento */
+.ProseMirror > p:first-child {
+  text-align: justify;
+  text-indent: 0;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
 }
 
 .ProseMirror h1 {
-  font-size: 1.25rem;
+  font-size: 13pt;
   font-weight: 700;
   color: #111827;
   text-align: center;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   margin-top: 1.5rem;
   margin-bottom: 1rem;
 }
 
 .ProseMirror h2 {
-  font-size: 1rem;
+  font-size: 12pt;
   font-weight: 700;
   color: #111827;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  text-align: center;
   margin-top: 1.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .ProseMirror h3 {
-  font-size: 0.9375rem;
-  font-weight: 600;
-  color: #1f2937;
-  margin-top: 1rem;
-  margin-bottom: 0.375rem;
+  font-size: 12pt;
+  font-weight: 700;
+  color: #111827;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
 }
 
 .ProseMirror p {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   text-align: justify;
-  text-indent: 1.25cm;
+  text-indent: 2.5cm;
 }
 
+/* Parágrafos logo após títulos — manter recuo */
 .ProseMirror h1 + p,
 .ProseMirror h2 + p,
 .ProseMirror h3 + p {
-  text-indent: 1.25cm;
+  text-indent: 2.5cm;
 }
 
 .ProseMirror strong { font-weight: 700; color: #111827; }
