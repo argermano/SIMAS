@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { useStreaming } from '@/components/shared/StreamingText'
+import { formatarPeca } from '@/lib/format/formatar-peca'
 import { SeletorCliente } from './SeletorCliente'
 import { UploadDocumentos } from './UploadDocumentos'
 import { MicrofoneInline } from './MicrofoneInline'
@@ -161,11 +162,14 @@ export function TelaRefinamento({
       return
     }
 
-    // Salva conteúdo
+    // Aplica formatação forense padronizada antes de salvar
+    const conteudoFormatado = formatarPeca(fullText)
+
+    // Salva conteúdo formatado
     await fetch('/api/ia/salvar-peca', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pecaId, conteudo: fullText }),
+      body: JSON.stringify({ pecaId, conteudo: conteudoFormatado }),
     })
 
     // Atualiza status do atendimento
