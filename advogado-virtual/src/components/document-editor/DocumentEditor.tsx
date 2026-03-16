@@ -14,6 +14,7 @@ import { TableHeader } from '@tiptap/extension-table-header'
 import { TextStyle } from '@tiptap/extension-text-style'
 import FontFamily from '@tiptap/extension-font-family'
 import { Markdown } from 'tiptap-markdown'
+import { marked } from 'marked'
 
 import { HighlightPlaceholders } from './HighlightPlaceholders'
 import { DocumentHeader } from './DocumentHeader'
@@ -57,13 +58,13 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
       TextStyle,
       FontFamily,
       Markdown.configure({
-        html: false,
+        html: true,
         transformCopiedText: true,
         transformPastedText: true,
       }),
       HighlightPlaceholders,
     ],
-    content: conteudo,
+    content: marked.parse(conteudo, { async: false }) as string,
   })
 
   // Exporta o conteúdo atual como markdown
@@ -140,9 +141,10 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
           getMarkdown={getMarkdown}
           onInsertContent={(md) => {
             if (editor) {
+              const html = marked.parse(md, { async: false }) as string
               editor.chain().focus().insertContentAt(
                 editor.state.doc.content.size,
-                `\n\n${md}`
+                html
               ).run()
             }
           }}
@@ -169,9 +171,10 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         onClose={() => setJurisprudenciaOpen(false)}
         onInserir={(texto) => {
           if (editor) {
+            const html = marked.parse(texto, { async: false }) as string
             editor.chain().focus().insertContentAt(
               editor.state.doc.content.size,
-              texto
+              html
             ).run()
           }
         }}
@@ -184,8 +187,8 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         documentoMarkdown={getMarkdown()}
         onAceitar={(novoConteudo) => {
           if (editor) {
-            // Replace entire document content with the AI-modified version
-            editor.commands.setContent(novoConteudo)
+            const html = marked.parse(novoConteudo, { async: false }) as string
+            editor.commands.setContent(html)
           }
         }}
       />
