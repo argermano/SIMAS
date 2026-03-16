@@ -11,6 +11,8 @@ const LABELS_AREA: Record<string, string> = {
   criminal:       'Criminal',
   tributario:     'Tributário',
   empresarial:    'Empresarial',
+  familia:        'Família e Sucessões',
+  medico:         'Direito Médico',
 }
 
 const SYSTEM_REFINAMENTO = `Você é um advogado brasileiro extremamente experiente e minucioso, especialista em revisão e refinamento de peças processuais. Seu trabalho é receber uma peça existente, analisá-la junto com os documentos do caso e as instruções do advogado, e produzir uma versão refinada e melhorada.

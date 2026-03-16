@@ -133,6 +133,54 @@ export const AREAS = {
       'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'cnpj', 'outro',
     ],
   },
+  familia: {
+    id: 'familia',
+    nome: 'Família/Sucessões',
+    icone: 'Heart',
+    cor: '#E91E63',
+    corBg: 'bg-[#E91E63]/10',
+    corTexto: 'text-[#E91E63]',
+    corBorda: 'border-[#E91E63]/20',
+    ativo: true,
+    descricao: 'Divórcio, guarda, alimentos, inventário e sucessões',
+    pecas: [
+      'peticao_inicial', 'contestacao', 'replica', 'apelacao', 'agravo',
+      'embargos', 'recurso_especial', 'tutela', 'cumprimento', 'contrarrazoes', 'acordo',
+    ],
+    modelos: [
+      'procuracao', 'contrato_honorarios', 'substabelecimento', 'declaracao_hipossuficiencia',
+    ],
+    tipos_documento: [
+      'certidao_casamento', 'certidao_nascimento', 'certidao_obito',
+      'pacto_antenupcial', 'escritura_uniao_estavel', 'comprovante_renda',
+      'declaracao_ir', 'escritura_imovel', 'extrato_bancario',
+      'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'comprovante_residencia', 'outro',
+    ],
+  },
+  medico: {
+    id: 'medico',
+    nome: 'Direito Médico',
+    icone: 'Stethoscope',
+    cor: '#10b981',
+    corBg: 'bg-[#10b981]/10',
+    corTexto: 'text-[#10b981]',
+    corBorda: 'border-[#10b981]/20',
+    ativo: true,
+    descricao: 'Erro médico, planos de saúde e responsabilidade civil médica',
+    pecas: [
+      'peticao_inicial', 'contestacao', 'replica', 'apelacao', 'agravo',
+      'embargos', 'recurso_especial', 'tutela', 'cumprimento', 'contrarrazoes', 'acordo',
+    ],
+    modelos: [
+      'procuracao', 'contrato_honorarios', 'substabelecimento', 'notificacao_extrajudicial',
+    ],
+    tipos_documento: [
+      'prontuario_medico', 'laudo_medico', 'laudo_pericial', 'exame',
+      'receita_medica', 'nota_fiscal_medica', 'contrato_plano_saude',
+      'negativa_plano', 'termo_consentimento', 'atestado_obito',
+      'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'comprovante_residencia', 'outro',
+    ],
+  },
 } as const
 
 export type AreaId = keyof typeof AREAS

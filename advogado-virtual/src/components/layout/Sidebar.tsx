@@ -12,7 +12,7 @@ import {
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
-const PREFIXOS_HOME = ['/dashboard', '/previdenciario', '/trabalhista', '/civel', '/criminal', '/tributario', '/empresarial']
+const PREFIXOS_HOME = ['/dashboard', '/previdenciario', '/trabalhista', '/civel', '/criminal', '/tributario', '/empresarial', '/familia', '/medico']
 
 const MENU_ITEMS = [
   {
