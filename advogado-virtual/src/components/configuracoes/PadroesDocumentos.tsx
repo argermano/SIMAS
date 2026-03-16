@@ -446,11 +446,23 @@ export function PadroesDocumentos() {
                       type="file"
                       accept=".pdf,.docx,.doc,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,text/plain"
                       onChange={e => setArquivo(e.target.files?.[0] ?? null)}
-                      className="w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary hover:file:bg-primary/20"
+                      className="hidden"
                     />
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      PDF, Word (.docx) ou texto (.txt) — máx. 10 MB
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => fileRef.current?.click()}
+                      className="w-full rounded-lg border-2 border-dashed border-input hover:border-primary/50 bg-muted/30 hover:bg-primary/5 transition-colors py-8 px-4 flex flex-col items-center gap-2 cursor-pointer"
+                    >
+                      <Upload className="h-8 w-8 text-muted-foreground/60" />
+                      {arquivo ? (
+                        <span className="text-sm font-medium text-foreground">{arquivo.name}</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Clique para selecionar um arquivo</span>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        PDF, Word (.docx) ou texto (.txt) — máx. 10 MB
+                      </span>
+                    </button>
                   </div>
                 ) : (
                   <textarea
