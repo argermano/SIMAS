@@ -24,7 +24,7 @@ async function enviarEmailAcesso(nome: string, email: string, link: string, isNo
       titulo: `Olá, ${nome}!`,
       conteudo: isNovo
         ? `
-          <p>Você foi convidado(a) para acessar o <strong>SIMAS</strong> — Sistema de IA para Maximizar a Advocacia de forma Simples.</p>
+          <p>Você foi convidado(a) para acessar o <strong>SIMAS</strong> — Sistema Inteligente para Modernizar a Advocacia com Segurança.</p>
           <p>Clique no botão abaixo para criar sua senha e começar a usar o sistema:</p>
         `
         : `

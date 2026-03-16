@@ -25,7 +25,7 @@ async function enviarEmailConvite(nome: string, email: string, link: string) {
     html: emailTemplate({
       titulo: `Olá, ${nome}!`,
       conteudo: `
-        <p>Você foi convidado(a) para acessar o <strong>SIMAS</strong> — Sistema de IA para Maximizar a Advocacia de forma Simples.</p>
+        <p>Você foi convidado(a) para acessar o <strong>SIMAS</strong> — Sistema Inteligente para Modernizar a Advocacia com Segurança.</p>
         <p>Clique no botão abaixo para criar sua senha e começar a usar o sistema:</p>
       `,
       botao: { texto: 'Criar minha senha', url: link },
