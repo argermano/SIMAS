@@ -241,7 +241,7 @@ export const LABELS_AREA: Record<AreaJuridica, string> = {
   criminal:       'Criminal',
   tributario:     'Tributário',
   empresarial:    'Empresarial',
-  familia:        'Família/Sucessões',
+  familia:        'Família',
   medico:         'Direito Médico',
 }
 

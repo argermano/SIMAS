@@ -11,7 +11,7 @@ const LABELS_AREA: Record<string, string> = {
   criminal:       'Criminal',
   tributario:     'Tributário',
   empresarial:    'Empresarial',
-  familia:        'Família e Sucessões',
+  familia:        'Família',
   medico:         'Direito Médico',
 }
 
