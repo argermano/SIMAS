@@ -6,22 +6,79 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import {
   FileText, Upload, Trash2, Loader2, Plus, Eye, X,
-  FileSignature, ScrollText, Scale, FileCheck,
+  FileSignature, ScrollText, Scale, FileCheck, Lightbulb,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const TIPOS = [
-  { id: 'peca', label: 'Peças Processuais', icon: Scale, descricao: 'Petições iniciais, contestações, recursos e outras peças' },
-  { id: 'contrato', label: 'Contratos', icon: FileSignature, descricao: 'Contratos de honorários, prestação de serviços, etc.' },
-  { id: 'procuracao', label: 'Procurações', icon: ScrollText, descricao: 'Procurações ad judicia, ad negotia e específicas' },
-  { id: 'declaracao', label: 'Declarações', icon: FileCheck, descricao: 'Declarações de hipossuficiência, residência, etc.' },
+  { id: 'peca', label: 'Peças Processuais', icon: Scale },
+  { id: 'contrato', label: 'Contratos', icon: FileSignature },
+  { id: 'procuracao', label: 'Procurações', icon: ScrollText },
+  { id: 'declaracao', label: 'Declarações', icon: FileCheck },
 ] as const
 
 type TipoModelo = (typeof TIPOS)[number]['id']
 
+const SUBTIPOS_PECA: { value: string; label: string }[] = [
+  { value: 'todos', label: 'Todos (padrão geral)' },
+  { value: 'peticao_inicial', label: 'Petição Inicial' },
+  { value: 'contestacao', label: 'Contestação' },
+  { value: 'replica', label: 'Réplica' },
+  { value: 'apelacao', label: 'Apelação' },
+  { value: 'agravo', label: 'Agravo' },
+  { value: 'embargos', label: 'Embargos' },
+  { value: 'recurso_especial', label: 'Recurso Especial' },
+  { value: 'recurso_ordinario', label: 'Recurso Ordinário' },
+  { value: 'tutela', label: 'Tutela de Urgência' },
+  { value: 'cumprimento', label: 'Cumprimento de Sentença' },
+  { value: 'contrarrazoes', label: 'Contrarrazões' },
+  { value: 'acordo', label: 'Acordo' },
+  { value: 'habeas_corpus', label: 'Habeas Corpus' },
+  { value: 'mandado_seguranca', label: 'Mandado de Segurança' },
+]
+
+const SUBTIPOS_CONTRATO: { value: string; label: string }[] = [
+  { value: 'todos', label: 'Todos (padrão geral)' },
+  { value: 'contrato_honorarios', label: 'Contrato de Honorários' },
+  { value: 'contrato_prestacao_servicos', label: 'Prestação de Serviços' },
+  { value: 'contrato_compra_venda', label: 'Compra e Venda' },
+  { value: 'contrato_locacao', label: 'Locação' },
+  { value: 'contrato_parceria', label: 'Parceria' },
+]
+
+const SUBTIPOS_PROCURACAO: { value: string; label: string }[] = [
+  { value: 'todos', label: 'Todos (padrão geral)' },
+  { value: 'procuracao_ad_judicia', label: 'Ad Judicia' },
+  { value: 'procuracao_ad_negotia', label: 'Ad Negotia' },
+  { value: 'procuracao_especifica', label: 'Específica' },
+]
+
+const SUBTIPOS_DECLARACAO: { value: string; label: string }[] = [
+  { value: 'todos', label: 'Todos (padrão geral)' },
+  { value: 'declaracao_hipossuficiencia', label: 'Hipossuficiência' },
+  { value: 'declaracao_residencia', label: 'Residência' },
+  { value: 'declaracao_uniao_estavel', label: 'União Estável' },
+  { value: 'declaracao_dependentes', label: 'Dependentes' },
+]
+
+const SUBTIPOS_MAP: Record<TipoModelo, { value: string; label: string }[]> = {
+  peca: SUBTIPOS_PECA,
+  contrato: SUBTIPOS_CONTRATO,
+  procuracao: SUBTIPOS_PROCURACAO,
+  declaracao: SUBTIPOS_DECLARACAO,
+}
+
+const DICAS: Record<TipoModelo, string> = {
+  peca: 'Cadastre modelos para cada tipo de peça. A IA usará o modelo como referência de formatação (fontes, espaçamentos, cabeçalhos, rodapés e estrutura visual). Se não houver modelo para o tipo específico, usará o modelo marcado como "Todos". Sem nenhum modelo, a IA gera automaticamente.',
+  contrato: 'Cadastre modelos de contrato. A IA respeitará o conteúdo e a estrutura do modelo, apenas preenchendo os dados do cliente e do caso. Não será gerado conteúdo adicional além do previsto no modelo.',
+  procuracao: 'Cadastre modelos de procuração. A IA respeitará integralmente o conteúdo do modelo, apenas inserindo os dados das partes, poderes e informações do caso.',
+  declaracao: 'Cadastre modelos de declaração. A IA seguirá exatamente o conteúdo e formato do modelo, preenchendo apenas os dados necessários do cliente.',
+}
+
 interface Modelo {
   id: string
   tipo: string
+  subtipo: string
   titulo: string
   descricao: string | null
   created_at: string
@@ -39,7 +96,7 @@ export function PadroesDocumentos() {
   const [visualizando, setVisualizando] = useState<{ titulo: string; conteudo: string } | null>(null)
 
   // Form state
-  const [titulo, setTitulo] = useState('')
+  const [subtipo, setSubtipo] = useState('todos')
   const [descricao, setDescricao] = useState('')
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [conteudo, setConteudo] = useState('')
@@ -64,9 +121,18 @@ export function PadroesDocumentos() {
   useEffect(() => { carregarModelos() }, [carregarModelos])
 
   const modelosFiltrados = modelos.filter(m => m.tipo === tipoAtivo)
+  const subtiposDisponiveis = SUBTIPOS_MAP[tipoAtivo]
+
+  function getSubtipoLabel(subtipoValue: string): string {
+    for (const list of Object.values(SUBTIPOS_MAP)) {
+      const found = list.find(s => s.value === subtipoValue)
+      if (found) return found.label
+    }
+    return subtipoValue
+  }
 
   function resetForm() {
-    setTitulo('')
+    setSubtipo('todos')
     setDescricao('')
     setArquivo(null)
     setConteudo('')
@@ -77,10 +143,6 @@ export function PadroesDocumentos() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!titulo.trim()) {
-      toastError('Erro', 'Informe o título do modelo')
-      return
-    }
     if (modoInput === 'arquivo' && !arquivo) {
       toastError('Erro', 'Selecione um arquivo')
       return
@@ -90,11 +152,20 @@ export function PadroesDocumentos() {
       return
     }
 
+    // Verificar se já existe modelo para este subtipo
+    const jaExiste = modelosFiltrados.some(m => m.subtipo === subtipo)
+    if (jaExiste) {
+      toastError('Erro', `Já existe um modelo para "${getSubtipoLabel(subtipo)}". Exclua o existente antes de adicionar outro.`)
+      return
+    }
+
     setEnviando(true)
     try {
+      const titulo = getSubtipoLabel(subtipo)
       const formData = new FormData()
       formData.append('tipo', tipoAtivo)
-      formData.append('titulo', titulo.trim())
+      formData.append('subtipo', subtipo)
+      formData.append('titulo', titulo)
       if (descricao.trim()) formData.append('descricao', descricao.trim())
 
       if (modoInput === 'arquivo' && arquivo) {
@@ -114,7 +185,7 @@ export function PadroesDocumentos() {
         return
       }
 
-      success('Modelo salvo!', `"${titulo}" foi adicionado aos padrões de ${TIPOS.find(t => t.id === tipoAtivo)?.label}`)
+      success('Modelo salvo!', `"${titulo}" foi adicionado como padrão`)
       resetForm()
       carregarModelos()
     } catch {
@@ -160,13 +231,6 @@ export function PadroesDocumentos() {
 
   return (
     <div className="space-y-6">
-      {/* Descrição */}
-      <div>
-        <p className="text-sm text-muted-foreground">
-          Gerencie os modelos padrão de documentos do escritório. Esses modelos podem ser usados como referência pela IA ao gerar documentos.
-        </p>
-      </div>
-
       {/* Abas por tipo */}
       <div className="flex gap-1 border-b border-border">
         {TIPOS.map(tipo => {
@@ -195,10 +259,13 @@ export function PadroesDocumentos() {
         })}
       </div>
 
-      {/* Descrição do tipo ativo */}
-      <p className="text-xs text-muted-foreground">
-        {TIPOS.find(t => t.id === tipoAtivo)?.descricao}
-      </p>
+      {/* Dica contextual */}
+      <div className="flex gap-3 rounded-lg bg-primary/5 border border-primary/10 p-4">
+        <Lightbulb className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {DICAS[tipoAtivo]}
+        </p>
+      </div>
 
       {/* Lista de modelos */}
       {loading ? (
@@ -212,7 +279,7 @@ export function PadroesDocumentos() {
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  Nenhum modelo cadastrado para {TIPOS.find(t => t.id === tipoAtivo)?.label}.
+                  Nenhum modelo cadastrado. A IA gerará documentos automaticamente.
                 </p>
                 <Button
                   variant="secondary"
@@ -231,7 +298,14 @@ export function PadroesDocumentos() {
             <Card key={modelo.id}>
               <CardContent className="flex items-center justify-between py-4">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{modelo.titulo}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm truncate">{modelo.titulo}</p>
+                    {modelo.subtipo === 'todos' && (
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary uppercase">
+                        Padrão geral
+                      </span>
+                    )}
+                  </div>
                   {modelo.descricao && (
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">{modelo.descricao}</p>
                   )}
@@ -286,7 +360,7 @@ export function PadroesDocumentos() {
             <CardTitle className="flex items-center justify-between text-base">
               <span className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
-                Novo modelo de {TIPOS.find(t => t.id === tipoAtivo)?.label}
+                Novo modelo
               </span>
               <Button variant="ghost" size="sm" onClick={resetForm}>
                 <X className="h-4 w-4" />
@@ -296,31 +370,37 @@ export function PadroesDocumentos() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Título *</label>
-                <input
-                  type="text"
-                  value={titulo}
-                  onChange={e => setTitulo(e.target.value)}
-                  placeholder="Ex.: Petição Inicial Cível Padrão"
+                <label className="text-sm font-medium">Tipo do documento *</label>
+                <select
+                  value={subtipo}
+                  onChange={e => setSubtipo(e.target.value)}
                   className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  required
-                />
+                >
+                  {subtiposDisponiveis.map(s => (
+                    <option key={s.value} value={s.value} disabled={modelosFiltrados.some(m => m.subtipo === s.value)}>
+                      {s.label}{modelosFiltrados.some(m => m.subtipo === s.value) ? ' (já cadastrado)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Selecione &quot;Todos&quot; para definir um padrão geral que será usado quando não houver modelo específico.
+                </p>
               </div>
 
               <div>
-                <label className="text-sm font-medium">Descrição (opcional)</label>
+                <label className="text-sm font-medium">Observação (opcional)</label>
                 <input
                   type="text"
                   value={descricao}
                   onChange={e => setDescricao(e.target.value)}
-                  placeholder="Breve descrição do modelo"
+                  placeholder="Anotação interna sobre este modelo"
                   className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 />
               </div>
 
               {/* Alternância arquivo / texto */}
               <div>
-                <label className="text-sm font-medium">Conteúdo do modelo</label>
+                <label className="text-sm font-medium">Modelo de referência *</label>
                 <div className="flex gap-2 mt-1 mb-3">
                   <button
                     type="button"

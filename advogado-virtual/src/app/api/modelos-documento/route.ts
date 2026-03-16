@@ -20,10 +20,10 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('modelos_documento')
-    .select('id, tipo, titulo, descricao, created_at, updated_at')
+    .select('id, tipo, subtipo, titulo, descricao, created_at, updated_at')
     .eq('tenant_id', usuario.tenant_id)
     .order('tipo')
-    .order('titulo')
+    .order('subtipo')
 
   if (tipo && TIPOS_VALIDOS.includes(tipo)) {
     query = query.eq('tipo', tipo)
@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
 
   const formData = await req.formData()
   const tipo = formData.get('tipo') as string
+  const subtipo = (formData.get('subtipo') as string) || 'todos'
   const titulo = formData.get('titulo') as string
   const descricao = formData.get('descricao') as string | null
   const arquivo = formData.get('arquivo') as File | null
@@ -121,13 +122,14 @@ export async function POST(req: NextRequest) {
     .insert({
       tenant_id: usuario.tenant_id,
       tipo,
+      subtipo,
       titulo: titulo.trim(),
       descricao: descricao?.trim() || null,
       conteudo_markdown: conteudoMarkdown || null,
       file_url: fileUrl,
       created_by: usuario.id,
     })
-    .select('id, tipo, titulo, descricao, created_at')
+    .select('id, tipo, subtipo, titulo, descricao, created_at')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
