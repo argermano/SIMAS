@@ -69,16 +69,22 @@ const BADGE_CONTRATO_STATUS: Record<string, { variant: 'success' | 'warning' | '
 const LABELS_AREA: Record<string, string> = {
   previdenciario: 'Previdenciário',
   civel:          'Cível',
+  familia:        'Família',
   trabalhista:    'Trabalhista',
   criminal:       'Criminal',
+  empresarial:    'Empresarial',
+  medico:         'Direito Médico',
   geral:          'Análise de Caso',
 }
 
 const ICONES_AREA: Record<string, string> = {
   previdenciario: 'rose',
-  trabalhista:    'amber',
   civel:          'emerald',
+  familia:        'pink',
+  trabalhista:    'amber',
   criminal:       'red',
+  empresarial:    'blue',
+  medico:         'teal',
   geral:          'violet',
 }
 
@@ -344,6 +350,9 @@ export default async function DossieClientePage({
                                 corArea === 'rose'    ? 'border-l-rose-400'    :
                                 corArea === 'amber'   ? 'border-l-amber-400'   :
                                 corArea === 'emerald' ? 'border-l-emerald-400' :
+                                corArea === 'pink'    ? 'border-l-pink-400'    :
+                                corArea === 'teal'    ? 'border-l-teal-400'    :
+                                corArea === 'blue'    ? 'border-l-blue-400'    :
                                 corArea === 'violet'  ? 'border-l-violet-400'  : 'border-l-gray-400'
                               }`}>
                                 <CardContent className="py-4">
