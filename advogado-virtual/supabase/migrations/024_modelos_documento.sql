@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS modelos_documento (
   id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id         UUID        NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  tipo              TEXT        NOT NULL CHECK (tipo IN ('peca', 'contrato', 'procuracao', 'declaracao')),
+  tipo              TEXT        NOT NULL CHECK (tipo IN ('peca', 'contrato', 'procuracao', 'declaracao', 'substabelecimento')),
   titulo            TEXT        NOT NULL,
   descricao         TEXT,
   conteudo_markdown TEXT,
