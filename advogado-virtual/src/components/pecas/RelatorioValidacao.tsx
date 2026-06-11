@@ -10,6 +10,7 @@ interface ValidacaoData {
   jurisprudencia?: { status: string; citacoes: Array<{ referencia: string; status: string; sugestao?: string }> }
   score_confianca?: number
   correcoes_sugeridas?: Array<{ tipo: string; descricao: string; prioridade: string }>
+  formatacao?: Array<{ tipo: string; mensagem: string; severidade: string }>
 }
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -54,6 +55,36 @@ export function RelatorioValidacao({ data, onCorrecao }: { data: ValidacaoData; 
                     : 'Peça precisa de revisão significativa'}
               </p>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Formatação (validação determinística das regras forenses) */}
+      {data.formatacao && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              {data.formatacao.length === 0
+                ? STATUS_ICON.validado
+                : data.formatacao.some((a) => a.severidade === 'erro')
+                  ? STATUS_ICON.nao_validado
+                  : STATUS_ICON.parcial}
+              Formatação (regras forenses)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.formatacao.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Formatação conforme as regras forenses.</p>
+            ) : (
+              <div className="space-y-1">
+                {data.formatacao.map((a, i) => (
+                  <div key={i} className="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs">
+                    {a.severidade === 'erro' ? STATUS_ICON.nao_validado : STATUS_ICON.parcial}
+                    <p className="text-foreground">{a.mensagem}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

@@ -5,6 +5,7 @@ import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptRevisarValidar, SYSTEM_VALIDAR } from '@/lib/prompts/validacao/revisar-validar'
+import { validarFormatacaoPeca } from '@/lib/format/validar-peca'
 
 // POST /api/ia/validar-peca — revisar e validar peça
 export async function POST(req: NextRequest) {
@@ -68,7 +69,10 @@ export async function POST(req: NextRequest) {
       latenciaMs: Date.now() - start,
     })
 
-    return NextResponse.json(result)
+    // Validação determinística de formatação (complementa a validação por IA)
+    const formatacao = validarFormatacaoPeca(peca.conteudo_markdown)
+
+    return NextResponse.json({ ...result, formatacao })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     return jsonError(message, 500)
