@@ -5,6 +5,30 @@
 
 import { createClient } from '@/lib/supabase/server'
 
+/**
+ * Garante que todos os IDs informados existem E pertencem ao tenant.
+ * Defesa em profundidade: a RLS protege o insert da própria task, mas não
+ * valida que as referências (assignee, board, lista, tags) são do mesmo tenant.
+ */
+async function validarPertencimentoTenant(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tabela: string,
+  ids: (string | null | undefined)[],
+  tenantId: string,
+) {
+  const unicos = [...new Set(ids.filter((id): id is string => !!id))]
+  if (unicos.length === 0) return
+  const { data, error } = await supabase
+    .from(tabela)
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .in('id', unicos)
+  if (error) throw new Error(error.message)
+  if ((data?.length ?? 0) !== unicos.length) {
+    throw new Error(`Referência inválida: um ou mais registros de "${tabela}" não pertencem ao tenant`)
+  }
+}
+
 export interface CreateTaskInput {
   description:      string
   assigneeId:       string
@@ -75,6 +99,14 @@ const taskService = {
         .single()
       taskListId = list?.id ?? null
     }
+
+    // Valida que todas as referências pertencem ao tenant antes de inserir
+    await Promise.all([
+      validarPertencimentoTenant(supabase, 'users', [input.assigneeId, input.createdBy, ...(input.extraAssignees ?? [])], input.tenantId),
+      validarPertencimentoTenant(supabase, 'kanban_boards', [kanbanBoardId], input.tenantId),
+      validarPertencimentoTenant(supabase, 'task_lists', [taskListId], input.tenantId),
+      validarPertencimentoTenant(supabase, 'task_tags', input.tagIds ?? [], input.tenantId),
+    ])
 
     const { data: task, error } = await supabase
       .from('tasks')
