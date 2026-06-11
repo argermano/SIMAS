@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { z } from 'zod'
 
 const schemaUpdate = z.object({
@@ -16,24 +17,16 @@ const schemaUpdate = z.object({
   tag_ids:          z.array(z.string().uuid()).optional(),
 })
 
-async function getUsuario(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data } = await supabase
-    .from('users').select('id, tenant_id').eq('auth_user_id', user.id).single()
-  return data
-}
-
 // PATCH /api/tasks/[id]
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const usuario  = await getUsuario(supabase)
-  if (!usuario) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const body   = await req.json()
   const parsed = schemaUpdate.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
+  if (!parsed.success) return jsonError('Dados inválidos', 400)
 
   const { extra_assignees, tag_ids, ...taskData } = parsed.data
 
@@ -45,7 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   // Atualizar responsáveis adicionais (substituição completa)
   if (extra_assignees !== undefined) {
@@ -73,9 +66,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE /api/tasks/[id]
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const usuario  = await getUsuario(supabase)
-  if (!usuario) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { error } = await supabase
     .from('tasks')
@@ -83,6 +76,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
   return NextResponse.json({ ok: true })
 }

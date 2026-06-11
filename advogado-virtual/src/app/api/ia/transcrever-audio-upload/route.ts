@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import Groq from 'groq-sdk'
 
 export const maxDuration = 120
@@ -9,18 +10,9 @@ const MAX_AUDIO_SIZE = 500 * 1024 * 1024 // 500 MB
 
 // POST — gera signed URL para upload direto ao Supabase Storage
 export async function POST(req: Request) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { fileName, fileSize, atendimentoId } = await req.json() as {
     fileName: string
@@ -29,11 +21,11 @@ export async function POST(req: Request) {
   }
 
   if (!fileName || !fileSize || !atendimentoId) {
-    return NextResponse.json({ error: 'Dados obrigatórios ausentes' }, { status: 400 })
+    return jsonError('Dados obrigatórios ausentes', 400)
   }
 
   if (fileSize > MAX_AUDIO_SIZE) {
-    return NextResponse.json({ error: 'Arquivo excede o limite de 500 MB' }, { status: 400 })
+    return jsonError('Arquivo excede o limite de 500 MB', 400)
   }
 
   const { data: atendimento } = await supabase
@@ -44,7 +36,7 @@ export async function POST(req: Request) {
     .single()
 
   if (!atendimento) {
-    return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    return jsonError('Atendimento não encontrado', 404)
   }
 
   const timestamp = Date.now()
@@ -61,7 +53,7 @@ export async function POST(req: Request) {
     .createSignedUploadUrl(storagePath)
 
   if (signError || !signedData) {
-    return NextResponse.json({ error: `Erro ao gerar URL de upload: ${signError?.message}` }, { status: 500 })
+    return jsonError(`Erro ao gerar URL de upload: ${signError?.message}`, 500)
   }
 
   return NextResponse.json({
@@ -74,18 +66,9 @@ export async function POST(req: Request) {
 // PATCH — transcreve um arquivo de áudio já enviado ao Storage (deve ser <= 25MB)
 // Para arquivos grandes, o client faz o chunking e envia múltiplos WAV chunks
 export async function PATCH(req: Request) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { storagePath, atendimentoId, transcricaoAcumulada, timeOffset } = await req.json() as {
     storagePath: string
@@ -95,7 +78,7 @@ export async function PATCH(req: Request) {
   }
 
   if (!storagePath || !atendimentoId) {
-    return NextResponse.json({ error: 'Dados obrigatórios ausentes' }, { status: 400 })
+    return jsonError('Dados obrigatórios ausentes', 400)
   }
 
   // O atendimento precisa pertencer ao tenant do usuário (RLS),
@@ -109,16 +92,16 @@ export async function PATCH(req: Request) {
     .single()
 
   if (!atendimentoDoTenant) {
-    return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    return jsonError('Atendimento não encontrado', 404)
   }
 
   if (!storagePath.startsWith(`${usuario.tenant_id}/`)) {
-    return NextResponse.json({ error: 'Caminho de arquivo inválido' }, { status: 403 })
+    return jsonError('Caminho de arquivo inválido', 403)
   }
 
   const groqKey = process.env.GROQ_API_KEY
   if (!groqKey || groqKey === 'PREENCHA_AQUI') {
-    return NextResponse.json({ error: 'GROQ_API_KEY não configurada' }, { status: 503 })
+    return jsonError('GROQ_API_KEY não configurada', 503)
   }
 
   // Baixa o arquivo do Storage
@@ -132,7 +115,7 @@ export async function PATCH(req: Request) {
     .download(storagePath)
 
   if (downloadError || !fileBlob) {
-    return NextResponse.json({ error: 'Erro ao baixar áudio do storage' }, { status: 500 })
+    return jsonError('Erro ao baixar áudio do storage', 500)
   }
 
   // Determina extensão e mime type do arquivo
@@ -169,7 +152,7 @@ export async function PATCH(req: Request) {
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    return NextResponse.json({ error: `Erro na transcrição: ${message}` }, { status: 500 })
+    return jsonError(`Erro na transcrição: ${message}`, 500)
   }
 
   // Se há transcrição acumulada de chunks anteriores, concatena
@@ -224,10 +207,7 @@ export async function PATCH(req: Request) {
 
   if (updateError) {
     console.error('[transcrever-audio] falha ao salvar transcrição:', updateError.message)
-    return NextResponse.json(
-      { error: 'Transcrição concluída, mas falhou ao salvar no atendimento. Tente novamente.' },
-      { status: 500 }
-    )
+    return jsonError('Transcrição concluída, mas falhou ao salvar no atendimento. Tente novamente.', 500)
   }
 
   return NextResponse.json({ transcricao: transcricaoFinal })

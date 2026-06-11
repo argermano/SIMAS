@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 // DELETE /api/pecas/[id] — exclui peça e versões relacionadas
 export async function DELETE(
@@ -7,18 +8,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   // Verificar que a peça pertence ao tenant
   const { data: peca } = await supabase
@@ -29,7 +22,7 @@ export async function DELETE(
     .single()
 
   if (!peca) {
-    return NextResponse.json({ error: 'Peça não encontrada' }, { status: 404 })
+    return jsonError('Peça não encontrada', 404)
   }
 
   // Excluir versões primeiro
@@ -43,7 +36,7 @@ export async function DELETE(
     .eq('tenant_id', usuario.tenant_id)
 
   if (error) {
-    return NextResponse.json({ error: 'Erro ao excluir peça' }, { status: 500 })
+    return jsonError('Erro ao excluir peça', 500)
   }
 
   return NextResponse.json({ ok: true })

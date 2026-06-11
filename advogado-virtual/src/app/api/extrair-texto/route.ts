@@ -1,5 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { detectarTipoReal } from '@/lib/file-validation'
 
 export const maxDuration = 60
@@ -8,16 +9,15 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25 MB — evita hang/exhaust no pdf-pa
 
 // POST /api/extrair-texto — extrai texto de arquivo (PDF, DOCX, TXT)
 export async function POST(req: Request) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
 
   const formData = await req.formData()
   const file = formData.get('file') as File | null
-  if (!file) return NextResponse.json({ error: 'Arquivo não enviado' }, { status: 400 })
+  if (!file) return jsonError('Arquivo não enviado', 400)
 
   if (file.size > MAX_FILE_SIZE) {
-    return NextResponse.json({ error: 'Arquivo excede o limite de 25 MB' }, { status: 413 })
+    return jsonError('Arquivo excede o limite de 25 MB', 413)
   }
 
   const arrayBuffer = await file.arrayBuffer()
@@ -33,10 +33,10 @@ export async function POST(req: Request) {
   // Confere magic bytes para PDF/DOCX antes de passar a parsers pesados
   const tipoReal = detectarTipoReal(buffer)
   if (isPdf && tipoReal !== 'pdf') {
-    return NextResponse.json({ error: 'O arquivo não é um PDF válido' }, { status: 400 })
+    return jsonError('O arquivo não é um PDF válido', 400)
   }
   if (isDocx && tipoReal !== 'zip') {
-    return NextResponse.json({ error: 'O arquivo não é um DOCX válido' }, { status: 400 })
+    return jsonError('O arquivo não é um DOCX válido', 400)
   }
 
   if (isPdf) {

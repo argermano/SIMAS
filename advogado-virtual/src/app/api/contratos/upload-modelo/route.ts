@@ -1,38 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { detectarTipoReal } from '@/lib/file-validation'
 
 // POST /api/contratos/upload-modelo — upload do modelo de contrato do advogado
 // Extrai texto do PDF/DOCX e salva no Storage
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const formData  = await req.formData()
   const arquivo   = formData.get('modelo') as File | null
 
   if (!arquivo) {
-    return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
+    return jsonError('Nenhum arquivo enviado', 400)
   }
 
   const TIPOS_ACEITOS = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
   if (!TIPOS_ACEITOS.includes(arquivo.type)) {
-    return NextResponse.json({ error: 'Apenas PDF e DOCX são suportados' }, { status: 400 })
+    return jsonError('Apenas PDF e DOCX são suportados', 400)
   }
 
   const MAX_BYTES = 10 * 1024 * 1024 // 10 MB
   if (arquivo.size > MAX_BYTES) {
-    return NextResponse.json({ error: 'Arquivo muito grande (máx. 10 MB)' }, { status: 400 })
+    return jsonError('Arquivo muito grande (máx. 10 MB)', 400)
   }
 
   const arrayBuffer = await arquivo.arrayBuffer()
@@ -42,10 +34,7 @@ export async function POST(req: NextRequest) {
   const tipoReal = detectarTipoReal(buffer)
   const tipoEsperado = arquivo.type === 'application/pdf' ? 'pdf' : 'zip' // DOCX = contêiner ZIP
   if (tipoReal !== tipoEsperado) {
-    return NextResponse.json(
-      { error: 'O conteúdo do arquivo não corresponde ao tipo declarado (PDF ou DOCX).' },
-      { status: 400 }
-    )
+    return jsonError('O conteúdo do arquivo não corresponde ao tipo declarado (PDF ou DOCX).', 400)
   }
 
   // Upload para Storage
@@ -61,7 +50,7 @@ export async function POST(req: NextRequest) {
     })
 
   if (uploadError) {
-    return NextResponse.json({ error: `Upload falhou: ${uploadError.message}` }, { status: 500 })
+    return jsonError(`Upload falhou: ${uploadError.message}`, 500)
   }
 
   // Extrai texto do arquivo

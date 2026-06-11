@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError, validateBody } from '@/lib/api'
 
 const schemaContrato = z.object({
   cliente_id:       z.string().uuid().optional().nullable(),
@@ -14,18 +15,9 @@ const schemaContrato = z.object({
 
 // GET /api/contratos — lista contratos do tenant
 export async function GET(req: NextRequest) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status')
@@ -43,7 +35,7 @@ export async function GET(req: NextRequest) {
   if (status) query = query.eq('status', status)
 
   const { data, error, count } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({
     contratos:    data,
@@ -55,30 +47,14 @@ export async function GET(req: NextRequest) {
 
 // POST /api/contratos — criar contrato (rascunho)
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const parsed = await validateBody(req, schemaContrato)
+  if (!parsed.ok) return parsed.response
 
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-
-  const body = await req.json()
-  const resultado = schemaContrato.safeParse(body)
-
-  if (!resultado.success) {
-    return NextResponse.json(
-      { error: 'Dados inválidos', detalhes: resultado.error.flatten() },
-      { status: 400 }
-    )
-  }
-
-  const dados = resultado.data
+  const dados = parsed.data
   const inserir: Record<string, unknown> = {
     tenant_id:  usuario.tenant_id,
     criado_por: usuario.id,
@@ -101,7 +77,7 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ contrato }, { status: 201 })
 }

@@ -1,20 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 const TIPOS_VALIDOS = ['peca', 'contrato', 'procuracao', 'declaracao', 'substabelecimento']
 
 // GET /api/modelos-documento?tipo=peca — lista modelos do tenant
 export async function GET(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const tipo = req.nextUrl.searchParams.get('tipo')
 
@@ -35,19 +29,12 @@ export async function GET(req: NextRequest) {
 
 // POST /api/modelos-documento — criar novo modelo
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   if (usuario.role !== 'admin' && usuario.role !== 'advogado') {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+    return jsonError('Sem permissão', 403)
   }
 
   const formData = await req.formData()
@@ -58,10 +45,10 @@ export async function POST(req: NextRequest) {
   const arquivo = formData.get('arquivo') as File | null
 
   if (!tipo || !TIPOS_VALIDOS.includes(tipo)) {
-    return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
+    return jsonError('Tipo inválido', 400)
   }
   if (!titulo?.trim()) {
-    return NextResponse.json({ error: 'Título é obrigatório' }, { status: 400 })
+    return jsonError('Título é obrigatório', 400)
   }
 
   let conteudoMarkdown = ''
@@ -70,7 +57,7 @@ export async function POST(req: NextRequest) {
   if (arquivo && arquivo.size > 0) {
     const MAX_BYTES = 10 * 1024 * 1024
     if (arquivo.size > MAX_BYTES) {
-      return NextResponse.json({ error: 'Arquivo muito grande (máx. 10 MB)' }, { status: 400 })
+      return jsonError('Arquivo muito grande (máx. 10 MB)', 400)
     }
 
     const arrayBuffer = await arquivo.arrayBuffer()
@@ -86,7 +73,7 @@ export async function POST(req: NextRequest) {
       .upload(path, buffer, { contentType: arquivo.type, upsert: true })
 
     if (uploadError) {
-      return NextResponse.json({ error: `Upload falhou: ${uploadError.message}` }, { status: 500 })
+      return jsonError(`Upload falhou: ${uploadError.message}`, 500)
     }
     fileUrl = path
 
@@ -132,7 +119,7 @@ export async function POST(req: NextRequest) {
     .select('id, tipo, subtipo, titulo, descricao, created_at')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ modelo }, { status: 201 })
 }

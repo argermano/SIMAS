@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
+import { logAudit } from '@/lib/audit'
 
 const schema = z.object({
   email: z.string().email('E-mail inválido'),
@@ -39,24 +41,16 @@ async function enviarEmailAcesso(nome: string, email: string, link: string, isNo
 
 // POST /api/usuarios/reenviar-convite — reenvia o e-mail de convite (admin only)
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: admin } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!admin) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-  if (admin.role !== 'admin') return NextResponse.json({ error: 'Apenas administradores podem reenviar convites' }, { status: 403 })
+  if (usuario.role !== 'admin') return jsonError('Apenas administradores podem reenviar convites', 403)
 
   const body = await req.json()
   const resultado = schema.safeParse(body)
   if (!resultado.success) {
-    return NextResponse.json({ error: 'E-mail inválido' }, { status: 400 })
+    return jsonError('E-mail inválido', 400)
   }
 
   const { email } = resultado.data
@@ -66,12 +60,12 @@ export async function POST(req: NextRequest) {
     .from('users')
     .select('id, nome, auth_user_id')
     .eq('email', email)
-    .eq('tenant_id', admin.tenant_id)
+    .eq('tenant_id', usuario.tenant_id)
     .eq('status', 'ativo')
     .single()
 
   if (!pendente) {
-    return NextResponse.json({ error: 'Usuário não encontrado neste escritório' }, { status: 404 })
+    return jsonError('Usuário não encontrado neste escritório', 404)
   }
 
   const adminSupabase = createAdminClient(
@@ -95,11 +89,11 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     console.error('[reenviar-convite] Erro generateLink:', error.message)
-    return NextResponse.json({ error: `Erro ao gerar link: ${error.message}` }, { status: 500 })
+    return jsonError(`Erro ao gerar link: ${error.message}`, 500)
   }
 
   if (!linkData?.properties?.action_link) {
-    return NextResponse.json({ error: 'Não foi possível gerar o link de acesso' }, { status: 500 })
+    return jsonError('Não foi possível gerar o link de acesso', 500)
   }
 
   // Envia e-mail personalizado via Resend
@@ -109,8 +103,16 @@ export async function POST(req: NextRequest) {
     await enviarEmailAcesso(nome, email, linkData.properties.action_link, isNovo)
   } catch (mailErr) {
     console.error('[reenviar-convite] Erro ao enviar e-mail:', mailErr)
-    return NextResponse.json({ error: 'Erro ao enviar e-mail' }, { status: 500 })
+    return jsonError('Erro ao enviar e-mail', 500)
   }
+
+  await logAudit({
+    tenantId: usuario.tenant_id,
+    userId: usuario.id,
+    action: 'user.invite_resend',
+    resourceType: 'user',
+    resourceId: pendente.id,
+  })
 
   return NextResponse.json({ ok: true })
 }

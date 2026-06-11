@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest } from 'next/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { streamCompletion } from '@/lib/anthropic/client'
 import { decryptClienteFields } from '@/lib/encryption'
 import {
@@ -26,19 +27,12 @@ export async function POST(req: NextRequest) {
     console.log('[gerar-contrato] contratoId:', contratoId, '| modeloTexto length:', modeloTexto?.length ?? 0, '| tem modelo:', !!modeloTexto)
 
     if (!contratoId) {
-      return NextResponse.json({ error: 'contratoId é obrigatório' }, { status: 400 })
+      return jsonError('contratoId é obrigatório', 400)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-    const { data: usuarioLogado } = await supabase
-      .from('users')
-      .select('id, tenant_id')
-      .eq('auth_user_id', user.id)
-      .single()
-    if (!usuarioLogado) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
+    const { supabase, usuario: usuarioLogado } = auth
 
     // Buscar dados profissionais do escritório (tenant)
     const { data: tenant } = await supabase
@@ -55,7 +49,7 @@ export async function POST(req: NextRequest) {
       .eq('tenant_id', usuarioLogado.tenant_id)
       .single()
 
-    if (!contrato) return NextResponse.json({ error: 'Contrato não encontrado' }, { status: 404 })
+    if (!contrato) return jsonError('Contrato não encontrado', 404)
 
     // Decifra CPF/RG (criptografados em repouso) antes de montar o contrato
     const cliente = decryptClienteFields(contrato.clientes as {
@@ -231,6 +225,6 @@ Responda com o contrato COMPLETO em Markdown.
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[gerar-contrato]', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

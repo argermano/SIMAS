@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 // GET /api/templates-contrato/[id] — busca modelo com conteúdo completo
 export async function GET(
@@ -7,16 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { data: template } = await supabase
     .from('templates_contrato')
@@ -25,7 +19,7 @@ export async function GET(
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
-  if (!template) return NextResponse.json({ error: 'Template não encontrado' }, { status: 404 })
+  if (!template) return jsonError('Template não encontrado', 404)
 
   return NextResponse.json({ template })
 }
@@ -36,16 +30,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { error } = await supabase
     .from('templates_contrato')
@@ -53,7 +40,7 @@ export async function DELETE(
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ ok: true })
 }

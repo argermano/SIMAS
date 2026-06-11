@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext, requireRole } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 // GET /api/modelos-documento/[id] — busca um modelo com conteúdo
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { data: modelo } = await supabase
     .from('modelos_documento')
@@ -22,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
-  if (!modelo) return NextResponse.json({ error: 'Modelo não encontrado' }, { status: 404 })
+  if (!modelo) return jsonError('Modelo não encontrado', 404)
 
   return NextResponse.json({ modelo })
 }
@@ -30,20 +24,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 // PATCH /api/modelos-documento/[id] — atualizar modelo
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-
-  if (usuario.role !== 'admin' && usuario.role !== 'advogado') {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
-  }
+  const roleError = requireRole(usuario, ['admin', 'advogado'])
+  if (roleError) return roleError
 
   const body = await req.json() as {
     titulo?: string
@@ -64,8 +50,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .select('id, tipo, titulo, descricao, updated_at')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!modelo) return NextResponse.json({ error: 'Modelo não encontrado' }, { status: 404 })
+  if (error) return jsonError(error.message, 500)
+  if (!modelo) return jsonError('Modelo não encontrado', 404)
 
   return NextResponse.json({ modelo })
 }
@@ -73,20 +59,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE /api/modelos-documento/[id] — excluir modelo
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-
-  if (usuario.role !== 'admin' && usuario.role !== 'advogado') {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
-  }
+  const roleError = requireRole(usuario, ['admin', 'advogado'])
+  if (roleError) return roleError
 
   // Buscar file_url para limpar storage
   const { data: modelo } = await supabase
@@ -96,7 +74,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
-  if (!modelo) return NextResponse.json({ error: 'Modelo não encontrado' }, { status: 404 })
+  if (!modelo) return jsonError('Modelo não encontrado', 404)
 
   if (modelo.file_url) {
     await supabase.storage.from('documentos').remove([modelo.file_url])
@@ -108,7 +86,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ ok: true })
 }

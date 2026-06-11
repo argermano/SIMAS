@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { d4signGetStatus, d4signGetSigningLink, d4signCancelDocument } from '@/lib/d4sign/client'
 
 const D4SIGN_STATUS_MAP: Record<string, string> = {
@@ -17,14 +18,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users').select('tenant_id').eq('auth_user_id', user.id).single()
-  if (!usuario) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { data: signature } = await supabase
     .from('contract_signatures')
@@ -66,14 +62,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users').select('tenant_id').eq('auth_user_id', user.id).single()
-  if (!usuario) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { data: signature } = await supabase
     .from('contract_signatures')
@@ -86,7 +77,7 @@ export async function PATCH(
     .maybeSingle()
 
   if (!signature?.d4sign_uuid) {
-    return NextResponse.json({ error: 'Nenhuma assinatura ativa' }, { status: 404 })
+    return jsonError('Nenhuma assinatura ativa', 404)
   }
 
   try {
@@ -107,7 +98,7 @@ export async function PATCH(
 
     return NextResponse.json({ status: novoStatus })
   } catch (err: unknown) {
-    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
+    return jsonError(err instanceof Error ? err.message : String(err), 500)
   }
 }
 
@@ -117,16 +108,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const supabase = await createClient()
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users').select('id, tenant_id, role').eq('auth_user_id', user.id).single()
-  if (!usuario) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
   if (!['admin', 'advogado'].includes(usuario.role)) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+    return jsonError('Sem permissão', 403)
   }
 
   const body = await req.json().catch(() => ({}))
@@ -142,7 +129,7 @@ export async function DELETE(
     .limit(1)
     .maybeSingle()
 
-  if (!signature) return NextResponse.json({ error: 'Nenhuma assinatura ativa' }, { status: 404 })
+  if (!signature) return jsonError('Nenhuma assinatura ativa', 404)
 
   if (signature.d4sign_uuid) {
     try { await d4signCancelDocument(signature.d4sign_uuid, reason) } catch { /* silencioso */ }

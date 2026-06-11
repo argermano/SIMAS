@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest } from 'next/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { streamCompletion, completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
@@ -79,22 +80,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (!atendimentoId || !tipo || !area) {
-      return NextResponse.json({ error: 'atendimentoId, tipo e area são obrigatórios' }, { status: 400 })
+      return jsonError('atendimentoId, tipo e area são obrigatórios', 400)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-    const { data: usuario } = await supabase
-      .from('users')
-      .select('id, tenant_id, role')
-      .eq('auth_user_id', user.id)
-      .single()
-    if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
+    const { supabase, usuario } = auth
 
     const cota = await verificarCota(supabase, usuario.tenant_id, 'gerar_peca')
-    if (!cota.permitido) return NextResponse.json({ error: mensagemCotaExcedida(cota) }, { status: 429 })
+    if (!cota.permitido) return jsonError(mensagemCotaExcedida(cota), 429)
 
     // Colaboradores não podem publicar diretamente — peça vai para fila de revisão
     const statusInicial = usuario.role === 'colaborador' ? 'aguardando_revisao' : 'rascunho'
@@ -106,7 +100,7 @@ export async function POST(req: NextRequest) {
       .eq('id', atendimentoId)
       .eq('tenant_id', usuario.tenant_id)
       .single()
-    if (!atendimento) return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    if (!atendimento) return jsonError('Atendimento não encontrado', 404)
 
     type ClienteDB = {
       nome?: string; cpf?: string; rg?: string; orgao_expedidor?: string
@@ -256,7 +250,7 @@ export async function POST(req: NextRequest) {
 
       if (pecaError || !peca) {
         console.error('[gerar-peca] erro ao criar peça (fallback):', pecaError?.message)
-        return NextResponse.json({ error: 'Erro ao criar registro da peça' }, { status: 500 })
+        return jsonError('Erro ao criar registro da peça', 500)
       }
 
       const { stream } = await streamCompletion({ system: fallback.system, prompt, maxTokens: 32768 })
@@ -310,7 +304,7 @@ export async function POST(req: NextRequest) {
 
     if (pecaError || !peca) {
       console.error('[gerar-peca] erro ao criar peça:', pecaError?.message)
-      return NextResponse.json({ error: 'Erro ao criar registro da peça' }, { status: 500 })
+      return jsonError('Erro ao criar registro da peça', 500)
     }
 
     const { stream, getUsage } = await streamCompletion({
@@ -344,7 +338,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[gerar-peca] Erro:', message, err)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }
 

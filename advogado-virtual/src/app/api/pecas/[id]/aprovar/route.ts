@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 const ROLES_REVISORES = ['admin', 'advogado']
 
@@ -9,21 +10,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   if (!ROLES_REVISORES.includes(usuario.role)) {
-    return NextResponse.json({ error: 'Sem permissão para aprovar peças' }, { status: 403 })
+    return jsonError('Sem permissão para aprovar peças', 403)
   }
 
   const { data: peca, error } = await supabase
@@ -40,10 +32,7 @@ export async function POST(
     .single()
 
   if (error || !peca) {
-    return NextResponse.json(
-      { error: 'Peça não encontrada ou não está aguardando revisão' },
-      { status: 404 }
-    )
+    return jsonError('Peça não encontrada ou não está aguardando revisão', 404)
   }
 
   // Auto-concluir tarefa de revisão associada no kanban

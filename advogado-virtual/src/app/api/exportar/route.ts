@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { markdownToDocx } from '@/lib/export/docx-generator'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 
@@ -7,21 +8,14 @@ import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 export async function POST(req: NextRequest) {
   try {
     const { pecaId, formato } = await req.json()
-    if (!pecaId) return NextResponse.json({ error: 'pecaId é obrigatório' }, { status: 400 })
+    if (!pecaId) return jsonError('pecaId é obrigatório', 400)
     if (formato && formato !== 'docx') {
-      return NextResponse.json({ error: 'Apenas formato docx é suportado no momento' }, { status: 400 })
+      return jsonError('Apenas formato docx é suportado no momento', 400)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-    const { data: usuario } = await supabase
-      .from('users')
-      .select('id, tenant_id')
-      .eq('auth_user_id', user.id)
-      .single()
-    if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
+    const { supabase, usuario } = auth
 
     const { data: peca } = await supabase
       .from('pecas')
@@ -29,8 +23,8 @@ export async function POST(req: NextRequest) {
       .eq('id', pecaId)
       .eq('tenant_id', usuario.tenant_id)
       .single()
-    if (!peca) return NextResponse.json({ error: 'Peça não encontrada' }, { status: 404 })
-    if (!peca.conteudo_markdown) return NextResponse.json({ error: 'Peça sem conteúdo' }, { status: 400 })
+    if (!peca) return jsonError('Peça não encontrada', 404)
+    if (!peca.conteudo_markdown) return jsonError('Peça sem conteúdo', 400)
 
     const tipoPecaConfig = TIPOS_PECA[peca.tipo]
     const titulo = tipoPecaConfig?.nome ?? peca.tipo
@@ -63,6 +57,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

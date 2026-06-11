@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { completionJSON, extractTextFromImage, extractTextFromPdf } from '@/lib/anthropic/client'
 import {
   SYSTEM_EXTRACAO,
@@ -15,12 +16,12 @@ export async function POST(req: NextRequest) {
     const { atendimentoId } = await req.json() as { atendimentoId: string }
 
     if (!atendimentoId) {
-      return NextResponse.json({ error: 'atendimentoId é obrigatório' }, { status: 400 })
+      return jsonError('atendimentoId é obrigatório', 400)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
+    const { supabase } = auth
 
     // Buscar TODOS os documentos do atendimento (incluindo sem texto)
     const { data: documentos } = await supabase
@@ -107,6 +108,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[extrair-dados-cliente]', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

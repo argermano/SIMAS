@@ -1,25 +1,23 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { LIMITES_PLANO, categorizar } from '@/lib/anthropic/quota'
 
 // Taxa de conversão USD → BRL (atualizar periodicamente)
 const USD_BRL = 5.70
 
 export async function GET() {
-  const supabase = await createClient()
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id, tenants(plano)')
-    .eq('auth_user_id', user.id)
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('plano')
+    .eq('id', usuario.tenant_id)
     .single()
 
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-
-  const plano = (usuario.tenants as { plano?: string } | null)?.plano ?? 'trial'
+  const plano = (tenant as { plano?: string } | null)?.plano ?? 'trial'
   const limites = LIMITES_PLANO[plano] ?? LIMITES_PLANO.trial
 
   // Fetch all usage logs for this tenant
@@ -29,7 +27,7 @@ export async function GET() {
     .eq('tenant_id', usuario.tenant_id)
     .order('created_at', { ascending: false })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   // Aggregate by category
   const porCategoria: Record<string, {

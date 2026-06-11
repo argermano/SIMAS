@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError, validateBody } from '@/lib/api'
 
 const ESTADOS_BR = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
   'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
@@ -33,34 +34,19 @@ function getAdminSupabase() {
 
 // PATCH /api/escritorio/perfil — atualiza dados profissionais do escritório (admin only)
 export async function PATCH(req: NextRequest) {
-  const supabase = await createClient()
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { usuario } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
   if (usuario.role !== 'admin') {
-    return NextResponse.json({ error: 'Apenas administradores podem alterar dados do escritório' }, { status: 403 })
+    return jsonError('Apenas administradores podem alterar dados do escritório', 403)
   }
 
-  const body = await req.json()
-  const resultado = schemaPerfil.safeParse(body)
-
-  if (!resultado.success) {
-    return NextResponse.json(
-      { error: 'Dados inválidos', detalhes: resultado.error.flatten() },
-      { status: 400 }
-    )
-  }
+  const parsed = await validateBody(req, schemaPerfil)
+  if (!parsed.ok) return parsed.response
 
   const dados: Record<string, string | null> = {}
-  for (const [k, v] of Object.entries(resultado.data)) {
+  for (const [k, v] of Object.entries(parsed.data)) {
     dados[k] = v || null
   }
 
@@ -73,7 +59,7 @@ export async function PATCH(req: NextRequest) {
     .select('id, nome_responsavel, oab_numero, oab_estado, cpf_responsavel, rg_responsavel, orgao_expedidor, estado_civil, nacionalidade, telefone, email_profissional, endereco, bairro, cidade, estado, cep')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ escritorio: atualizado })
 }

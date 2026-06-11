@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
@@ -43,22 +44,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (!transcricao?.trim()) {
-      return NextResponse.json({ error: 'Descreva o caso para análise' }, { status: 400 })
+      return jsonError('Descreva o caso para análise', 400)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-    const { data: usuario } = await supabase
-      .from('users')
-      .select('id, tenant_id')
-      .eq('auth_user_id', user.id)
-      .single()
-    if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
+    const { supabase, usuario } = auth
 
     const cota = await verificarCota(supabase, usuario.tenant_id, 'analise_geral')
-    if (!cota.permitido) return NextResponse.json({ error: mensagemCotaExcedida(cota) }, { status: 429 })
+    if (!cota.permitido) return jsonError(mensagemCotaExcedida(cota), 429)
 
     const prompt = buildPromptAnaliseGeral({ transcricao, pedido_especifico: pedidoEspecifico, documentos })
 
@@ -91,7 +85,7 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (!atendimentoDoTenant) {
-        return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+        return jsonError('Atendimento não encontrado', 404)
       }
 
       try {
@@ -143,6 +137,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[analise-geral]', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 const DEFAULT_BOARD_NAME   = 'QUADRO KANBAN PADRÃO'
 const DEFAULT_COLUMNS      = [
@@ -15,17 +16,9 @@ const DEFAULT_TAGS = [
 
 // GET /api/kanban-boards — retorna boards com colunas; cria board padrão se não existir
 export async function GET() {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   let { data: boards } = await supabase
     .from('kanban_boards')
@@ -41,7 +34,7 @@ export async function GET() {
       .select()
       .single()
 
-    if (boardErr || !newBoard) return NextResponse.json({ error: 'Erro ao criar board padrão' }, { status: 500 })
+    if (boardErr || !newBoard) return jsonError('Erro ao criar board padrão', 500)
 
     const colsToInsert = DEFAULT_COLUMNS.map(c => ({ ...c, board_id: newBoard.id }))
     await supabase.from('kanban_columns').insert(colsToInsert)

@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { z } from 'zod'
 
 const schema = z.object({ name: z.string().min(1).max(200) })
 
 // GET /api/task-lists
 export async function GET() {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users').select('tenant_id').eq('auth_user_id', user.id).single()
-  if (!usuario) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { data } = await supabase
     .from('task_lists')
@@ -26,18 +22,13 @@ export async function GET() {
 
 // POST /api/task-lists
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users').select('id, tenant_id').eq('auth_user_id', user.id).single()
-  if (!usuario) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const body = await req.json()
   const parsed = schema.safeParse(body)
-  if (!parsed.success) return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
+  if (!parsed.success) return jsonError('Dados inválidos', 400)
 
   const { data, error } = await supabase
     .from('task_lists')
@@ -45,6 +36,6 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
   return NextResponse.json({ list: data }, { status: 201 })
 }

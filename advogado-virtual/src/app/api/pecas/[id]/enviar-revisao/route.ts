@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { taskService } from '@/services/task-service'
 
 // POST /api/pecas/[id]/enviar-revisao — envia peça para fila de revisão e cria tarefa no kanban
@@ -8,18 +9,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, nome, tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const body = await req.json().catch(() => ({}))
   const prazoRevisao = body.prazo_revisao ?? null
@@ -33,10 +25,7 @@ export async function POST(
     .single()
 
   if (!peca || peca.status !== 'rascunho') {
-    return NextResponse.json(
-      { error: 'Peça não encontrada ou não está em rascunho' },
-      { status: 404 }
-    )
+    return jsonError('Peça não encontrada ou não está em rascunho', 404)
   }
 
   const nomeCliente = (peca.atendimentos as { clientes?: { nome?: string } } | null)
@@ -54,7 +43,7 @@ export async function POST(
     .eq('status', 'rascunho')
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 })
+    return jsonError(updateError.message, 500)
   }
 
   // Buscar o primeiro advogado/admin do tenant para atribuir a revisão

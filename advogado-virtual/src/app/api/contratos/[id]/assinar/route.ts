@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext, requireRole } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { z } from 'zod'
 import { jsPDF } from 'jspdf'
 import {
@@ -199,21 +200,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
-  const supabase = await createClient()
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-  if (!['admin', 'advogado'].includes(usuario.role)) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
-  }
+  const roleError = requireRole(usuario, ['admin', 'advogado'])
+  if (roleError) return roleError
 
   // Buscar contrato com dados do cliente
   const { data: contrato } = await supabase
@@ -223,9 +215,9 @@ export async function POST(
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
-  if (!contrato) return NextResponse.json({ error: 'Contrato não encontrado' }, { status: 404 })
+  if (!contrato) return jsonError('Contrato não encontrado', 404)
   if (!contrato.conteudo_markdown?.trim()) {
-    return NextResponse.json({ error: 'Contrato sem conteúdo para assinar' }, { status: 400 })
+    return jsonError('Contrato sem conteúdo para assinar', 400)
   }
 
   // Impede múltiplos processos de assinatura simultâneos (race / dupla submissão).
@@ -240,17 +232,14 @@ export async function POST(
     .maybeSingle()
 
   if (assinaturaAtiva) {
-    return NextResponse.json(
-      { error: 'Já existe um processo de assinatura ativo para este contrato' },
-      { status: 409 }
-    )
+    return jsonError('Já existe um processo de assinatura ativo para este contrato', 409)
   }
 
   // Validar body
   const body = await req.json()
   const parsed = schemaBody.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Dados inválidos', detalhes: parsed.error.flatten() }, { status: 400 })
+    return jsonError('Dados inválidos', 400, parsed.error.flatten())
   }
   const { signers, message, workflow } = parsed.data
 
@@ -265,7 +254,7 @@ export async function POST(
     } catch { /* silencioso */ }
   }
   if (!safeUuid) {
-    return NextResponse.json({ error: 'Nenhum cofre D4Sign encontrado. Configure D4SIGN_SAFE_UUID ou verifique as credenciais.' }, { status: 500 })
+    return jsonError('Nenhum cofre D4Sign encontrado. Configure D4SIGN_SAFE_UUID ou verifique as credenciais.', 500)
   }
 
   try {
@@ -365,7 +354,7 @@ export async function POST(
       .single()
 
     if (sigError || !signature) {
-      return NextResponse.json({ error: sigError?.message ?? 'Erro ao salvar assinatura' }, { status: 500 })
+      return jsonError(sigError?.message ?? 'Erro ao salvar assinatura', 500)
     }
 
     // Salvar signatários com keys e links
@@ -406,6 +395,6 @@ export async function POST(
     return NextResponse.json({ signatureId: signature.id, status: 'waiting_signatures' }, { status: 201 })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return jsonError(msg, 500)
   }
 }

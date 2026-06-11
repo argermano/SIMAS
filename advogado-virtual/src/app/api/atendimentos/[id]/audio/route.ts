@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 // POST /api/atendimentos/[id]/audio — upload áudio + transcrição Groq
 export async function POST(
@@ -8,18 +9,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   // Verifica se o atendimento pertence ao tenant
   const { data: atendimento } = await supabase
@@ -30,7 +23,7 @@ export async function POST(
     .single()
 
   if (!atendimento) {
-    return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    return jsonError('Atendimento não encontrado', 404)
   }
 
   // Extrai o arquivo de áudio do FormData
@@ -38,7 +31,7 @@ export async function POST(
   const audioFile = formData.get('audio') as File | null
 
   if (!audioFile) {
-    return NextResponse.json({ error: 'Nenhum arquivo de áudio enviado' }, { status: 400 })
+    return jsonError('Nenhum arquivo de áudio enviado', 400)
   }
 
   try {
@@ -55,7 +48,7 @@ export async function POST(
       })
 
     if (uploadError) {
-      return NextResponse.json({ error: `Upload falhou: ${uploadError.message}` }, { status: 500 })
+      return jsonError(`Upload falhou: ${uploadError.message}`, 500)
     }
 
     // 2. Transcrição via Groq Whisper
@@ -108,7 +101,7 @@ export async function POST(
       .eq('id', id)
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
+      return jsonError(updateError.message, 500)
     }
 
     return NextResponse.json({
@@ -117,6 +110,6 @@ export async function POST(
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    return NextResponse.json({ error: `Erro na transcrição: ${message}` }, { status: 500 })
+    return jsonError(`Erro na transcrição: ${message}`, 500)
   }
 }

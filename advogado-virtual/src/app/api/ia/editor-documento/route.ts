@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest } from 'next/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { streamCompletion } from '@/lib/anthropic/client'
 
 type Acao = 'reescrever' | 'gerar_topico' | 'comando_livre'
@@ -28,17 +29,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (!acao) {
-      return NextResponse.json({ error: 'acao é obrigatória' }, { status: 400 })
+      return jsonError('acao é obrigatória', 400)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
 
     let prompt: string
 
     if (acao === 'reescrever') {
-      if (!conteudo) return NextResponse.json({ error: 'conteudo é obrigatório para reescrever' }, { status: 400 })
+      if (!conteudo) return jsonError('conteudo é obrigatório para reescrever', 400)
       prompt = `Reescreva a seguinte seção do documento jurídico, mantendo o mesmo propósito mas melhorando a clareza, precisão e fundamentação jurídica.
 
 CONTEXTO DO DOCUMENTO:
@@ -49,7 +49,7 @@ ${conteudo}
 
 Retorne APENAS o conteúdo reescrito da seção em Markdown, sem explicações.`
     } else if (acao === 'comando_livre') {
-      if (!instrucao) return NextResponse.json({ error: 'instrucao é obrigatória para comando_livre' }, { status: 400 })
+      if (!instrucao) return jsonError('instrucao é obrigatória para comando_livre', 400)
       prompt = `Você recebeu uma instrução do advogado para modificar ou complementar o documento jurídico abaixo.
 
 DOCUMENTO COMPLETO:
@@ -67,7 +67,7 @@ REGRAS IMPORTANTES:
 - Se a instrução pedir mudanças de formatação (espaçamento, numeração, negrito, etc.), aplique em todo o documento conforme solicitado.`
     } else {
       // gerar_topico
-      if (!descricao) return NextResponse.json({ error: 'descricao é obrigatória para gerar_topico' }, { status: 400 })
+      if (!descricao) return jsonError('descricao é obrigatória para gerar_topico', 400)
       prompt = `Gere o conteúdo de uma nova seção para o documento jurídico com base na descrição fornecida.
 
 CONTEXTO DO DOCUMENTO:
@@ -92,6 +92,6 @@ Retorne APENAS o conteúdo Markdown da seção, sem explicações adicionais.`
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[editor-documento]', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

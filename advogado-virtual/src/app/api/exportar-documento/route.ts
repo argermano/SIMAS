@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { markdownToDocx } from '@/lib/export/docx-generator'
 
 // POST /api/exportar-documento — gerar DOCX a partir de markdown raw (sem pecaId)
@@ -8,12 +9,11 @@ export async function POST(req: NextRequest) {
     const { conteudo, titulo } = await req.json() as { conteudo: string; titulo?: string }
 
     if (!conteudo?.trim()) {
-      return NextResponse.json({ error: 'Conteúdo obrigatório' }, { status: 400 })
+      return jsonError('Conteúdo obrigatório', 400)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
 
     const buffer = await markdownToDocx(conteudo, { titulo })
     const fileName = `${(titulo ?? 'documento').replace(/\s+/g, '_')}.docx`
@@ -26,6 +26,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

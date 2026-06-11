@@ -1,20 +1,16 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError, validateBody } from '@/lib/api'
 
 // GET /api/atendimentos?cliente_id=UUID — lista atendimentos de um cliente
 export async function GET(req: NextRequest) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users').select('tenant_id').eq('auth_user_id', user.id).single()
-  if (!usuario) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const clienteId = new URL(req.url).searchParams.get('cliente_id')
-  if (!clienteId) return NextResponse.json({ error: 'cliente_id obrigatório' }, { status: 400 })
+  if (!clienteId) return jsonError('cliente_id obrigatório', 400)
 
   const { data } = await supabase
     .from('atendimentos')
@@ -37,30 +33,14 @@ const schemaNovoAtendimento = z.object({
 
 // POST /api/atendimentos — cria novo atendimento
 export async function POST(req: Request) {
-  const supabase = await createClient()
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const parsed = await validateBody(req, schemaNovoAtendimento)
+  if (!parsed.ok) return parsed.response
 
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-
-  const body = await req.json()
-  const resultado = schemaNovoAtendimento.safeParse(body)
-
-  if (!resultado.success) {
-    return NextResponse.json(
-      { error: 'Dados inválidos', detalhes: resultado.error.flatten() },
-      { status: 400 }
-    )
-  }
-
-  const dados = resultado.data
+  const dados = parsed.data
 
   // Monta o objeto de inserção sem incluir campos nulos de colunas opcionais
   // (evita erro de schema cache quando a migration ainda não foi aplicada)
@@ -82,7 +62,7 @@ export async function POST(req: Request) {
     .select('id')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ id: atendimento.id }, { status: 201 })
 }

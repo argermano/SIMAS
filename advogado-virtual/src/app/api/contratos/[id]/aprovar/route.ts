@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 // POST /api/contratos/[id]/aprovar — aprova o contrato (admin/advogado apenas)
 export async function POST(
@@ -7,21 +8,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   if (!['admin', 'advogado'].includes(usuario.role)) {
-    return NextResponse.json({ error: 'Sem permissão — somente advogados e admins podem aprovar contratos' }, { status: 403 })
+    return jsonError('Sem permissão — somente advogados e admins podem aprovar contratos', 403)
   }
 
   const { data: contrato } = await supabase
@@ -31,7 +24,7 @@ export async function POST(
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
-  if (!contrato) return NextResponse.json({ error: 'Contrato não encontrado' }, { status: 404 })
+  if (!contrato) return jsonError('Contrato não encontrado', 404)
 
   const { data: atualizado, error } = await supabase
     .from('contratos_honorarios')
@@ -40,7 +33,7 @@ export async function POST(
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ contrato: atualizado })
 }

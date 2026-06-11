@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
+import type { Usuario } from '@/lib/auth'
+import type { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
 
 const schemaUpdate = z.object({
@@ -13,19 +16,9 @@ const schemaUpdate = z.object({
 
 async function verificarAcesso(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  usuario: Usuario,
   contratoId: string
 ) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return null
-
   const { data: contrato } = await supabase
     .from('contratos_honorarios')
     .select('*')
@@ -42,10 +35,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-  const acesso = await verificarAcesso(supabase, id)
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
+  const acesso = await verificarAcesso(supabase, usuario, id)
 
-  if (!acesso) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  if (!acesso) return jsonError('Não encontrado', 404)
 
   // Buscar versões
   const { data: versoes } = await supabase
@@ -73,19 +68,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-  const acesso = await verificarAcesso(supabase, id)
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
+  const acesso = await verificarAcesso(supabase, usuario, id)
 
-  if (!acesso) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  if (!acesso) return jsonError('Não encontrado', 404)
 
   const body = await req.json()
   const resultado = schemaUpdate.safeParse(body)
 
   if (!resultado.success) {
-    return NextResponse.json(
-      { error: 'Dados inválidos', detalhes: resultado.error.flatten() },
-      { status: 400 }
-    )
+    return jsonError('Dados inválidos', 400, resultado.error.flatten())
   }
 
   const dados   = resultado.data
@@ -112,7 +106,7 @@ export async function PATCH(
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ contrato: atualizado })
 }
@@ -123,14 +117,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-  const acesso = await verificarAcesso(supabase, id)
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
+  const acesso = await verificarAcesso(supabase, usuario, id)
 
-  if (!acesso) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  if (!acesso) return jsonError('Não encontrado', 404)
 
   // Somente admin/advogado podem deletar
   if (!['admin', 'advogado'].includes(acesso.usuario.role)) {
-    return NextResponse.json({ error: 'Sem permissão' }, { status: 403 })
+    return jsonError('Sem permissão', 403)
   }
 
   const { error } = await supabase
@@ -138,7 +134,7 @@ export async function DELETE(
     .delete()
     .eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ ok: true })
 }

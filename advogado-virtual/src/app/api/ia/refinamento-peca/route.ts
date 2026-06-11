@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest } from 'next/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
 import { SYSTEM_REGRAS_FORENSE } from '@/lib/prompts/pecas/regras-formatacao'
@@ -54,19 +55,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (!atendimentoId || !area || !pecaOriginal) {
-      return NextResponse.json({ error: 'atendimentoId, area e pecaOriginal são obrigatórios' }, { status: 400 })
+      return jsonError('atendimentoId, area e pecaOriginal são obrigatórios', 400)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-    const { data: usuario } = await supabase
-      .from('users')
-      .select('id, tenant_id, role')
-      .eq('auth_user_id', user.id)
-      .single()
-    if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
+    const { supabase, usuario } = auth
 
     const statusInicial = usuario.role === 'colaborador' ? 'aguardando_revisao' : 'rascunho'
 
@@ -77,7 +71,7 @@ export async function POST(req: NextRequest) {
       .eq('id', atendimentoId)
       .eq('tenant_id', usuario.tenant_id)
       .single()
-    if (!atendimento) return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    if (!atendimento) return jsonError('Atendimento não encontrado', 404)
 
     const documentos = (atendimento.documentos ?? [])
       .filter((d: Record<string, unknown>) => d.texto_extraido && (d.texto_extraido as string).trim().length > 10)
@@ -167,6 +161,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[refinamento-peca] Erro:', message, err)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

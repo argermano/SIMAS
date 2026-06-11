@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError, validateBody } from '@/lib/api'
 
 const schema = z.object({
   atendimentoId:    z.string().uuid(),
@@ -10,25 +11,14 @@ const schema = z.object({
 
 // PATCH /api/atendimentos/checklist — marca/desmarca documento como entregue
 export async function PATCH(req: NextRequest) {
-  const supabase = await createClient()
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const parsed = await validateBody(req, schema)
+  if (!parsed.ok) return parsed.response
 
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-
-  const body = await req.json()
-  const resultado = schema.safeParse(body)
-  if (!resultado.success) {
-    return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
-  }
-
-  const { atendimentoId, docId, entregue } = resultado.data
+  const { atendimentoId, docId, entregue } = parsed.data
 
   // Busca atendimento para verificar tenant
   const { data: atendimento } = await supabase
@@ -38,7 +28,7 @@ export async function PATCH(req: NextRequest) {
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
-  if (!atendimento) return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+  if (!atendimento) return jsonError('Atendimento não encontrado', 404)
 
   const checklist = (atendimento.checklist_entregues ?? {}) as Record<string, boolean>
   checklist[docId] = entregue
@@ -48,7 +38,7 @@ export async function PATCH(req: NextRequest) {
     .update({ checklist_entregues: checklist })
     .eq('id', atendimentoId)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ ok: true, checklist })
 }

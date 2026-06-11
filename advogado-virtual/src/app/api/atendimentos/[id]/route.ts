@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 // GET /api/atendimentos/[id] — retorna atendimento com documentos
 export async function GET(
@@ -8,18 +9,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { data: atendimento, error } = await supabase
     .from('atendimentos')
@@ -29,7 +22,7 @@ export async function GET(
     .single()
 
   if (error || !atendimento) {
-    return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    return jsonError('Atendimento não encontrado', 404)
   }
 
   // Fetch contratos linked to this atendimento
@@ -59,27 +52,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const body = await req.json()
   const resultado = schemaUpdate.safeParse(body)
 
   if (!resultado.success) {
-    return NextResponse.json(
-      { error: 'Dados inválidos', detalhes: resultado.error.flatten() },
-      { status: 400 }
-    )
+    return jsonError('Dados inválidos', 400, resultado.error.flatten())
   }
 
   const { data: atendimento, error } = await supabase
@@ -91,7 +73,7 @@ export async function PATCH(
     .single()
 
   if (error || !atendimento) {
-    return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    return jsonError('Atendimento não encontrado', 404)
   }
 
   return NextResponse.json({ atendimento })
@@ -103,18 +85,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   // Verificar que o atendimento pertence ao tenant
   const { data: at } = await supabase
@@ -125,7 +99,7 @@ export async function DELETE(
     .single()
 
   if (!at) {
-    return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    return jsonError('Atendimento não encontrado', 404)
   }
 
   // Coleta paths de Storage a remover (áudios + documentos)
@@ -174,7 +148,7 @@ export async function DELETE(
     .eq('tenant_id', usuario.tenant_id)
 
   if (delError) {
-    return NextResponse.json({ error: 'Erro ao excluir atendimento' }, { status: 500 })
+    return jsonError('Erro ao excluir atendimento', 500)
   }
 
   // Remove arquivos do Storage (best-effort: falhas são logadas mas não revertem o DELETE)

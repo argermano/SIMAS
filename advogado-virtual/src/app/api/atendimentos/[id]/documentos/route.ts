@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { extractTextFromImage, extractTextFromPdf } from '@/lib/anthropic/client'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
@@ -11,18 +12,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { data: atendimento } = await supabase
     .from('atendimentos')
@@ -32,7 +24,7 @@ export async function POST(
     .single()
 
   if (!atendimento) {
-    return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    return jsonError('Atendimento não encontrado', 404)
   }
 
   const body = await req.json()
@@ -44,11 +36,11 @@ export async function POST(
   }
 
   if (!fileName || !fileType || !fileSize) {
-    return NextResponse.json({ error: 'Dados do arquivo são obrigatórios' }, { status: 400 })
+    return jsonError('Dados do arquivo são obrigatórios', 400)
   }
 
   if (fileSize > MAX_FILE_SIZE) {
-    return NextResponse.json({ error: `Arquivo "${fileName}" excede o limite de 50 MB` }, { status: 400 })
+    return jsonError(`Arquivo "${fileName}" excede o limite de 50 MB`, 400)
   }
 
   const timestamp = Date.now()
@@ -66,7 +58,7 @@ export async function POST(
     .createSignedUploadUrl(path)
 
   if (signError || !signedData) {
-    return NextResponse.json({ error: `Erro ao gerar URL de upload: ${signError?.message}` }, { status: 500 })
+    return jsonError(`Erro ao gerar URL de upload: ${signError?.message}`, 500)
   }
 
   // Insere registro na tabela documentos (texto será extraído depois)
@@ -87,7 +79,7 @@ export async function POST(
     .single()
 
   if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 })
+    return jsonError(insertError.message, 500)
   }
 
   return NextResponse.json({
@@ -104,18 +96,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const body = await req.json()
   const { documentoId, storagePath, fileType } = body as {
@@ -125,7 +108,7 @@ export async function PATCH(
   }
 
   if (!documentoId || !storagePath) {
-    return NextResponse.json({ error: 'Dados obrigatórios ausentes' }, { status: 400 })
+    return jsonError('Dados obrigatórios ausentes', 400)
   }
 
   // Baixa o arquivo do storage para extração de texto
@@ -139,7 +122,7 @@ export async function PATCH(
     .download(storagePath)
 
   if (downloadError || !fileData) {
-    return NextResponse.json({ error: 'Erro ao baixar arquivo para extração' }, { status: 500 })
+    return jsonError('Erro ao baixar arquivo para extração', 500)
   }
 
   const arrayBuffer = await fileData.arrayBuffer()

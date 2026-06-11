@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptAnalisePrev, SYSTEM_ANALISE_PREV } from '@/lib/prompts/analise/previdenciario'
 import { buildPromptAnaliseTrab, SYSTEM_ANALISE_TRAB } from '@/lib/prompts/analise/trabalhista'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 // POST /api/ia/analise — gerar análise jurídica
 export async function POST(req: NextRequest) {
@@ -13,24 +14,15 @@ export async function POST(req: NextRequest) {
   try {
     const { atendimentoId } = await req.json()
     if (!atendimentoId) {
-      return NextResponse.json({ error: 'atendimentoId é obrigatório' }, { status: 400 })
+      return jsonError('atendimentoId é obrigatório', 400)
     }
 
-    const supabase = await createClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-    const { data: usuario } = await supabase
-      .from('users')
-      .select('id, tenant_id')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
+    const { supabase, usuario } = auth
 
     const cota = await verificarCota(supabase, usuario.tenant_id, 'analise')
-    if (!cota.permitido) return NextResponse.json({ error: mensagemCotaExcedida(cota) }, { status: 429 })
+    if (!cota.permitido) return jsonError(mensagemCotaExcedida(cota), 429)
 
     // Buscar atendimento com documentos
     const { data: atendimento } = await supabase
@@ -40,11 +32,11 @@ export async function POST(req: NextRequest) {
       .eq('tenant_id', usuario.tenant_id)
       .single()
 
-    if (!atendimento) return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+    if (!atendimento) return jsonError('Atendimento não encontrado', 404)
 
     const transcricao = atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? ''
     if (!transcricao.trim()) {
-      return NextResponse.json({ error: 'Atendimento sem transcrição ou texto' }, { status: 400 })
+      return jsonError('Atendimento sem transcrição ou texto', 400)
     }
 
     const documentos = (atendimento.documentos ?? []).map((d: Record<string, unknown>) => ({
@@ -103,7 +95,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (errAnalise) {
-      return NextResponse.json({ error: 'Erro ao salvar análise' }, { status: 500 })
+      return jsonError('Erro ao salvar análise', 500)
     }
 
     // Log de uso
@@ -123,6 +115,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

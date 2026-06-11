@@ -1,6 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
+import { createClient } from '@/lib/supabase/server'
 import { encryptClienteFields, decryptClienteFields } from '@/lib/encryption'
 
 const schemaUpdate = z.object({
@@ -21,27 +23,20 @@ const schemaUpdate = z.object({
   notas:            z.string().max(2000).optional().nullable(),
 })
 
-// Helper: verifica se o cliente pertence ao tenant do usuário
-async function verificarAcesso(supabase: Awaited<ReturnType<typeof createClient>>, clienteId: string) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return null
-
+// Helper: busca o cliente garantindo que pertence ao tenant do usuário
+async function buscarCliente(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  clienteId: string,
+  tenantId: string
+) {
   const { data: cliente } = await supabase
     .from('clientes')
     .select('*')
     .eq('id', clienteId)
-    .eq('tenant_id', usuario.tenant_id)
+    .eq('tenant_id', tenantId)
     .single()
 
-  return cliente ? { cliente, usuario } : null
+  return cliente
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -53,10 +48,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-  const acesso = await verificarAcesso(supabase, id)
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  if (!acesso) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  const cliente = await buscarCliente(supabase, id, usuario.tenant_id)
+  if (!cliente) return jsonError('Não encontrado', 404)
 
   // Busca com contagem de atendimentos
   const { data: atendimentos } = await supabase
@@ -67,7 +64,7 @@ export async function GET(
     .limit(10)
 
   return NextResponse.json({
-    cliente:      decryptClienteFields(acesso.cliente),
+    cliente:      decryptClienteFields(cliente),
     atendimentos: atendimentos ?? [],
   })
 }
@@ -81,19 +78,18 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-  const acesso = await verificarAcesso(supabase, id)
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  if (!acesso) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  const cliente = await buscarCliente(supabase, id, usuario.tenant_id)
+  if (!cliente) return jsonError('Não encontrado', 404)
 
   const body = await req.json()
   const resultado = schemaUpdate.safeParse(body)
 
   if (!resultado.success) {
-    return NextResponse.json(
-      { error: 'Dados inválidos', detalhes: resultado.error.flatten() },
-      { status: 400 }
-    )
+    return jsonError('Dados inválidos', 400, resultado.error.flatten())
   }
 
   const { data: clienteAtualizado, error } = await supabase
@@ -106,7 +102,7 @@ export async function PATCH(
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ cliente: decryptClienteFields(clienteAtualizado) })
 }
@@ -120,17 +116,19 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
-  const acesso = await verificarAcesso(supabase, id)
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  if (!acesso) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
+  const cliente = await buscarCliente(supabase, id, usuario.tenant_id)
+  if (!cliente) return jsonError('Não encontrado', 404)
 
   const { error } = await supabase
     .from('clientes')
     .delete()
     .eq('id', id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ ok: true })
 }

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
+import { logAudit } from '@/lib/audit'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 
@@ -24,24 +26,17 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { usuario: admin } = auth
 
-  const { data: admin } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!admin) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-  if (admin.role !== 'admin') return NextResponse.json({ error: 'Apenas administradores podem alterar perfis' }, { status: 403 })
+  if (admin.role !== 'admin') return jsonError('Apenas administradores podem alterar perfis', 403)
 
   const body = await req.json()
   const resultado = schema.safeParse(body)
   if (!resultado.success) {
-    return NextResponse.json({ error: 'Dados inválidos', detalhes: resultado.error.flatten() }, { status: 400 })
+    return jsonError('Dados inválidos', 400, resultado.error.flatten())
   }
 
   // Admin não pode alterar o próprio role/status, mas pode definir-se como advogado principal
@@ -49,7 +44,7 @@ export async function PATCH(
     const apenasDefinindoPrincipal = resultado.data.is_advogado_principal !== undefined
       && !resultado.data.role && !resultado.data.status
     if (!apenasDefinindoPrincipal) {
-      return NextResponse.json({ error: 'Você não pode alterar seu próprio perfil' }, { status: 400 })
+      return jsonError('Você não pode alterar seu próprio perfil', 400)
     }
   }
 
@@ -74,8 +69,17 @@ export async function PATCH(
     .single()
 
   if (error || !usuario) {
-    return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    return jsonError('Usuário não encontrado', 404)
   }
+
+  await logAudit({
+    tenantId:     admin.tenant_id,
+    userId:       admin.id,
+    action:       'user.update',
+    resourceType: 'user',
+    resourceId:   id,
+    metadata:     resultado.data,
+  })
 
   return NextResponse.json({ ok: true, usuario })
 }
@@ -86,20 +90,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const supabase = await createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { usuario: admin } = auth
 
-  const { data: admin } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!admin) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-  if (admin.role !== 'admin') return NextResponse.json({ error: 'Apenas administradores podem remover usuários' }, { status: 403 })
-  if (id === admin.id) return NextResponse.json({ error: 'Você não pode remover a si mesmo' }, { status: 400 })
+  if (admin.role !== 'admin') return jsonError('Apenas administradores podem remover usuários', 403)
+  if (id === admin.id) return jsonError('Você não pode remover a si mesmo', 400)
 
   const adminDb = getAdminSupabase()
 
@@ -109,7 +106,15 @@ export async function DELETE(
     .eq('id', id)
     .eq('tenant_id', admin.tenant_id)
 
-  if (error) return NextResponse.json({ error: 'Erro ao remover usuário' }, { status: 500 })
+  if (error) return jsonError('Erro ao remover usuário', 500)
+
+  await logAudit({
+    tenantId:     admin.tenant_id,
+    userId:       admin.id,
+    action:       'user.delete',
+    resourceType: 'user',
+    resourceId:   id,
+  })
 
   return NextResponse.json({ ok: true })
 }

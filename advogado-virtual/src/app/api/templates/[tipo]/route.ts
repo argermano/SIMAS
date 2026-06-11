@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 
 type TipoTemplate =
   | 'contrato'
@@ -18,17 +19,6 @@ const TIPOS_VALIDOS: TipoTemplate[] = [
   'notificacao_extrajudicial',
 ]
 
-async function getUsuario(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-  return usuario ?? null
-}
-
 // GET /api/templates/[tipo] — busca template do tenant pelo tipo
 export async function GET(
   _req: NextRequest,
@@ -37,12 +27,12 @@ export async function GET(
   const { tipo } = await params
 
   if (!TIPOS_VALIDOS.includes(tipo as TipoTemplate)) {
-    return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
+    return jsonError('Tipo inválido', 400)
   }
 
-  const supabase = await createClient()
-  const usuario = await getUsuario(supabase)
-  if (!usuario) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { data: template } = await supabase
     .from('templates_documentos')
@@ -62,17 +52,17 @@ export async function POST(
   const { tipo } = await params
 
   if (!TIPOS_VALIDOS.includes(tipo as TipoTemplate)) {
-    return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
+    return jsonError('Tipo inválido', 400)
   }
 
-  const supabase = await createClient()
-  const usuario = await getUsuario(supabase)
-  if (!usuario) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { conteudo_markdown } = await req.json() as { conteudo_markdown: string }
 
   if (!conteudo_markdown?.trim()) {
-    return NextResponse.json({ error: 'Conteúdo obrigatório' }, { status: 400 })
+    return jsonError('Conteúdo obrigatório', 400)
   }
 
   const { data: template, error } = await supabase
@@ -90,7 +80,7 @@ export async function POST(
     .select('id, tipo, updated_at')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ template }, { status: 201 })
 }
@@ -103,12 +93,12 @@ export async function DELETE(
   const { tipo } = await params
 
   if (!TIPOS_VALIDOS.includes(tipo as TipoTemplate)) {
-    return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
+    return jsonError('Tipo inválido', 400)
   }
 
-  const supabase = await createClient()
-  const usuario = await getUsuario(supabase)
-  if (!usuario) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { error } = await supabase
     .from('templates_documentos')
@@ -116,7 +106,7 @@ export async function DELETE(
     .eq('tenant_id', usuario.tenant_id)
     .eq('tipo', tipo)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ ok: true })
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { getAnthropicClient, DEFAULT_MODEL, DEFAULT_MAX_TOKENS } from '@/lib/anthropic/client'
 import { SYSTEM_PROCURACAO, buildPromptProcuracao } from '@/lib/prompts/documentos/procuracao'
 import { SYSTEM_DECLARACAO, buildPromptDeclaracao } from '@/lib/prompts/documentos/declaracao-hipossuficiencia'
@@ -50,24 +51,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (!tipo || !clienteId) {
-      return NextResponse.json({ error: 'tipo e clienteId são obrigatórios' }, { status: 400 })
+      return jsonError('tipo e clienteId são obrigatórios', 400)
     }
 
     if (!TIPOS_VALIDOS.includes(tipo as TipoDoc)) {
-      return NextResponse.json({ error: 'Tipo inválido' }, { status: 400 })
+      return jsonError('Tipo inválido', 400)
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-    const { data: usuario } = await supabase
-      .from('users')
-      .select('id, nome, tenant_id')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+    const auth = await getAuthContext()
+    if (!auth.ok) return auth.response
+    const { supabase, usuario } = auth
 
     // Buscar dados do cliente
     const { data: clienteRaw } = await supabase
@@ -77,7 +70,7 @@ export async function POST(req: NextRequest) {
       .eq('tenant_id', usuario.tenant_id)
       .single()
 
-    if (!clienteRaw) return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
+    if (!clienteRaw) return jsonError('Cliente não encontrado', 404)
 
     // Decifra CPF/RG (criptografados em repouso) antes de montar o documento
     const cliente = decryptClienteFields(clienteRaw)
@@ -187,6 +180,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[gerar-documento]', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

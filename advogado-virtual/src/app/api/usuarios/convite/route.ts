@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { z } from 'zod'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError, validateBody } from '@/lib/api'
+import { logAudit } from '@/lib/audit'
 
 const schema = z.object({
   nome:  z.string().min(2, 'Nome é obrigatório'),
@@ -35,28 +37,17 @@ async function enviarEmailConvite(nome: string, email: string, link: string) {
 }
 
 // POST /api/usuarios/convite — convida usuário para o escritório (admin only)
-export async function POST(req: NextRequest) {
-  const supabase = await createClient()
+export async function POST(req: Request) {
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario: admin } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  if (admin.role !== 'admin') return jsonError('Apenas administradores podem convidar usuários', 403)
 
-  const { data: admin } = await supabase
-    .from('users')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
+  const parsed = await validateBody(req, schema)
+  if (!parsed.ok) return parsed.response
 
-  if (!admin) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-  if (admin.role !== 'admin') return NextResponse.json({ error: 'Apenas administradores podem convidar usuários' }, { status: 403 })
-
-  const body = await req.json()
-  const resultado = schema.safeParse(body)
-  if (!resultado.success) {
-    return NextResponse.json({ error: 'Dados inválidos', detalhes: resultado.error.flatten() }, { status: 400 })
-  }
-
-  const { nome, email, role } = resultado.data
+  const { nome, email, role } = parsed.data
 
   // Verifica se já existe um usuário com este e-mail no tenant
   const { data: existente } = await supabase
@@ -67,7 +58,7 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (existente) {
-    return NextResponse.json({ error: 'Este e-mail já está cadastrado no escritório' }, { status: 409 })
+    return jsonError('Este e-mail já está cadastrado no escritório', 409)
   }
 
   // Usa service role key para chamar a API administrativa do Supabase Auth
@@ -90,7 +81,7 @@ export async function POST(req: NextRequest) {
 
   if (linkError) {
     if (!linkError.message.includes('already been registered')) {
-      return NextResponse.json({ error: `Erro ao gerar convite: ${linkError.message}` }, { status: 500 })
+      return jsonError(`Erro ao gerar convite: ${linkError.message}`, 500)
     }
   }
 
@@ -120,8 +111,17 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (userError) {
-    return NextResponse.json({ error: `Erro ao criar usuário: ${userError.message}` }, { status: 500 })
+    return jsonError(`Erro ao criar usuário: ${userError.message}`, 500)
   }
+
+  await logAudit({
+    tenantId: admin.tenant_id,
+    userId: admin.id,
+    action: 'user.invite',
+    resourceType: 'user',
+    resourceId: novoUsuario.id,
+    metadata: { email, role },
+  })
 
   return NextResponse.json({ ok: true, usuario: novoUsuario }, { status: 201 })
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { jsonError } from '@/lib/api'
 import { buscarJurisprudencia } from '@/lib/jurisprudencia/datajud'
 
 // POST /api/jurisprudencia — buscar jurisprudência na API DataJud (CNJ)
@@ -8,16 +9,13 @@ export async function POST(req: NextRequest) {
     const { termos, tribunais } = await req.json()
 
     if (!termos || !tribunais || !Array.isArray(tribunais) || tribunais.length === 0) {
-      return NextResponse.json(
-        { error: 'termos e tribunais (array) são obrigatórios' },
-        { status: 400 },
-      )
+      return jsonError('termos e tribunais (array) são obrigatórios', 400)
     }
 
     // Autenticação
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    if (!user) return jsonError('Não autenticado', 401)
 
     const resultados = await buscarJurisprudencia({
       termos,
@@ -28,6 +26,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ resultados, total: resultados.length })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return jsonError(message, 500)
   }
 }

@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError, validateBody } from '@/lib/api'
 import { encryptClienteFields, decryptClienteFields } from '@/lib/encryption'
 
 // ─────────────────────────────────────────────────────────────
@@ -30,18 +31,9 @@ const schemaCliente = z.object({
 // ─────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const { searchParams } = new URL(req.url)
   const busca = searchParams.get('q') ?? ''
@@ -62,7 +54,7 @@ export async function GET(req: Request) {
 
   const { data, error, count } = await query
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({
     clientes:   (data ?? []).map(decryptClienteFields),
@@ -77,30 +69,14 @@ export async function GET(req: Request) {
 // ─────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  const parsed = await validateBody(req, schemaCliente)
+  if (!parsed.ok) return parsed.response
 
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id, tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
-
-  const body = await req.json()
-  const resultado = schemaCliente.safeParse(body)
-
-  if (!resultado.success) {
-    return NextResponse.json(
-      { error: 'Dados inválidos', detalhes: resultado.error.flatten() },
-      { status: 400 }
-    )
-  }
-
-  const dados = resultado.data
+  const dados = parsed.data
 
   const { data: cliente, error } = await supabase
     .from('clientes')
@@ -113,7 +89,7 @@ export async function POST(req: Request) {
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ cliente: decryptClienteFields(cliente) }, { status: 201 })
 }

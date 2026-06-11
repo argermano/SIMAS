@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
 import { z } from 'zod'
 
 const schemaPerfil = z.object({
@@ -8,27 +9,15 @@ const schemaPerfil = z.object({
 
 // PATCH /api/usuarios/perfil — o usuário atualiza seu próprio perfil
 export async function PATCH(req: NextRequest) {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { data: usuario } = await supabase
-    .from('users')
-    .select('id')
-    .eq('auth_user_id', user.id)
-    .single()
-
-  if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
 
   const body = await req.json()
   const resultado = schemaPerfil.safeParse(body)
 
   if (!resultado.success) {
-    return NextResponse.json(
-      { error: 'Dados inválidos', detalhes: resultado.error.flatten() },
-      { status: 400 }
-    )
+    return jsonError('Dados inválidos', 400, resultado.error.flatten())
   }
 
   const { data: atualizado, error } = await supabase
@@ -38,7 +27,7 @@ export async function PATCH(req: NextRequest) {
     .select('id, nome')
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({ usuario: atualizado })
 }
