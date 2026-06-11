@@ -11,6 +11,9 @@ const COLOR_BLACK = '000000'
 // Reexporta para compatibilidade com quem importa daqui (testes, etc.)
 export { limparMarkdownParaDocx }
 
+// Endereçamento ao juízo (1ª linha da peça): "EXCELENTÍSSIMO...", "EXMO.", "AO JUÍZO..."
+const RE_ENDERECAMENTO = /^\s*(?:EXCELENT[IÍ]SSIM|EXM[OA]\b|MERIT[IÍ]SSIM|AO\s+(?:JU[IÍ]ZO|EXCELENT|MERIT|DOUTO))/i
+
 /** Valores do estilo já convertidos para as unidades do docx. */
 interface EstiloDocx {
   font: string
@@ -57,6 +60,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
   const lines = limparMarkdownParaDocx(markdown).split('\n')
   const paragraphs: Paragraph[] = []
 
+  let enderecamentoAplicado = false
   let inBlockquote = false
   let blockquoteLines: string[] = []
 
@@ -159,6 +163,18 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       continue
     }
 
+    // Endereçamento ao juízo — sem recuo de 1ª linha e com espaço extra antes da
+    // qualificação das partes (padrão de petição: endereçamento "respira").
+    if (!enderecamentoAplicado && RE_ENDERECAMENTO.test(trimmed)) {
+      enderecamentoAplicado = true
+      paragraphs.push(new Paragraph({
+        alignment: AlignmentType.JUSTIFIED,
+        spacing: { after: 600, line: e.lineSpacing },
+        children: parseInlineFormatting(trimmed, e.size, e.font, true),
+      }))
+      continue
+    }
+
     // Parágrafo normal — justificado, recuo de 1ª linha, entrelinha do estilo
     paragraphs.push(new Paragraph({
       alignment: AlignmentType.JUSTIFIED,
@@ -214,7 +230,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
 /**
  * Processa formatação inline: **negrito**, *itálico*, [PREENCHER], [VERIFICAR]
  */
-function parseInlineFormatting(text: string, fontSize: number, font: string): TextRun[] {
+function parseInlineFormatting(text: string, fontSize: number, font: string, forceBold = false): TextRun[] {
   const runs: TextRun[] = []
   const parts = text.split(/(\*\*.*?\*\*|\*[^*]+?\*|\[PREENCHER[^\]]*\]|\[VERIFICAR[^\]]*\])/g)
 
@@ -228,9 +244,9 @@ function parseInlineFormatting(text: string, fontSize: number, font: string): Te
     } else if (part.startsWith('**') && part.endsWith('**')) {
       runs.push(new TextRun({ text: part.slice(2, -2), bold: true, size: fontSize, font, color: COLOR_BLACK }))
     } else if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
-      runs.push(new TextRun({ text: part.slice(1, -1), italics: true, size: fontSize, font, color: COLOR_BLACK }))
+      runs.push(new TextRun({ text: part.slice(1, -1), italics: true, bold: forceBold || undefined, size: fontSize, font, color: COLOR_BLACK }))
     } else {
-      runs.push(new TextRun({ text: part, size: fontSize, font, color: COLOR_BLACK }))
+      runs.push(new TextRun({ text: part, bold: forceBold || undefined, size: fontSize, font, color: COLOR_BLACK }))
     }
   }
 

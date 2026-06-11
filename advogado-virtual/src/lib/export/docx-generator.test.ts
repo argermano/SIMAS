@@ -52,4 +52,12 @@ describe('markdownToDocx — artefatos não vazam para o documento', () => {
     expect(value).toContain('[PREENCHER]')
     expect(value).toContain('[PREENCHER endereço completo]')
   })
+
+  it('endereçamento ao juízo sai em negrito', async () => {
+    const buffer = await markdownToDocx(
+      'EXCELENTÍSSIMO SENHOR JUIZ FEDERAL DE [PREENCHER COMARCA]\n\nFULANO DE TAL, brasileiro, propõe a presente ação.',
+    )
+    const { value } = await mammoth.convertToHtml({ buffer })
+    expect(value).toMatch(/<strong>[^<]*EXCELENT[IÍ]SSIMO/i)
+  })
 })

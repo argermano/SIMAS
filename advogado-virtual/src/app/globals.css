@@ -201,13 +201,13 @@
   color: hsl(var(--editor-text));
 }
 
-/* Endereçamento ao juiz — primeira linha do documento */
+/* Endereçamento ao juiz — primeira linha do documento (negrito, sem recuo,
+   com espaço extra antes da qualificação das partes, como no DOCX exportado) */
 .ProseMirror > p:first-child {
   text-align: justify;
   text-indent: 0;
   font-weight: 700;
-  text-transform: uppercase;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2.5rem;
 }
 
 /* Títulos: mesmo tamanho do corpo + negrito (como no DOCX exportado).
