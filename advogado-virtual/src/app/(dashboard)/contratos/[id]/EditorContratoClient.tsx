@@ -9,7 +9,7 @@ import { ConfirmDialog } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { EnviarAssinaturaModal } from '@/components/contratos/EnviarAssinaturaModal'
 import { PainelAssinatura } from '@/components/contratos/PainelAssinatura'
-import { CheckCircle, Loader2, PenLine, ChevronDown, FileDown, Monitor } from 'lucide-react'
+import { CheckCircle, Loader2, PenLine, ChevronDown, FileDown, Monitor, FileText } from 'lucide-react'
 
 interface Signer {
   id:           string
@@ -71,6 +71,7 @@ export function EditorContratoClient({
   const [showAssinar,      setShowAssinar]      = useState(false)
   const [assinatura,       setAssinatura]       = useState<SignatureData | null>(assinaturaInicial ?? null)
   const [baixandoPdf,      setBaixandoPdf]      = useState(false)
+  const [baixandoModelo,   setBaixandoModelo]   = useState(false)
 
   const podeAprovar        = ['admin', 'advogado'].includes(role)
   const temAssinaturaAtiva = assinatura && assinatura.status !== 'cancelled'
@@ -139,6 +140,31 @@ export function EditorContratoClient({
     }
   }, [contratoId, contrato.titulo, success, toastError])
 
+  // Preenche o modelo .docx do escritório (com {{placeholders}}) — fidelidade 1:1
+  const handleBaixarModelo = useCallback(async () => {
+    setBaixandoModelo(true)
+    try {
+      const res = await fetch(`/api/contratos/${contratoId}/exportar-modelo`, { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toastError('Modelo não disponível', d.error ?? 'Não foi possível gerar o documento')
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${contrato.titulo.replace(/\s+/g, '_')}_modelo.docx`
+      a.click()
+      URL.revokeObjectURL(url)
+      success('DOCX gerado!', 'Modelo do escritório preenchido')
+    } catch {
+      toastError('Erro', 'Falha de rede')
+    } finally {
+      setBaixandoModelo(false)
+    }
+  }, [contratoId, contrato.titulo, success, toastError])
+
   const acaoAprovar = podeAprovar && status !== 'aprovado' && status !== 'exportado' ? (
     <Button
       size="sm"
@@ -167,6 +193,10 @@ export function EditorContratoClient({
         <DropdownMenuItem onClick={handleBaixarPdf} disabled={baixandoPdf}>
           <FileDown className="h-4 w-4" />
           {baixandoPdf ? 'Gerando PDF…' : 'Manual (PDF)'}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={handleBaixarModelo} disabled={baixandoModelo}>
+          <FileText className="h-4 w-4" />
+          {baixandoModelo ? 'Preenchendo…' : 'Meu modelo (.docx)'}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setShowAssinar(true)}>
           <Monitor className="h-4 w-4" />
