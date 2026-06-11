@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { LogoMark } from '@/components/ui/Logo'
 import {
-  Scale,
   Brain,
   FileText,
   Users,
@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Sparkles,
   Check,
-  Star,
   ArrowRight,
   Lock,
   Headphones,
@@ -227,35 +226,32 @@ const PLANS = [
   },
 ]
 
-const TESTIMONIALS = [
+const DIFERENCIAIS = [
   {
-    name: 'Dra. Carolina Mendes',
-    role: 'Advogada Previdenciária',
+    icon: Gavel,
+    title: 'Feito para o direito brasileiro',
     content:
-      'O SIMAS transformou meu escritório. Reduzi em 60% o tempo gasto com documentos e nunca mais perdi um prazo. A IA para análise de casos é simplesmente incrível.',
-    avatar: 'CM',
+      'Peças, prazos e linguagem no padrão forense — não um chatbot genérico adaptado às pressas.',
   },
   {
-    name: 'Dr. Ricardo Almeida',
-    role: 'Sócio — Almeida & Associados',
+    icon: Sparkles,
+    title: 'Da consulta à peça, sem retrabalho',
     content:
-      'Depois que implementamos o SIMAS, nosso faturamento cresceu 40%. A automação liberou a equipe para focar no que realmente importa: os clientes.',
-    avatar: 'RA',
+      'O relato do cliente vira transcrição, análise e minuta — tudo conectado no dossiê do cliente.',
   },
   {
-    name: 'Dra. Fernanda Costa',
-    role: 'Advogada Trabalhista',
+    icon: FileSignature,
+    title: 'Seu padrão, sua marca',
     content:
-      'A funcionalidade de IA para análise de jurisprudência economiza horas do meu dia. É como ter um assistente jurídico disponível 24 horas.',
-    avatar: 'FC',
+      'Modelos .docx do escritório preenchidos com fidelidade — no seu timbre e na sua formatação.',
   },
 ]
 
 const STATS = [
-  { value: 2500, suffix: '+', label: 'Advogados ativos' },
-  { value: 98, suffix: '%', label: 'Satisfação' },
-  { value: 60, suffix: '%', label: 'Menos tempo em tarefas' },
-  { value: 40, suffix: '%', label: 'Mais produtividade' },
+  { value: 8, suffix: '', label: 'Áreas jurídicas' },
+  { value: 6, suffix: '', label: 'Tipos de documento automatizados' },
+  { value: 100, suffix: '%', label: 'Peças no padrão ABNT' },
+  { value: 4, suffix: '', label: 'Passos: da consulta à peça' },
 ]
 
 const TRUST = [
@@ -286,12 +282,27 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'SoftwareApplication',
+            name: 'SIMAS',
+            applicationCategory: 'BusinessApplication',
+            operatingSystem: 'Web',
+            inLanguage: 'pt-BR',
+            url: 'https://simas.app',
+            description: 'Sistema jurídico inteligente com IA para a advocacia brasileira.',
+          }),
+        }}
+      />
       {/* ═══════════ Navbar ═══════════ */}
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5 sm:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-glow shadow-md shadow-primary/25 transition-shadow group-hover:shadow-lg group-hover:shadow-primary/30">
-              <Scale className="h-5 w-5 text-white" />
+              <LogoMark className="h-5 w-5 text-white" />
             </div>
             <span className="font-heading text-xl font-extrabold tracking-tight">
               SIMAS
@@ -323,7 +334,7 @@ export default function LandingPage() {
               Entrar
             </Link>
             <Link
-              href="/login"
+              href="/registro"
               className="group relative rounded-xl bg-gradient-to-r from-primary to-primary-glow px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
             >
               Começar grátis
@@ -361,7 +372,7 @@ export default function LandingPage() {
               ))}
               <div className="mt-2 flex gap-3 border-t pt-3">
                 <Link href="/login" className="text-sm font-semibold text-muted-foreground">Entrar</Link>
-                <Link href="/login" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Começar grátis</Link>
+                <Link href="/registro" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Começar grátis</Link>
               </div>
             </div>
           </div>
@@ -400,7 +411,7 @@ export default function LandingPage() {
               </div>
 
               {/* Headline */}
-              <h1 className="font-heading text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+              <h1 className="font-serif text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
                 A advocacia do futuro,{' '}
                 <span className="relative">
                   <span className="bg-gradient-to-r from-primary via-primary-glow to-primary bg-clip-text text-transparent">
@@ -426,7 +437,7 @@ export default function LandingPage() {
               {/* CTA buttons */}
               <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
                 <Link
-                  href="/login"
+                  href="/registro"
                   className="group relative inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-primary-glow px-8 py-4 text-base font-bold text-white shadow-xl shadow-primary/25 transition-all hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-0.5"
                 >
                   Começar teste gratuito
@@ -461,7 +472,7 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════ Stats bar ═══════════ */}
-      <section className="relative overflow-hidden border-y border-white/10 bg-gradient-to-r from-[hsl(234,65%,18%)] via-[hsl(234,65%,22%)] to-[hsl(250,65%,24%)]">
+      <section className="relative overflow-hidden border-y border-white/10 bg-gradient-to-r from-[hsl(216,44%,15%)] via-[hsl(216,44%,20%)] to-[hsl(217,39%,28%)]">
         <div className="absolute inset-0 opacity-10" style={{
           backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
           backgroundSize: '32px 32px',
@@ -483,7 +494,7 @@ export default function LandingPage() {
               <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary">
                 Como funciona
               </span>
-              <h2 className="mt-5 font-heading text-3xl font-extrabold text-foreground md:text-4xl lg:text-5xl">
+              <h2 className="mt-5 font-serif text-3xl font-bold text-foreground md:text-4xl lg:text-5xl">
                 Da consulta à peça processual{' '}
                 <span className="bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">em minutos</span>
               </h2>
@@ -534,7 +545,7 @@ export default function LandingPage() {
               <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary">
                 Funcionalidades
               </span>
-              <h2 className="mt-5 font-heading text-3xl font-extrabold text-foreground md:text-4xl lg:text-5xl">
+              <h2 className="mt-5 font-serif text-3xl font-bold text-foreground md:text-4xl lg:text-5xl">
                 Tudo que seu escritório precisa
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
@@ -607,7 +618,7 @@ export default function LandingPage() {
               <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary">
                 Preços
               </span>
-              <h2 className="mt-5 font-heading text-3xl font-extrabold text-foreground md:text-4xl lg:text-5xl">
+              <h2 className="mt-5 font-serif text-3xl font-bold text-foreground md:text-4xl lg:text-5xl">
                 Planos que crescem com você
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
@@ -649,7 +660,7 @@ export default function LandingPage() {
                   </ul>
 
                   <Link
-                    href="/login"
+                    href="/registro"
                     className={`mt-8 block rounded-xl px-5 py-3 text-center text-sm font-bold transition-all ${
                       plan.highlighted
                         ? 'bg-gradient-to-r from-primary to-primary-glow text-white shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5'
@@ -665,54 +676,42 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ═══════════ Testimonials ═══════════ */}
+      {/* ═══════════ Diferenciais ═══════════ */}
       <section id="testimonials" className="relative border-t bg-muted/20 py-24 md:py-32">
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <Reveal>
             <div className="text-center">
               <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary">
-                Depoimentos
+                Diferenciais
               </span>
-              <h2 className="mt-5 font-heading text-3xl font-extrabold text-foreground md:text-4xl lg:text-5xl">
-                Quem usa, recomenda
+              <h2 className="mt-5 font-serif text-3xl font-bold text-foreground md:text-4xl lg:text-5xl">
+                Pensado para a rotina jurídica
               </h2>
             </div>
           </Reveal>
 
           <div className="mt-16 grid gap-6 md:grid-cols-3">
-            {TESTIMONIALS.map((t, i) => (
-              <Reveal key={t.name} delay={i * 100}>
-                <div className="flex h-full flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1">
-                  {/* Stars */}
-                  <div className="mb-4 flex gap-1">
-                    {Array.from({ length: 5 }).map((_, j) => (
-                      <Star key={j} className="h-4 w-4 fill-amber-400 text-amber-400" />
-                    ))}
-                  </div>
-
-                  <p className="flex-1 text-sm leading-relaxed text-muted-foreground italic">
-                    &ldquo;{t.content}&rdquo;
-                  </p>
-
-                  <div className="mt-6 flex items-center gap-3 border-t border-border/60 pt-5">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-xs font-bold text-white">
-                      {t.avatar}
+            {DIFERENCIAIS.map((d, i) => {
+              const Icon = d.icon
+              return (
+                <Reveal key={d.title} delay={i * 100}>
+                  <div className="flex h-full flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1">
+                    <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-accent/15 text-accent">
+                      <Icon className="h-6 w-6" />
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-foreground">{t.name}</p>
-                      <p className="text-xs text-muted-foreground">{t.role}</p>
-                    </div>
+                    <h3 className="font-heading text-lg font-bold text-foreground">{d.title}</h3>
+                    <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{d.content}</p>
                   </div>
-                </div>
-              </Reveal>
-            ))}
+                </Reveal>
+              )
+            })}
           </div>
         </div>
       </section>
 
       {/* ═══════════ CTA ═══════════ */}
       <section className="relative overflow-hidden border-t">
-        <div className="absolute inset-0 bg-gradient-to-br from-[hsl(234,65%,18%)] via-[hsl(234,65%,22%)] to-[hsl(250,60%,26%)]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[hsl(216,44%,14%)] via-[hsl(216,44%,19%)] to-[hsl(217,39%,27%)]" />
         <div className="absolute inset-0 opacity-5" style={{
           backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
           backgroundSize: '24px 24px',
@@ -727,7 +726,7 @@ export default function LandingPage() {
               Comece hoje mesmo
             </div>
 
-            <h2 className="font-heading text-3xl font-extrabold text-white md:text-4xl lg:text-5xl">
+            <h2 className="font-serif text-3xl font-bold text-white md:text-4xl lg:text-5xl">
               Pronto para transformar{' '}
               <span className="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
                 seu escritório?
@@ -735,13 +734,13 @@ export default function LandingPage() {
             </h2>
 
             <p className="mx-auto mt-6 max-w-xl text-lg text-white/60">
-              Junte-se a milhares de advogados que já economizam tempo e aumentam a produtividade com o SIMAS.
+              Comece agora e transforme a rotina do seu escritório com IA jurídica — da consulta à peça.
             </p>
 
             <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
               <Link
-                href="/login"
-                className="group inline-flex items-center gap-2 rounded-2xl bg-white px-8 py-4 text-base font-bold text-[hsl(234,65%,22%)] shadow-xl transition-all hover:shadow-2xl hover:-translate-y-0.5"
+                href="/registro"
+                className="group inline-flex items-center gap-2 rounded-2xl bg-white px-8 py-4 text-base font-bold text-[hsl(216,44%,22%)] shadow-xl transition-all hover:shadow-2xl hover:-translate-y-0.5"
               >
                 Começar agora — é grátis
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
@@ -781,7 +780,7 @@ export default function LandingPage() {
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-glow">
-                <Scale className="h-4 w-4 text-white" />
+                <LogoMark className="h-4 w-4 text-white" />
               </div>
               <span className="font-heading text-sm font-bold">SIMAS</span>
             </div>
