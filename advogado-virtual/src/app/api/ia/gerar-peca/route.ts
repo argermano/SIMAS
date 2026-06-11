@@ -244,7 +244,7 @@ export async function POST(req: NextRequest) {
       })
 
       if (modeloPadrao) {
-        prompt += `\n\n## MODELO PADRÃO DO ESCRITÓRIO (OBRIGATÓRIO)\nO escritório cadastrou o seguinte modelo como padrão. Você DEVE seguir EXATAMENTE a mesma formatação, estrutura visual, fontes, espaçamentos, cabeçalhos e rodapés deste modelo. Adapte apenas o conteúdo jurídico ao caso concreto, mantendo o layout idêntico:\n\n${modeloPadrao}`
+        prompt += `\n\n## MODELO DE REFERÊNCIA DO ESCRITÓRIO\nUse o modelo abaixo apenas como REFERÊNCIA DE ESTRUTURA (seções, ordem e tom de escrita) — NÃO copie o conteúdo dele. A apresentação visual (fonte, margens, entrelinha, recuo) é aplicada automaticamente na exportação; não tente reproduzi-la no texto. Adapte a estrutura ao caso concreto:\n\n${modeloPadrao}`
       }
 
       if (jurisprudenciaTexto) {
@@ -296,7 +296,7 @@ export async function POST(req: NextRequest) {
     })
 
     if (modeloPadrao) {
-      prompt += `\n\n## MODELO PADRÃO DO ESCRITÓRIO (OBRIGATÓRIO)\nO escritório cadastrou o seguinte modelo como padrão. Você DEVE seguir EXATAMENTE a mesma formatação, estrutura visual, fontes, espaçamentos, cabeçalhos e rodapés deste modelo. Adapte apenas o conteúdo jurídico ao caso concreto, mantendo o layout idêntico:\n\n${modeloPadrao}`
+      prompt += `\n\n## MODELO DE REFERÊNCIA DO ESCRITÓRIO\nUse o modelo abaixo apenas como REFERÊNCIA DE ESTRUTURA (seções, ordem e tom de escrita) — NÃO copie o conteúdo dele. A apresentação visual (fonte, margens, entrelinha, recuo) é aplicada automaticamente na exportação; não tente reproduzi-la no texto. Adapte a estrutura ao caso concreto:\n\n${modeloPadrao}`
     }
 
     if (jurisprudenciaTexto) {

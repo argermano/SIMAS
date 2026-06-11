@@ -77,7 +77,7 @@ const SUBTIPOS_MAP: Record<TipoModelo, { value: string; label: string }[]> = {
 }
 
 const DICAS: Record<TipoModelo, string> = {
-  peca: 'Cadastre modelos para cada tipo de peça. A IA usará o modelo como referência de formatação (fontes, espaçamentos, cabeçalhos, rodapés e estrutura visual). Se não houver modelo para o tipo específico, usará o modelo marcado como "Todos". Sem nenhum modelo, a IA gera automaticamente.',
+  peca: 'Cadastre modelos para cada tipo de peça. A IA usa o modelo como referência de ESTRUTURA (seções, ordem e tom de escrita). A formatação visual (fonte, margens, entrelinha, recuo) segue o padrão ABNT/forense aplicado automaticamente na exportação. Se não houver modelo para o tipo específico, usa o marcado como "Todos". Sem nenhum modelo, a IA gera automaticamente.',
   contrato: 'Cadastre modelos de contrato. A IA respeitará o conteúdo e a estrutura do modelo, apenas preenchendo os dados do cliente e do caso. Não será gerado conteúdo adicional além do previsto no modelo.',
   procuracao: 'Cadastre modelos de procuração. A IA respeitará integralmente o conteúdo do modelo, apenas inserindo os dados das partes, poderes e informações do caso.',
   declaracao: 'Cadastre modelos de declaração. A IA seguirá exatamente o conteúdo e formato do modelo, preenchendo apenas os dados necessários do cliente.',

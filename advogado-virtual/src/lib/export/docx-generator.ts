@@ -1,25 +1,71 @@
 import {
   Document, Paragraph, TextRun,
   AlignmentType, convertMillimetersToTwip,
-  Packer, TabStopPosition, TabStopType,
+  Packer,
 } from 'docx'
+import { type EstiloDocumento, resolverEstilo } from '@/lib/format/estilo-documento'
 
-const FONT = 'Times New Roman'
-const FONT_SIZE = 24 // 12pt (docx uses half-points)
-const FONT_SIZE_EMENTA = 20 // 10pt para ementas
 const COLOR_BLACK = '000000'
-const LINE_SPACING = 360 // 1.5 line spacing
-const INDENT_FIRST_LINE = convertMillimetersToTwip(12.5) // 1,25cm recuo ABNT
+
+/** Valores do estilo já convertidos para as unidades do docx. */
+interface EstiloDocx {
+  font: string
+  size: number          // half-points
+  sizeEmenta: number    // half-points
+  lineSpacing: number   // 240 = simples
+  indentFirstLine: number
+  indentBlockquote: number
+  margins: { top: number; bottom: number; left: number; right: number }
+}
+
+function estiloParaDocx(estilo: EstiloDocumento): EstiloDocx {
+  const cm = (v: number) => convertMillimetersToTwip(v * 10)
+  return {
+    font: estilo.fonte,
+    size: Math.round(estilo.tamanhoPt * 2),
+    sizeEmenta: Math.round(estilo.tamanhoEmentaPt * 2),
+    lineSpacing: Math.round(240 * estilo.entrelinha),
+    indentFirstLine: cm(estilo.recuoPrimeiraLinhaCm),
+    indentBlockquote: cm(estilo.recuoBlockquoteCm),
+    margins: {
+      top: cm(estilo.margensCm.topo),
+      bottom: cm(estilo.margensCm.baixo),
+      left: cm(estilo.margensCm.esquerda),
+      right: cm(estilo.margensCm.direita),
+    },
+  }
+}
+
+interface DocxOptions {
+  titulo?: string
+  area?: string
+  /** Estilo de apresentação; default = ABNT/forense. */
+  estilo?: Partial<EstiloDocumento> | null
+}
 
 /**
- * Converte Markdown simples → DOCX com formatação jurídica forense
+ * Converte Markdown → DOCX aplicando o EstiloDocumento informado
+ * (fonte, corpo, entrelinha, recuo, margens). Sem `estilo`, usa o DEFAULT_ABNT.
  */
-export async function markdownToDocx(markdown: string, meta?: { titulo?: string; area?: string }): Promise<Buffer> {
+export async function markdownToDocx(markdown: string, opts?: DocxOptions): Promise<Buffer> {
+  const e = estiloParaDocx(resolverEstilo(opts?.estilo))
   const lines = markdown.split('\n')
   const paragraphs: Paragraph[] = []
 
   let inBlockquote = false
   let blockquoteLines: string[] = []
+
+  const flushBlockquote = () => {
+    const bqText = blockquoteLines.join(' ')
+    paragraphs.push(new Paragraph({
+      alignment: AlignmentType.JUSTIFIED,
+      spacing: { before: 120, after: 120, line: 240 },
+      indent: { left: e.indentBlockquote },
+      children: parseInlineFormatting(bqText, e.sizeEmenta, e.font),
+    }))
+    inBlockquote = false
+    blockquoteLines = []
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
@@ -31,16 +77,7 @@ export async function markdownToDocx(markdown: string, meta?: { titulo?: string;
       blockquoteLines.push(trimmed.replace(/^>\s*/, ''))
       continue
     } else if (inBlockquote) {
-      // Fim do blockquote
-      const bqText = blockquoteLines.join(' ')
-      paragraphs.push(new Paragraph({
-        alignment: AlignmentType.JUSTIFIED,
-        spacing: { before: 120, after: 120, line: 240 }, // Espaçamento simples
-        indent: { left: convertMillimetersToTwip(40) }, // Recuo 4cm
-        children: parseInlineFormatting(bqText, FONT_SIZE_EMENTA),
-      }))
-      inBlockquote = false
-      blockquoteLines = []
+      flushBlockquote()
     }
 
     if (!trimmed) {
@@ -48,64 +85,44 @@ export async function markdownToDocx(markdown: string, meta?: { titulo?: string;
       continue
     }
 
-    // Títulos H1 (nome da peça — centralizado, negrito, MAIÚSCULAS)
+    // Título H1 (nome da peça — centralizado, negrito, MAIÚSCULAS)
     if (trimmed.startsWith('# ') && !trimmed.startsWith('## ')) {
       const texto = trimmed.replace(/^#\s*/, '').replace(/\*\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 360, after: 240 },
-        children: [new TextRun({
-          text: texto.toUpperCase(),
-          bold: true,
-          size: FONT_SIZE,
-          font: FONT,
-          color: COLOR_BLACK,
-        })],
+        children: [new TextRun({ text: texto.toUpperCase(), bold: true, size: e.size, font: e.font, color: COLOR_BLACK })],
       }))
       continue
     }
 
-    // Títulos H2 (seções: I – DOS FATOS, II – DO DIREITO, etc.)
+    // Títulos H2 (seções) e H3 (subseções) — esquerda, negrito
     if (trimmed.startsWith('## ')) {
       const texto = trimmed.replace(/^##\s*/, '').replace(/\*\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.LEFT,
         spacing: { before: 360, after: 200 },
-        children: [new TextRun({
-          text: texto,
-          bold: true,
-          size: FONT_SIZE,
-          font: FONT,
-          color: COLOR_BLACK,
-        })],
+        children: [new TextRun({ text: texto, bold: true, size: e.size, font: e.font, color: COLOR_BLACK })],
       }))
       continue
     }
-
-    // Títulos H3 (subseções: I.I – DA FRAUDE, etc.)
     if (trimmed.startsWith('### ')) {
       const texto = trimmed.replace(/^###\s*/, '').replace(/\*\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.LEFT,
         spacing: { before: 240, after: 160 },
-        children: [new TextRun({
-          text: texto,
-          bold: true,
-          size: FONT_SIZE,
-          font: FONT,
-          color: COLOR_BLACK,
-        })],
+        children: [new TextRun({ text: texto, bold: true, size: e.size, font: e.font, color: COLOR_BLACK })],
       }))
       continue
     }
 
-    // Itens de lista numerada (pedidos: I –, II –, etc.)
+    // Itens de lista (pedidos: I –, II –, etc.) ou numeração arábica
     if (/^[IVXLCDM]+[\.\s–\-]/.test(trimmed) || /^\d+\.\s/.test(trimmed)) {
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: 80, line: LINE_SPACING },
-        indent: { left: convertMillimetersToTwip(12.5) },
-        children: parseInlineFormatting(trimmed, FONT_SIZE),
+        spacing: { after: 80, line: e.lineSpacing },
+        indent: { left: e.indentFirstLine },
+        children: parseInlineFormatting(trimmed, e.size, e.font),
       }))
       continue
     }
@@ -115,47 +132,30 @@ export async function markdownToDocx(markdown: string, meta?: { titulo?: string;
       const texto = trimmed.replace(/^-\s*/, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: 60, line: LINE_SPACING },
-        indent: { left: convertMillimetersToTwip(12.5) },
-        children: parseInlineFormatting(texto, FONT_SIZE),
+        spacing: { after: 60, line: e.lineSpacing },
+        indent: { left: e.indentFirstLine },
+        children: parseInlineFormatting(texto, e.size, e.font),
       }))
       continue
     }
 
-    // Parágrafo normal — justificado, recuo 1,25cm, espaçamento 1,5
+    // Parágrafo normal — justificado, recuo de 1ª linha, entrelinha do estilo
     paragraphs.push(new Paragraph({
       alignment: AlignmentType.JUSTIFIED,
-      spacing: { after: 120, line: LINE_SPACING },
-      indent: { firstLine: INDENT_FIRST_LINE },
-      children: parseInlineFormatting(trimmed, FONT_SIZE),
+      spacing: { after: 120, line: e.lineSpacing },
+      indent: { firstLine: e.indentFirstLine },
+      children: parseInlineFormatting(trimmed, e.size, e.font),
     }))
   }
 
   // Flush blockquote residual
-  if (inBlockquote && blockquoteLines.length > 0) {
-    const bqText = blockquoteLines.join(' ')
-    paragraphs.push(new Paragraph({
-      alignment: AlignmentType.JUSTIFIED,
-      spacing: { before: 120, after: 120, line: 240 },
-      indent: { left: convertMillimetersToTwip(40) },
-      children: parseInlineFormatting(bqText, FONT_SIZE_EMENTA),
-    }))
-  }
+  if (inBlockquote && blockquoteLines.length > 0) flushBlockquote()
 
   const doc = new Document({
     creator: 'SIMAS',
-    title: meta?.titulo ?? 'Peça Processual',
+    title: opts?.titulo ?? 'Peça Processual',
     sections: [{
-      properties: {
-        page: {
-          margin: {
-            top: convertMillimetersToTwip(30),    // ABNT: 3cm
-            bottom: convertMillimetersToTwip(20),  // ABNT: 2cm
-            left: convertMillimetersToTwip(30),    // ABNT: 3cm
-            right: convertMillimetersToTwip(20),   // ABNT: 2cm
-          },
-        },
-      },
+      properties: { page: { margin: e.margins } },
       children: paragraphs,
     }],
   })
@@ -167,55 +167,23 @@ export async function markdownToDocx(markdown: string, meta?: { titulo?: string;
 /**
  * Processa formatação inline: **negrito**, *itálico*, [PREENCHER], [VERIFICAR]
  */
-function parseInlineFormatting(text: string, fontSize: number): TextRun[] {
+function parseInlineFormatting(text: string, fontSize: number, font: string): TextRun[] {
   const runs: TextRun[] = []
-  // Match **bold**, *italic*, [PREENCHER], [VERIFICAR]
   const parts = text.split(/(\*\*.*?\*\*|\*[^*]+?\*|\[PREENCHER\]|\[VERIFICAR\])/g)
 
   for (const part of parts) {
     if (!part) continue
 
     if (part === '[PREENCHER]') {
-      runs.push(new TextRun({
-        text: '[PREENCHER]',
-        color: 'FF6600',
-        bold: true,
-        size: fontSize,
-        font: FONT,
-        highlight: 'yellow',
-      }))
+      runs.push(new TextRun({ text: '[PREENCHER]', color: 'FF6600', bold: true, size: fontSize, font, highlight: 'yellow' }))
     } else if (part === '[VERIFICAR]') {
-      runs.push(new TextRun({
-        text: '[VERIFICAR]',
-        color: 'CC0000',
-        bold: true,
-        size: fontSize,
-        font: FONT,
-        highlight: 'yellow',
-      }))
+      runs.push(new TextRun({ text: '[VERIFICAR]', color: 'CC0000', bold: true, size: fontSize, font, highlight: 'yellow' }))
     } else if (part.startsWith('**') && part.endsWith('**')) {
-      runs.push(new TextRun({
-        text: part.slice(2, -2),
-        bold: true,
-        size: fontSize,
-        font: FONT,
-        color: COLOR_BLACK,
-      }))
+      runs.push(new TextRun({ text: part.slice(2, -2), bold: true, size: fontSize, font, color: COLOR_BLACK }))
     } else if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
-      runs.push(new TextRun({
-        text: part.slice(1, -1),
-        italics: true,
-        size: fontSize,
-        font: FONT,
-        color: COLOR_BLACK,
-      }))
+      runs.push(new TextRun({ text: part.slice(1, -1), italics: true, size: fontSize, font, color: COLOR_BLACK }))
     } else {
-      runs.push(new TextRun({
-        text: part,
-        size: fontSize,
-        font: FONT,
-        color: COLOR_BLACK,
-      }))
+      runs.push(new TextRun({ text: part, size: fontSize, font, color: COLOR_BLACK }))
     }
   }
 

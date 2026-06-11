@@ -4,16 +4,19 @@
  * com as regras de formatação forense antes de exibir ao usuário.
  */
 
-// ─── Mapa arábico → romano ───────────────────────────────────
-const ARABIC_TO_ROMAN: Record<number, string> = {
-  1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V',
-  6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX', 10: 'X',
-  11: 'XI', 12: 'XII', 13: 'XIII', 14: 'XIV', 15: 'XV',
-  16: 'XVI', 17: 'XVII', 18: 'XVIII', 19: 'XIX', 20: 'XX',
-}
-
+// ─── Conversão arábico → romano (algoritmo completo) ─────────
 function arabicToRoman(n: number): string {
-  return ARABIC_TO_ROMAN[n] ?? String(n)
+  if (!Number.isInteger(n) || n <= 0 || n > 3999) return String(n)
+  const tabela: [number, string][] = [
+    [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
+    [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
+  ]
+  let resultado = ''
+  let resto = n
+  for (const [valor, simbolo] of tabela) {
+    while (resto >= valor) { resultado += simbolo; resto -= valor }
+  }
+  return resultado
 }
 
 // ─── Expressões latinas que devem estar em itálico ───────────
@@ -254,6 +257,13 @@ function formatarTitulos(text: string): string {
 
 // ─── 5. Italicizar expressões latinas ────────────────────────
 function italicizarLatim(text: string): string {
+  // Não altera citações (blockquote) — preserva ementas/doutrina fielmente.
+  return text.split('\n').map(line =>
+    line.trim().startsWith('>') ? line : italicizarLatimLinha(line)
+  ).join('\n')
+}
+
+function italicizarLatimLinha(text: string): string {
   let result = text
 
   // Primeiro, garantir que as exceções NÃO tenham itálico
@@ -284,6 +294,13 @@ function italicizarLatim(text: string): string {
 
 // ─── 6. Corrigir expressões proibidas ────────────────────────
 function corrigirExpressoesProibidas(text: string): string {
+  // Não altera citações (blockquote) — não falsificar texto de jurisprudência/doutrina.
+  return text.split('\n').map(line =>
+    line.trim().startsWith('>') ? line : corrigirExpressoesProibidasLinha(line)
+  ).join('\n')
+}
+
+function corrigirExpressoesProibidasLinha(text: string): string {
   let result = text
   for (const [pattern, replacement] of PROHIBITED_EXPRESSIONS) {
     result = result.replace(pattern, (match) => {
