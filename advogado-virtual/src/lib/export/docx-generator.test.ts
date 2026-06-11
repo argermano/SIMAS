@@ -21,6 +21,14 @@ describe('limparMarkdownParaDocx', () => {
     expect(out).toContain('**negrito**')
     expect(out).toContain('*itálico*')
   })
+
+  it('remove indentação que viraria bloco de código (fonte monoespaçada)', () => {
+    const out = limparMarkdownParaDocx('## I – DOS FATOS\n    O Autor reside em tal lugar.\n\tCom contribuições.')
+    expect(out).toMatch(/^O Autor reside/m)   // sem os 4 espaços iniciais
+    expect(out).toMatch(/^Com contribuições/m) // sem o tab inicial
+    expect(out).not.toMatch(/^ {4}/m)
+    expect(out).not.toMatch(/^\t/m)
+  })
 })
 
 describe('markdownToDocx — artefatos não vazam para o documento', () => {

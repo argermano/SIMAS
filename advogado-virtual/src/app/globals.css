@@ -288,6 +288,18 @@
   margin-bottom: 0.4rem;
 }
 
+/* Rede de segurança: peças jurídicas não têm "código" — se algum trecho for
+   interpretado como tal, ele NÃO deve virar fonte monoespaçada. */
+.ProseMirror pre,
+.ProseMirror code {
+  font-family: inherit;
+  font-size: inherit;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  white-space: pre-wrap;
+}
+
 .ProseMirror a {
   color: hsl(var(--primary));
   text-decoration: underline;
