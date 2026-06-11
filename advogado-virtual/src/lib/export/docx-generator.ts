@@ -169,7 +169,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       enderecamentoAplicado = true
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: 600, line: e.lineSpacing },
+        spacing: { after: convertMillimetersToTwip(80), line: e.lineSpacing },
         children: parseInlineFormatting(trimmed, e.size, e.font, true),
       }))
       continue

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { markdownToDocx } from '@/lib/export/docx-generator'
+import { aplicarTimbrado } from '@/lib/export/aplicar-timbrado'
 import { resolverEstiloEfetivo } from '@/lib/format/estilo-documento'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 
@@ -31,11 +32,24 @@ export async function POST(req: NextRequest) {
     const titulo = tipoPecaConfig?.nome ?? peca.tipo
 
     const estilo = await resolverEstiloEfetivo(supabase, usuario.tenant_id, { tipo: 'peca', subtipo: peca.tipo })
-    const buffer = await markdownToDocx(peca.conteudo_markdown, {
+    let buffer = await markdownToDocx(peca.conteudo_markdown, {
       titulo,
       area: peca.area,
       estilo,
     })
+
+    // Se o escritório cadastrou um papel timbrado, gera a peça dentro dele
+    // (preservando cabeçalho/logo, marca d'água e rodapé). Falha não bloqueia o export.
+    const { data: timbrado } = await supabase.storage
+      .from('documentos')
+      .download(`${usuario.tenant_id}/timbrado/timbrado.docx`)
+    if (timbrado) {
+      try {
+        buffer = aplicarTimbrado(Buffer.from(await timbrado.arrayBuffer()), buffer)
+      } catch (err) {
+        console.error('[exportar] falha ao aplicar timbrado:', err instanceof Error ? err.message : err)
+      }
+    }
 
     // Salvar registro de exportação
     await supabase.from('exportacoes').insert({

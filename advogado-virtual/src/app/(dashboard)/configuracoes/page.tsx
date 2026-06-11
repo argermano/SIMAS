@@ -13,6 +13,7 @@ import { FormPerfilProfissional } from '@/components/configuracoes/FormPerfilPro
 import { PainelConsumoIA } from '@/components/configuracoes/PainelConsumoIA'
 import { PadroesDocumentos } from '@/components/configuracoes/PadroesDocumentos'
 import { FormatacaoEscritorio } from '@/components/configuracoes/FormatacaoEscritorio'
+import { PapelTimbrado } from '@/components/configuracoes/PapelTimbrado'
 import { ConfiguracoesTabs } from '@/components/configuracoes/ConfiguracoesTabs'
 
 export const metadata = { title: 'Configurações' }
@@ -259,6 +260,7 @@ export default async function ConfiguracoesPage() {
   const conteudoPadroes = (
     <>
       {usuario.role === 'admin' && <FormatacaoEscritorio />}
+      {usuario.role === 'admin' && <PapelTimbrado />}
       <PadroesDocumentos />
     </>
   )
