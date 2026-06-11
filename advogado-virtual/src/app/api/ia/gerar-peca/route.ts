@@ -144,31 +144,10 @@ export async function POST(req: NextRequest) {
       if (data) analise = data as Record<string, unknown>
     }
 
-    // Busca automática de jurisprudência se o advogado não pesquisou manualmente
-    let resultadosJurisp = jurisprudencia ?? []
+    // Operações independentes (jurisprudência e triagem de documentos) rodam
+    // concorrentes via Promise.all para reduzir a latência até o 1º chunk.
 
-    if (resultadosJurisp.length === 0) {
-      const transcricao = atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? ''
-      const pedidos = atendimento.pedidos_especificos ?? ''
-      const termosBusca = extrairTermosBusca(pedidos, transcricao, area)
-      const tribunaisBusca = tribunais?.length ? tribunais : (TRIBUNAIS_DEFAULT[area] ?? TRIBUNAIS_DEFAULT.previdenciario)
-
-      if (termosBusca) {
-        try {
-          resultadosJurisp = await buscarJurisprudencia({
-            termos: termosBusca,
-            tribunais: tribunaisBusca,
-            limite: 5,
-          })
-        } catch {
-          // Se falhar, continua sem jurisprudência
-        }
-      }
-    }
-
-    const jurisprudenciaTexto = formatarParaPrompt(resultadosJurisp)
-
-    // Filtragem de relevância dos documentos por IA (antes de qualquer caminho de geração)
+    // Preparação dos documentos (necessária antes da triagem)
     type DocFiltrado = { id: string; tipo: string; texto_extraido: string; file_name: string }
     let documentosFiltrados: DocFiltrado[] = (atendimento.documentos ?? []).map((d: Record<string, unknown>) => ({
       id: d.id as string,
@@ -176,31 +155,70 @@ export async function POST(req: NextRequest) {
       texto_extraido: (d.texto_extraido as string) ?? '',
       file_name: d.file_name as string,
     }))
-
     const docsComTexto = documentosFiltrados.filter((d: DocFiltrado) => d.texto_extraido.trim().length > 50)
-    if (docsComTexto.length > 1) {
-      try {
-        const { result: triagem } = await completionJSON<{
-          relevantes: Array<{ id: string; justificativa: string }>
-          irrelevantes: Array<{ id: string; justificativa: string }>
-        }>({
-          system: SYSTEM_RELEVANCIA,
-          prompt: buildPromptRelevancia({
-            area,
-            tipo_peca: tipo,
-            pedido: atendimento.pedidos_especificos,
-            transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
-            documentos: docsComTexto,
-          }),
-          maxTokens: 1024,
-        })
-        const idsRelevantes = new Set(triagem.relevantes.map((r) => r.id))
-        documentosFiltrados = documentosFiltrados.filter(
-          (d: DocFiltrado) => idsRelevantes.has(d.id) || d.texto_extraido.trim().length <= 50
-        )
-      } catch {
-        // Falha silenciosa — inclui todos os documentos
+
+    // Promise: busca automática de jurisprudência se o advogado não pesquisou manualmente
+    const jurispPromise = (async (): Promise<ResultadoJurisprudencia[]> => {
+      let resultadosJurisp = jurisprudencia ?? []
+
+      if (resultadosJurisp.length === 0) {
+        const transcricao = atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? ''
+        const pedidos = atendimento.pedidos_especificos ?? ''
+        const termosBusca = extrairTermosBusca(pedidos, transcricao, area)
+        const tribunaisBusca = tribunais?.length ? tribunais : (TRIBUNAIS_DEFAULT[area] ?? TRIBUNAIS_DEFAULT.previdenciario)
+
+        if (termosBusca) {
+          try {
+            resultadosJurisp = await buscarJurisprudencia({
+              termos: termosBusca,
+              tribunais: tribunaisBusca,
+              limite: 5,
+            })
+          } catch {
+            // Se falhar, continua sem jurisprudência
+          }
+        }
       }
+
+      return resultadosJurisp
+    })()
+
+    // Promise: filtragem de relevância dos documentos por IA. Retorna o
+    // conjunto de ids relevantes (ou null caso não haja triagem/falhe).
+    const triagemPromise = (async (): Promise<Set<string> | null> => {
+      if (docsComTexto.length > 1) {
+        try {
+          const { result: triagem } = await completionJSON<{
+            relevantes: Array<{ id: string; justificativa: string }>
+            irrelevantes: Array<{ id: string; justificativa: string }>
+          }>({
+            system: SYSTEM_RELEVANCIA,
+            prompt: buildPromptRelevancia({
+              area,
+              tipo_peca: tipo,
+              pedido: atendimento.pedidos_especificos,
+              transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
+              documentos: docsComTexto,
+            }),
+            maxTokens: 1024,
+          })
+          return new Set(triagem.relevantes.map((r) => r.id))
+        } catch {
+          // Falha silenciosa — inclui todos os documentos
+          return null
+        }
+      }
+      return null
+    })()
+
+    const [resultadosJurisp, idsRelevantes] = await Promise.all([jurispPromise, triagemPromise])
+
+    const jurisprudenciaTexto = formatarParaPrompt(resultadosJurisp)
+
+    if (idsRelevantes) {
+      documentosFiltrados = documentosFiltrados.filter(
+        (d: DocFiltrado) => idsRelevantes.has(d.id) || d.texto_extraido.trim().length <= 50
+      )
     }
 
     // Buscar modelo padrão do escritório (se cadastrado)

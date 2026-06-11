@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Plus } from 'lucide-react'
@@ -11,11 +12,11 @@ interface KanbanColumnProps {
   name:      string
   color?:    string | null
   tasks:     TaskData[]
-  onNewTask: () => void
+  onNewTask: (colId: string) => void
   onTaskClick: (task: TaskData) => void
 }
 
-export function KanbanColumn({ id, name, color, tasks, onNewTask, onTaskClick }: KanbanColumnProps) {
+function KanbanColumnBase({ id, name, color, tasks, onNewTask, onTaskClick }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id })
 
   const count = tasks.length
@@ -38,7 +39,7 @@ export function KanbanColumn({ id, name, color, tasks, onNewTask, onTaskClick }:
         </div>
 
         <button
-          onClick={onNewTask}
+          onClick={() => onNewTask(id)}
           className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           aria-label="Nova tarefa"
         >
@@ -67,7 +68,7 @@ export function KanbanColumn({ id, name, color, tasks, onNewTask, onTaskClick }:
         {/* Botão "Nova atividade" quando vazio */}
         {tasks.length === 0 && (
           <button
-            onClick={onNewTask}
+            onClick={() => onNewTask(id)}
             className="mt-1 flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border py-4 text-sm text-muted-foreground hover:border-muted-foreground hover:text-foreground transition-colors"
           >
             <Plus className="h-4 w-4" />
@@ -78,3 +79,7 @@ export function KanbanColumn({ id, name, color, tasks, onNewTask, onTaskClick }:
     </div>
   )
 }
+
+// Memoizado: evita re-render de todas as colunas (e seus cards) quando outras
+// colunas ou o board sofrem atualizações de estado.
+export const KanbanColumn = memo(KanbanColumnBase)

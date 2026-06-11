@@ -17,15 +17,15 @@ import { TranscricaoActions } from './TranscricaoActions'
 import { UploadDocumentos } from './UploadDocumentos'
 import { SeletorTribunais } from './SeletorTribunais'
 import { ConfirmarDadosModal } from './ConfirmarDadosModal'
+import { ModalGeracaoPeca } from './ModalGeracaoPeca'
+import { ModalExtraindoDados } from './ModalExtraindoDados'
+import { DocumentosDoCaso } from './DocumentosDoCaso'
 import type { ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import type { DadosExtraidosAutor, DadosExtraidosReu } from '@/lib/prompts/extracao/dados-cliente'
-import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, Loader2, UserCheck, MapPin, ScrollText, ExternalLink, FileSignature, FilePlus } from 'lucide-react'
+import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, UserCheck, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { AcessoRapidoFooter } from '@/components/acesso-rapido/AcessoRapidoFooter'
-import { Badge } from '@/components/ui/badge'
-import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
-import Link from 'next/link'
 
 const ESTADOS_BR = [
   { value: 'AC', label: 'AC' }, { value: 'AL', label: 'AL' }, { value: 'AP', label: 'AP' },
@@ -453,50 +453,15 @@ export function TelaAtendimento({
 
       {/* Modal de geração com streaming */}
       {mostraModalGeracao && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-card shadow-2xl">
-            <div className="border-b px-6 py-4">
-              <h2 className="text-lg font-semibold text-foreground">Gerando {tipoPecaNome} com IA</h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Isto pode levar até 45 segundos. Não feche a janela.
-              </p>
-            </div>
-            <div className="px-6 py-4">
-              <div className="h-52 overflow-y-auto rounded-xl border bg-muted/50 p-3 font-mono text-xs leading-relaxed text-foreground">
-                {textoGerado ? (
-                  <>
-                    {textoGerado}
-                    {gerando && (
-                      <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary/70 ml-0.5 align-middle" />
-                    )}
-                  </>
-                ) : (
-                  <div className="flex items-center gap-2 py-4 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Iniciando geração...
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="border-t px-6 py-4 text-center">
-              <p className="text-xs text-muted-foreground">
-                {gerando ? 'Gerando...' : 'Finalizando e salvando...'}
-              </p>
-            </div>
-          </div>
-        </div>
+        <ModalGeracaoPeca
+          tipoPecaNome={tipoPecaNome}
+          textoGerado={textoGerado}
+          gerando={gerando}
+        />
       )}
 
       {/* Modal de extração de dados em andamento */}
-      {extraindo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="rounded-2xl bg-card shadow-2xl px-8 py-6 text-center space-y-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-            <p className="text-sm font-medium text-foreground">Extraindo dados dos documentos...</p>
-            <p className="text-xs text-muted-foreground">Analisando documentos com IA para preencher qualificação</p>
-          </div>
-        </div>
-      )}
+      {extraindo && <ModalExtraindoDados />}
 
       {/* Modal de confirmação de dados extraídos */}
       {dadosExtraidos && (
@@ -512,117 +477,12 @@ export function TelaAtendimento({
 
       {/* Documentos gerados neste caso */}
       {(pecasExistentes.length > 0 || contratosExistentes.length > 0 || cliente) && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <ScrollText className="h-5 w-5 text-primary" />
-              Documentos do caso
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {/* Peças */}
-            {pecasExistentes.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Peças processuais</p>
-                {pecasExistentes.map(peca => {
-                  const tipoCfg = TIPOS_PECA[peca.tipo]
-                  const badgeVariant = peca.status === 'aprovada' ? 'success' as const
-                    : peca.status === 'revisada' ? 'default' as const
-                    : 'secondary' as const
-                  const statusLabel = peca.status === 'aprovada' ? 'Aprovada'
-                    : peca.status === 'revisada' ? 'Revisada'
-                    : peca.status === 'exportada' ? 'Exportada'
-                    : 'Rascunho'
-                  return (
-                    <Link
-                      key={peca.id}
-                      href={`/${peca.area}/editor/${peca.id}`}
-                      className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 hover:bg-muted/50 transition-colors group"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileText className="h-4 w-4 text-primary shrink-0" />
-                        <span className="text-sm font-medium text-foreground truncate">
-                          {tipoCfg?.nome ?? peca.tipo}
-                        </span>
-                        <Badge variant={badgeVariant} className="text-[10px] px-1.5 py-0 shrink-0">
-                          {statusLabel}
-                        </Badge>
-                        <span className="text-[11px] text-muted-foreground shrink-0">v{peca.versao}</span>
-                      </div>
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Contratos */}
-            {contratosExistentes.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Contratos</p>
-                {contratosExistentes.map(contrato => {
-                  const badgeVariant = contrato.status === 'aprovado' ? 'success' as const
-                    : contrato.status === 'exportado' ? 'success' as const
-                    : 'secondary' as const
-                  const statusLabel = contrato.status === 'aprovado' ? 'Aprovado'
-                    : contrato.status === 'exportado' ? 'Exportado'
-                    : contrato.status === 'em_revisao' ? 'Em revisão'
-                    : 'Rascunho'
-                  return (
-                    <Link
-                      key={contrato.id}
-                      href={`/contratos/${contrato.id}`}
-                      className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 hover:bg-muted/50 transition-colors group"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <FileSignature className="h-4 w-4 text-primary shrink-0" />
-                        <span className="text-sm font-medium text-foreground truncate">
-                          {contrato.titulo}
-                        </span>
-                        <Badge variant={badgeVariant} className="text-[10px] px-1.5 py-0 shrink-0">
-                          {statusLabel}
-                        </Badge>
-                      </div>
-                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
-                    </Link>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Ações rápidas: gerar documentos */}
-            {cliente && (
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Gerar documentos</p>
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    href={`/${area}/modelos/procuracao?clienteId=${cliente.id}`}
-                    className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
-                  >
-                    <FilePlus className="h-3.5 w-3.5 text-muted-foreground" />
-                    Procuração
-                  </Link>
-                  <Link
-                    href={`/${area}/modelos/declaracao_hipossuficiencia?clienteId=${cliente.id}`}
-                    className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
-                  >
-                    <FilePlus className="h-3.5 w-3.5 text-muted-foreground" />
-                    Declaração de Hipossuficiência
-                  </Link>
-                  {contratosExistentes.length === 0 && (
-                    <Link
-                      href={`/contratos/novo?cliente_id=${cliente.id}`}
-                      className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
-                    >
-                      <FilePlus className="h-3.5 w-3.5 text-muted-foreground" />
-                      Contrato de Honorários
-                    </Link>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <DocumentosDoCaso
+          area={area}
+          cliente={cliente}
+          pecasExistentes={pecasExistentes}
+          contratosExistentes={contratosExistentes}
+        />
       )}
 
       {/* 1. Seleção de Cliente */}

@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Users, History, Settings, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
@@ -109,20 +108,13 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: 'var(--gradient-primary)' }}>
           <Scale className="h-5 w-5 text-white" />
         </div>
-        <AnimatePresence>
-          {!isCollapsed && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex-1 min-w-0"
-            >
-              <p className="truncate text-base font-bold text-white font-heading">SIMAS</p>
-              <p className="text-[11px] tracking-wider text-sidebar-muted leading-tight">Sistema Inteligente para Modernizar a Advocacia com Segurança</p>
-              <p className="mt-2 text-[11px] font-medium text-blue-300/80 leading-tight">{nomeEscritorio}</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {!isCollapsed && (
+          <div className="flex-1 min-w-0 animate-in fade-in-0 duration-300">
+            <p className="truncate text-base font-bold text-white font-heading">SIMAS</p>
+            <p className="text-[11px] tracking-wider text-sidebar-muted leading-tight">Sistema Inteligente para Modernizar a Advocacia com Segurança</p>
+            <p className="mt-2 text-[11px] font-medium text-blue-300/80 leading-tight">{nomeEscritorio}</p>
+          </div>
+        )}
       </div>
 
       {/* Toggle colapso (desktop only) */}
@@ -160,25 +152,14 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
                   title={isCollapsed ? item.label : undefined}
                 >
                   {ativo && (
-                    <motion.div
-                      layoutId="sidebar-indicator"
-                      className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-card"
-                      transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-                    />
+                    <div className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-card animate-in fade-in-0 duration-200" />
                   )}
                   <item.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                  <AnimatePresence>
-                    {!isCollapsed && (
-                      <motion.span
-                        initial={{ opacity: 0, width: 0 }}
-                        animate={{ opacity: 1, width: 'auto' }}
-                        exit={{ opacity: 0, width: 0 }}
-                        className="overflow-hidden whitespace-nowrap"
-                      >
-                        {item.label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                  {!isCollapsed && (
+                    <span className="overflow-hidden whitespace-nowrap animate-in fade-in-0 duration-300">
+                      {item.label}
+                    </span>
+                  )}
                 </Link>
               </li>
             )
@@ -202,25 +183,14 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
           title={isCollapsed ? 'Configurações' : undefined}
         >
           {isConfigAtivo && (
-            <motion.div
-              layoutId="sidebar-indicator"
-              className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-card"
-              transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-            />
+            <div className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-card animate-in fade-in-0 duration-200" />
           )}
           <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
-          <AnimatePresence>
-            {!isCollapsed && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="overflow-hidden whitespace-nowrap"
-              >
-                Configurações
-              </motion.span>
-            )}
-          </AnimatePresence>
+          {!isCollapsed && (
+            <span className="overflow-hidden whitespace-nowrap animate-in fade-in-0 duration-300">
+              Configurações
+            </span>
+          )}
         </Link>
 
         {/* Avatar / Perfil */}
@@ -235,35 +205,23 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
               <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar bg-success/50" />
             </div>
 
-            <AnimatePresence>
-              {!isCollapsed && (
-                <motion.div
-                  initial={{ opacity: 0, width: 0 }}
-                  animate={{ opacity: 1, width: 'auto' }}
-                  exit={{ opacity: 0, width: 0 }}
-                  className="flex-1 min-w-0 overflow-hidden"
-                >
-                  <p className="truncate text-sm font-semibold text-white">{nomeUsuario.split(' ')[0]}</p>
-                  <p className="text-xs text-sidebar-muted">{roleUsuario}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {!isCollapsed && (
+              <div className="flex-1 min-w-0 overflow-hidden animate-in fade-in-0 duration-300">
+                <p className="truncate text-sm font-semibold text-white">{nomeUsuario.split(' ')[0]}</p>
+                <p className="text-xs text-sidebar-muted">{roleUsuario}</p>
+              </div>
+            )}
 
-            <AnimatePresence>
-              {!isCollapsed && (
-                <motion.button
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={sair}
-                  className="shrink-0 rounded-md p-1.5 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors"
-                  aria-label="Sair do sistema"
-                  title="Sair do sistema"
-                >
-                  <LogOut className="h-4 w-4" />
-                </motion.button>
-              )}
-            </AnimatePresence>
+            {!isCollapsed && (
+              <button
+                onClick={sair}
+                className="shrink-0 rounded-md p-1.5 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors animate-in fade-in-0 duration-300"
+                aria-label="Sair do sistema"
+                title="Sair do sistema"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -291,13 +249,14 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
         <Menu className="h-5 w-5" />
       </button>
 
-      <motion.aside
-        className="hidden lg:flex lg:shrink-0 lg:flex-col h-screen overflow-hidden"
-        animate={{ width: collapsed ? 68 : 240 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+      <aside
+        className={cn(
+          'hidden lg:flex lg:shrink-0 lg:flex-col h-screen overflow-hidden transition-[width] duration-300 ease-in-out',
+          collapsed ? 'lg:w-[68px]' : 'lg:w-60'
+        )}
       >
         {sidebarContent(collapsed)}
-      </motion.aside>
+      </aside>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">

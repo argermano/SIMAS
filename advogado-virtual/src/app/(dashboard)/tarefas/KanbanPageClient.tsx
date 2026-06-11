@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Search, Tag, ChevronDown, Plus, User } from 'lucide-react'
 import { KanbanBoard } from '@/components/tarefas/KanbanBoard'
 import { TaskFormModal } from '@/components/tarefas/TaskFormModal'
@@ -42,12 +42,17 @@ export function KanbanPageClient({
 
   // Map filter value to what the API expects
   const assigneeApiValue = assigneeFilter === '' ? 'all' : assigneeFilter
-  const filters = { assignee: assigneeApiValue, period: periodFilter, tagId: tagFilter, search }
+  const filters = useMemo(
+    () => ({ assignee: assigneeApiValue, period: periodFilter, tagId: tagFilter, search }),
+    [assigneeApiValue, periodFilter, tagFilter, search]
+  )
 
-  function handleSaved() {
+  const handleSaved = useCallback(() => {
     setFormOpen(false)
     setRefreshKey(k => k + 1)
-  }
+  }, [])
+
+  const handleFormClose = useCallback(() => setFormOpen(false), [])
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -184,7 +189,7 @@ export function KanbanPageClient({
       {/* Modal de nova tarefa (global) */}
       <TaskFormModal
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={handleFormClose}
         onSaved={handleSaved}
         currentUserId={currentUserId}
         currentUserName={currentUserName}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -65,7 +65,10 @@ export function KanbanBoard({
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
-  const columns = [...board.kanban_columns].sort((a, b) => a.position - b.position)
+  const columns = useMemo(
+    () => [...board.kanban_columns].sort((a, b) => a.position - b.position),
+    [board.kanban_columns]
+  )
 
   const fetchTasks = useCallback(async () => {
     const params = new URLSearchParams({ board_id: board.id })
@@ -92,16 +95,16 @@ export function KanbanBoard({
     })
   }, [])
 
-  function tasksForColumn(colId: string) {
-    return tasks.filter(t => t.kanban_column_id === colId)
-  }
+  const tasksForColumn = useCallback(
+    (colId: string) => tasks.filter(t => t.kanban_column_id === colId),
+    [tasks]
+  )
 
-  function handleDragStart(event: DragStartEvent) {
-    const task = tasks.find(t => t.id === event.active.id)
-    setActiveTask(task ?? null)
-  }
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveTask(tasks.find(t => t.id === event.active.id) ?? null)
+  }, [tasks])
 
-  async function handleDragEnd(event: DragEndEvent) {
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over || active.id === over.id) { setActiveTask(null); return }
 
@@ -148,14 +151,18 @@ export function KanbanBoard({
       toastError('Erro', 'Não foi possível mover a tarefa')
       fetchTasks()
     }
-  }
+  }, [columns, tasks, toastError, fetchTasks])
 
-  function openNewTask(colId: string) {
+  const openNewTask = useCallback((colId: string) => {
     setDefaultColId(colId)
     setFormOpen(true)
-  }
+  }, [])
 
-  function handleSaved() {
+  const handleTaskClick = useCallback((task: TaskData) => {
+    setDetailTask(task)
+  }, [])
+
+  const handleSaved = useCallback(() => {
     fetchTasks()
     // Atualiza a tarefa aberta no detalhe se ela ainda existe
     setDetailTask(prev => {
@@ -163,7 +170,7 @@ export function KanbanBoard({
       // Será re-populated na próxima vez que fetchTasks atualizar tasks
       return prev
     })
-  }
+  }, [fetchTasks])
 
   return (
     <>
@@ -178,8 +185,8 @@ export function KanbanBoard({
                 name={col.name}
                 color={col.color}
                 tasks={tasksForColumn(col.id)}
-                onNewTask={() => openNewTask(col.id)}
-                onTaskClick={task => setDetailTask(task)}
+                onNewTask={openNewTask}
+                onTaskClick={handleTaskClick}
               />
             ))}
           </div>

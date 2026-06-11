@@ -32,6 +32,15 @@ export async function GET(req: NextRequest) {
   const tag_id     = searchParams.get('tag_id')
   const search     = searchParams.get('search')
 
+  // Paginação configurável (retrocompatível: default = limit 100, página 1).
+  const limitParam = Number(searchParams.get('limit'))
+  const limit = Number.isFinite(limitParam) && limitParam > 0
+    ? Math.min(Math.floor(limitParam), 1000)
+    : 100
+  const pageParam = Number(searchParams.get('page'))
+  const page = Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1
+  const offset = (page - 1) * limit
+
   let query = supabase
     .from('tasks')
     .select(`
@@ -45,7 +54,7 @@ export async function GET(req: NextRequest) {
     `, { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
     .order('created_at', { ascending: false })
-    .limit(100)
+    .range(offset, offset + limit - 1)
 
   if (board_id)  query = query.eq('kanban_board_id', board_id)
   if (column_id) query = query.eq('kanban_column_id', column_id)
@@ -88,7 +97,7 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  return NextResponse.json({ tasks, total: count ?? tasks.length })
+  return NextResponse.json({ tasks, total: count ?? tasks.length, page, limit })
 }
 
 // POST /api/tasks
