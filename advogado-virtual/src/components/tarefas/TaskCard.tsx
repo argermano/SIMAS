@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { cn } from '@/lib/utils'
@@ -43,7 +44,7 @@ interface TaskCardProps {
   onClick?: () => void
 }
 
-export function TaskCard({ task, onClick }: TaskCardProps) {
+function TaskCardBase({ task, onClick }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id })
 
@@ -137,3 +138,6 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
     </div>
   )
 }
+
+// Memoizado: evita re-render de todos os cards durante drag/atualizações no Kanban.
+export const TaskCard = memo(TaskCardBase)
