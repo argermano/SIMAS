@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -10,7 +11,10 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, label, error, hint, leftIcon, id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
+    const reactId = React.useId()
+    const inputId = id || label?.toLowerCase().replace(/\s+/g, '-') || reactId
+    const hintId = `${inputId}-hint`
+    const errorId = `${inputId}-error`
 
     return (
       <div className="w-full space-y-1.5">
@@ -33,14 +37,16 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <input
             id={inputId}
             ref={ref}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : hint ? hintId : undefined}
             className={cn(
               'h-11 w-full rounded-md border bg-background px-3 py-2 text-base',
               'placeholder:text-muted-foreground',
-              'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent',
               'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground',
               'transition-colors',
               error
-                ? 'border-destructive focus:ring-destructive'
+                ? 'border-destructive focus-visible:ring-destructive'
                 : 'border-input hover:border-ring',
               leftIcon && 'pl-10',
               className
@@ -50,11 +56,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         </div>
 
         {hint && !error && (
-          <p className="text-sm text-muted-foreground">{hint}</p>
+          <p id={hintId} className="text-sm text-muted-foreground">{hint}</p>
         )}
         {error && (
-          <p className="text-sm text-destructive flex items-center gap-1">
-            <span>⚠</span> {error}
+          <p id={errorId} className="flex items-center gap-1 text-sm text-destructive">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden /> {error}
           </p>
         )}
       </div>

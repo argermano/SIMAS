@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, AlertCircle } from 'lucide-react'
 
 export interface SelectOption {
   value: string
@@ -17,7 +17,10 @@ export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElemen
 
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, label, error, hint, options, placeholder, id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
+    const reactId = React.useId()
+    const inputId = id || label?.toLowerCase().replace(/\s+/g, '-') || reactId
+    const hintId = `${inputId}-hint`
+    const errorId = `${inputId}-error`
 
     return (
       <div className="w-full space-y-1.5">
@@ -35,13 +38,15 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           <select
             id={inputId}
             ref={ref}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : hint ? hintId : undefined}
             className={cn(
               'h-11 w-full appearance-none rounded-md border bg-background px-3 pr-10 py-2 text-base',
-              'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent',
               'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground',
               'transition-colors cursor-pointer',
               error
-                ? 'border-destructive focus:ring-destructive'
+                ? 'border-destructive focus-visible:ring-destructive'
                 : 'border-input hover:border-ring',
               className
             )}
@@ -64,11 +69,11 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         </div>
 
         {hint && !error && (
-          <p className="text-sm text-muted-foreground">{hint}</p>
+          <p id={hintId} className="text-sm text-muted-foreground">{hint}</p>
         )}
         {error && (
-          <p className="text-sm text-destructive flex items-center gap-1">
-            <span>⚠</span> {error}
+          <p id={errorId} className="flex items-center gap-1 text-sm text-destructive">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden /> {error}
           </p>
         )}
       </div>

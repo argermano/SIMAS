@@ -1,4 +1,5 @@
 import { cn, iniciais } from '@/lib/utils'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
 interface HeaderProps {
   titulo:       string
@@ -20,6 +21,7 @@ export function Header({ titulo, subtitulo, acoes, nomeUsuario }: HeaderProps) {
 
         <div className="flex shrink-0 items-center gap-3">
           {acoes}
+          <ThemeToggle />
           <div
             className={cn(
               'flex h-10 w-10 items-center justify-center rounded-full',

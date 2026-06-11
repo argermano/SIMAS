@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
@@ -9,7 +10,10 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, label, error, hint, id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, '-')
+    const reactId = React.useId()
+    const inputId = id || label?.toLowerCase().replace(/\s+/g, '-') || reactId
+    const hintId = `${inputId}-hint`
+    const errorId = `${inputId}-error`
 
     return (
       <div className="w-full space-y-1.5">
@@ -26,14 +30,16 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         <textarea
           id={inputId}
           ref={ref}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : hint ? hintId : undefined}
           className={cn(
             'w-full rounded-md border bg-background px-3 py-2.5 text-base',
             'placeholder:text-muted-foreground',
-            'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent',
             'disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground',
             'transition-colors resize-y min-h-[100px]',
             error
-              ? 'border-destructive focus:ring-destructive'
+              ? 'border-destructive focus-visible:ring-destructive'
               : 'border-input hover:border-ring',
             className
           )}
@@ -41,11 +47,11 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
         />
 
         {hint && !error && (
-          <p className="text-sm text-muted-foreground">{hint}</p>
+          <p id={hintId} className="text-sm text-muted-foreground">{hint}</p>
         )}
         {error && (
-          <p className="text-sm text-destructive flex items-center gap-1">
-            <span>⚠</span> {error}
+          <p id={errorId} className="flex items-center gap-1 text-sm text-destructive">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden /> {error}
           </p>
         )}
       </div>
