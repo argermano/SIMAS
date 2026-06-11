@@ -20,7 +20,18 @@ const securityHeaders = [
   { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
 ]
 
+// Identificação do build (avaliada em build-time; exibida na tela de Configurações).
+// Na Vercel, VERCEL_GIT_COMMIT_SHA e VERCEL_ENV são preenchidos automaticamente.
+const buildSha = (process.env.VERCEL_GIT_COMMIT_SHA ?? '').slice(0, 7) || 'local'
+const buildEnv = process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? 'development'
+const buildTime = new Date().toISOString()
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_BUILD_SHA: buildSha,
+    NEXT_PUBLIC_BUILD_ENV: buildEnv,
+    NEXT_PUBLIC_BUILD_TIME: buildTime,
+  },
   images: {
     remotePatterns: [
       {

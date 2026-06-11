@@ -5,8 +5,9 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase } from 'lucide-react'
+import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, Tag } from 'lucide-react'
 import { formatarData } from '@/lib/utils'
+import { isEncryptionConfigured } from '@/lib/encryption'
 import { LABELS_ROLE } from '@/types'
 import { FormPerfilProfissional } from '@/components/configuracoes/FormPerfilProfissional'
 import { PainelConsumoIA } from '@/components/configuracoes/PainelConsumoIA'
@@ -34,6 +35,12 @@ export default async function ConfiguracoesPage() {
     .single()
 
   if (!usuario) redirect('/login')
+
+  // Identificação do build e status de criptografia (úteis para confirmar o deploy)
+  const buildSha  = process.env.NEXT_PUBLIC_BUILD_SHA  ?? 'local'
+  const buildEnv  = process.env.NEXT_PUBLIC_BUILD_ENV  ?? 'development'
+  const buildTime = process.env.NEXT_PUBLIC_BUILD_TIME
+  const criptoAtiva = isEncryptionConfigured()
 
   const tenant = usuario.tenants as {
     nome?: string; cnpj?: string; plano?: string; status?: string; created_at?: string
@@ -169,8 +176,10 @@ export default async function ConfiguracoesPage() {
             Dados transmitidos com criptografia TLS
           </p>
           <p className="flex items-start gap-2">
-            <span className="mt-0.5 text-success">✓</span>
-            Dados sensíveis (CPF) armazenados com criptografia
+            <span className={`mt-0.5 ${criptoAtiva ? 'text-success' : 'text-warning'}`}>{criptoAtiva ? '✓' : '⚠'}</span>
+            {criptoAtiva
+              ? 'Dados sensíveis (CPF/RG) armazenados com criptografia (AES-256-GCM)'
+              : 'Criptografia de CPF/RG inativa neste ambiente (ENCRYPTION_KEY não configurada)'}
           </p>
           <p className="flex items-start gap-2">
             <span className="mt-0.5 text-success">✓</span>
@@ -205,6 +214,41 @@ export default async function ConfiguracoesPage() {
               Em breve, planos pagos estarão disponíveis.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Versão do sistema — identifica o build em produção */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Tag className="h-5 w-5 text-muted-foreground" />
+            Versão do Sistema
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <InfoItem
+            label="Build (commit)"
+            valor={<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">{buildSha}</code>}
+          />
+          <InfoItem
+            label="Ambiente"
+            valor={
+              <Badge variant={buildEnv === 'production' ? 'success' : 'warning'}>
+                {buildEnv}
+              </Badge>
+            }
+          />
+          {buildTime && (
+            <InfoItem label="Data do build" valor={new Date(buildTime).toLocaleString('pt-BR')} />
+          )}
+          <InfoItem
+            label="Criptografia de dados"
+            valor={
+              <Badge variant={criptoAtiva ? 'success' : 'warning'}>
+                {criptoAtiva ? 'Ativa' : 'Inativa'}
+              </Badge>
+            }
+          />
         </CardContent>
       </Card>
     </>
