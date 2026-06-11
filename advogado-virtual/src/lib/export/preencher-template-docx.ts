@@ -1,6 +1,10 @@
 import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
 
+// Limite defensivo: o template é carregado inteiro em memória antes de preencher.
+// O upload de modelos já limita a 10 MB; este teto evita OOM caso algo maior chegue.
+export const MAX_MODELO_BYTES = 20 * 1024 * 1024
+
 /**
  * Preenche um TEMPLATE .docx (com placeholders {{campo}}) com os dados informados,
  * preservando 100% da formatação real do arquivo (fonte, margens, cabeçalho/rodapé,

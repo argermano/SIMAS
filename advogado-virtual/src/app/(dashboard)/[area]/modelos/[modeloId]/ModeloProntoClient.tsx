@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
 import { EditorDocumentoPronto } from '@/components/documentos/EditorDocumentoPronto'
+import { TIPOS_COM_MODELO_DOCX } from '@/lib/export/tipos-modelo-docx'
 import {
   Users, FileText, CheckCircle, AlertCircle, Trash2,
   Upload, Edit3, Loader2, Save, X, Zap,
@@ -63,6 +64,10 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
   const [documentoGerado, setDocumentoGerado] = useState('')
   const [gerando, setGerando]                 = useState(false)
   const [modoEditor, setModoEditor]           = useState(false)
+  const [baixandoModelo, setBaixandoModelo]   = useState(false)
+
+  // Tipos que aceitam preenchimento de modelo .docx do escritório (fonte única)
+  const suportaModelo = TIPOS_COM_MODELO_DOCX.includes(tipoModelo)
 
   // ── Campos extras por tipo ──
   const [objeto, setObjeto]                         = useState('')           // procuracao
@@ -177,6 +182,51 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
       setDeletandoTemplate(false) }
   }
 
+  // Campos extras por tipo — usado tanto na geração quanto no preenchimento de modelo .docx
+  function montarCamposExtras(): Record<string, string> {
+    const campos: Record<string, string> = {}
+    if (objeto)              campos.objeto               = objeto
+    if (rendaMensal)         campos.renda_mensal         = rendaMensal
+    if (nomeSubstabelecido)  campos.nome_substabelecido  = nomeSubstabelecido
+    if (oabSubstabelecido)   campos.oab_substabelecido   = oabSubstabelecido
+    if (objetoNotificacao)   campos.objeto_notificacao   = objetoNotificacao
+    if (prazoResposta)       campos.prazo_resposta       = prazoResposta
+    if (valorFixo)           campos.valor_fixo           = valorFixo
+    if (percentualExito)     campos.percentual_exito     = percentualExito
+    if (formaPagamento)      campos.forma_pagamento      = formaPagamento
+    return campos
+  }
+
+  // Preenche o modelo .docx do escritório (fidelidade 1:1) a partir do cliente + camposExtras
+  async function baixarModelo() {
+    if (!cliente) return
+    setBaixandoModelo(true)
+    try {
+      const res = await fetch('/api/documentos/exportar-modelo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: tipoModelo, clienteId: cliente.id, camposExtras: montarCamposExtras() }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toastError('Modelo não disponível', d.error ?? 'Não foi possível gerar o documento')
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${tipoNome.replace(/\s+/g, '_')}_${cliente.nome.replace(/\s+/g, '_')}.docx`
+      a.click()
+      URL.revokeObjectURL(url)
+      success('DOCX gerado!', 'Modelo do escritório preenchido')
+    } catch {
+      toastError('Erro', 'Falha de rede')
+    } finally {
+      setBaixandoModelo(false)
+    }
+  }
+
   // ── Gerar documento ──
   async function gerar() {
     if (!cliente) {
@@ -186,16 +236,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
     setGerando(true)
     setDocumentoGerado('')
     try {
-      const camposExtras: Record<string, string> = {}
-      if (objeto)              camposExtras.objeto               = objeto
-      if (rendaMensal)         camposExtras.renda_mensal         = rendaMensal
-      if (nomeSubstabelecido)  camposExtras.nome_substabelecido  = nomeSubstabelecido
-      if (oabSubstabelecido)   camposExtras.oab_substabelecido   = oabSubstabelecido
-      if (objetoNotificacao)   camposExtras.objeto_notificacao   = objetoNotificacao
-      if (prazoResposta)       camposExtras.prazo_resposta       = prazoResposta
-      if (valorFixo)           camposExtras.valor_fixo           = valorFixo
-      if (percentualExito)     camposExtras.percentual_exito     = percentualExito
-      if (formaPagamento)      camposExtras.forma_pagamento      = formaPagamento
+      const camposExtras = montarCamposExtras()
 
       const res = await fetch('/api/ia/gerar-documento', {
         method: 'POST',
@@ -235,6 +276,19 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         titulo={tipoNome}
         conteudo={documentoGerado}
         onVoltar={() => setModoEditor(false)}
+        extraAcoes={suportaModelo && cliente ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={baixarModelo}
+            disabled={baixandoModelo}
+            className="gap-1.5"
+            title="Preencher o modelo .docx do escritório (fidelidade 1:1)"
+          >
+            {baixandoModelo ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            Meu modelo (.docx)
+          </Button>
+        ) : undefined}
       />
     )
   }
