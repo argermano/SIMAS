@@ -126,9 +126,11 @@
 
 .ProseMirror {
   outline: none;
-  font-family: 'Times New Roman', Times, serif;
-  font-size: 12pt;
-  line-height: 1.5;
+  /* Variáveis com fallback ABNT — podem ser sobrescritas por --doc-* no contêiner
+     a partir do estilo do escritório (alinha editor ao DOCX exportado). */
+  font-family: var(--doc-font, 'Times New Roman', Times, serif);
+  font-size: var(--doc-size, 12pt);
+  line-height: var(--doc-line-height, 1.5);
   color: #111827;
 }
 
@@ -173,14 +175,14 @@
 .ProseMirror p {
   margin-bottom: 0.5rem;
   text-align: justify;
-  text-indent: 2.5cm;
+  text-indent: var(--doc-indent, 1.25cm);
 }
 
 /* Parágrafos logo após títulos — manter recuo */
 .ProseMirror h1 + p,
 .ProseMirror h2 + p,
 .ProseMirror h3 + p {
-  text-indent: 2.5cm;
+  text-indent: var(--doc-indent, 1.25cm);
 }
 
 .ProseMirror strong { font-weight: 700; color: #111827; }

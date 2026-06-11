@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { markdownToDocx } from '@/lib/export/docx-generator'
+import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 
 // POST /api/exportar — gerar e retornar DOCX
@@ -29,9 +30,11 @@ export async function POST(req: NextRequest) {
     const tipoPecaConfig = TIPOS_PECA[peca.tipo]
     const titulo = tipoPecaConfig?.nome ?? peca.tipo
 
+    const estilo = await carregarEstiloTenant(supabase, usuario.tenant_id)
     const buffer = await markdownToDocx(peca.conteudo_markdown, {
       titulo,
       area: peca.area,
+      estilo,
     })
 
     // Salvar registro de exportação

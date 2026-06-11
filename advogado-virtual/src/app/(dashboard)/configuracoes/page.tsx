@@ -12,6 +12,7 @@ import { LABELS_ROLE } from '@/types'
 import { FormPerfilProfissional } from '@/components/configuracoes/FormPerfilProfissional'
 import { PainelConsumoIA } from '@/components/configuracoes/PainelConsumoIA'
 import { PadroesDocumentos } from '@/components/configuracoes/PadroesDocumentos'
+import { FormatacaoEscritorio } from '@/components/configuracoes/FormatacaoEscritorio'
 import { ConfiguracoesTabs } from '@/components/configuracoes/ConfiguracoesTabs'
 
 export const metadata = { title: 'Configurações' }
@@ -255,7 +256,12 @@ export default async function ConfiguracoesPage() {
   )
 
   const conteudoConsumo = <PainelConsumoIA />
-  const conteudoPadroes = <PadroesDocumentos />
+  const conteudoPadroes = (
+    <>
+      {usuario.role === 'admin' && <FormatacaoEscritorio />}
+      <PadroesDocumentos />
+    </>
+  )
 
   return (
     <>

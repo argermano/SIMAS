@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { markdownToDocx } from '@/lib/export/docx-generator'
+import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
 
 // POST /api/exportar-documento — gerar DOCX a partir de markdown raw (sem pecaId)
 export async function POST(req: NextRequest) {
@@ -14,8 +15,10 @@ export async function POST(req: NextRequest) {
 
     const auth = await getAuthContext()
     if (!auth.ok) return auth.response
+    const { supabase, usuario } = auth
 
-    const buffer = await markdownToDocx(conteudo, { titulo })
+    const estilo = await carregarEstiloTenant(supabase, usuario.tenant_id)
+    const buffer = await markdownToDocx(conteudo, { titulo, estilo })
     const fileName = `${(titulo ?? 'documento').replace(/\s+/g, '_')}.docx`
 
     return new NextResponse(new Uint8Array(buffer), {

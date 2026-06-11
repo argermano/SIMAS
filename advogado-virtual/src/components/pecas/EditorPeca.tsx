@@ -105,13 +105,13 @@ export function EditorPeca({ pecaId, conteudo, versao, status, onConteudoChange 
         ) : (
           <div
             className="prose prose-sm max-w-none min-h-[600px] rounded-xl border bg-white p-6 overflow-y-auto"
-            style={{ maxHeight: '75vh' }}
+            style={{ maxHeight: '75vh', fontFamily: "var(--doc-font, 'Times New Roman', Times, serif)" }}
           >
             {conteudo ? (
               <ReactMarkdown
                 components={{
                   h1: ({ children }) => (
-                    <h1 className="text-xl font-bold text-foreground mt-6 mb-3 pb-2 border-b">{children}</h1>
+                    <h1 className="text-xl font-bold text-foreground mt-6 mb-3 text-center uppercase">{children}</h1>
                   ),
                   h2: ({ children }) => (
                     <h2 className="text-lg font-bold text-foreground mt-6 mb-2 uppercase tracking-wide">{children}</h2>
@@ -120,7 +120,7 @@ export function EditorPeca({ pecaId, conteudo, versao, status, onConteudoChange 
                     <h3 className="text-base font-semibold text-foreground mt-4 mb-2">{children}</h3>
                   ),
                   p: ({ children }) => (
-                    <p className="text-sm leading-7 text-foreground mb-3 text-justify">{children}</p>
+                    <p className="text-sm leading-7 text-foreground mb-3 text-justify" style={{ textIndent: 'var(--doc-indent, 1.25cm)' }}>{children}</p>
                   ),
                   strong: ({ children }) => (
                     <strong className="font-bold text-foreground">{children}</strong>

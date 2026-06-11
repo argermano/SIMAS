@@ -1,7 +1,7 @@
 import {
   Document, Paragraph, TextRun,
   AlignmentType, convertMillimetersToTwip,
-  Packer,
+  Packer, Header, Footer, PageNumber, PageBreak, BorderStyle,
 } from 'docx'
 import { type EstiloDocumento, resolverEstilo } from '@/lib/format/estilo-documento'
 
@@ -48,7 +48,8 @@ interface DocxOptions {
  * (fonte, corpo, entrelinha, recuo, margens). Sem `estilo`, usa o DEFAULT_ABNT.
  */
 export async function markdownToDocx(markdown: string, opts?: DocxOptions): Promise<Buffer> {
-  const e = estiloParaDocx(resolverEstilo(opts?.estilo))
+  const estilo = resolverEstilo(opts?.estilo)
+  const e = estiloParaDocx(estilo)
   const lines = markdown.split('\n')
   const paragraphs: Paragraph[] = []
 
@@ -82,6 +83,21 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
 
     if (!trimmed) {
       paragraphs.push(new Paragraph({ spacing: { after: 120 } }))
+      continue
+    }
+
+    // Quebra de página explícita (usada em contratos)
+    if (trimmed === '\\pagebreak' || trimmed === '[pagebreak]') {
+      paragraphs.push(new Paragraph({ children: [new PageBreak()] }))
+      continue
+    }
+
+    // Separador horizontal --- (contratos; peças removem dividers antes do export)
+    if (trimmed === '---') {
+      paragraphs.push(new Paragraph({
+        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '999999' } },
+        spacing: { before: 80, after: 80 },
+      }))
       continue
     }
 
@@ -151,11 +167,38 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
   // Flush blockquote residual
   if (inBlockquote && blockquoteLines.length > 0) flushBlockquote()
 
+  // Cabeçalho / rodapé / numeração de páginas (opcionais, vindos do estilo)
+  const headers = estilo.cabecalho
+    ? {
+        default: new Header({
+          children: [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [new TextRun({ text: estilo.cabecalho, font: e.font, size: e.sizeEmenta, color: COLOR_BLACK })],
+          })],
+        }),
+      }
+    : undefined
+
+  const rodapeRuns: TextRun[] = []
+  if (estilo.rodape) {
+    rodapeRuns.push(new TextRun({ text: estilo.rodape, font: e.font, size: e.sizeEmenta, color: COLOR_BLACK }))
+  }
+  if (estilo.numerarPaginas) {
+    if (estilo.rodape) rodapeRuns.push(new TextRun({ text: '   ', font: e.font, size: e.sizeEmenta }))
+    rodapeRuns.push(new TextRun({ text: 'Página ', font: e.font, size: e.sizeEmenta, color: COLOR_BLACK }))
+    rodapeRuns.push(new TextRun({ children: [PageNumber.CURRENT], font: e.font, size: e.sizeEmenta, color: COLOR_BLACK }))
+  }
+  const footers = rodapeRuns.length
+    ? { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: rodapeRuns })] }) }
+    : undefined
+
   const doc = new Document({
     creator: 'SIMAS',
     title: opts?.titulo ?? 'Peça Processual',
     sections: [{
       properties: { page: { margin: e.margins } },
+      headers,
+      footers,
       children: paragraphs,
     }],
   })
