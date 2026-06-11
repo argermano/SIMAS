@@ -4,22 +4,12 @@ import {
   Packer, Header, Footer, PageNumber, PageBreak, BorderStyle,
 } from 'docx'
 import { type EstiloDocumento, resolverEstilo } from '@/lib/format/estilo-documento'
+import { limparMarkdownParaDocx } from '@/lib/format/limpar-markdown'
 
 const COLOR_BLACK = '000000'
 
-/**
- * Remove artefatos de markdown que vazam para o documento final:
- * - cercas de código (```), que a IA coloca ao redor de seções/citações;
- * - escape de pontuação introduzido pelo editor (turndown): \[ → [, \. → ., \( → (, etc.
- * Mantém * e ` (o itálico/negrito é tratado em parseInlineFormatting; cercas já removidas).
- */
-export function limparMarkdownParaDocx(markdown: string): string {
-  return markdown
-    .split('\n')
-    .filter((line) => !/^\s*```[a-zA-Z]*\s*$/.test(line))
-    .join('\n')
-    .replace(/\\([[\]().!_~|{}+])/g, '$1')
-}
+// Reexporta para compatibilidade com quem importa daqui (testes, etc.)
+export { limparMarkdownParaDocx }
 
 /** Valores do estilo já convertidos para as unidades do docx. */
 interface EstiloDocx {

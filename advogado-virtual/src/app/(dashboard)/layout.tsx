@@ -36,8 +36,14 @@ export default async function DashboardLayout({
     ? ({
         '--doc-font': `'${estilo.fonte}', 'Times New Roman', serif`,
         '--doc-size': `${estilo.tamanhoPt}pt`,
+        '--doc-ementa-size': `${estilo.tamanhoEmentaPt}pt`,
         '--doc-line-height': `${estilo.entrelinha}`,
         '--doc-indent': `${estilo.recuoPrimeiraLinhaCm}cm`,
+        '--doc-blockquote-indent': `${estilo.recuoBlockquoteCm}cm`,
+        '--doc-margin-top': `${estilo.margensCm.topo}cm`,
+        '--doc-margin-right': `${estilo.margensCm.direita}cm`,
+        '--doc-margin-bottom': `${estilo.margensCm.baixo}cm`,
+        '--doc-margin-left': `${estilo.margensCm.esquerda}cm`,
       } as CSSProperties)
     : undefined
 

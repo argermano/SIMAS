@@ -210,8 +210,10 @@
   margin-bottom: 1.5rem;
 }
 
+/* Títulos: mesmo tamanho do corpo + negrito (como no DOCX exportado).
+   H1 centralizado (nome da peça); H2/H3 à esquerda (seções/subseções). */
 .ProseMirror h1 {
-  font-size: 13pt;
+  font-size: var(--doc-size, 12pt);
   font-weight: 700;
   color: hsl(var(--editor-text));
   text-align: center;
@@ -222,19 +224,20 @@
 }
 
 .ProseMirror h2 {
-  font-size: 12pt;
+  font-size: var(--doc-size, 12pt);
   font-weight: 700;
   color: hsl(var(--editor-text));
   text-transform: uppercase;
-  text-align: center;
+  text-align: left;
   margin-top: 1.5rem;
   margin-bottom: 0.75rem;
 }
 
 .ProseMirror h3 {
-  font-size: 12pt;
+  font-size: var(--doc-size, 12pt);
   font-weight: 700;
   color: hsl(var(--editor-text));
+  text-align: left;
   margin-top: 1.25rem;
   margin-bottom: 0.5rem;
 }
@@ -270,12 +273,19 @@
   display: none;
 }
 
+/* Ementas/citações: recuo de bloco (4cm ABNT) + corpo menor + justificado,
+   como no DOCX exportado (sem barra lateral; itálico vem dos marcadores *…*). */
 .ProseMirror blockquote {
-  border-left: 4px solid hsl(var(--editor-border));
-  padding: 0.5rem 1rem;
-  margin: 0.75rem 0;
-  font-style: italic;
-  color: hsl(var(--editor-muted));
+  margin: 0.75rem 0 0.75rem var(--doc-blockquote-indent, 4cm);
+  padding: 0;
+  border: none;
+  font-size: var(--doc-ementa-size, 10pt);
+  text-align: justify;
+  color: hsl(var(--editor-text));
+}
+.ProseMirror blockquote p {
+  text-indent: 0;
+  margin-bottom: 0.4rem;
 }
 
 .ProseMirror a {
@@ -359,7 +369,8 @@
 .editor-a4-page {
   width: 210mm;
   min-height: 297mm;
-  padding: 30mm 20mm 20mm 30mm; /* ABNT: 3cm top, 2cm right, 2cm bottom, 3cm left */
+  /* Margens do estilo do escritório (fallback ABNT: 3cm topo, 2cm dir, 2cm baixo, 3cm esq) */
+  padding: var(--doc-margin-top, 30mm) var(--doc-margin-right, 20mm) var(--doc-margin-bottom, 20mm) var(--doc-margin-left, 30mm);
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05);
   margin: 0 auto;

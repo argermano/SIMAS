@@ -15,6 +15,7 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import FontFamily from '@tiptap/extension-font-family'
 import { marked } from 'marked'
 import TurndownService from 'turndown'
+import { limparMarkdownParaDocx } from '@/lib/format/limpar-markdown'
 
 import { HighlightPlaceholders } from './HighlightPlaceholders'
 import { DocumentHeader } from './DocumentHeader'
@@ -25,9 +26,10 @@ import { AiComandoDialog } from './AiComandoDialog'
 import { JurisprudenciaDialog } from './JurisprudenciaDialog'
 import { useToast } from '@/components/ui/toast'
 
-// Markdown → HTML (entrada)
+// Markdown → HTML (entrada) — limpa os mesmos artefatos que a exportação remove,
+// para a prévia refletir o documento final (Word).
 function mdToHtml(md: string): string {
-  return marked.parse(md, { async: false }) as string
+  return marked.parse(limparMarkdownParaDocx(md), { async: false }) as string
 }
 
 // HTML → Markdown (saída)
