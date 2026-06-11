@@ -36,4 +36,24 @@ describe('formatarPeca', () => {
     expect(out).toContain('data venia')
     expect(out).not.toContain('*data venia*')
   })
+
+  it('remove cercas de código ``` que a IA coloca ao redor de seções', () => {
+    const entrada = [
+      '## I – DOS FATOS',
+      '```',
+      'O Autor dedicou 45 anos ao trabalho formal.',
+      '```',
+      '## I.I – DO REQUERIMENTO',
+    ].join('\n')
+    const out = formatarPeca(entrada)
+    expect(out).not.toContain('```')
+    expect(out).toContain('O Autor dedicou 45 anos')
+  })
+
+  it('NÃO adiciona itálico de latim dentro de TÍTULOS (evita * no heading)', () => {
+    const out = formatarPeca('### III.II – DA PROBABILIDADE DO DIREITO (FUMUS BONI IURIS)')
+    expect(out).not.toContain('*FUMUS BONI IURIS*')
+    expect(out).not.toContain('*fumus boni iuris*')
+    expect(out).toContain('FUMUS BONI IURIS')
+  })
 })

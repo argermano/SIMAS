@@ -7,6 +7,20 @@ import { type EstiloDocumento, resolverEstilo } from '@/lib/format/estilo-docume
 
 const COLOR_BLACK = '000000'
 
+/**
+ * Remove artefatos de markdown que vazam para o documento final:
+ * - cercas de código (```), que a IA coloca ao redor de seções/citações;
+ * - escape de pontuação introduzido pelo editor (turndown): \[ → [, \. → ., \( → (, etc.
+ * Mantém * e ` (o itálico/negrito é tratado em parseInlineFormatting; cercas já removidas).
+ */
+export function limparMarkdownParaDocx(markdown: string): string {
+  return markdown
+    .split('\n')
+    .filter((line) => !/^\s*```[a-zA-Z]*\s*$/.test(line))
+    .join('\n')
+    .replace(/\\([[\]().!_~|{}+])/g, '$1')
+}
+
 /** Valores do estilo já convertidos para as unidades do docx. */
 interface EstiloDocx {
   font: string
@@ -50,7 +64,7 @@ interface DocxOptions {
 export async function markdownToDocx(markdown: string, opts?: DocxOptions): Promise<Buffer> {
   const estilo = resolverEstilo(opts?.estilo)
   const e = estiloParaDocx(estilo)
-  const lines = markdown.split('\n')
+  const lines = limparMarkdownParaDocx(markdown).split('\n')
   const paragraphs: Paragraph[] = []
 
   let inBlockquote = false
@@ -103,7 +117,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
 
     // Título H1 (nome da peça — centralizado, negrito, MAIÚSCULAS)
     if (trimmed.startsWith('# ') && !trimmed.startsWith('## ')) {
-      const texto = trimmed.replace(/^#\s*/, '').replace(/\*\*/g, '')
+      const texto = trimmed.replace(/^#\s*/, '').replace(/\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 360, after: 240 },
@@ -114,7 +128,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
 
     // Títulos H2 (seções) e H3 (subseções) — esquerda, negrito
     if (trimmed.startsWith('## ')) {
-      const texto = trimmed.replace(/^##\s*/, '').replace(/\*\*/g, '')
+      const texto = trimmed.replace(/^##\s*/, '').replace(/\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.LEFT,
         spacing: { before: 360, after: 200 },
@@ -123,7 +137,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       continue
     }
     if (trimmed.startsWith('### ')) {
-      const texto = trimmed.replace(/^###\s*/, '').replace(/\*\*/g, '')
+      const texto = trimmed.replace(/^###\s*/, '').replace(/\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.LEFT,
         spacing: { before: 240, after: 160 },
@@ -212,15 +226,15 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
  */
 function parseInlineFormatting(text: string, fontSize: number, font: string): TextRun[] {
   const runs: TextRun[] = []
-  const parts = text.split(/(\*\*.*?\*\*|\*[^*]+?\*|\[PREENCHER\]|\[VERIFICAR\])/g)
+  const parts = text.split(/(\*\*.*?\*\*|\*[^*]+?\*|\[PREENCHER[^\]]*\]|\[VERIFICAR[^\]]*\])/g)
 
   for (const part of parts) {
     if (!part) continue
 
-    if (part === '[PREENCHER]') {
-      runs.push(new TextRun({ text: '[PREENCHER]', color: 'FF6600', bold: true, size: fontSize, font, highlight: 'yellow' }))
-    } else if (part === '[VERIFICAR]') {
-      runs.push(new TextRun({ text: '[VERIFICAR]', color: 'CC0000', bold: true, size: fontSize, font, highlight: 'yellow' }))
+    if (part.startsWith('[PREENCHER')) {
+      runs.push(new TextRun({ text: part, color: 'FF6600', bold: true, size: fontSize, font, highlight: 'yellow' }))
+    } else if (part.startsWith('[VERIFICAR')) {
+      runs.push(new TextRun({ text: part, color: 'CC0000', bold: true, size: fontSize, font, highlight: 'yellow' }))
     } else if (part.startsWith('**') && part.endsWith('**')) {
       runs.push(new TextRun({ text: part.slice(2, -2), bold: true, size: fontSize, font, color: COLOR_BLACK }))
     } else if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {

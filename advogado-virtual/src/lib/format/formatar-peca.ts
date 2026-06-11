@@ -91,6 +91,9 @@ function removerBlocoCodigo(text: string): string {
   // Remove ```markdown ... ``` ou ``` ... ``` que envolve todo o conteúdo
   result = result.replace(/^```(?:markdown|md|text|html)?\s*\n?/i, '')
   result = result.replace(/\n?```\s*$/, '')
+  // Remove QUALQUER linha que seja apenas uma cerca ``` — a IA costuma cercar
+  // seções/citações individuais, e essas cercas vazavam para o documento final.
+  result = result.split('\n').filter(line => !/^\s*```[a-zA-Z]*\s*$/.test(line)).join('\n')
   return result.trim()
 }
 
@@ -257,10 +260,12 @@ function formatarTitulos(text: string): string {
 
 // ─── 5. Italicizar expressões latinas ────────────────────────
 function italicizarLatim(text: string): string {
-  // Não altera citações (blockquote) — preserva ementas/doutrina fielmente.
-  return text.split('\n').map(line =>
-    line.trim().startsWith('>') ? line : italicizarLatimLinha(line)
-  ).join('\n')
+  // Não altera citações (blockquote) nem títulos (#): preserva ementas/doutrina e evita
+  // que marcadores * de itálico vazem para dentro de títulos (negrito/maiúsculo).
+  return text.split('\n').map(line => {
+    const t = line.trim()
+    return t.startsWith('>') || t.startsWith('#') ? line : italicizarLatimLinha(line)
+  }).join('\n')
 }
 
 function italicizarLatimLinha(text: string): string {

@@ -1,0 +1,47 @@
+import { describe, it, expect } from 'vitest'
+import mammoth from 'mammoth'
+import { markdownToDocx, limparMarkdownParaDocx } from './docx-generator'
+
+describe('limparMarkdownParaDocx', () => {
+  it('remove cercas de código ``` (inclusive as internas)', () => {
+    const out = limparMarkdownParaDocx('## I – DOS FATOS\n```\nO Autor...\n```\ntexto')
+    expect(out).not.toContain('```')
+    expect(out).toContain('O Autor...')
+  })
+
+  it('desescapa colchetes/pontuação do editor (\\[ → [)', () => {
+    const out = limparMarkdownParaDocx('portador do CPF n. \\[PREENCHER\\], em \\[PREENCHER COMARCA\\]')
+    expect(out).toContain('[PREENCHER]')
+    expect(out).toContain('[PREENCHER COMARCA]')
+    expect(out).not.toContain('\\[')
+  })
+
+  it('preserva marcadores de formatação (* e **)', () => {
+    const out = limparMarkdownParaDocx('texto **negrito** e *itálico*')
+    expect(out).toContain('**negrito**')
+    expect(out).toContain('*itálico*')
+  })
+})
+
+describe('markdownToDocx — artefatos não vazam para o documento', () => {
+  // Reproduz os defeitos vistos no PDF real (Petição Inicial)
+  const markdown = [
+    '## I – DOS FATOS',
+    '```',
+    'O autor reside em \\[PREENCHER endereço completo\\], CEP \\[PREENCHER\\].',
+    '```',
+    '### III.II – DA PROBABILIDADE DO DIREITO (*FUMUS BONI IURIS*)',
+    'Resta demonstrado o direito.',
+  ].join('\n')
+
+  it('não contém crases triplas, colchetes escapados nem asteriscos de título', async () => {
+    const buffer = await markdownToDocx(markdown)
+    const { value } = await mammoth.extractRawText({ buffer })
+    expect(value).not.toContain('```')
+    expect(value).not.toContain('\\[')
+    expect(value).not.toContain('*FUMUS BONI IURIS*')
+    expect(value).toContain('FUMUS BONI IURIS')
+    expect(value).toContain('[PREENCHER]')
+    expect(value).toContain('[PREENCHER endereço completo]')
+  })
+})
