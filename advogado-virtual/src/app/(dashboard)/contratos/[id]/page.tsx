@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { EditorContratoClient } from './EditorContratoClient'
+import { decryptClienteFields } from '@/lib/encryption'
 import { ChevronLeft } from 'lucide-react'
 
 export const metadata = { title: 'Contrato de Honorários' }
@@ -63,6 +64,13 @@ export default async function ContratoPage({
   ])
 
   if (!contrato) notFound()
+
+  // Decifra o CPF do cliente vinculado (criptografado em repouso)
+  if (contrato.clientes) {
+    contrato.clientes = decryptClienteFields(
+      contrato.clientes as Record<string, unknown>
+    ) as typeof contrato.clientes
+  }
 
   const [{ data: versoes }, { data: assinatura }] = await Promise.all([
     supabase

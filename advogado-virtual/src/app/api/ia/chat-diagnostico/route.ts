@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
         tokensOutput: usage.output,
         latenciaMs: Date.now() - start,
       })
-    }).catch(() => {})
+    }).catch((e) => console.error('[logUsage] erro pós-stream (chat_diagnostico):', e))
 
     return new Response(stream, {
       headers: {

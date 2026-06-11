@@ -40,9 +40,9 @@ export async function GET(
     paths = [atendimento.audio_url]
   }
 
-  // Gera URLs assinadas com validade de 2 horas
+  // Gera URLs assinadas com validade de 1 hora
   const resultados = await Promise.all(
-    paths.map(path => supabase.storage.from('documentos').createSignedUrl(path, 7200))
+    paths.map(path => supabase.storage.from('documentos').createSignedUrl(path, 3600))
   )
 
   const urls = resultados

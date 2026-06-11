@@ -48,6 +48,22 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
     return () => clearInterval(timerRef.current)
   }, [estado])
 
+  // ─── Cleanup no unmount: libera microfone e recorder ────────────
+  // Sem isto, desmontar durante a gravação deixa o MediaStream ativo
+  // (microfone aberto) e vaza recursos.
+  useEffect(() => {
+    return () => {
+      try {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop()
+        }
+      } catch { /* ignora — recorder já parado */ }
+      streamRef.current?.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+      mediaRecorderRef.current = null
+    }
+  }, [])
+
   // ─── Limites de tempo e chunking ────────────────────────────────
   useEffect(() => {
     if (estado !== 'gravando') return

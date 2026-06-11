@@ -1,60 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { LIMITES_PLANO, categorizar } from '@/lib/anthropic/quota'
 
 // Taxa de conversão USD → BRL (atualizar periodicamente)
 const USD_BRL = 5.70
-
-/**
- * Categories for endpoint grouping.
- * Dynamic endpoints like `comando_resumir` and `correcao_ortografia` are matched by prefix.
- */
-const CATEGORIAS: Record<string, { label: string; grupo: string; chave: string }> = {
-  gerar_peca:     { label: 'Geração de peças',         grupo: 'Documentos', chave: 'gerar_peca' },
-  refinar_peca:   { label: 'Refinamento de peças',     grupo: 'Documentos', chave: 'refinar_peca' },
-  validar_peca:   { label: 'Validação de peças',       grupo: 'Documentos', chave: 'validar_peca' },
-  analise:        { label: 'Análise de documentos',     grupo: 'Análise',   chave: 'analise' },
-  analise_geral:  { label: 'Análise geral do caso',    grupo: 'Análise',   chave: 'analise_geral' },
-  comando:        { label: 'Comandos IA no editor',    grupo: 'Editor',    chave: 'comando' },
-  correcao:       { label: 'Correção automática',      grupo: 'Editor',    chave: 'correcao' },
-}
-
-/** Limites por plano (chamadas permitidas por categoria) */
-const LIMITES_PLANO: Record<string, Record<string, number>> = {
-  trial: {
-    gerar_peca:    50,
-    refinar_peca:  50,
-    validar_peca:  30,
-    analise:       20,
-    analise_geral: 100,
-    comando:       200,
-    correcao:      200,
-  },
-  basico: {
-    gerar_peca:    200,
-    refinar_peca:  200,
-    validar_peca:  100,
-    analise:       100,
-    analise_geral: 500,
-    comando:       1000,
-    correcao:      1000,
-  },
-  profissional: {
-    gerar_peca:    1000,
-    refinar_peca:  1000,
-    validar_peca:  500,
-    analise:       500,
-    analise_geral: 2000,
-    comando:       5000,
-    correcao:      5000,
-  },
-}
-
-function categorizar(endpoint: string): { label: string; grupo: string; chave: string } {
-  if (CATEGORIAS[endpoint]) return CATEGORIAS[endpoint]
-  if (endpoint.startsWith('comando_')) return CATEGORIAS.comando
-  if (endpoint.startsWith('correcao_')) return CATEGORIAS.correcao
-  return { label: endpoint, grupo: 'Outros', chave: endpoint }
-}
 
 export async function GET() {
   const supabase = await createClient()

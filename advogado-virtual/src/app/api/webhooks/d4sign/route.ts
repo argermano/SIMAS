@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'node:crypto'
 import { createClient } from '@/lib/supabase/server'
 import { d4signDownloadDocument } from '@/lib/d4sign/client'
 import type { D4SignWebhookPayload } from '@/lib/d4sign/types'
@@ -12,8 +13,39 @@ const D4SIGN_STATUS_MAP: Record<string, string> = {
   '6': 'cancelled',
 }
 
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const ab = Buffer.from(a)
+  const bb = Buffer.from(b)
+  if (ab.length !== bb.length) return false
+  return crypto.timingSafeEqual(ab, bb)
+}
+
+/**
+ * Valida a autenticidade do webhook via secret compartilhado.
+ * Configure D4SIGN_WEBHOOK_SECRET e aponte o webhook no painel D4Sign para
+ * `https://SEU_APP/api/webhooks/d4sign?secret=SEU_SECRET` (ou envie no header
+ * `x-webhook-secret`). Sem isso, qualquer um poderia forjar eventos de assinatura.
+ */
+function webhookAutorizado(req: NextRequest): boolean {
+  const secret = process.env.D4SIGN_WEBHOOK_SECRET
+  if (!secret) {
+    console.warn(
+      '[d4sign webhook] D4SIGN_WEBHOOK_SECRET não configurado — aceitando sem validação. ' +
+        'Configure o secret e atualize a URL no painel D4Sign para habilitar a verificação.'
+    )
+    return true // não bloquear produção até o secret ser provisionado
+  }
+  const provided =
+    req.nextUrl.searchParams.get('secret') ?? req.headers.get('x-webhook-secret') ?? ''
+  return provided.length > 0 && timingSafeEqualStr(provided, secret)
+}
+
 // POST /api/webhooks/d4sign  (público — chamado pela D4Sign)
 export async function POST(req: NextRequest) {
+  if (!webhookAutorizado(req)) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+
   let payload: D4SignWebhookPayload
   try {
     payload = await req.json()

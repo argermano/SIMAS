@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { encryptClienteFields, decryptClienteFields } from '@/lib/encryption'
 
 const schemaUpdate = z.object({
   nome:         z.string().min(2).max(200).optional(),
@@ -66,7 +67,7 @@ export async function GET(
     .limit(10)
 
   return NextResponse.json({
-    cliente:      acesso.cliente,
+    cliente:      decryptClienteFields(acesso.cliente),
     atendimentos: atendimentos ?? [],
   })
 }
@@ -98,7 +99,7 @@ export async function PATCH(
   const { data: clienteAtualizado, error } = await supabase
     .from('clientes')
     .update({
-      ...resultado.data,
+      ...encryptClienteFields(resultado.data),
       email: resultado.data.email || null,
     })
     .eq('id', id)
@@ -107,7 +108,7 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ cliente: clienteAtualizado })
+  return NextResponse.json({ cliente: decryptClienteFields(clienteAtualizado) })
 }
 
 // ─────────────────────────────────────────────────────────────

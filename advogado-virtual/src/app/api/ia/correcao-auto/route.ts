@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 
 const SYSTEM = `Você é um advogado revisor. Aplique a correção solicitada à peça e retorne a peça completa corrigida em Markdown. Não adicione explicações, apenas a peça corrigida.`
 
@@ -44,6 +45,9 @@ export async function POST(req: NextRequest) {
       .single()
     if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
+    const cota = await verificarCota(supabase, usuario.tenant_id, 'correcao')
+    if (!cota.permitido) return NextResponse.json({ error: mensagemCotaExcedida(cota) }, { status: 429 })
+
     const { data: peca } = await supabase
       .from('pecas')
       .select('*')
@@ -78,7 +82,7 @@ export async function POST(req: NextRequest) {
         tokensOutput: usage.output,
         latenciaMs: Date.now() - start,
       })
-    }).catch(() => {})
+    }).catch((e) => console.error('[logUsage] erro pós-stream (correcao):', e))
 
     return new Response(stream, {
       headers: {

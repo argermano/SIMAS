@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent } from '@/components/ui/card'
 import { FormCliente } from '@/components/clientes/FormCliente'
+import { decryptClienteFields } from '@/lib/encryption'
 import { ChevronLeft } from 'lucide-react'
 
 export const metadata = { title: 'Editar Cliente' }
@@ -27,14 +28,17 @@ export default async function EditarClientePage({
 
   if (!usuario) redirect('/login')
 
-  const { data: cliente } = await supabase
+  const { data: clienteRaw } = await supabase
     .from('clientes')
     .select('*')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
-  if (!cliente) notFound()
+  if (!clienteRaw) notFound()
+
+  // Decifra CPF/RG para edição em texto-plano
+  const cliente = decryptClienteFields(clienteRaw)
 
   return (
     <>

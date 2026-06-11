@@ -31,7 +31,7 @@ export async function GET(
 
   const { data: urlData, error } = await supabase.storage
     .from('documentos')
-    .createSignedUrl(doc.file_url, 7200) // 2 horas
+    .createSignedUrl(doc.file_url, 3600) // 1 hora
 
   if (error || !urlData?.signedUrl) {
     return NextResponse.json({ error: 'Não foi possível gerar URL do documento' }, { status: 500 })

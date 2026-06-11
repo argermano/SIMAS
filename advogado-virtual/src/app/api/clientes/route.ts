@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
+import { encryptClienteFields, decryptClienteFields } from '@/lib/encryption'
 
 // ─────────────────────────────────────────────────────────────
 // Schema de validação
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({
-    clientes:   data,
+    clientes:   (data ?? []).map(decryptClienteFields),
     total:      count ?? 0,
     pagina:     page,
     totalPaginas: Math.ceil((count ?? 0) / limit),
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
   const { data: cliente, error } = await supabase
     .from('clientes')
     .insert({
-      ...dados,
+      ...encryptClienteFields(dados),
       email:      dados.email || null,
       tenant_id:  usuario.tenant_id,
       created_by: usuario.id,
@@ -114,5 +115,5 @@ export async function POST(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ cliente }, { status: 201 })
+  return NextResponse.json({ cliente: decryptClienteFields(cliente) }, { status: 201 })
 }

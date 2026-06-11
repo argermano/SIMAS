@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
         tokensOutput: usage.output,
         latenciaMs: Date.now() - start,
       })
-    }).catch(() => {})
+    }).catch((e) => console.error('[logUsage] erro pós-stream (refinamento_peca):', e))
 
     return new Response(stream, {
       headers: {

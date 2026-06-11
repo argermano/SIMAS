@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptAnalisePrev, SYSTEM_ANALISE_PREV } from '@/lib/prompts/analise/previdenciario'
 import { buildPromptAnaliseTrab, SYSTEM_ANALISE_TRAB } from '@/lib/prompts/analise/trabalhista'
 
@@ -27,6 +28,9 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+
+    const cota = await verificarCota(supabase, usuario.tenant_id, 'analise')
+    if (!cota.permitido) return NextResponse.json({ error: mensagemCotaExcedida(cota) }, { status: 429 })
 
     // Buscar atendimento com documentos
     const { data: atendimento } = await supabase

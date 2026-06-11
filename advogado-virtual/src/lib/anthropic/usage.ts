@@ -19,7 +19,7 @@ export async function logUsage(params: {
 
   const supabase = await createClient()
 
-  await supabase.from('api_usage_log').insert({
+  const { error } = await supabase.from('api_usage_log').insert({
     tenant_id: params.tenantId,
     user_id: params.userId,
     endpoint: params.endpoint,
@@ -29,4 +29,22 @@ export async function logUsage(params: {
     custo_estimado: custoEstimado,
     latencia_ms: params.latenciaMs,
   })
+
+  if (error) {
+    // Não silenciar: log de uso impreciso compromete o dashboard e o enforcement de cota.
+    console.error(`[logUsage] falha ao registrar uso (${params.endpoint}, tenant ${params.tenantId}):`, error.message)
+  }
+}
+
+/**
+ * Versão que nunca lança — para uso pós-stream (getUsage().then(...)),
+ * onde uma exceção não tratada quebraria o handler do stream. Loga o erro
+ * em vez de engoli-lo silenciosamente.
+ */
+export async function safeLogUsage(params: Parameters<typeof logUsage>[0]): Promise<void> {
+  try {
+    await logUsage(params)
+  } catch (err) {
+    console.error(`[logUsage] erro inesperado (${params.endpoint}):`, err instanceof Error ? err.message : err)
+  }
 }

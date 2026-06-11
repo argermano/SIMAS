@@ -98,6 +98,24 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: 'Dados obrigatórios ausentes' }, { status: 400 })
   }
 
+  // O atendimento precisa pertencer ao tenant do usuário (RLS),
+  // e o caminho no storage precisa estar sob o prefixo do tenant —
+  // caso contrário o admin client baixaria áudio de outro tenant.
+  const { data: atendimentoDoTenant } = await supabase
+    .from('atendimentos')
+    .select('id')
+    .eq('id', atendimentoId)
+    .eq('tenant_id', usuario.tenant_id)
+    .single()
+
+  if (!atendimentoDoTenant) {
+    return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+  }
+
+  if (!storagePath.startsWith(`${usuario.tenant_id}/`)) {
+    return NextResponse.json({ error: 'Caminho de arquivo inválido' }, { status: 403 })
+  }
+
   const groqKey = process.env.GROQ_API_KEY
   if (!groqKey || groqKey === 'PREENCHA_AQUI') {
     return NextResponse.json({ error: 'GROQ_API_KEY não configurada' }, { status: 503 })
@@ -129,13 +147,13 @@ export async function PATCH(req: Request) {
   let transcricao = ''
 
   try {
-    const transcription = await groq.audio.transcriptions.create({
+    const transcription = await comRetry(() => groq.audio.transcriptions.create({
       file,
       model:                  'whisper-large-v3',
       language:               'pt',
       response_format:        'verbose_json',
       timestamp_granularities: ['segment'],
-    })
+    }))
 
     // verbose_json retorna segments com timestamps
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -159,7 +177,24 @@ export async function PATCH(req: Request) {
     ? transcricaoAcumulada + '\n' + transcricao
     : transcricao
 
-  // Salva no atendimento
+  // WAV chunks gerados pelo client (browser chunking) são descartáveis após transcrição:
+  // ocupam ~7.5 MB/4min cada e o usuário só precisa do texto. Apenas o áudio original
+  // (uploads < 25 MB) é preservado para replay.
+  const isChunk = /audio_upload_.*chunk_\d+\.wav$/i.test(storagePath)
+
+  if (isChunk) {
+    const { error: removeError } = await adminSupabase.storage
+      .from('documentos')
+      .remove([storagePath])
+    if (removeError) {
+      console.error('[transcrever-audio] falha ao remover chunk pós-transcrição', {
+        storagePath,
+        error: removeError.message,
+      })
+    }
+  }
+
+  // Salva no atendimento — chunks não vão pro audio_url (foram deletados)
   const { data: atData } = await supabase
     .from('atendimentos')
     .select('audio_url')
@@ -175,18 +210,45 @@ export async function PATCH(req: Request) {
       audioPaths = [atData.audio_url]
     }
   }
-  audioPaths.push(storagePath)
+  if (!isChunk) audioPaths.push(storagePath)
 
-  await supabase
+  const { error: updateError } = await supabase
     .from('atendimentos')
     .update({
-      audio_url:       JSON.stringify(audioPaths),
+      audio_url:       audioPaths.length > 0 ? JSON.stringify(audioPaths) : null,
       transcricao_raw: transcricaoFinal,
       modo_input:      'audio',
     })
     .eq('id', atendimentoId)
+    .eq('tenant_id', usuario.tenant_id)
+
+  if (updateError) {
+    console.error('[transcrever-audio] falha ao salvar transcrição:', updateError.message)
+    return NextResponse.json(
+      { error: 'Transcrição concluída, mas falhou ao salvar no atendimento. Tente novamente.' },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({ transcricao: transcricaoFinal })
+}
+
+/** Retry com backoff exponencial (1s, 2s, 4s) para erros transientes da Groq. */
+async function comRetry<T>(fn: () => Promise<T>, tentativas = 3): Promise<T> {
+  let ultimoErro: unknown
+  for (let i = 0; i < tentativas; i++) {
+    try {
+      return await fn()
+    } catch (err) {
+      ultimoErro = err
+      if (i < tentativas - 1) {
+        const espera = 1000 * 2 ** i
+        console.warn(`[transcrever-audio] retry ${i + 1}/${tentativas} após erro: ${err instanceof Error ? err.message : err}`)
+        await new Promise((r) => setTimeout(r, espera))
+      }
+    }
+  }
+  throw ultimoErro
 }
 
 function formatTimestamp(seconds: number): string {

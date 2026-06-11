@@ -13,6 +13,7 @@ import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrat
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
 import { PlayerAudio } from '@/components/atendimento/PlayerAudio'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
+import { decryptClienteFields } from '@/lib/encryption'
 import {
   Phone, Mail, MapPin, FileText, Plus,
   Calendar, User, StickyNote, ChevronRight, ChevronLeft,
@@ -120,14 +121,17 @@ export default async function DossieClientePage({
 
   if (!usuario) redirect('/login')
 
-  const { data: cliente } = await supabase
+  const { data: clienteRaw } = await supabase
     .from('clientes')
     .select('*')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
-  if (!cliente) notFound()
+  if (!clienteRaw) notFound()
+
+  // Decifra CPF/RG (criptografados em repouso) para exibição
+  const cliente = decryptClienteFields(clienteRaw)
 
   const { data: atendimentos } = await supabase
     .from('atendimentos')

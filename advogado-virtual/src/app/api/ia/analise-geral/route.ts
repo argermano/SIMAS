@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptAnaliseGeral, SYSTEM_ANALISE_GERAL } from '@/lib/prompts/analise/geral'
 
 function getAdminSupabase() {
@@ -56,6 +57,9 @@ export async function POST(req: NextRequest) {
       .single()
     if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
+    const cota = await verificarCota(supabase, usuario.tenant_id, 'analise_geral')
+    if (!cota.permitido) return NextResponse.json({ error: mensagemCotaExcedida(cota) }, { status: 429 })
+
     const prompt = buildPromptAnaliseGeral({ transcricao, pedido_especifico: pedidoEspecifico, documentos })
 
     const { result, usage } = await completionJSON<ResultadoAnaliseGeral>({
@@ -77,6 +81,19 @@ export async function POST(req: NextRequest) {
     // Salvar resultado na tabela analises se atendimentoId foi fornecido
     let analise_id: string | null = null
     if (atendimentoId) {
+      // Valida ownership ANTES de usar o admin client (que bypassa RLS):
+      // o atendimento precisa pertencer ao tenant do usuário autenticado.
+      const { data: atendimentoDoTenant } = await supabase
+        .from('atendimentos')
+        .select('id')
+        .eq('id', atendimentoId)
+        .eq('tenant_id', usuario.tenant_id)
+        .single()
+
+      if (!atendimentoDoTenant) {
+        return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+      }
+
       try {
         const admin = getAdminSupabase()
 
@@ -84,6 +101,7 @@ export async function POST(req: NextRequest) {
           .from('analises')
           .select('id')
           .eq('atendimento_id', atendimentoId)
+          .eq('tenant_id', usuario.tenant_id)
           .single()
 
         const payload = {

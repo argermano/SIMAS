@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptRevisarValidar, SYSTEM_VALIDAR } from '@/lib/prompts/validacao/revisar-validar'
 
 // POST /api/ia/validar-peca — revisar e validar peça
@@ -22,6 +23,9 @@ export async function POST(req: NextRequest) {
       .eq('auth_user_id', user.id)
       .single()
     if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+
+    const cota = await verificarCota(supabase, usuario.tenant_id, 'validar_peca')
+    if (!cota.permitido) return NextResponse.json({ error: mensagemCotaExcedida(cota) }, { status: 429 })
 
     const { data: peca } = await supabase
       .from('pecas')

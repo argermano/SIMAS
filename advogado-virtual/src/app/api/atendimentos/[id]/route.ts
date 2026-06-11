@@ -119,13 +119,37 @@ export async function DELETE(
   // Verificar que o atendimento pertence ao tenant
   const { data: at } = await supabase
     .from('atendimentos')
-    .select('id')
+    .select('id, audio_url')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
   if (!at) {
     return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
+  }
+
+  // Coleta paths de Storage a remover (áudios + documentos)
+  const storagePaths: string[] = []
+
+  if (at.audio_url) {
+    try {
+      const parsed = JSON.parse(at.audio_url)
+      if (Array.isArray(parsed)) storagePaths.push(...parsed.filter((p): p is string => typeof p === 'string'))
+      else if (typeof parsed === 'string') storagePaths.push(parsed)
+    } catch {
+      storagePaths.push(at.audio_url)
+    }
+  }
+
+  const { data: docs } = await supabase
+    .from('documentos')
+    .select('file_url')
+    .eq('atendimento_id', id)
+
+  if (docs) {
+    for (const d of docs) {
+      if (d.file_url) storagePaths.push(d.file_url)
+    }
   }
 
   // Excluir dados relacionados em cascata
@@ -151,6 +175,21 @@ export async function DELETE(
 
   if (delError) {
     return NextResponse.json({ error: 'Erro ao excluir atendimento' }, { status: 500 })
+  }
+
+  // Remove arquivos do Storage (best-effort: falhas são logadas mas não revertem o DELETE)
+  if (storagePaths.length > 0) {
+    const { error: storageError } = await supabase.storage
+      .from('documentos')
+      .remove(storagePaths)
+
+    if (storageError) {
+      console.error('[atendimentos/DELETE] falha ao limpar storage', {
+        atendimento_id: id,
+        paths: storagePaths,
+        error: storageError.message,
+      })
+    }
   }
 
   return NextResponse.json({ ok: true })

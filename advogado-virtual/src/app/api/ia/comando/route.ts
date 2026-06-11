@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { PROMPTS_COMANDOS } from '@/lib/prompts/comandos'
 
 // POST /api/ia/comando — executar comando rápido
@@ -30,6 +31,9 @@ export async function POST(req: NextRequest) {
       .eq('auth_user_id', user.id)
       .single()
     if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+
+    const cota = await verificarCota(supabase, usuario.tenant_id, 'comando')
+    if (!cota.permitido) return NextResponse.json({ error: mensagemCotaExcedida(cota) }, { status: 429 })
 
     const { data: atendimento } = await supabase
       .from('atendimentos')
@@ -62,7 +66,7 @@ export async function POST(req: NextRequest) {
         tokensOutput: usage.output,
         latenciaMs: Date.now() - start,
       })
-    }).catch(() => {})
+    }).catch((e) => console.error('[logUsage] erro pós-stream (comando):', e))
 
     return new Response(stream, {
       headers: {

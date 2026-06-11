@@ -6,6 +6,7 @@ import { SYSTEM_DECLARACAO, buildPromptDeclaracao } from '@/lib/prompts/document
 import { SYSTEM_SUBSTABELECIMENTO, buildPromptSubstabelecimento } from '@/lib/prompts/documentos/substabelecimento'
 import { SYSTEM_NOTIFICACAO, buildPromptNotificacao } from '@/lib/prompts/documentos/notificacao-extrajudicial'
 import { SYSTEM_CONTRATO_HONORARIOS, buildPromptContratoHonorarios } from '@/lib/prompts/documentos/contrato-honorarios-modelo'
+import { decryptClienteFields } from '@/lib/encryption'
 
 type TipoDoc =
   | 'procuracao'
@@ -69,14 +70,17 @@ export async function POST(req: NextRequest) {
     if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
     // Buscar dados do cliente
-    const { data: cliente } = await supabase
+    const { data: clienteRaw } = await supabase
       .from('clientes')
       .select('nome, cpf, endereco, cidade, estado')
       .eq('id', clienteId)
       .eq('tenant_id', usuario.tenant_id)
       .single()
 
-    if (!cliente) return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
+    if (!clienteRaw) return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
+
+    // Decifra CPF/RG (criptografados em repouso) antes de montar o documento
+    const cliente = decryptClienteFields(clienteRaw)
 
     // Verificar se já existe template salvo
     const { data: templateExistente } = await supabase

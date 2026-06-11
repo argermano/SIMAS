@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ListaClientesClient } from './ListaClientesClient'
 import { Plus, Users } from 'lucide-react'
 import { formatarData, mascaraCPF, iniciais } from '@/lib/utils'
+import { decryptClienteFields } from '@/lib/encryption'
 
 export const metadata = { title: 'Clientes' }
 
@@ -59,7 +60,8 @@ export default async function ClientesPage({
     query = query.ilike('nome', `${letra}%`)
   }
 
-  const { data: clientes, count } = await query
+  const { data: clientesRaw, count } = await query
+  const clientes = (clientesRaw ?? []).map(decryptClienteFields)
 
   const totalPaginas = Math.ceil((count ?? 0) / limit)
 

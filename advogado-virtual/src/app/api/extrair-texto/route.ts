@@ -1,7 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
+import { detectarTipoReal } from '@/lib/file-validation'
 
 export const maxDuration = 60
+
+const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25 MB — evita hang/exhaust no pdf-parse
 
 // POST /api/extrair-texto — extrai texto de arquivo (PDF, DOCX, TXT)
 export async function POST(req: Request) {
@@ -13,6 +16,10 @@ export async function POST(req: Request) {
   const file = formData.get('file') as File | null
   if (!file) return NextResponse.json({ error: 'Arquivo não enviado' }, { status: 400 })
 
+  if (file.size > MAX_FILE_SIZE) {
+    return NextResponse.json({ error: 'Arquivo excede o limite de 25 MB' }, { status: 413 })
+  }
+
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
   let texto = ''
@@ -22,6 +29,15 @@ export async function POST(req: Request) {
   const isDocx = file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     file.name.toLowerCase().endsWith('.docx') || file.name.toLowerCase().endsWith('.doc')
   const isTxt = file.type === 'text/plain' || file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.md')
+
+  // Confere magic bytes para PDF/DOCX antes de passar a parsers pesados
+  const tipoReal = detectarTipoReal(buffer)
+  if (isPdf && tipoReal !== 'pdf') {
+    return NextResponse.json({ error: 'O arquivo não é um PDF válido' }, { status: 400 })
+  }
+  if (isDocx && tipoReal !== 'zip') {
+    return NextResponse.json({ error: 'O arquivo não é um DOCX válido' }, { status: 400 })
+  }
 
   if (isPdf) {
     try {

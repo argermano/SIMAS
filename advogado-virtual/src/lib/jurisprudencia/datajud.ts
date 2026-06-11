@@ -7,7 +7,12 @@
  */
 
 const DATAJUD_BASE = 'https://api-publica.datajud.cnj.jus.br'
-const DATAJUD_API_KEY = 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=='
+// A API pública do DataJud usa uma chave pública compartilhada (documentada pelo CNJ).
+// Mesmo assim, mantida em env var para permitir rotação sem deploy e evitar hardcode.
+// Fallback para a chave pública oficial do CNJ caso a env não esteja definida.
+const DATAJUD_API_KEY =
+  process.env.DATAJUD_API_KEY ??
+  'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw=='
 
 export interface ResultadoJurisprudencia {
   tribunal: string

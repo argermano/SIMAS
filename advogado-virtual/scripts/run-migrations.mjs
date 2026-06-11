@@ -1,24 +1,28 @@
 /**
  * Executa as migrations do Supabase via Management API
  */
-import { readFileSync } from 'fs'
+import { readFileSync, readdirSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const PROJECT_REF = 'wlhtejsimgzzngruhcqt'
-const ACCESS_TOKEN = 'REDACTED_TOKEN_ROTACIONADO'
+const PROJECT_REF = process.env.SUPABASE_PROJECT_REF
+const ACCESS_TOKEN = process.env.SUPABASE_ACCESS_TOKEN
 
-const MIGRATIONS = [
-  '001_tenants_users.sql',
-  '002_clientes.sql',
-  '003_atendimentos_documentos.sql',
-  '004_analises_pecas.sql',
-  '005_rls_policies.sql',
-  '006_atendimentos_v2.sql',
-  '020_tarefas_kanban.sql',
-  '021_assinaturas_digitais.sql',
-]
+if (!PROJECT_REF || !ACCESS_TOKEN) {
+  console.error(
+    '❌ Defina SUPABASE_PROJECT_REF e SUPABASE_ACCESS_TOKEN no ambiente antes de rodar.\n' +
+    '   Ex.: SUPABASE_PROJECT_REF=xxxx SUPABASE_ACCESS_TOKEN=sbp_xxx node scripts/run-migrations.mjs'
+  )
+  process.exit(1)
+}
+
+// Aplica TODAS as migrations em ordem numérica (idempotente — erros de "já existe"
+// são ignorados). Inclui automaticamente novas migrations adicionadas ao diretório.
+const MIGRATIONS_DIR = join(__dirname, '..', 'supabase', 'migrations')
+const MIGRATIONS = readdirSync(MIGRATIONS_DIR)
+  .filter((f) => f.endsWith('.sql'))
+  .sort()
 
 async function executarSQL(sql, nome) {
   const url = `https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query`
@@ -57,7 +61,7 @@ async function main() {
   console.log('🚀 Iniciando execução das migrations...\n')
 
   for (const arquivo of MIGRATIONS) {
-    const caminho = join(__dirname, '..', 'supabase', 'migrations', arquivo)
+    const caminho = join(MIGRATIONS_DIR, arquivo)
     const sql = readFileSync(caminho, 'utf-8')
 
     process.stdout.write(`▶ ${arquivo} ... `)

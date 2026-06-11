@@ -395,19 +395,33 @@ export function TelaAtendimento({
     // 3. Aplica formatação forense padronizada antes de salvar
     const conteudoFormatado = formatarPeca(fullText)
 
-    // 4. Salva o conteúdo formatado no banco
-    await fetch('/api/ia/salvar-peca', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pecaId, conteudo: conteudoFormatado }),
-    })
+    // 4. Salva o conteúdo formatado no banco — aborta a navegação se falhar
+    try {
+      const resSalvar = await fetch('/api/ia/salvar-peca', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pecaId, conteudo: conteudoFormatado }),
+      })
+      if (!resSalvar.ok) {
+        const data = await resSalvar.json().catch(() => ({}))
+        throw new Error(data.error ?? 'Falha ao salvar a peça')
+      }
 
-    // 4. Atualiza status do atendimento para peca_gerada
-    await fetch(`/api/atendimentos/${atendimentoId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'peca_gerada' }),
-    })
+      // 4b. Atualiza status do atendimento para peca_gerada
+      const resStatus = await fetch(`/api/atendimentos/${atendimentoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'peca_gerada' }),
+      })
+      if (!resStatus.ok) {
+        const data = await resStatus.json().catch(() => ({}))
+        throw new Error(data.error ?? 'Falha ao atualizar o atendimento')
+      }
+    } catch (e) {
+      setMostraModalGeracao(false)
+      toastError('Erro ao salvar', e instanceof Error ? e.message : 'Tente novamente.')
+      return
+    }
 
     // 5. Colaboradores não vão direto ao editor — peça aguarda revisão
     if (roleUsuario === 'colaborador') {

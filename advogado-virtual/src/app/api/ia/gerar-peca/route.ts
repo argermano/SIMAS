@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { streamCompletion, completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
+import { decryptClienteFields } from '@/lib/encryption'
 import { buscarJurisprudencia, formatarParaPrompt, type ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import { TRIBUNAIS_DEFAULT } from '@/lib/jurisprudencia/tribunais'
 import { buildPromptPeticaoInicialPrev, SYSTEM_PETICAO_PREV } from '@/lib/prompts/pecas/previdenciario/peticao-inicial'
@@ -91,6 +93,9 @@ export async function POST(req: NextRequest) {
       .single()
     if (!usuario) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
 
+    const cota = await verificarCota(supabase, usuario.tenant_id, 'gerar_peca')
+    if (!cota.permitido) return NextResponse.json({ error: mensagemCotaExcedida(cota) }, { status: 429 })
+
     // Colaboradores não podem publicar diretamente — peça vai para fila de revisão
     const statusInicial = usuario.role === 'colaborador' ? 'aguardando_revisao' : 'rascunho'
 
@@ -109,7 +114,8 @@ export async function POST(req: NextRequest) {
       endereco?: string; bairro?: string; cidade?: string; estado?: string; cep?: string
       telefone?: string; email?: string
     } | null
-    const clienteDB = atendimento.clientes as ClienteDB
+    // Decifra CPF/RG (criptografados em repouso) antes de montar a qualificação
+    const clienteDB = decryptClienteFields(atendimento.clientes as ClienteDB)
 
     const localizacao = {
       cidade: clienteDB?.cidade ?? undefined,
@@ -233,10 +239,8 @@ export async function POST(req: NextRequest) {
         prompt += `\n\n${jurisprudenciaTexto}\n\nUse a jurisprudência acima como referência para fundamentar a peça. Cite os processos relevantes quando aplicável.`
       }
 
-      const { stream } = await streamCompletion({ system: fallback.system, prompt, maxTokens: 32768 })
-
-      // Salvar peça (vazia por enquanto — será atualizada ao final do stream no frontend)
-      const { data: peca } = await supabase
+      // Cria a peça ANTES do stream para garantir um X-Peca-Id válido sempre.
+      const { data: peca, error: pecaError } = await supabase
         .from('pecas')
         .insert({
           atendimento_id: atendimentoId,
@@ -250,12 +254,19 @@ export async function POST(req: NextRequest) {
         .select('id')
         .single()
 
+      if (pecaError || !peca) {
+        console.error('[gerar-peca] erro ao criar peça (fallback):', pecaError?.message)
+        return NextResponse.json({ error: 'Erro ao criar registro da peça' }, { status: 500 })
+      }
+
+      const { stream } = await streamCompletion({ system: fallback.system, prompt, maxTokens: 32768 })
+
       return new Response(stream, {
         headers: {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
-          'X-Peca-Id': peca?.id ?? '',
+          'X-Peca-Id': peca.id,
           'Access-Control-Expose-Headers': 'X-Peca-Id',
         },
       })
@@ -280,8 +291,8 @@ export async function POST(req: NextRequest) {
       prompt += `\n\n${jurisprudenciaTexto}\n\nUse a jurisprudência acima como referência para fundamentar a peça. Cite os processos relevantes quando aplicável.`
     }
 
-    // Criar peça no banco (status rascunho)
-    const { data: peca } = await supabase
+    // Criar peça no banco (status rascunho) ANTES do stream → X-Peca-Id sempre válido
+    const { data: peca, error: pecaError } = await supabase
       .from('pecas')
       .insert({
         atendimento_id: atendimentoId,
@@ -296,6 +307,11 @@ export async function POST(req: NextRequest) {
       })
       .select('id')
       .single()
+
+    if (pecaError || !peca) {
+      console.error('[gerar-peca] erro ao criar peça:', pecaError?.message)
+      return NextResponse.json({ error: 'Erro ao criar registro da peça' }, { status: 500 })
+    }
 
     const { stream, getUsage } = await streamCompletion({
       system: promptConfig.system,
@@ -314,14 +330,14 @@ export async function POST(req: NextRequest) {
         tokensOutput: usage.output,
         latenciaMs: Date.now() - start,
       })
-    }).catch(() => {})
+    }).catch((e) => console.error('[logUsage] erro pós-stream (gerar_peca):', e))
 
     return new Response(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
-        'X-Peca-Id': peca?.id ?? '',
+        'X-Peca-Id': peca.id,
         'Access-Control-Expose-Headers': 'X-Peca-Id',
       },
     })

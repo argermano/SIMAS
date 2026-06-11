@@ -228,17 +228,23 @@ export async function POST(
     return NextResponse.json({ error: 'Contrato sem conteúdo para assinar' }, { status: 400 })
   }
 
-  // TODO: restaurar verificação de assinatura ativa após testes
-  // const { data: assinaturaExistente } = await supabase
-  //   .from('contract_signatures')
-  //   .select('id, status')
-  //   .eq('contrato_id', id)
-  //   .not('status', 'in', '("cancelled")')
-  //   .maybeSingle()
-  //
-  // if (assinaturaExistente && ['waiting_signatures', 'uploaded', 'signers_registered'].includes(assinaturaExistente.status)) {
-  //   return NextResponse.json({ error: 'Já existe um processo de assinatura ativo para este contrato' }, { status: 409 })
-  // }
+  // Impede múltiplos processos de assinatura simultâneos (race / dupla submissão).
+  // Defesa em profundidade: além desta checagem, há um índice UNIQUE parcial no BD
+  // (migration 027) que garante atomicidade mesmo com requisições concorrentes.
+  const { data: assinaturaAtiva } = await supabase
+    .from('contract_signatures')
+    .select('id, status')
+    .eq('contrato_id', id)
+    .in('status', ['uploaded', 'signers_registered', 'waiting_signatures'])
+    .limit(1)
+    .maybeSingle()
+
+  if (assinaturaAtiva) {
+    return NextResponse.json(
+      { error: 'Já existe um processo de assinatura ativo para este contrato' },
+      { status: 409 }
+    )
+  }
 
   // Validar body
   const body = await req.json()

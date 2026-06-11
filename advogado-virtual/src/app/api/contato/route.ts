@@ -6,12 +6,51 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
+// Rate limiting in-memory (best-effort; por instância em ambiente serverless).
+// Para limite global robusto, migrar para Upstash Redis.
+const RATE_LIMIT_MAX = 5
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000 // 1 hora
+const acessosPorIp = new Map<string, number[]>()
+
+function rateLimited(ip: string): boolean {
+  const agora = Date.now()
+  const inicioJanela = agora - RATE_LIMIT_WINDOW_MS
+  const hits = (acessosPorIp.get(ip) ?? []).filter((t) => t > inicioJanela)
+  hits.push(agora)
+  acessosPorIp.set(ip, hits)
+  // Limpeza oportunista para não crescer indefinidamente
+  if (acessosPorIp.size > 5000) {
+    for (const [k, v] of acessosPorIp) {
+      if (v.every((t) => t <= inicioJanela)) acessosPorIp.delete(k)
+    }
+  }
+  return hits.length > RATE_LIMIT_MAX
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { nome, email, telefone } = await req.json() as {
+    const { nome, email, telefone, website } = await req.json() as {
       nome?: string
       email?: string
       telefone?: string
+      website?: string // honeypot — deve vir vazio
+    }
+
+    // Honeypot: bots preenchem campos ocultos. Finge sucesso sem processar.
+    if (website && website.trim()) {
+      return NextResponse.json({ ok: true })
+    }
+
+    // Rate limiting por IP
+    const ip =
+      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') ||
+      'desconhecido'
+    if (rateLimited(ip)) {
+      return NextResponse.json(
+        { error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' },
+        { status: 429 }
+      )
     }
 
     if (!nome?.trim() || !email?.trim()) {
@@ -37,7 +76,7 @@ export async function POST(req: NextRequest) {
         const resend = new Resend(process.env.RESEND_API_KEY)
         await resend.emails.send({
           from: 'SIMAS <contato@simas.app>',
-          to: 'argermano@gmail.com',
+          to: process.env.CONTACT_REPLY_EMAIL ?? 'argermano@gmail.com',
           subject: `Novo contato SIMAS — ${nome.trim()}`,
           html: emailTemplate({
             titulo: 'Novo contato via landing page',

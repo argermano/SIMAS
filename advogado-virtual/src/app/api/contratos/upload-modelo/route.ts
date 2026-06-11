@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { detectarTipoReal } from '@/lib/file-validation'
 
 // POST /api/contratos/upload-modelo — upload do modelo de contrato do advogado
 // Extrai texto do PDF/DOCX e salva no Storage
@@ -36,6 +37,16 @@ export async function POST(req: NextRequest) {
 
   const arrayBuffer = await arquivo.arrayBuffer()
   const buffer      = Buffer.from(arrayBuffer)
+
+  // Valida o conteúdo real (magic bytes) — não confiar no file.type do cliente
+  const tipoReal = detectarTipoReal(buffer)
+  const tipoEsperado = arquivo.type === 'application/pdf' ? 'pdf' : 'zip' // DOCX = contêiner ZIP
+  if (tipoReal !== tipoEsperado) {
+    return NextResponse.json(
+      { error: 'O conteúdo do arquivo não corresponde ao tipo declarado (PDF ou DOCX).' },
+      { status: 400 }
+    )
+  }
 
   // Upload para Storage
   const timestamp = Date.now()

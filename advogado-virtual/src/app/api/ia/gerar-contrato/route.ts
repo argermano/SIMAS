@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { streamCompletion } from '@/lib/anthropic/client'
+import { decryptClienteFields } from '@/lib/encryption'
 import {
   buildPromptContratoHonorarios,
   SYSTEM_CONTRATO_HONORARIOS,
@@ -56,12 +57,13 @@ export async function POST(req: NextRequest) {
 
     if (!contrato) return NextResponse.json({ error: 'Contrato não encontrado' }, { status: 404 })
 
-    const cliente = contrato.clientes as {
+    // Decifra CPF/RG (criptografados em repouso) antes de montar o contrato
+    const cliente = decryptClienteFields(contrato.clientes as {
       nome?: string; cpf?: string; rg?: string; orgao_expedidor?: string
       estado_civil?: string; nacionalidade?: string; profissao?: string
       telefone?: string; email?: string; endereco?: string; bairro?: string
       cidade?: string; estado?: string; cep?: string
-    } | null
+    } | null)
     const atendimento = contrato.atendimentos as { transcricao_editada?: string; transcricao_raw?: string; pedidos_especificos?: string; area?: string } | null
 
     const resumoCaso = atendimento
