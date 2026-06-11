@@ -20,6 +20,7 @@ const config: Config = {
         heading: ['Plus Jakarta Sans', 'sans-serif'],
         body: ['Inter', 'sans-serif'],
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        serif: ['Lora', 'Georgia', 'Times New Roman', 'serif'],
       },
       fontSize: {
         'xs':   ['0.8125rem', { lineHeight: '1.25rem' }],

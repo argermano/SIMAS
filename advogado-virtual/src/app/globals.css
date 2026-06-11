@@ -1,77 +1,139 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lora:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────
-   Design Tokens (CSS Variables)
+   Design Tokens (CSS Variables) — identidade "ardósia + dourado"
    ───────────────────────────────────────────────────────────── */
 
 @layer base {
   :root {
     --font-heading: 'Plus Jakarta Sans', sans-serif;
+    --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
     --font-body: 'Inter', sans-serif;
 
-    --background: 220 20% 97%;
-    --foreground: 225 25% 15%;
+    /* Marfim suave (editorial) */
+    --background: 40 25% 97%;
+    --foreground: 222 24% 16%;
 
     --card: 0 0% 100%;
-    --card-foreground: 225 25% 15%;
+    --card-foreground: 222 24% 16%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 225 25% 15%;
+    --popover-foreground: 222 24% 16%;
 
-    --primary: 234 65% 55%;
+    /* Azul-ardósia profundo (autoridade) */
+    --primary: 217 39% 27%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 250 70% 65%;
+    --primary-glow: 216 35% 44%;
 
-    --secondary: 230 30% 94%;
-    --secondary-foreground: 234 65% 55%;
+    --secondary: 216 28% 92%;
+    --secondary-foreground: 217 39% 27%;
 
-    --muted: 220 20% 95%;
-    --muted-foreground: 220 10% 50%;
+    --muted: 40 16% 94%;
+    --muted-foreground: 220 12% 42%;
 
-    --accent: 234 65% 55%;
-    --accent-foreground: 0 0% 100%;
+    /* Dourado (prestígio) — texto escuro sobre o dourado */
+    --accent: 40 62% 46%;
+    --accent-foreground: 222 24% 14%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 0 70% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 60% 45%;
+    --success: 152 55% 38%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 92% 55%;
+    --warning: 35 92% 38%;
     --warning-foreground: 0 0% 100%;
 
-    --info: 200 80% 55%;
+    --info: 202 80% 40%;
     --info-foreground: 0 0% 100%;
 
-    --border: 224 20% 90%;
-    --input: 224 20% 90%;
-    --ring: 234 65% 55%;
+    --border: 40 16% 88%;
+    --input: 40 16% 88%;
+    --ring: 217 39% 30%;
 
     --radius: 0.75rem;
 
-    --sidebar-background: 234 65% 20%;
-    --sidebar-foreground: 230 30% 85%;
+    /* Navy quente (sidebar) com realce dourado no foco */
+    --sidebar-background: 216 44% 17%;
+    --sidebar-foreground: 216 22% 82%;
     --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 234 65% 20%;
-    --sidebar-accent: 234 50% 30%;
+    --sidebar-primary-foreground: 216 44% 17%;
+    --sidebar-accent: 216 34% 26%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 234 40% 28%;
-    --sidebar-ring: 234 65% 55%;
-    --sidebar-muted: 234 30% 40%;
+    --sidebar-border: 216 30% 25%;
+    --sidebar-ring: 40 62% 50%;
+    --sidebar-muted: 216 18% 55%;
 
-    --gradient-primary: linear-gradient(135deg, hsl(234, 65%, 55%), hsl(250, 70%, 65%));
-    --gradient-sidebar: linear-gradient(180deg, hsl(234, 65%, 22%), hsl(234, 65%, 16%));
-    --gradient-card-hover: linear-gradient(135deg, hsl(234, 65%, 55%) 0%, hsl(250, 70%, 65%) 100%);
+    /* Editor de peças — tokenizado (sempre papel branco / texto escuro) */
+    --editor-text: 222 25% 12%;
+    --editor-muted: 220 12% 38%;
+    --editor-border: 220 14% 85%;
+    --editor-th-bg: 40 20% 97%;
+    --editor-placeholder: 220 10% 62%;
+    --marker-preencher: 45 93% 47%;
+    --marker-verificar: 24 94% 58%;
 
-    --shadow-sm: 0 1px 3px hsl(234 65% 20% / 0.06);
-    --shadow-md: 0 4px 12px hsl(234 65% 20% / 0.08);
-    --shadow-lg: 0 8px 30px hsl(234 65% 20% / 0.12);
-    --shadow-card: 0 1px 3px hsl(234 65% 20% / 0.04), 0 4px 12px hsl(234 65% 20% / 0.04);
-    --shadow-card-hover: 0 8px 30px hsl(234 65% 20% / 0.1);
+    --gradient-primary: linear-gradient(135deg, hsl(217 39% 27%), hsl(216 35% 44%));
+    --gradient-sidebar: linear-gradient(180deg, hsl(216 44% 19%), hsl(216 44% 13%));
+    --gradient-card-hover: linear-gradient(135deg, hsl(217 39% 27%) 0%, hsl(216 35% 44%) 100%);
+
+    --shadow-sm: 0 1px 3px hsl(217 39% 18% / 0.06);
+    --shadow-md: 0 4px 12px hsl(217 39% 18% / 0.08);
+    --shadow-lg: 0 8px 30px hsl(217 39% 18% / 0.12);
+    --shadow-card: 0 1px 3px hsl(217 39% 18% / 0.04), 0 4px 12px hsl(217 39% 18% / 0.04);
+    --shadow-card-hover: 0 8px 30px hsl(217 39% 18% / 0.1);
+  }
+
+  /* Tema escuro (ativado pela classe .dark no <html>). O "papel" do editor
+     permanece branco — por isso os tokens --editor-* NÃO são sobrescritos. */
+  .dark {
+    --background: 222 24% 10%;
+    --foreground: 216 20% 92%;
+
+    --card: 222 22% 14%;
+    --card-foreground: 216 20% 92%;
+
+    --popover: 222 22% 14%;
+    --popover-foreground: 216 20% 92%;
+
+    --primary: 216 55% 62%;
+    --primary-foreground: 222 35% 12%;
+    --primary-glow: 216 50% 55%;
+
+    --secondary: 217 24% 22%;
+    --secondary-foreground: 216 20% 92%;
+
+    --muted: 222 16% 20%;
+    --muted-foreground: 216 14% 64%;
+
+    --accent: 40 60% 55%;
+    --accent-foreground: 222 35% 12%;
+
+    --destructive: 0 65% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 48% 50%;
+    --success-foreground: 222 35% 12%;
+
+    --warning: 38 80% 54%;
+    --warning-foreground: 222 35% 12%;
+
+    --info: 202 72% 56%;
+    --info-foreground: 222 35% 12%;
+
+    --border: 222 16% 24%;
+    --input: 222 16% 24%;
+    --ring: 216 55% 62%;
+
+    --shadow-sm: 0 1px 3px hsl(0 0% 0% / 0.3);
+    --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.3);
+    --shadow-lg: 0 8px 30px hsl(0 0% 0% / 0.4);
+    --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.3), 0 4px 12px hsl(0 0% 0% / 0.25);
+    --shadow-card-hover: 0 8px 30px hsl(0 0% 0% / 0.35);
   }
 }
 
@@ -97,6 +159,11 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-heading);
+  }
+
+  /* Tipografia editorial (serifada) — aplicar com a classe utilitária .font-serif */
+  .font-serif {
+    font-family: var(--font-serif);
   }
 
   :focus-visible {
@@ -131,7 +198,7 @@
   font-family: var(--doc-font, 'Times New Roman', Times, serif);
   font-size: var(--doc-size, 12pt);
   line-height: var(--doc-line-height, 1.5);
-  color: #111827;
+  color: hsl(var(--editor-text));
 }
 
 /* Endereçamento ao juiz — primeira linha do documento */
@@ -146,7 +213,7 @@
 .ProseMirror h1 {
   font-size: 13pt;
   font-weight: 700;
-  color: #111827;
+  color: hsl(var(--editor-text));
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -157,7 +224,7 @@
 .ProseMirror h2 {
   font-size: 12pt;
   font-weight: 700;
-  color: #111827;
+  color: hsl(var(--editor-text));
   text-transform: uppercase;
   text-align: center;
   margin-top: 1.5rem;
@@ -167,7 +234,7 @@
 .ProseMirror h3 {
   font-size: 12pt;
   font-weight: 700;
-  color: #111827;
+  color: hsl(var(--editor-text));
   margin-top: 1.25rem;
   margin-bottom: 0.5rem;
 }
@@ -185,7 +252,7 @@
   text-indent: var(--doc-indent, 1.25cm);
 }
 
-.ProseMirror strong { font-weight: 700; color: #111827; }
+.ProseMirror strong { font-weight: 700; color: hsl(var(--editor-text)); }
 .ProseMirror em     { font-style: italic; }
 .ProseMirror u      { text-decoration: underline; }
 .ProseMirror s      { text-decoration: line-through; }
@@ -204,15 +271,15 @@
 }
 
 .ProseMirror blockquote {
-  border-left: 4px solid #d1d5db;
+  border-left: 4px solid hsl(var(--editor-border));
   padding: 0.5rem 1rem;
   margin: 0.75rem 0;
   font-style: italic;
-  color: #4b5563;
+  color: hsl(var(--editor-muted));
 }
 
 .ProseMirror a {
-  color: hsl(234, 65%, 55%);
+  color: hsl(var(--primary));
   text-decoration: underline;
   cursor: pointer;
 }
@@ -232,17 +299,17 @@
 }
 .ProseMirror th,
 .ProseMirror td {
-  border: 1px solid #d1d5db;
+  border: 1px solid hsl(var(--editor-border));
   padding: 0.5rem 0.75rem;
   vertical-align: top;
 }
 .ProseMirror th {
-  background-color: #f9fafb;
+  background-color: hsl(var(--editor-th-bg));
   font-weight: 600;
   text-align: left;
 }
 .ProseMirror .selectedCell:after {
-  background: hsla(234, 65%, 55%, 0.08);
+  background: hsl(var(--primary) / 0.08);
   content: '';
   left: 0;
   right: 0;
@@ -253,7 +320,7 @@
   z-index: 2;
 }
 .ProseMirror .column-resize-handle {
-  background-color: hsl(234, 65%, 55%);
+  background-color: hsl(var(--primary));
   bottom: -2px;
   position: absolute;
   right: -2px;
@@ -264,7 +331,7 @@
 
 /* Placeholder */
 .ProseMirror p.is-editor-empty:first-child::before {
-  color: #9ca3af;
+  color: hsl(var(--editor-placeholder));
   content: attr(data-placeholder);
   float: left;
   height: 0;
@@ -273,14 +340,14 @@
 
 /* Destaque de campos [PREENCHER] e [VERIFICAR] */
 .ProseMirror .placeholder-preencher {
-  background-color: rgba(234, 179, 8, 0.25);
-  border-bottom: 2px solid rgb(234, 179, 8);
+  background-color: hsl(var(--marker-preencher) / 0.25);
+  border-bottom: 2px solid hsl(var(--marker-preencher));
   border-radius: 2px;
   padding: 0 2px;
 }
 .ProseMirror .placeholder-verificar {
-  background-color: rgba(251, 146, 60, 0.25);
-  border-bottom: 2px solid rgb(251, 146, 60);
+  background-color: hsl(var(--marker-verificar) / 0.25);
+  border-bottom: 2px solid hsl(var(--marker-verificar));
   border-radius: 2px;
   padding: 0 2px;
 }
@@ -327,5 +394,15 @@
 
   .h-13 {
     height: 3.25rem;
+  }
+}
+
+/* Acessibilidade: respeitar quem prefere menos movimento */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
