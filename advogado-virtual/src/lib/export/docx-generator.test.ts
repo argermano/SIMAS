@@ -29,6 +29,14 @@ describe('limparMarkdownParaDocx', () => {
     expect(out).not.toMatch(/^ {4}/m)
     expect(out).not.toMatch(/^\t/m)
   })
+
+  it('converte links markdown de e-mail/URL em texto puro', () => {
+    const out = limparMarkdownParaDocx('e-mail [lico@gmail.com](mailto:lico@gmail.com) e site [aqui](https://x.com)')
+    expect(out).toContain('lico@gmail.com')
+    expect(out).not.toContain('mailto:')
+    expect(out).not.toContain('](')
+    expect(out).toContain('aqui')
+  })
 })
 
 describe('markdownToDocx — artefatos não vazam para o documento', () => {

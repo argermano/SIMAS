@@ -16,4 +16,7 @@ export function limparMarkdownParaDocx(markdown: string): string {
     .join('\n')
     .replace(/^[ \t]+/gm, '') // remove indentação que vira "bloco de código"
     .replace(/\\([[\]().!_~|{}+])/g, '$1')
+    // Links markdown de e-mail/URL viram texto puro (peça não tem hyperlink):
+    // [lico@gmail.com](mailto:lico@gmail.com) → lico@gmail.com
+    .replace(/\[([^\]]+)\]\((?:https?:|mailto:|tel:)[^)]*\)/gi, '$1')
 }
