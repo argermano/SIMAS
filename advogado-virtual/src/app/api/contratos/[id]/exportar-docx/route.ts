@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { markdownToDocx } from '@/lib/export/docx-generator'
-import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
+import { resolverEstiloEfetivo } from '@/lib/format/estilo-documento'
 
 // POST /api/contratos/[id]/exportar-docx
 // Usa o gerador DOCX único (markdownToDocx) com o estilo do escritório.
@@ -35,7 +35,7 @@ export async function POST(
     .update({ status: 'exportado' })
     .eq('id', id)
 
-  const estilo = await carregarEstiloTenant(supabase, usuario.tenant_id)
+  const estilo = await resolverEstiloEfetivo(supabase, usuario.tenant_id, { tipo: 'contrato' })
   const buffer = await markdownToDocx(contrato.conteudo_markdown, {
     titulo: contrato.titulo ?? 'Contrato',
     estilo,

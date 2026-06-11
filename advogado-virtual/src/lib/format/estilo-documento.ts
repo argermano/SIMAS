@@ -117,3 +117,53 @@ export async function carregarEstiloTenant(
     return DEFAULT_ABNT
   }
 }
+
+/** Estilo extraído do modelo (.docx) do escritório — subtipo específico > 'todos'. */
+async function buscarEstiloModelo(
+  supabase: SupabaseClient,
+  tenantId: string,
+  tipo: string,
+  subtipo: string,
+): Promise<Partial<EstiloDocumento> | null> {
+  try {
+    const { data: esp } = await supabase
+      .from('modelos_documento')
+      .select('estilo_config')
+      .eq('tenant_id', tenantId).eq('tipo', tipo).eq('subtipo', subtipo)
+      .maybeSingle()
+    if (esp?.estilo_config) return esp.estilo_config as Partial<EstiloDocumento>
+
+    const { data: geral } = await supabase
+      .from('modelos_documento')
+      .select('estilo_config')
+      .eq('tenant_id', tenantId).eq('tipo', tipo).eq('subtipo', 'todos')
+      .maybeSingle()
+    return (geral?.estilo_config as Partial<EstiloDocumento> | undefined) ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Estilo EFETIVO aplicado na exportação:
+ *   estilo do modelo (.docx do escritório) > padrão do escritório > DEFAULT_ABNT.
+ * Sem `modelo`, usa apenas o padrão do escritório.
+ */
+export async function resolverEstiloEfetivo(
+  supabase: SupabaseClient,
+  tenantId: string,
+  modelo?: { tipo: string; subtipo?: string } | null,
+): Promise<EstiloDocumento> {
+  const base = await carregarEstiloTenant(supabase, tenantId) // escritório > default
+  if (!modelo) return base
+
+  const estiloModelo = await buscarEstiloModelo(supabase, tenantId, modelo.tipo, modelo.subtipo ?? 'todos')
+  if (!estiloModelo) return base
+
+  // modelo sobrescreve o escritório (campos ausentes no modelo permanecem do escritório)
+  return {
+    ...base,
+    ...estiloModelo,
+    margensCm: { ...base.margensCm, ...(estiloModelo.margensCm ?? {}) },
+  }
+}

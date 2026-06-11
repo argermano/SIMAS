@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { extrairEstiloDocx } from '@/lib/modelos/extrair-estilo-docx'
 
 const TIPOS_VALIDOS = ['peca', 'contrato', 'procuracao', 'declaracao', 'substabelecimento']
 
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
 
   let conteudoMarkdown = ''
   let fileUrl: string | null = null
+  let estiloConfig: Awaited<ReturnType<typeof extrairEstiloDocx>> = null
 
   if (arquivo && arquivo.size > 0) {
     const MAX_BYTES = 10 * 1024 * 1024
@@ -91,6 +93,8 @@ export async function POST(req: NextRequest) {
         const mammoth = await import('mammoth')
         const result = await mammoth.extractRawText({ buffer })
         conteudoMarkdown = result.value?.trim() ?? ''
+        // Extrai o estilo real do .docx (fonte/margens/entrelinha/cabeçalho)
+        estiloConfig = await extrairEstiloDocx(buffer)
       } else {
         // Texto puro
         conteudoMarkdown = new TextDecoder().decode(buffer).trim()
@@ -113,6 +117,7 @@ export async function POST(req: NextRequest) {
       titulo: titulo.trim(),
       descricao: descricao?.trim() || null,
       conteudo_markdown: conteudoMarkdown || null,
+      estilo_config: estiloConfig,
       file_url: fileUrl,
       created_by: usuario.id,
     })
