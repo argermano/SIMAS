@@ -1,7 +1,9 @@
+import type { CSSProperties } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TaskDueNotification } from '@/components/layout/TaskDueNotification'
+import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
 import { LABELS_ROLE } from '@/types'
 
 export default async function DashboardLayout({
@@ -27,8 +29,20 @@ export default async function DashboardLayout({
   const roleUsuario    = LABELS_ROLE[roleRaw as keyof typeof LABELS_ROLE] ?? 'Advogado(a)'
   const nomeEscritorio = (usuario?.tenants as { nome?: string } | null)?.nome ?? 'Meu Escritório'
 
+  // Estilo de formatação do escritório → CSS vars herdadas por editores/previews
+  // (.ProseMirror e o preview do EditorPeca leem var(--doc-*) com fallback ABNT).
+  const estilo = usuario?.tenant_id ? await carregarEstiloTenant(supabase, usuario.tenant_id) : null
+  const docVars = estilo
+    ? ({
+        '--doc-font': `'${estilo.fonte}', 'Times New Roman', serif`,
+        '--doc-size': `${estilo.tamanhoPt}pt`,
+        '--doc-line-height': `${estilo.entrelinha}`,
+        '--doc-indent': `${estilo.recuoPrimeiraLinhaCm}cm`,
+      } as CSSProperties)
+    : undefined
+
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background" style={docVars}>
       <Sidebar
         nomeUsuario={nomeUsuario}
         nomeEscritorio={nomeEscritorio}

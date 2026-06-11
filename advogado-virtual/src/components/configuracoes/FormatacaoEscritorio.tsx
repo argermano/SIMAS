@@ -199,6 +199,29 @@ export function FormatacaoEscritorio() {
           Numerar páginas no rodapé
         </label>
 
+        {/* Live preview — atualiza conforme os campos */}
+        <div>
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Pré-visualização</span>
+          <div
+            className="mt-1 rounded-lg border bg-white p-5 text-foreground"
+            style={{ fontFamily: `'${form.fonte}', 'Times New Roman', serif`, lineHeight: form.entrelinha }}
+          >
+            <p className="text-center font-bold uppercase" style={{ fontSize: `${form.tamanho_pt}pt` }}>
+              Petição Inicial
+            </p>
+            <p className="mt-3 font-bold uppercase" style={{ fontSize: `${form.tamanho_pt}pt` }}>
+              I – DOS FATOS
+            </p>
+            <p className="text-justify" style={{ fontSize: `${form.tamanho_pt}pt`, textIndent: `${form.recuo_primeira_linha_cm}cm` }}>
+              Trata-se de exemplo de parágrafo para visualizar a formatação aplicada às peças do
+              escritório, com recuo de primeira linha, justificação e entrelinha conforme definido acima.
+            </p>
+            <p className="italic" style={{ fontSize: `${form.tamanho_ementa_pt}pt`, marginLeft: `${Math.min(form.recuo_blockquote_cm, 3)}cm` }}>
+              &quot;Ementa de exemplo de citação de jurisprudência, em itálico e recuada.&quot;
+            </p>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2 pt-2">
           <Button onClick={salvar} disabled={salvando}>
             {salvando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
