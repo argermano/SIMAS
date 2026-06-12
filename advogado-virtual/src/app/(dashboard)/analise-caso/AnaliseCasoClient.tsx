@@ -13,6 +13,7 @@ import { TranscricaoActions } from '@/components/atendimento/TranscricaoActions'
 import type { ResultadoAnaliseGeral } from '@/app/api/ia/analise-geral/route'
 import { MicrofoneInline } from '@/components/atendimento/MicrofoneInline'
 import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
+import { PecasPorArea, type PecaExistente } from '@/components/atendimento/PecasPorArea'
 import { SeletorVersaoIA } from '@/components/atendimento/SeletorVersaoIA'
 import { VERSAO_IA_PADRAO, type VersaoIA } from '@/lib/anthropic/versoes'
 import { AREAS } from '@/lib/constants/areas'
@@ -60,6 +61,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
   const [carregando,       setCarregando]       = useState(!!atendimentoIdInicial)
   const [salvando,         setSalvando]         = useState(false)
   const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string }>>([])
+  const [pecasExistentes, setPecasExistentes] = useState<PecaExistente[]>([])
   // Anexo de resumo/transcrição no modo "Digitar": o texto extraído entra no relato (e na análise)
   const arquivoTextoRef = useRef<HTMLInputElement>(null)
   const [extraindoArquivo, setExtraindoArquivo] = useState(false)
@@ -129,8 +131,9 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
         if (at.pedidos_especificos) setPedido(at.pedidos_especificos)
         if (at.modo_input === 'texto') setModoInput('texto')
         else setModoInput('pos_reuniao')
-        // Carregar documentos existentes
+        // Carregar documentos e peças existentes (para a "casa do caso")
         if (at.documentos) setDocumentosExistentes(at.documentos)
+        if (at.pecas) setPecasExistentes(at.pecas)
         // Carregar diagnóstico salvo
         const analises = at.analises as Array<{ id: string; plano_a: ResultadoAnaliseGeral }> | undefined
         if (analises && analises.length > 0 && analises[0].plano_a) {
@@ -500,6 +503,25 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
               tiposDocumento={['rg_cpf', 'comprovante_residencia', 'cnis', 'ctps', 'outro']}
               documentosIniciais={documentosExistentes}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Peças do caso — a "casa do caso": mostra as peças geradas, agrupadas por área */}
+      {atendimentoId && pecasExistentes.length > 0 && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <FileText className="h-5 w-5 text-primary" />
+              Peças do caso
+              <span className="ml-1 text-xs font-normal text-muted-foreground">({pecasExistentes.length})</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PecasPorArea pecas={pecasExistentes} />
+            <p className="mt-3 text-xs text-muted-foreground">
+              Para gerar uma nova peça, use &quot;Aprofundar análise&quot; na área desejada.
+            </p>
           </CardContent>
         </Card>
       )}
