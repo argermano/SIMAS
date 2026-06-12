@@ -60,6 +60,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
   // Campos extras por tipo
   const [objeto, setObjeto]                         = useState('')
   const [rendaMensal, setRendaMensal]               = useState('')
+  const [numeroDependentes, setNumeroDependentes]   = useState('')
   const [nomeSubstabelecido, setNomeSubstabelecido] = useState('')
   const [oabSubstabelecido, setOabSubstabelecido]   = useState('')
   const [objetoNotificacao, setObjetoNotificacao]   = useState('')
@@ -96,6 +97,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
     const campos: Record<string, string> = {}
     if (objeto)              campos.objeto               = objeto
     if (rendaMensal)         campos.renda_mensal         = rendaMensal
+    if (numeroDependentes)   campos.numero_dependentes   = numeroDependentes
     if (nomeSubstabelecido)  campos.nome_substabelecido  = nomeSubstabelecido
     if (oabSubstabelecido)   campos.oab_substabelecido   = oabSubstabelecido
     if (objetoNotificacao)   campos.objeto_notificacao   = objetoNotificacao
@@ -301,13 +303,23 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
               Dados adicionais <span className="text-sm font-normal text-muted-foreground">(opcional)</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <Input
-              label="Renda mensal aproximada"
-              value={rendaMensal}
-              onChange={(e) => setRendaMensal(e.target.value)}
-              placeholder="Ex.: R$ 1.500,00"
-            />
+          <CardContent className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 sm:col-span-1">
+              <Input
+                label="Renda mensal aproximada"
+                value={rendaMensal}
+                onChange={(e) => setRendaMensal(e.target.value)}
+                placeholder="Ex.: R$ 1.500,00"
+              />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <Input
+                label="Número de dependentes"
+                value={numeroDependentes}
+                onChange={(e) => setNumeroDependentes(e.target.value)}
+                placeholder="Ex.: 2"
+              />
+            </div>
           </CardContent>
         </Card>
       )}

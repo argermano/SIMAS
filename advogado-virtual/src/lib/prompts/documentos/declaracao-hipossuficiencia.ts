@@ -27,8 +27,12 @@ Retorne APENAS o texto Markdown da declaração, sem explicações adicionais.`
 
 export function buildPromptDeclaracao({
   cliente,
+  rendaMensal,
+  numeroDependentes,
 }: {
   cliente: { nome: string; cpf?: string | null; endereco?: string | null; cidade?: string | null; estado?: string | null }
+  rendaMensal?: string | null
+  numeroDependentes?: string | null
 }): string {
   return `Gere uma declaração de hipossuficiência econômica para gratuidade da justiça com os seguintes dados conhecidos:
 
@@ -38,9 +42,12 @@ DECLARANTE:
 - Endereço: ${cliente.endereco ?? '[use {{endereco_cliente}}]'}
 - Cidade: ${cliente.cidade ?? '[use {{cidade_cliente}}]'}
 - Estado: ${cliente.estado ?? '[use {{estado_cliente}}]'}
+${rendaMensal ? `- Renda mensal aproximada: ${rendaMensal}` : ''}
+${numeroDependentes ? `- Número de dependentes: ${numeroDependentes}` : ''}
 
-Use {{renda_mensal}} e {{numero_dependentes}} como variáveis a preencher.
+${rendaMensal ? 'Use o valor de renda informado acima (não use placeholder para a renda).' : 'Use {{renda_mensal}} para a renda mensal.'}
+${numeroDependentes ? 'Use o número de dependentes informado acima.' : 'Se mencionar dependentes, use {{numero_dependentes}}; não invente um número.'}
 Use {{data_extenso}} para a data de assinatura.
 
-Gere o template com {{variavel}} em TODOS os campos que devem ser personalizados por cliente.`
+Gere o template com {{variavel}} APENAS nos campos do declarante que mudam por cliente; não deixe placeholders para dados já informados acima.`
 }

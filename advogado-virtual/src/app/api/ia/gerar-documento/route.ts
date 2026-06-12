@@ -117,6 +117,8 @@ export async function POST(req: NextRequest) {
       system = SYSTEM_DECLARACAO
       prompt = buildPromptDeclaracao({
         cliente: { nome: cliente.nome, cpf: cliente.cpf, endereco: cliente.endereco, cidade: cliente.cidade, estado: cliente.estado },
+        rendaMensal: camposExtras?.renda_mensal,
+        numeroDependentes: camposExtras?.numero_dependentes,
       })
     } else if (tipo === 'substabelecimento') {
       system = SYSTEM_SUBSTABELECIMENTO
