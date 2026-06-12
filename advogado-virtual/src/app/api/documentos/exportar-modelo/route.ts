@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   const { data: tenant } = await supabase
     .from('tenants')
-    .select('nome, nome_responsavel, oab_numero, oab_estado, cpf_responsavel, rg_responsavel, orgao_expedidor, estado_civil, nacionalidade, telefone, email_profissional, endereco, bairro, cidade, estado, cep')
+    .select('nome, cnpj, nome_responsavel, oab_numero, oab_estado, cpf_responsavel, rg_responsavel, orgao_expedidor, estado_civil, nacionalidade, telefone, email_profissional, endereco, bairro, cidade, estado, cep')
     .eq('id', usuario.tenant_id)
     .single()
 

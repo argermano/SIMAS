@@ -5,6 +5,7 @@ const HOJE = new Date('2026-06-11T12:00:00-03:00')
 
 const TENANT = {
   nome: 'Silva Advocacia',
+  cnpj: '12.345.678/0001-99',
   nome_responsavel: 'Dr. João Silva',
   oab_numero: '12345',
   oab_estado: 'SP',
@@ -59,6 +60,7 @@ describe('montarPlaceholders', () => {
     expect(d.cpf_cliente).toBe('123.456.789-00')
     expect(d.profissao_cliente).toBe('professora')
     expect(d.escritorio).toBe('Silva Advocacia')
+    expect(d.cnpj_escritorio).toBe('12.345.678/0001-99')
     expect(d.nome_advogado).toBe('Dr. João Silva')
     expect(d.oab).toBe('12345/SP')
     expect(d.numero_oab).toBe('12345')

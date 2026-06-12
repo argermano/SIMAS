@@ -43,13 +43,15 @@ Vale para: **contrato**, **procuração**, **declaração** e **substabeleciment
 ### Advogado / escritório
 | Placeholder | Conteúdo |
 |---|---|
-| `{{escritorio}}` | Nome do escritório |
+| `{{escritorio}}` | Nome do escritório / sociedade |
+| `{{cnpj_escritorio}}` | CNPJ do escritório |
 | `{{nome_advogado}}` | Nome do responsável |
 | `{{oab}}` | OAB completa (ex.: `12345/SP`) |
 | `{{numero_oab}}` | Número da OAB (sem UF) |
 | `{{estado_oab}}` | Seccional/UF da OAB |
 | `{{cpf_advogado}}` | CPF do responsável |
 | `{{rg_advogado}}` | RG do responsável |
+| `{{orgao_expedidor_advogado}}` | Órgão expedidor do RG do responsável |
 | `{{estado_civil_advogado}}` | Estado civil |
 | `{{nacionalidade_advogado}}` | Nacionalidade |
 | `{{endereco_escritorio}}` | Endereço do escritório |
@@ -91,3 +93,39 @@ Vale para: **contrato**, **procuração**, **declaração** e **substabeleciment
 |---|---|
 | `{{nome_substabelecido}}` | Nome do advogado substabelecido |
 | `{{oab_substabelecido}}` | OAB do substabelecido (ex.: `12345/SP`) |
+
+---
+
+## Exemplo pronto: procuração
+
+Cole este texto num `.docx` do Word (com a sua formatação), salve e faça o upload em
+Configurações → Padrões (tipo "procuração"). Os dados do cliente entram dos placeholders;
+os dados do escritório podem ficar **fixos** (sempre os mesmos) ou usar placeholders.
+
+```
+PROCURAÇÃO
+
+Pelo presente instrumento particular de procuração, o(a) outorgante {{nome_cliente}},
+{{nacionalidade_cliente}}, {{estado_civil_cliente}}, portador(a) do RG n. {{rg_cliente}}
+{{orgao_expedidor_cliente}}, inscrito(a) no CPF sob o n. {{cpf_cliente}}, residente e
+domiciliado(a) na {{endereco_cliente}}, {{cidade_cliente}}/{{estado_cliente}}; constitui e
+nomeia sua bastante procuradora {{escritorio}}, CNPJ n. {{cnpj_escritorio}}, representada
+pela advogada {{nome_advogado}}, inscrita na OAB {{oab}}, CPF n. {{cpf_advogado}}, RG n.
+{{rg_advogado}} {{orgao_expedidor_advogado}}, para a finalidade de {{objeto}}, com poderes
+para atuação no foro em geral, estabelecidos no art. 105 do CPC, por mais amplos que sejam,
+desde que indispensáveis ao fim pretendido, inclusive os poderes de receber citação inicial,
+confessar, reconhecer a procedência do pedido, transigir, desistir, renunciar ao direito em que
+se funda a ação, firmar compromisso, levantar alvará, receber e dar quitação e tudo o mais
+fazer para o bom e fiel cumprimento deste mandato, agindo in solidum ou separadamente, e
+ainda substabelecer.
+
+{{cidade_cliente}} - {{estado_cliente}}, {{data}}.
+
+________________________________________________
+{{nome_cliente}}
+```
+
+> Dica: o que é sempre igual (nome da sociedade, CNPJ, OAB, dados da advogada) pode ser
+> escrito **fixo** no .docx — fica mais simples. Os placeholders acima são só para automatizar.
+> O campo **{{objeto}}** é preenchido pelo que você digita em "Finalidade / Objeto da
+> procuração" ao gerar (ex.: *representar o outorgante no processo n. … - …ª Vara Federal …*).

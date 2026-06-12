@@ -71,12 +71,14 @@ export function montarPlaceholders(opts: MontarPlaceholdersOpts): Record<string,
 
     // Advogado / escritório
     escritorio: s(t.nome),
+    cnpj_escritorio: s(t.cnpj),
     nome_advogado: s(t.nome_responsavel),
     oab: formatarOAB(t.oab_numero, t.oab_estado), // combinado "12345/SP"
     numero_oab: s(t.oab_numero),                  // aliases (convenção dos modelos gerados)
     estado_oab: s(t.oab_estado),
     cpf_advogado: s(t.cpf_responsavel),
     rg_advogado: s(t.rg_responsavel),
+    orgao_expedidor_advogado: s(t.orgao_expedidor),
     estado_civil_advogado: s(t.estado_civil),
     nacionalidade_advogado: s(t.nacionalidade),
     endereco_escritorio: s(t.endereco),
