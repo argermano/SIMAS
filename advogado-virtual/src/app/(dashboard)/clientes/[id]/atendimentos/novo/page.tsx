@@ -41,7 +41,7 @@ export default async function NovoAtendimentoPage({
   return (
     <>
       <Header
-        titulo="Novo Atendimento"
+        titulo="Novo Caso"
         subtitulo={`Cliente: ${cliente.nome}`}
         nomeUsuario={usuario.nome}
         acoes={

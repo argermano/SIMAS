@@ -4,15 +4,17 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import {
-  LayoutDashboard, Users, History, Settings, LogOut,
+  LayoutDashboard, Users, Settings, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
   KanbanSquare, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { LogoMark } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { AREAS } from '@/lib/constants/areas'
 
-const PREFIXOS_HOME = ['/dashboard', '/previdenciario', '/trabalhista', '/civel', '/criminal', '/tributario', '/empresarial', '/familia', '/medico']
+// "Início" fica ativo no dashboard e em qualquer área jurídica (derivado de areas.ts)
+const PREFIXOS_HOME = ['/dashboard', ...Object.values(AREAS).map((a) => `/${a.id}`)]
 
 const MENU_ITEMS = [
   {
@@ -28,22 +30,16 @@ const MENU_ITEMS = [
     ativoSe: (p: string) => p.startsWith('/clientes'),
   },
   {
-    href:    '/contratos',
-    label:   'Contratos',
-    icon:    FileSignature,
-    ativoSe: (p: string) => p.startsWith('/contratos'),
-  },
-  {
     href:    '/tarefas',
     label:   'Tarefas',
     icon:    KanbanSquare,
     ativoSe: (p: string) => p.startsWith('/tarefas'),
   },
   {
-    href:    '/historico',
-    label:   'Histórico',
-    icon:    History,
-    ativoSe: (p: string) => p.startsWith('/historico') || p.startsWith('/atendimentos'),
+    href:    '/contratos',
+    label:   'Contratos a assinar',
+    icon:    FileSignature,
+    ativoSe: (p: string) => p.startsWith('/contratos'),
   },
 ]
 

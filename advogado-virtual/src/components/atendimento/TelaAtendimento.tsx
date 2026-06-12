@@ -126,7 +126,7 @@ export function TelaAtendimento({
         if (at.pecas) setPecasExistentes(at.pecas)
         if (data.contratos) setContratosExistentes(data.contratos)
       } catch {
-        toastError('Erro', 'Não foi possível carregar o atendimento')
+        toastError('Erro', 'Não foi possível carregar o caso')
       } finally {
         setCarregando(false)
       }
@@ -174,10 +174,10 @@ export function TelaAtendimento({
         if (data.id) {
           setAtendimentoId(data.id)
         } else {
-          toastError('Erro', data.error ?? 'Não foi possível criar o atendimento')
+          toastError('Erro', data.error ?? 'Não foi possível criar o caso')
         }
       } catch {
-        toastError('Erro', 'Falha de rede ao criar atendimento')
+        toastError('Erro', 'Falha de rede ao criar caso')
       }
     }
   }, [atendimentoId, area, tipoPeca, modoInput, toastError])
@@ -239,7 +239,7 @@ export function TelaAtendimento({
 
       if (res.ok) {
         setSalvo(true)
-        success('Atendimento salvo!', 'O caso foi registrado com sucesso.')
+        success('Caso salvo!', 'O caso foi registrado com sucesso.')
         setTimeout(() => setSalvo(false), 2000)
       } else {
         const data = await res.json()
@@ -418,7 +418,7 @@ export function TelaAtendimento({
       })
       if (!resStatus.ok) {
         const data = await resStatus.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Falha ao atualizar o atendimento')
+        throw new Error(data.error ?? 'Falha ao atualizar o caso')
       }
     } catch (e) {
       setMostraModalGeracao(false)
@@ -445,7 +445,7 @@ export function TelaAtendimento({
       <div className="flex items-center justify-center py-20">
         <div className="text-center space-y-3">
           <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
-          <p className="text-sm text-muted-foreground">Carregando atendimento...</p>
+          <p className="text-sm text-muted-foreground">Carregando caso...</p>
         </div>
       </div>
     )

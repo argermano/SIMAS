@@ -77,8 +77,13 @@ export default async function ContratosPage({
     query = query.or(`titulo.ilike.%${q}%,clientes.nome.ilike.%${q}%`)
   }
 
-  if (status) {
+  // Padrão ("a assinar") = pendentes (não finalizados). "todos" mostra tudo; status específico filtra.
+  if (status === 'todos') {
+    // sem filtro de status
+  } else if (status) {
     query = query.eq('status', status)
+  } else {
+    query = query.neq('status', 'exportado')
   }
 
   const { data: contratos, count } = await query
@@ -93,8 +98,12 @@ export default async function ContratosPage({
   return (
     <>
       <Header
-        titulo="Contratos de Honorários"
-        subtitulo={`${count ?? 0} contrato${(count ?? 0) !== 1 ? 's' : ''}`}
+        titulo={status === '' ? 'Contratos a assinar' : 'Contratos de Honorários'}
+        subtitulo={
+          status === ''
+            ? `${count ?? 0} pendente${(count ?? 0) !== 1 ? 's' : ''} de assinatura/aprovação`
+            : `${count ?? 0} contrato${(count ?? 0) !== 1 ? 's' : ''}`
+        }
         nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
         acoes={
           <Link
@@ -114,16 +123,18 @@ export default async function ContratosPage({
           {!contratos || contratos.length === 0 ? (
             <EmptyState
               icon={<FileSignature className="h-10 w-10" />}
-              title={q ? 'Nenhum contrato encontrado' : status ? 'Nenhum contrato com esse status' : 'Nenhum contrato ainda'}
+              title={q ? 'Nenhum contrato encontrado' : status && status !== 'todos' ? 'Nenhum contrato com esse status' : status === '' ? 'Nenhum contrato pendente' : 'Nenhum contrato ainda'}
               description={
                 q
                   ? `Nenhum contrato encontrado para "${q}". Tente outro termo.`
-                  : status
+                  : status && status !== 'todos'
                     ? 'Nenhum contrato com o status selecionado.'
-                    : 'Crie seu primeiro contrato de honorários advocatícios com auxílio da IA.'
+                    : status === ''
+                      ? 'Não há contratos aguardando assinatura ou aprovação. Use o filtro "Todos" para ver os finalizados, ou crie um novo.'
+                      : 'Crie seu primeiro contrato de honorários advocatícios com auxílio da IA.'
               }
               action={
-                q || status
+                q || (status && status !== 'todos')
                   ? undefined
                   : { label: 'Criar contrato', href: '/contratos/novo' }
               }

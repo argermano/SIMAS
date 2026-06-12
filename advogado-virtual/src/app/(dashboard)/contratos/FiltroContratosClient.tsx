@@ -10,11 +10,12 @@ interface FiltroContratosClientProps {
 }
 
 const STATUS_OPTIONS = [
-  { value: '',           label: 'Todos' },
+  { value: '',           label: 'Pendentes' },   // padrão: contratos ainda não finalizados (a assinar)
   { value: 'rascunho',   label: 'Rascunho' },
   { value: 'em_revisao', label: 'Em revisão' },
   { value: 'aprovado',   label: 'Aprovado' },
-  { value: 'exportado',  label: 'Exportado' },
+  { value: 'exportado',  label: 'Finalizados' },
+  { value: 'todos',      label: 'Todos' },
 ]
 
 export function FiltroContratosClient({ busca, statusAtivo }: FiltroContratosClientProps) {

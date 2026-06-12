@@ -13,6 +13,7 @@ import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrat
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
 import { PlayerAudio } from '@/components/atendimento/PlayerAudio'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
+import { AREAS } from '@/lib/constants/areas'
 import { decryptClienteFields } from '@/lib/encryption'
 import {
   Phone, Mail, MapPin, FileText, Plus,
@@ -291,7 +292,7 @@ export default async function DossieClientePage({
           {/* ── Barra de resumo + filtros ── */}
           {totalAtendimentos > 0 && (
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-              <ResumoCard href={`/clientes/${id}${filtro === 'atendimentos' ? '' : '?filtro=atendimentos'}`} icone={<FileText className="h-5 w-5" />} label="Atendimentos" valor={totalAtendimentos} cor="primary" ativo={filtro === 'atendimentos'} />
+              <ResumoCard href={`/clientes/${id}${filtro === 'atendimentos' ? '' : '?filtro=atendimentos'}`} icone={<FileText className="h-5 w-5" />} label="Casos" valor={totalAtendimentos} cor="primary" ativo={filtro === 'atendimentos'} />
               <ResumoCard href={`/clientes/${id}${filtro === 'analises'     ? '' : '?filtro=analises'}`}     icone={<Brain className="h-5 w-5" />}         label="Análises IA"    valor={totalAnalises}     cor="violet"  ativo={filtro === 'analises'}     />
               <ResumoCard href={`/clientes/${id}${filtro === 'pecas'        ? '' : '?filtro=pecas'}`}        icone={<ScrollText className="h-5 w-5" />}    label="Peças geradas"  valor={totalPecas}        cor="emerald" ativo={filtro === 'pecas'}        />
               <ResumoCard href={`/clientes/${id}${filtro === 'documentos'   ? '' : '?filtro=documentos'}`}   icone={<Paperclip className="h-5 w-5" />}     label="Documentos"     valor={totalDocumentos}   cor="amber"   ativo={filtro === 'documentos'}   />
@@ -305,14 +306,14 @@ export default async function DossieClientePage({
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
                   <FileText className="h-5 w-5 text-muted-foreground" />
-                  {filtro === 'atendimentos' ? 'Atendimentos' :
+                  {filtro === 'atendimentos' ? 'Casos' :
                    filtro === 'analises'     ? 'Análises IA' :
                    filtro === 'pecas'        ? 'Peças Geradas' : 'Dossiê Completo'}
                 </h2>
                 <Button asChild variant="secondary" size="md">
                   <Link href={`/clientes/${id}/atendimentos/novo`}>
                     <Plus className="h-4 w-4" />
-                    Novo Atendimento
+                    Novo Caso
                   </Link>
                 </Button>
               </div>
@@ -320,9 +321,9 @@ export default async function DossieClientePage({
               {!atendimentos || atendimentos.length === 0 ? (
                 <EmptyState
                   icon={<FileText className="h-8 w-8" />}
-                  title="Nenhum atendimento ainda"
-                  description="Registre o primeiro atendimento deste cliente para iniciar a análise jurídica."
-                  action={{ label: '+ Registrar Atendimento', href: `/clientes/${id}/atendimentos/novo` }}
+                  title="Nenhum caso ainda"
+                  description="Registre o primeiro caso deste cliente para iniciar a análise jurídica."
+                  action={{ label: '+ Registrar Caso', href: `/clientes/${id}/atendimentos/novo` }}
                 />
               ) : (
                 <div className="space-y-4">
@@ -380,7 +381,7 @@ export default async function DossieClientePage({
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                       <BotaoExcluirAtendimento atendimentoId={at.id} />
-                                      <Link href={hrefAtendimento(at)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-muted-foreground transition-colors" title="Abrir atendimento">
+                                      <Link href={hrefAtendimento(at)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-muted-foreground transition-colors" title="Abrir caso">
                                         <ChevronRight className="h-5 w-5" />
                                       </Link>
                                     </div>
@@ -409,6 +410,11 @@ export default async function DossieClientePage({
                                       {filtro !== 'analises' && atPecas.map(peca => {
                                         const pcBadge  = BADGE_PECA_STATUS[peca.status] ?? BADGE_PECA_STATUS.rascunho
                                         const tipoPeca = TIPOS_PECA[peca.tipo]
+                                        // Etiqueta de área quando a peça é de área diferente do caso
+                                        // (ex.: Estudo de Caso "geral" com peças de Família e Previdenciário)
+                                        const pcArea = peca.area !== at.area
+                                          ? (AREAS as Record<string, { nome: string; corBg: string; corTexto: string }>)[peca.area]
+                                          : null
                                         const StatusIcon =
                                           peca.status === 'aprovada'  ? CheckCircle2 :
                                           peca.status === 'exportada' ? Download :
@@ -420,8 +426,13 @@ export default async function DossieClientePage({
                                           >
                                             <ScrollText className="h-4 w-4 text-emerald-500 shrink-0" />
                                             <div className="min-w-0 flex-1">
-                                              <div className="flex items-center gap-2">
+                                              <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="font-medium text-emerald-900 group-hover:text-emerald-800">{tipoPeca?.nome ?? peca.tipo}</span>
+                                                {pcArea && (
+                                                  <span className={`rounded-full px-1.5 py-0 text-[10px] font-semibold ${pcArea.corBg} ${pcArea.corTexto}`}>
+                                                    {pcArea.nome}
+                                                  </span>
+                                                )}
                                                 <Badge variant={pcBadge.variant} className="text-xs px-1.5 py-0">
                                                   <StatusIcon className="h-3 w-3 mr-0.5" />{pcBadge.label}
                                                 </Badge>

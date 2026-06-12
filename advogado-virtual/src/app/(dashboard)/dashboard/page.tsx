@@ -151,7 +151,7 @@ export default async function DashboardPage() {
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-xl font-semibold text-foreground font-heading">
                   <Clock className="h-5 w-5 text-muted-foreground" />
-                  Últimos atendimentos
+                  Últimos casos
                 </h2>
                 <Link
                   href="/historico"
