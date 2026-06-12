@@ -65,6 +65,7 @@ export async function POST(req: NextRequest) {
   let conteudoMarkdown = ''
   let fileUrl: string | null = null
   let estiloConfig: Awaited<ReturnType<typeof extrairEstiloDocx>> = null
+  let placeholdersDetectados: string[] = []
 
   if (arquivo && arquivo.size > 0) {
     const MAX_BYTES = 10 * 1024 * 1024
@@ -139,10 +140,13 @@ export async function POST(req: NextRequest) {
         if (texto.trim().length > 30 && !texto.includes('{{')) {
           const pares = await detectarPlaceholders(texto, NOME_TIPO_TEMPLATE[tipo])
           if (pares.length > 0) {
-            const { buffer: template } = templatizarDocx(buffer, pares)
-            await supabase.storage
-              .from('documentos')
-              .upload(path, template, { contentType: arquivo.type, upsert: true })
+            const { buffer: template, aplicados } = templatizarDocx(buffer, pares)
+            if (aplicados > 0) {
+              await supabase.storage
+                .from('documentos')
+                .upload(path, template, { contentType: arquivo.type, upsert: true })
+              placeholdersDetectados = [...new Set(pares.map((p) => p.replace))]
+            }
           }
         }
       } catch (err) {
@@ -173,5 +177,14 @@ export async function POST(req: NextRequest) {
 
   if (error) return jsonError(error.message, 500)
 
-  return NextResponse.json({ modelo }, { status: 201 })
+  const ehDocxTemplatizavel = !!fileUrl && !!NOME_TIPO_TEMPLATE[tipo] && /\.docx$/i.test(fileUrl)
+  return NextResponse.json(
+    {
+      modelo,
+      templatizacao: ehDocxTemplatizavel
+        ? { placeholders: placeholdersDetectados, total: placeholdersDetectados.length }
+        : null,
+    },
+    { status: 201 },
+  )
 }

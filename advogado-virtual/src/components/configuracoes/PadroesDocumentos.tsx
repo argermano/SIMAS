@@ -188,13 +188,26 @@ export function PadroesDocumentos() {
         body: formData,
       })
 
+      const data = await res.json().catch(() => ({}))
+
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
         toastError('Erro', (data as { error?: string }).error ?? 'Falha ao salvar modelo')
         return
       }
 
-      success('Modelo salvo!', `"${titulo}" foi adicionado como padrão`)
+      // Feedback da templatização automática (.docx → campos detectados pela IA)
+      const t = (data as { templatizacao?: { placeholders: string[]; total: number } | null }).templatizacao
+      if (t && t.total > 0) {
+        const campos = t.placeholders.map((p) => p.replace(/[{}]/g, '').replace(/_/g, ' ')).join(', ')
+        success('Modelo salvo!', `${t.total} campo(s) detectado(s) automaticamente: ${campos}.`)
+      } else if (t && t.total === 0) {
+        toastError(
+          'Modelo salvo, mas sem campos detectados',
+          'A IA não encontrou dados variáveis. Suba um .docx de EXEMPLO PREENCHIDO (com nome/CPF/endereço reais) para o preenchimento automático funcionar.',
+        )
+      } else {
+        success('Modelo salvo!', `"${titulo}" foi adicionado como padrão`)
+      }
       resetForm()
       carregarModelos()
     } catch {

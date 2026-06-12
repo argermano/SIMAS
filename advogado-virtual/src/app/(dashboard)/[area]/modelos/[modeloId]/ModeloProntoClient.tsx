@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -10,10 +11,7 @@ import { useToast } from '@/components/ui/toast'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
 import { EditorDocumentoPronto } from '@/components/documentos/EditorDocumentoPronto'
 import { TIPOS_COM_MODELO_DOCX } from '@/lib/export/tipos-modelo-docx'
-import {
-  Users, FileText, CheckCircle, AlertCircle, Trash2,
-  Upload, Edit3, Loader2, Save, X, Zap,
-} from 'lucide-react'
+import { Users, FileText, CheckCircle, AlertCircle, Loader2, Zap } from 'lucide-react'
 
 // ── Tipos e constantes ────────────────────────────────────────────────────────
 
@@ -32,8 +30,6 @@ const OPCOES_PAGAMENTO = [
   { value: 'Êxito',             label: 'Somente êxito'      },
 ]
 
-// ── Props ─────────────────────────────────────────────────────────────────────
-
 interface ModeloProntoClientProps {
   tipo: string
   tipoNome: string
@@ -45,144 +41,54 @@ interface ModeloProntoClientProps {
 export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloProntoClientProps) {
   const tipoModelo = tipo as TipoModelo
   const { success, error: toastError } = useToast()
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // ── Estado do cliente ──
   const [cliente, setCliente] = useState<{ id: string; nome: string } | null>(null)
 
-  // ── Estado do template ──
-  const [templateExiste, setTemplateExiste]     = useState(false)
-  const [templateConteudo, setTemplateConteudo] = useState('')
-  const [carregandoTemplate, setCarregandoTemplate] = useState(true)
-  const [editandoTemplate, setEditandoTemplate] = useState(false)
-  const [templateRascunho, setTemplateRascunho] = useState('')
-  const [salvandoTemplate, setSalvandoTemplate] = useState(false)
-  const [deletandoTemplate, setDeletandoTemplate] = useState(false)
-  const [uploadando, setUploadando]             = useState(false)
-
-  // ── Estado de geração ──
-  const [documentoGerado, setDocumentoGerado] = useState('')
-  const [gerando, setGerando]                 = useState(false)
-  const [modoEditor, setModoEditor]           = useState(false)
-  const [baixandoModelo, setBaixandoModelo]   = useState(false)
-
-  // Tipos que aceitam preenchimento de modelo .docx do escritório (fonte única)
+  // Modelo .docx do escritório (fonte única) — preenche preservando a formatação
   const suportaModelo = TIPOS_COM_MODELO_DOCX.includes(tipoModelo)
+  const [modeloDocxExiste, setModeloDocxExiste] = useState(false)
+  const [carregandoModelo, setCarregandoModelo] = useState(true)
 
-  // ── Campos extras por tipo ──
-  const [objeto, setObjeto]                         = useState('')           // procuracao
-  const [rendaMensal, setRendaMensal]               = useState('')           // declaracao
-  const [nomeSubstabelecido, setNomeSubstabelecido] = useState('')           // substabelecimento
-  const [oabSubstabelecido, setOabSubstabelecido]   = useState('')           // substabelecimento
-  const [objetoNotificacao, setObjetoNotificacao]   = useState('')           // notificacao
-  const [prazoResposta, setPrazoResposta]           = useState('15')         // notificacao
-  const [valorFixo, setValorFixo]                   = useState('')           // contrato_honorarios
-  const [percentualExito, setPercentualExito]       = useState('')           // contrato_honorarios
-  const [formaPagamento, setFormaPagamento]         = useState('')           // contrato_honorarios
+  // Geração
+  const [gerando, setGerando]                 = useState(false)
+  const [documentoGerado, setDocumentoGerado] = useState('')
+  const [modoEditor, setModoEditor]           = useState(false)
 
-  // ── Carregar template salvo ao montar ──
-  const carregarTemplate = useCallback(async () => {
-    setCarregandoTemplate(true)
-    try {
-      const res = await fetch(`/api/templates/${tipoModelo}`)
-      const data = await res.json()
-      if (data.template) {
-        setTemplateExiste(true)
-        setTemplateConteudo(data.template.conteudo_markdown)
-      } else {
-        setTemplateExiste(false)
-        setTemplateConteudo('')
-      }
-    } catch { /* silencioso */ }
-    finally { setCarregandoTemplate(false) }
-  }, [tipoModelo])
+  // Campos extras por tipo
+  const [objeto, setObjeto]                         = useState('')
+  const [rendaMensal, setRendaMensal]               = useState('')
+  const [nomeSubstabelecido, setNomeSubstabelecido] = useState('')
+  const [oabSubstabelecido, setOabSubstabelecido]   = useState('')
+  const [objetoNotificacao, setObjetoNotificacao]   = useState('')
+  const [prazoResposta, setPrazoResposta]           = useState('15')
+  const [valorFixo, setValorFixo]                   = useState('')
+  const [percentualExito, setPercentualExito]       = useState('')
+  const [formaPagamento, setFormaPagamento]         = useState('')
 
-  useEffect(() => { carregarTemplate() }, [carregarTemplate])
+  // Verifica se há modelo .docx do escritório cadastrado para este tipo
+  useEffect(() => {
+    if (!suportaModelo) { setCarregandoModelo(false); setModeloDocxExiste(false); return }
+    let ativo = true
+    fetch(`/api/documentos/exportar-modelo?tipo=${tipoModelo}`)
+      .then((r) => r.json())
+      .then((d) => { if (ativo) setModeloDocxExiste(!!d.existe) })
+      .catch(() => { /* silencioso */ })
+      .finally(() => { if (ativo) setCarregandoModelo(false) })
+    return () => { ativo = false }
+  }, [suportaModelo, tipoModelo])
 
-  // ── Pré-selecionar cliente quando vindo via searchParam ──
+  // Pré-selecionar cliente quando vindo via searchParam
   useEffect(() => {
     if (!clienteIdInicial) return
     fetch(`/api/clientes/${clienteIdInicial}`)
-      .then(r => r.json())
-      .then(data => {
+      .then((r) => r.json())
+      .then((data) => {
         const c = data.cliente
         if (c?.id && c?.nome) setCliente({ id: c.id, nome: c.nome })
       })
       .catch(() => { /* silencioso */ })
   }, [clienteIdInicial])
 
-  // ── Upload de PDF/DOCX para extrair texto do modelo ──
-  async function handleUpload(file: File) {
-    setUploadando(true)
-    try {
-      const formData = new FormData()
-      formData.append('modelo', file)
-      const res = await fetch('/api/contratos/upload-modelo', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (res.ok && data.texto_extraido) {
-        setTemplateRascunho(data.texto_extraido)
-        success('Modelo extraído!', 'Revise o conteúdo e salve o modelo.')
-      } else {
-        toastError('Erro no upload', data.error ?? 'Tente novamente')
-      }
-    } catch {
-      toastError('Erro', 'Falha ao enviar o arquivo')
-    } finally {
-      setUploadando(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
-
-  // ── Salvar template ──
-  async function salvarTemplate() {
-    if (!templateRascunho.trim()) {
-      toastError('Atenção', 'O modelo não pode estar vazio')
-      return
-    }
-    setSalvandoTemplate(true)
-    try {
-      const res = await fetch(`/api/templates/${tipoModelo}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conteudo_markdown: templateRascunho }),
-      })
-      if (res.ok) {
-        setTemplateExiste(true)
-        setTemplateConteudo(templateRascunho)
-        setEditandoTemplate(false)
-        success('Modelo salvo!', 'Próximas gerações usarão este modelo.')
-      } else {
-        const data = await res.json()
-        toastError('Erro', data.error ?? 'Falha ao salvar')
-      }
-    } catch {
-      toastError('Erro', 'Falha de rede')
-    } finally {
-      setSalvandoTemplate(false) }
-  }
-
-  // ── Excluir template ──
-  async function excluirTemplate() {
-    setDeletandoTemplate(true)
-    try {
-      const res = await fetch(`/api/templates/${tipoModelo}`, { method: 'DELETE' })
-      if (res.ok) {
-        setTemplateExiste(false)
-        setTemplateConteudo('')
-        setEditandoTemplate(false)
-        setTemplateRascunho('')
-        success('Modelo excluído', 'A próxima geração usará IA.')
-      } else {
-        const data = await res.json()
-        toastError('Erro', data.error ?? 'Falha ao excluir')
-      }
-    } catch {
-      toastError('Erro', 'Falha de rede')
-    } finally {
-      setDeletandoTemplate(false) }
-  }
-
-  // Campos extras por tipo — usado tanto na geração quanto no preenchimento de modelo .docx
   function montarCamposExtras(): Record<string, string> {
     const campos: Record<string, string> = {}
     if (objeto)              campos.objeto               = objeto
@@ -197,69 +103,54 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
     return campos
   }
 
-  // Preenche o modelo .docx do escritório (fidelidade 1:1) a partir do cliente + camposExtras
-  async function baixarModelo() {
-    if (!cliente) return
-    setBaixandoModelo(true)
-    try {
-      const res = await fetch('/api/documentos/exportar-modelo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: tipoModelo, clienteId: cliente.id, camposExtras: montarCamposExtras() }),
-      })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        toastError('Modelo não disponível', d.error ?? 'Não foi possível gerar o documento')
-        return
-      }
-      const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `${tipoNome.replace(/\s+/g, '_')}_${cliente.nome.replace(/\s+/g, '_')}.docx`
-      a.click()
-      URL.revokeObjectURL(url)
-      success('DOCX gerado!', 'Modelo do escritório preenchido')
-    } catch {
-      toastError('Erro', 'Falha de rede')
-    } finally {
-      setBaixandoModelo(false)
-    }
-  }
-
-  // ── Gerar documento ──
+  // Gerar: se houver modelo .docx do escritório → preenche e baixa (mantém a formatação);
+  // senão → gera com IA e abre o editor para revisão.
   async function gerar() {
     if (!cliente) {
       toastError('Atenção', 'Selecione um cliente para gerar o documento')
       return
     }
     setGerando(true)
-    setDocumentoGerado('')
     try {
       const camposExtras = montarCamposExtras()
 
-      const res = await fetch('/api/ia/gerar-documento', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tipo: tipoModelo,
-          clienteId: cliente.id,
-          camposExtras: Object.keys(camposExtras).length > 0 ? camposExtras : undefined,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        toastError('Erro', data.error ?? 'Falha ao gerar documento')
-        return
-      }
-      setDocumentoGerado(data.conteudo)
-      setModoEditor(true)
-      if (!data.templateExistia) {
-        setTemplateExiste(true)
-        setTemplateConteudo(data.conteudo)
-        success('Gerado com IA e salvo!', 'Próximas gerações serão instantâneas.')
+      if (modeloDocxExiste) {
+        const res = await fetch('/api/documentos/exportar-modelo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tipo: tipoModelo, clienteId: cliente.id, camposExtras }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          toastError('Erro', d.error ?? 'Não foi possível gerar o documento')
+          return
+        }
+        const blob = await res.blob()
+        const url  = URL.createObjectURL(blob)
+        const a    = document.createElement('a')
+        a.href     = url
+        a.download = `${tipoNome.replace(/\s+/g, '_')}_${cliente.nome.replace(/\s+/g, '_')}.docx`
+        a.click()
+        URL.revokeObjectURL(url)
+        success('Documento gerado!', 'Preenchido no modelo .docx do escritório.')
       } else {
-        success('Documento gerado!', 'Gerado a partir do modelo salvo.')
+        const res = await fetch('/api/ia/gerar-documento', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tipo: tipoModelo,
+            clienteId: cliente.id,
+            camposExtras: Object.keys(camposExtras).length > 0 ? camposExtras : undefined,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          toastError('Erro', data.error ?? 'Falha ao gerar documento')
+          return
+        }
+        setDocumentoGerado(data.conteudo)
+        setModoEditor(true)
+        success('Documento gerado com IA!', 'Revise e exporte no editor.')
       }
     } catch {
       toastError('Erro', 'Falha de rede')
@@ -276,19 +167,6 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         titulo={tipoNome}
         conteudo={documentoGerado}
         onVoltar={() => setModoEditor(false)}
-        extraAcoes={suportaModelo && cliente ? (
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={baixarModelo}
-            disabled={baixandoModelo}
-            className="gap-1.5"
-            title="Preencher o modelo .docx do escritório (fidelidade 1:1)"
-          >
-            {baixandoModelo ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-            Meu modelo (.docx)
-          </Button>
-        ) : undefined}
       />
     )
   }
@@ -305,133 +183,40 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <SeletorCliente
-            onSelecionado={(c) => setCliente(c)}
-            clienteSelecionado={cliente}
-          />
+          <SeletorCliente onSelecionado={(c) => setCliente(c)} clienteSelecionado={cliente} />
         </CardContent>
       </Card>
 
-      {/* 2. Modelo salvo */}
+      {/* 2. Status do modelo do escritório */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5 text-muted-foreground" />
-            Modelo
+            Modelo do escritório
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {carregandoTemplate ? (
+        <CardContent>
+          {carregandoModelo ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Verificando modelo salvo...
+              <Loader2 className="h-4 w-4 animate-spin" /> Verificando…
             </div>
-          ) : editandoTemplate ? (
-            /* Edição do modelo */
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">
-                Cole ou edite o conteúdo do modelo. Use <code className="rounded bg-muted px-1">{'{{variavel}}'}</code> para campos que mudam por cliente.
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadando}
-                  className="gap-1.5"
-                >
-                  {uploadando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  {uploadando ? 'Extraindo...' : 'Importar PDF/DOCX'}
-                </Button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.docx"
-                  className="hidden"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f) }}
-                />
-                <span className="text-xs text-muted-foreground">ou cole o texto abaixo</span>
-              </div>
-              <Textarea
-                value={templateRascunho}
-                onChange={(e) => setTemplateRascunho(e.target.value)}
-                placeholder="Cole aqui o conteúdo do modelo de documento..."
-                rows={10}
-              />
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={salvarTemplate}
-                  disabled={salvandoTemplate || !templateRascunho.trim()}
-                  loading={salvandoTemplate}
-                  className="gap-1.5"
-                >
-                  <Save className="h-3.5 w-3.5" />
-                  Salvar modelo
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => { setEditandoTemplate(false); setTemplateRascunho('') }}
-                  disabled={salvandoTemplate}
-                  className="gap-1.5"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          ) : templateExiste ? (
-            /* Modelo salvo encontrado */
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-lg border border-success/20 bg-success/5 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-success" />
-                  <span className="text-sm font-medium text-success">Modelo salvo — geração instantânea</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => { setTemplateRascunho(templateConteudo); setEditandoTemplate(true) }}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-card hover:text-foreground transition-colors"
-                    title="Editar modelo"
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                    Editar
-                  </button>
-                  <button
-                    onClick={excluirTemplate}
-                    disabled={deletandoTemplate}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-destructive hover:bg-destructive/5 hover:text-destructive transition-colors"
-                    title="Excluir modelo"
-                  >
-                    {deletandoTemplate
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      : <Trash2 className="h-3.5 w-3.5" />}
-                    Excluir
-                  </button>
-                </div>
-              </div>
+          ) : modeloDocxExiste ? (
+            <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 px-4 py-3 text-sm font-medium text-success">
+              <CheckCircle className="h-4 w-4 shrink-0" />
+              Modelo .docx cadastrado — a geração preenche o seu modelo, preservando a formatação.
             </div>
           ) : (
-            /* Sem modelo salvo */
-            <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-600" />
-                  <span className="text-sm text-amber-800">
-                    Nenhum modelo salvo — a IA gerará e salvará automaticamente
-                  </span>
-                </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <div className="flex items-center gap-2 font-medium">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                Sem modelo .docx — a geração usará IA.
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => { setTemplateRascunho(''); setEditandoTemplate(true) }}
-                className="gap-1.5"
-              >
-                <Upload className="h-3.5 w-3.5" />
-                Usar meu próprio modelo
-              </Button>
+              {suportaModelo && (
+                <p className="mt-1 text-xs">
+                  Para gerar no layout do escritório, cadastre o .docx em{' '}
+                  <Link href="/configuracoes" className="font-medium underline">Configurações → Padrões</Link>.
+                </p>
+              )}
             </div>
           )}
         </CardContent>
@@ -570,20 +355,14 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         <Button
           size="lg"
           onClick={gerar}
-          disabled={!cliente || gerando || carregandoTemplate}
+          disabled={!cliente || gerando || carregandoModelo}
           loading={gerando}
           className="gap-2 bg-amber-600 hover:bg-amber-700"
         >
           <Zap className="h-5 w-5" />
-          {gerando
-            ? 'Gerando...'
-            : templateExiste
-              ? `Gerar ${tipoNome}`
-              : `Gerar com IA`}
+          {gerando ? 'Gerando…' : `Gerar ${tipoNome}`}
         </Button>
       </div>
-
-
     </div>
   )
 }

@@ -6,6 +6,29 @@ import { montarPlaceholders } from '@/lib/export/montar-placeholders'
 import { TIPO_MODELO_DOCX, NOME_AMIGAVEL_DOC } from '@/lib/export/tipos-modelo-docx'
 import { decryptClienteFields } from '@/lib/encryption'
 
+// GET /api/documentos/exportar-modelo?tipo=procuracao — informa se há modelo .docx cadastrado
+export async function GET(req: NextRequest) {
+  const tipo = req.nextUrl.searchParams.get('tipo') ?? ''
+  const tipoModelo = TIPO_MODELO_DOCX[tipo]
+  if (!tipoModelo) return NextResponse.json({ existe: false })
+
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
+
+  const { data: modelo } = await supabase
+    .from('modelos_documento')
+    .select('file_url')
+    .eq('tenant_id', usuario.tenant_id)
+    .eq('tipo', tipoModelo)
+    .not('file_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  return NextResponse.json({ existe: !!modelo?.file_url && /\.docx$/i.test(modelo.file_url) })
+}
+
 // POST /api/documentos/exportar-modelo
 // body: { tipo, clienteId, camposExtras? }
 // Preenche o TEMPLATE .docx do escritório (com {{placeholders}}) com os dados do cliente +
