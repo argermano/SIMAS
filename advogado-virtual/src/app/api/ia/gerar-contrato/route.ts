@@ -18,10 +18,12 @@ export async function POST(req: NextRequest) {
       contratoId,
       instrucoes,
       modeloTexto,
+      semModelo,
     } = await req.json() as {
       contratoId:   string
       instrucoes?:  string
       modeloTexto?: string
+      semModelo?:   boolean
     }
 
     console.log('[gerar-contrato] contratoId:', contratoId, '| modeloTexto length:', modeloTexto?.length ?? 0, '| tem modelo:', !!modeloTexto)
@@ -109,8 +111,9 @@ export async function POST(req: NextRequest) {
 
     // O modelo anexado/escolhido na tela tem prioridade (usar este). Se não houver,
     // cai no modelo de contrato cadastrado em Configurações → Padrões (modelos_documento).
+    // Exceção: semModelo=true (usuário escolheu "gerar do zero") ignora o modelo padrão.
     let modeloEfetivo = modeloTexto?.trim() ? modeloTexto : ''
-    if (!modeloEfetivo) {
+    if (!modeloEfetivo && !semModelo) {
       const { data: modeloDoc } = await supabase
         .from('modelos_documento')
         .select('conteudo_markdown')

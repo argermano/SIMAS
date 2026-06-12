@@ -206,7 +206,7 @@ export function DocumentosDoCaso({
               </Link>
               {contratosExistentes.length === 0 && (
                 <Link
-                  href={`/contratos/novo?cliente_id=${cliente.id}`}
+                  href={`/contratos/novo?cliente_id=${cliente.id}${atendimentoId ? `&atendimentoId=${atendimentoId}` : ''}`}
                   className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
                 >
                   <FilePlus className="h-3.5 w-3.5 text-muted-foreground" />

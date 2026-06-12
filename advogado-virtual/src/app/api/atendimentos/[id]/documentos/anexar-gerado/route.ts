@@ -24,10 +24,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
 
-  const { tipo, titulo, conteudo } = (await req.json().catch(() => ({}))) as {
+  const { tipo, titulo, conteudo, documentoId } = (await req.json().catch(() => ({}))) as {
     tipo?: string
     titulo?: string
     conteudo?: string
+    documentoId?: string | null
   }
   if (!conteudo?.trim()) return jsonError('Conteúdo obrigatório', 400)
 
@@ -61,6 +62,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .from('documentos')
     .upload(path, buffer, { contentType: DOCX_MIME, upsert: true })
   if (upErr) return jsonError(`Falha ao salvar o documento: ${upErr.message}`, 500)
+
+  // Idempot\u00eancia: se j\u00e1 existe um documento (mesmo "Salvar" clicado de novo),
+  // ATUALIZA o registro em vez de criar outro \u2014 evita duplicar no caso.
+  if (documentoId) {
+    const { data: existente } = await supabase
+      .from('documentos')
+      .select('id, file_url')
+      .eq('id', documentoId)
+      .eq('atendimento_id', id)
+      .eq('tenant_id', usuario.tenant_id)
+      .maybeSingle()
+
+    if (existente) {
+      const { data: documento, error } = await supabase
+        .from('documentos')
+        .update({
+          tipo: tipo ?? 'outro',
+          file_url: path,
+          file_name: fileName,
+          mime_type: DOCX_MIME,
+          tamanho_bytes: buffer.length,
+          texto_extraido: conteudo.slice(0, 5000),
+        })
+        .eq('id', documentoId)
+        .eq('tenant_id', usuario.tenant_id)
+        .select()
+        .single()
+
+      if (error) return jsonError(error.message, 500)
+      // Remove o arquivo antigo do storage (best-effort)
+      if (existente.file_url && existente.file_url !== path) {
+        await supabase.storage.from('documentos').remove([existente.file_url])
+      }
+      return NextResponse.json({ documento }, { status: 200 })
+    }
+  }
 
   const { data: documento, error } = await supabase
     .from('documentos')

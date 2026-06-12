@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,9 +57,15 @@ interface TemplateContrato {
 interface ContratoFormClientProps {
   role: string
   clienteInicial?: { id: string; nome: string }
+  atendimentoIdInicial?: string
 }
 
-export function ContratoFormClient({ role: _role, clienteInicial }: ContratoFormClientProps) {
+// Sentinelas do seletor de modelo
+const PADRAO_CONFIG = '__config__' // modelo padrão do escritório (Configurações → Padrões)
+const SEM_MODELO    = '__none__'   // gerar do zero com IA, ignorando o modelo padrão
+
+export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdInicial }: ContratoFormClientProps) {
+  const router = useRouter()
   const { success, error: toastError } = useToast()
 
   const [cliente,           setCliente]           = useState<{ id: string; nome: string } | null>(clienteInicial ?? null)
@@ -80,6 +87,7 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
   const [modelosSalvos,       setModelosSalvos]       = useState<TemplateContrato[]>([])
   const [modeloSelecionadoId, setModeloSelecionadoId] = useState<string | null>(null)
   const [carregandoModelos,   setCarregandoModelos]   = useState(false)
+  const [temModeloConfig,     setTemModeloConfig]     = useState(false) // modelo padrão cadastrado nas Configurações
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -90,30 +98,48 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
     fetch(`/api/atendimentos?cliente_id=${cliente.id}`)
       .then(r => r.json())
       .then(d => {
-        setAtendimentos(d.atendimentos ?? [])
-        setAtendimentoId('')
+        const ats: AtendimentoOpcao[] = d.atendimentos ?? []
+        setAtendimentos(ats)
+        // Pré-seleciona o atendimento do caso (quando veio da tela do caso)
+        const doCaso = atendimentoIdInicial ? ats.find(a => a.id === atendimentoIdInicial) : undefined
+        if (doCaso) {
+          setAtendimentoId(doCaso.id)
+          if (doCaso.area) setArea(doCaso.area)
+        } else {
+          setAtendimentoId('')
+        }
       })
       .catch(() => {})
       .finally(() => setCarregandoAts(false))
-  }, [cliente?.id])
+  }, [cliente?.id, atendimentoIdInicial])
 
-  // Carregar modelos salvos ao montar
+  // Carregar modelos ao montar: prioriza o modelo PADRÃO das Configurações
   useEffect(() => {
     async function carregar() {
       setCarregandoModelos(true)
       try {
-        const res = await fetch('/api/templates-contrato')
+        // 1. Existe modelo de contrato padrão nas Configurações? (modelos_documento tipo=contrato)
+        let temConfig = false
+        try {
+          const resCfg  = await fetch('/api/documentos/exportar-modelo?tipo=contrato')
+          const dataCfg = await resCfg.json()
+          temConfig = !!dataCfg.existe
+        } catch { /* ignora */ }
+        setTemModeloConfig(temConfig)
+
+        // 2. Repositório de modelos salvos (templates_contrato)
+        const res  = await fetch('/api/templates-contrato')
         const data = await res.json()
-        if (data.templates) {
-          setModelosSalvos(data.templates)
-          // Selecionar o primeiro automaticamente
-          if (data.templates.length > 0) {
-            setModeloSelecionadoId(data.templates[0].id)
-            // Carregar conteúdo do primeiro modelo
-            const resT = await fetch(`/api/templates-contrato/${data.templates[0].id}`)
-            const dataT = await resT.json()
-            if (dataT.template) setModeloTexto(dataT.template.conteudo_markdown)
-          }
+        if (data.templates) setModelosSalvos(data.templates)
+
+        // Pré-seleção: o modelo padrão das Configurações (não mais o 1º da lista).
+        // Sem padrão cadastrado, deixa "gerar do zero" como opção (sem auto-selecionar item errado).
+        if (temConfig) {
+          setModeloSelecionadoId(PADRAO_CONFIG)
+          setModeloTexto('')
+        } else {
+          setModeloSelecionadoId(SEM_MODELO)
+          setModeloTexto('')
         }
       } catch { /* silencioso */ }
       finally { setCarregandoModelos(false) }
@@ -122,11 +148,13 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
   }, [])
 
   async function selecionarModelo(id: string | null) {
-    setModeloSelecionadoId(id)
-    if (!id) {
+    // PADRAO_CONFIG e SEM_MODELO não carregam texto (o backend resolve o modelo).
+    if (!id || id === PADRAO_CONFIG || id === SEM_MODELO) {
+      setModeloSelecionadoId(id)
       setModeloTexto('')
       return
     }
+    setModeloSelecionadoId(id)
     try {
       const res = await fetch(`/api/templates-contrato/${id}`)
       const data = await res.json()
@@ -164,7 +192,9 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
     }
   }
 
-  const temModeloSelecionado = !!modeloSelecionadoId || !!modeloTexto
+  // Usa modelo quando há um modelo escolhido (padrão das Configurações ou um salvo);
+  // SEM_MODELO/none = gerar do zero com IA.
+  const temModeloSelecionado = modeloSelecionadoId != null && modeloSelecionadoId !== SEM_MODELO
 
   const criarEGerar = useCallback(async () => {
     if (!cliente) {
@@ -205,6 +235,7 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
           contratoId:  id,
           instrucoes:  instrucoes  || undefined,
           modeloTexto: modeloTexto || undefined,
+          semModelo:   modeloSelecionadoId === SEM_MODELO || undefined,
         }),
       })
 
@@ -242,6 +273,9 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
           body:    JSON.stringify({ conteudo_markdown: conteudo }),
         })
         success('Contrato gerado!', temModeloSelecionado ? 'Gerado a partir do seu modelo.' : 'Gerado com IA.')
+        // 4. Abre o editor automaticamente (como nos demais documentos).
+        //    replace() remove o formulário do histórico → "Voltar" no editor retorna ao caso.
+        router.replace(`/contratos/${id}`)
       }
     } catch (err) {
       console.error('[ContratoForm] Erro:', err)
@@ -249,7 +283,7 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
     } finally {
       setGerando(false)
     }
-  }, [cliente, atendimentoId, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, temModeloSelecionado, success, toastError])
+  }, [cliente, atendimentoId, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, modeloSelecionadoId, temModeloSelecionado, router, success, toastError])
 
   return (
     <div className="space-y-6">
@@ -386,40 +420,64 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
             <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Carregando modelos...
             </div>
-          ) : modelosSalvos.length > 0 ? (
+          ) : (
             <div className="space-y-2">
-              {/* Lista de modelos existentes */}
-              <p className="text-xs font-medium text-muted-foreground">Modelos salvos</p>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                {modelosSalvos.map(m => (
+              {/* Modelo padrão do escritório (Configurações → Padrões) */}
+              {temModeloConfig && (
+                <>
+                  <p className="text-xs font-medium text-muted-foreground">Modelo padrão</p>
                   <button
-                    key={m.id}
                     type="button"
-                    onClick={() => selecionarModelo(m.id === modeloSelecionadoId ? null : m.id)}
+                    onClick={() => selecionarModelo(PADRAO_CONFIG)}
                     className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
-                      m.id === modeloSelecionadoId
+                      modeloSelecionadoId === PADRAO_CONFIG
                         ? 'border-primary/30 bg-primary/5 text-primary'
                         : 'border-border bg-card text-foreground hover:border-border'
                     }`}
                   >
-                    <FolderOpen className={`h-4 w-4 shrink-0 ${m.id === modeloSelecionadoId ? 'text-primary' : 'text-muted-foreground'}`} />
-                    <span className="flex-1 truncate font-medium">{m.titulo}</span>
-                    {m.id === modeloSelecionadoId && <CheckCircle className="h-4 w-4 shrink-0 text-primary" />}
+                    <FileText className={`h-4 w-4 shrink-0 ${modeloSelecionadoId === PADRAO_CONFIG ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <span className="flex-1 font-medium">Modelo padrão do escritório (Configurações)</span>
+                    {modeloSelecionadoId === PADRAO_CONFIG && <CheckCircle className="h-4 w-4 shrink-0 text-primary" />}
                   </button>
-                ))}
-              </div>
+                </>
+              )}
 
-              {/* Opção: gerar sem modelo */}
+              {/* Repositório de modelos salvos */}
+              {modelosSalvos.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-muted-foreground">{temModeloConfig ? 'Outros modelos salvos' : 'Modelos salvos'}</p>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {modelosSalvos.map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => selecionarModelo(m.id === modeloSelecionadoId ? SEM_MODELO : m.id)}
+                        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                          m.id === modeloSelecionadoId
+                            ? 'border-primary/30 bg-primary/5 text-primary'
+                            : 'border-border bg-card text-foreground hover:border-border'
+                        }`}
+                      >
+                        <FolderOpen className={`h-4 w-4 shrink-0 ${m.id === modeloSelecionadoId ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <span className="flex-1 truncate font-medium">{m.titulo}</span>
+                        {m.id === modeloSelecionadoId && <CheckCircle className="h-4 w-4 shrink-0 text-primary" />}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Opção: gerar do zero com IA */}
               <button
                 type="button"
-                onClick={() => selecionarModelo(null)}
+                onClick={() => selecionarModelo(SEM_MODELO)}
                 className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
-                  !modeloSelecionadoId && !modeloTexto
+                  modeloSelecionadoId === SEM_MODELO
                     ? 'border-primary/30 bg-primary/5 text-primary'
                     : 'border-border bg-card text-muted-foreground hover:border-border'
                 }`}
               >
-                <Sparkles className={`h-4 w-4 shrink-0 ${!modeloSelecionadoId && !modeloTexto ? 'text-primary' : 'text-muted-foreground'}`} />
+                <Sparkles className={`h-4 w-4 shrink-0 ${modeloSelecionadoId === SEM_MODELO ? 'text-primary' : 'text-muted-foreground'}`} />
                 <span className="flex-1">Gerar do zero com IA (sem modelo)</span>
               </button>
 
@@ -429,10 +487,6 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
                 <span className="text-xs text-muted-foreground">ou enviar novo modelo</span>
                 <div className="flex-1 border-t border-border" />
               </div>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-warning">
-              Nenhum modelo salvo. Envie um modelo abaixo ou gere com IA.
             </div>
           )}
 
@@ -506,7 +560,7 @@ export function ContratoFormClient({ role: _role, clienteInicial }: ContratoForm
         {contratoId && !gerando && (
           <Button
             variant="secondary"
-            onClick={() => { window.location.href = `/contratos/${contratoId}` }}
+            onClick={() => router.replace(`/contratos/${contratoId}`)}
             className="gap-2"
           >
             Abrir editor

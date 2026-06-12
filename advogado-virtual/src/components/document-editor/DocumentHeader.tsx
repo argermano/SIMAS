@@ -12,7 +12,7 @@ interface DocumentHeaderProps {
   onBaixarDocx: () => void
   onCopiar: () => void
   baixando: boolean
-  onSalvar?: () => void
+  onSalvar?: () => void | Promise<void>
   salvando?: boolean
   extraAcoes?: ReactNode
   onComandoIa?: () => void
@@ -33,12 +33,18 @@ export function DocumentHeader({
   onBuscarJurisprudencia,
 }: DocumentHeaderProps) {
   const [salvo, setSalvo] = useState(false)
+  const [salvandoLocal, setSalvandoLocal] = useState(false)
 
   async function handleSalvar() {
-    if (!onSalvar) return
-    onSalvar()
-    setSalvo(true)
-    setTimeout(() => setSalvo(false), 2000)
+    if (!onSalvar || salvandoLocal || salvo) return
+    setSalvandoLocal(true)
+    try {
+      await onSalvar()
+      setSalvo(true)
+      setTimeout(() => setSalvo(false), 2000)
+    } finally {
+      setSalvandoLocal(false)
+    }
   }
   const [editando, setEditando]     = useState(false)
   const [rascunho, setRascunho]     = useState(titulo)
@@ -122,8 +128,8 @@ export function DocumentHeader({
 
         {/* Salvar (opcional) */}
         {onSalvar && (
-          <Button size="sm" variant="secondary" onClick={handleSalvar} disabled={salvando || salvo} className="gap-1.5">
-            {salvando
+          <Button size="sm" variant="secondary" onClick={handleSalvar} disabled={salvando || salvandoLocal || salvo} className="gap-1.5">
+            {salvando || salvandoLocal
               ? <Loader2 className="h-4 w-4 animate-spin" />
               : salvo
                 ? <Check className="h-4 w-4" />

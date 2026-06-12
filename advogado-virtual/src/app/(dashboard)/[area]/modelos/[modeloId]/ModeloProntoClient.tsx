@@ -66,6 +66,8 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
   const [modoEditor, setModoEditor]           = useState(false)
   const [baixandoModelo, setBaixandoModelo]   = useState(false)
   const [salvandoCaso, setSalvandoCaso]       = useState(false)
+  // Id do documento já anexado ao caso — em re-saves, atualiza o mesmo (não duplica)
+  const [documentoIdSalvo, setDocumentoIdSalvo] = useState<string | null>(null)
 
   // Campos extras por tipo
   const [objeto, setObjeto]                         = useState('')
@@ -192,13 +194,14 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
       const res = await fetch(`/api/atendimentos/${atendimentoId}/documentos/anexar-gerado`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: tipoModelo, titulo: tipoNome, conteudo }),
+        body: JSON.stringify({ tipo: tipoModelo, titulo: tipoNome, conteudo, documentoId: documentoIdSalvo }),
       })
+      const d = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
         toastError('Erro', d.error ?? 'Falha ao anexar ao caso')
         return
       }
+      if (d.documento?.id) setDocumentoIdSalvo(d.documento.id)
       success('Anexado ao caso!', 'O documento está em Documentos do Caso.')
     } catch {
       toastError('Erro', 'Falha de rede')

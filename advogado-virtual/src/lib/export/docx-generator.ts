@@ -65,6 +65,9 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
   const e = estiloParaDocx(estilo)
   const compacto = opts?.compacto ?? false
   const afterCorpo = compacto ? 60 : 120
+  // No compacto reduz a entrelinha (máx. ~1,15) p/ caber em uma página mesmo com
+  // cabeçalho/rodapé do papel timbrado consumindo a área útil.
+  const lineCorpo = compacto ? Math.min(e.lineSpacing, 276) : e.lineSpacing
   const lines = limparMarkdownParaDocx(markdown).split('\n')
   const paragraphs: Paragraph[] = []
 
@@ -124,7 +127,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       const texto = trimmed.replace(/^#\s*/, '').replace(/\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 360, after: 240 },
+        spacing: { before: compacto ? 120 : 360, after: compacto ? 120 : 240 },
         children: [new TextRun({ text: texto.toUpperCase(), bold: true, size: e.size, font: e.font, color: COLOR_BLACK })],
       }))
       continue
@@ -135,7 +138,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       const texto = trimmed.replace(/^##\s*/, '').replace(/\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.LEFT,
-        spacing: { before: 360, after: 200 },
+        spacing: { before: compacto ? 160 : 360, after: compacto ? 100 : 200 },
         children: [new TextRun({ text: texto, bold: true, size: e.size, font: e.font, color: COLOR_BLACK })],
       }))
       continue
@@ -144,7 +147,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       const texto = trimmed.replace(/^###\s*/, '').replace(/\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.LEFT,
-        spacing: { before: 240, after: 160 },
+        spacing: { before: compacto ? 120 : 240, after: compacto ? 80 : 160 },
         children: [new TextRun({ text: texto, bold: true, size: e.size, font: e.font, color: COLOR_BLACK })],
       }))
       continue
@@ -154,7 +157,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
     if (/^[IVXLCDM]+[\.\s–\-]/.test(trimmed) || /^\d+\.\s/.test(trimmed)) {
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: 80, line: e.lineSpacing },
+        spacing: { after: 80, line: lineCorpo },
         indent: { left: e.indentFirstLine },
         children: parseInlineFormatting(trimmed, e.size, e.font),
       }))
@@ -166,7 +169,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       const texto = trimmed.replace(/^-\s*/, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: 60, line: e.lineSpacing },
+        spacing: { after: 60, line: lineCorpo },
         indent: { left: e.indentFirstLine },
         children: parseInlineFormatting(texto, e.size, e.font),
       }))
@@ -179,7 +182,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       enderecamentoAplicado = true
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: convertMillimetersToTwip(80), line: e.lineSpacing },
+        spacing: { after: convertMillimetersToTwip(80), line: lineCorpo },
         children: parseInlineFormatting(trimmed, e.size, e.font, true),
       }))
       continue
@@ -188,7 +191,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
     // Parágrafo normal — justificado, recuo de 1ª linha, entrelinha do estilo
     paragraphs.push(new Paragraph({
       alignment: AlignmentType.JUSTIFIED,
-      spacing: { after: afterCorpo, line: e.lineSpacing },
+      spacing: { after: afterCorpo, line: lineCorpo },
       indent: { firstLine: e.indentFirstLine },
       children: parseInlineFormatting(trimmed, e.size, e.font),
     }))

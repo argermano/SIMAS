@@ -10,9 +10,9 @@ export const metadata = { title: 'Novo Contrato de Honorários' }
 export default async function NovoContratoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ cliente_id?: string }>
+  searchParams: Promise<{ cliente_id?: string; atendimentoId?: string }>
 }) {
-  const { cliente_id } = await searchParams
+  const { cliente_id, atendimentoId } = await searchParams
 
   const supabase = await createClient()
 
@@ -58,7 +58,7 @@ export default async function NovoContratoPage({
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-3xl">
-          <ContratoFormClient role={usuario.role} clienteInicial={clienteInicial} />
+          <ContratoFormClient role={usuario.role} clienteInicial={clienteInicial} atendimentoIdInicial={atendimentoId} />
         </div>
       </main>
     </>
