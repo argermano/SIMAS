@@ -479,9 +479,11 @@ export function TelaAtendimento({
       {(pecasExistentes.length > 0 || contratosExistentes.length > 0 || cliente) && (
         <DocumentosDoCaso
           area={area}
+          atendimentoId={atendimentoId}
           cliente={cliente}
           pecasExistentes={pecasExistentes}
           contratosExistentes={contratosExistentes}
+          documentosAnexados={documentosExistentes}
         />
       )}
 

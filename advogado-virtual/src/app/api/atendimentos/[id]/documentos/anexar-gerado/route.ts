@@ -1,0 +1,75 @@
+import { NextResponse } from 'next/server'
+import { getAuthContext } from '@/lib/auth'
+import { jsonError } from '@/lib/api'
+import { markdownToDocx } from '@/lib/export/docx-generator'
+import { aplicarTimbrado } from '@/lib/export/aplicar-timbrado'
+import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
+
+const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+// POST /api/atendimentos/[id]/documentos/anexar-gerado
+// Gera o .docx a partir do markdown (estilo do escritório + papel timbrado, se houver)
+// e ANEXA ao caso (tabela documentos), aparecendo em "Documentos do Caso".
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
+
+  const { tipo, titulo, conteudo } = (await req.json().catch(() => ({}))) as {
+    tipo?: string
+    titulo?: string
+    conteudo?: string
+  }
+  if (!conteudo?.trim()) return jsonError('Conteúdo obrigatório', 400)
+
+  const { data: atendimento } = await supabase
+    .from('atendimentos')
+    .select('id, cliente_id')
+    .eq('id', id)
+    .eq('tenant_id', usuario.tenant_id)
+    .single()
+  if (!atendimento) return jsonError('Atendimento não encontrado', 404)
+
+  // Gera o .docx (mesmo pipeline do export) e aplica o papel timbrado, se houver
+  const estilo = await carregarEstiloTenant(supabase, usuario.tenant_id)
+  let buffer = await markdownToDocx(conteudo, { titulo, estilo })
+  const { data: timbrado } = await supabase.storage
+    .from('documentos')
+    .download(`${usuario.tenant_id}/timbrado/timbrado.docx`)
+  if (timbrado) {
+    try {
+      buffer = aplicarTimbrado(Buffer.from(await timbrado.arrayBuffer()), buffer)
+    } catch (err) {
+      console.error('[anexar-gerado] falha ao aplicar timbrado:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  const base = (titulo ?? 'documento').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_')
+  const fileName = `${base}.docx`
+  const path = `${usuario.tenant_id}/${id}/docs/${Date.now()}_${fileName}`
+
+  const { error: upErr } = await supabase.storage
+    .from('documentos')
+    .upload(path, buffer, { contentType: DOCX_MIME, upsert: true })
+  if (upErr) return jsonError(`Falha ao salvar o documento: ${upErr.message}`, 500)
+
+  const { data: documento, error } = await supabase
+    .from('documentos')
+    .insert({
+      atendimento_id: id,
+      cliente_id: atendimento.cliente_id ?? null,
+      tenant_id: usuario.tenant_id,
+      tipo: tipo ?? 'outro',
+      file_url: path,
+      file_name: fileName,
+      mime_type: DOCX_MIME,
+      tamanho_bytes: buffer.length,
+      texto_extraido: conteudo.slice(0, 5000),
+    })
+    .select()
+    .single()
+
+  if (error) return jsonError(error.message, 500)
+  return NextResponse.json({ documento }, { status: 201 })
+}

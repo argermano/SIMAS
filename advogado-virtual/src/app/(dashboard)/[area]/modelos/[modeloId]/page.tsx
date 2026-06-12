@@ -27,10 +27,10 @@ export default async function ModeloProntoPage({
   searchParams,
 }: {
   params: Promise<{ area: string; modeloId: string }>
-  searchParams: Promise<{ clienteId?: string }>
+  searchParams: Promise<{ clienteId?: string; atendimentoId?: string }>
 }) {
   const { area, modeloId } = await params
-  const { clienteId: clienteIdParam } = await searchParams
+  const { clienteId: clienteIdParam, atendimentoId: atendimentoIdParam } = await searchParams
 
   const areaConfig = AREAS[area as AreaId]
   if (!areaConfig || !areaConfig.ativo) notFound()
@@ -75,6 +75,7 @@ export default async function ModeloProntoPage({
             tipo={modeloId}
             tipoNome={modelo.nome}
             clienteIdInicial={clienteIdParam}
+            atendimentoId={atendimentoIdParam}
           />
         </div>
       </main>

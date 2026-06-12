@@ -34,11 +34,12 @@ interface ModeloProntoClientProps {
   tipo: string
   tipoNome: string
   clienteIdInicial?: string
+  atendimentoId?: string
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
-export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloProntoClientProps) {
+export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimentoId }: ModeloProntoClientProps) {
   const tipoModelo = tipo as TipoModelo
   const { success, error: toastError } = useToast()
 
@@ -53,6 +54,8 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
   const [gerando, setGerando]                 = useState(false)
   const [documentoGerado, setDocumentoGerado] = useState('')
   const [modoEditor, setModoEditor]           = useState(false)
+  const [baixandoModelo, setBaixandoModelo]   = useState(false)
+  const [salvandoCaso, setSalvandoCaso]       = useState(false)
 
   // Campos extras por tipo
   const [objeto, setObjeto]                         = useState('')
@@ -103,59 +106,92 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
     return campos
   }
 
-  // Gerar: se houver modelo .docx do escritório → preenche e baixa (mantém a formatação);
-  // senão → gera com IA e abre o editor para revisão.
+  // Gerar → abre o editor para revisão (não baixa nada automaticamente)
   async function gerar() {
     if (!cliente) {
       toastError('Atenção', 'Selecione um cliente para gerar o documento')
       return
     }
     setGerando(true)
+    setDocumentoGerado('')
     try {
       const camposExtras = montarCamposExtras()
-
-      if (modeloDocxExiste) {
-        const res = await fetch('/api/documentos/exportar-modelo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tipo: tipoModelo, clienteId: cliente.id, camposExtras }),
-        })
-        if (!res.ok) {
-          const d = await res.json().catch(() => ({}))
-          toastError('Erro', d.error ?? 'Não foi possível gerar o documento')
-          return
-        }
-        const blob = await res.blob()
-        const url  = URL.createObjectURL(blob)
-        const a    = document.createElement('a')
-        a.href     = url
-        a.download = `${tipoNome.replace(/\s+/g, '_')}_${cliente.nome.replace(/\s+/g, '_')}.docx`
-        a.click()
-        URL.revokeObjectURL(url)
-        success('Documento gerado!', 'Preenchido no modelo .docx do escritório.')
-      } else {
-        const res = await fetch('/api/ia/gerar-documento', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tipo: tipoModelo,
-            clienteId: cliente.id,
-            camposExtras: Object.keys(camposExtras).length > 0 ? camposExtras : undefined,
-          }),
-        })
-        const data = await res.json()
-        if (!res.ok) {
-          toastError('Erro', data.error ?? 'Falha ao gerar documento')
-          return
-        }
-        setDocumentoGerado(data.conteudo)
-        setModoEditor(true)
-        success('Documento gerado com IA!', 'Revise e exporte no editor.')
+      const res = await fetch('/api/ia/gerar-documento', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: tipoModelo,
+          clienteId: cliente.id,
+          camposExtras: Object.keys(camposExtras).length > 0 ? camposExtras : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toastError('Erro', data.error ?? 'Falha ao gerar documento')
+        return
       }
+      setDocumentoGerado(data.conteudo)
+      setModoEditor(true)
     } catch {
       toastError('Erro', 'Falha de rede')
     } finally {
       setGerando(false)
+    }
+  }
+
+  // Baixa no modelo .docx do escritório (formatação exata) — ação do editor
+  async function baixarModelo() {
+    if (!cliente) return
+    setBaixandoModelo(true)
+    try {
+      const res = await fetch('/api/documentos/exportar-modelo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: tipoModelo, clienteId: cliente.id, camposExtras: montarCamposExtras() }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toastError('Modelo não disponível', d.error ?? 'Não foi possível gerar o documento')
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `${tipoNome.replace(/\s+/g, '_')}_${cliente.nome.replace(/\s+/g, '_')}.docx`
+      a.click()
+      URL.revokeObjectURL(url)
+      success('DOCX gerado!', 'Modelo do escritório preenchido.')
+    } catch {
+      toastError('Erro', 'Falha de rede')
+    } finally {
+      setBaixandoModelo(false)
+    }
+  }
+
+  // Anexa o documento (markdown do editor) a "Documentos do Caso"
+  async function salvarNoCaso(conteudo: string) {
+    if (!atendimentoId) {
+      toastError('Sem caso vinculado', 'Abra a geração a partir de um atendimento para anexar ao caso.')
+      return
+    }
+    setSalvandoCaso(true)
+    try {
+      const res = await fetch(`/api/atendimentos/${atendimentoId}/documentos/anexar-gerado`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: tipoModelo, titulo: tipoNome, conteudo }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toastError('Erro', d.error ?? 'Falha ao anexar ao caso')
+        return
+      }
+      success('Anexado ao caso!', 'O documento está em Documentos do Caso.')
+    } catch {
+      toastError('Erro', 'Falha de rede')
+    } finally {
+      setSalvandoCaso(false)
     }
   }
 
@@ -167,6 +203,21 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
         titulo={tipoNome}
         conteudo={documentoGerado}
         onVoltar={() => setModoEditor(false)}
+        onSalvar={atendimentoId ? salvarNoCaso : undefined}
+        salvando={salvandoCaso}
+        extraAcoes={modeloDocxExiste && cliente ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={baixarModelo}
+            disabled={baixandoModelo}
+            className="gap-1.5"
+            title="Baixar no modelo .docx do escritório (formatação exata)"
+          >
+            {baixandoModelo ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            Meu modelo (.docx)
+          </Button>
+        ) : undefined}
       />
     )
   }
@@ -203,7 +254,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial }: ModeloP
           ) : modeloDocxExiste ? (
             <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/5 px-4 py-3 text-sm font-medium text-success">
               <CheckCircle className="h-4 w-4 shrink-0" />
-              Modelo .docx cadastrado — a geração preenche o seu modelo, preservando a formatação.
+              Modelo .docx cadastrado — no editor, use &quot;Meu modelo (.docx)&quot; para o layout exato do escritório.
             </div>
           ) : (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
