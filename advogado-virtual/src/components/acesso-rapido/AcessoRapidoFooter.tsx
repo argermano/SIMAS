@@ -63,6 +63,7 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
   // ── Estado compartilhado por procuração e declaração ──
   const [objeto,           setObjeto]           = useState('')
   const [rendaMensal,      setRendaMensal]      = useState('')
+  const [numeroDependentes, setNumeroDependentes] = useState('')
   const [templateExiste,   setTemplateExiste]   = useState(false)
   const [gerandoDoc,       setGerandoDoc]       = useState(false)
   const [documentoGerado,  setDocumentoGerado]  = useState('')
@@ -73,6 +74,8 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
   const [editorAberto,   setEditorAberto]   = useState(false)
   const [editorTitulo,   setEditorTitulo]   = useState('')
   const [editorConteudo, setEditorConteudo] = useState('')
+  const [editorTipo,     setEditorTipo]     = useState('')
+  const [salvandoCaso,   setSalvandoCaso]   = useState(false)
 
   // ── Carregar modelos de contrato existentes ──
   const carregarModelos = useCallback(async () => {
@@ -111,6 +114,7 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
     setDocumentoGerado('')
     setObjeto('')
     setRendaMensal('')
+    setNumeroDependentes('')
     setTemplateExiste(false)
     setTemplateConteudo('')
   }
@@ -270,8 +274,9 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
     setGerandoDoc(true)
     const tipoApi: TipoDoc = tipo === 'declaracao' ? 'declaracao_hipossuficiencia' : 'procuracao'
     const camposExtras: Record<string, string> = {}
-    if (objeto)      camposExtras.objeto       = objeto
-    if (rendaMensal) camposExtras.renda_mensal = rendaMensal
+    if (objeto)            camposExtras.objeto             = objeto
+    if (rendaMensal)       camposExtras.renda_mensal       = rendaMensal
+    if (numeroDependentes) camposExtras.numero_dependentes = numeroDependentes
 
     try {
       const res = await fetch('/api/ia/gerar-documento', {
@@ -293,6 +298,29 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
       if (!data.templateExistia) success('Template salvo!', 'Próximas gerações serão mais rápidas e sem IA.')
     } catch { toastError('Erro', 'Falha de rede') }
     finally   { setGerandoDoc(false) }
+  }
+
+  // ── Anexar o documento gerado a "Documentos do Caso" ──
+  async function salvarNoCaso(conteudo: string) {
+    if (!atendimentoId) {
+      toastError('Sem caso vinculado', 'Não há atendimento para anexar o documento.')
+      return
+    }
+    setSalvandoCaso(true)
+    try {
+      const res = await fetch(`/api/atendimentos/${atendimentoId}/documentos/anexar-gerado`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ tipo: editorTipo, titulo: editorTitulo, conteudo }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toastError('Erro', d.error ?? 'Falha ao anexar ao caso')
+        return
+      }
+      success('Anexado ao caso!', 'O documento está em Documentos do Caso.')
+    } catch { toastError('Erro', 'Falha de rede') }
+    finally   { setSalvandoCaso(false) }
   }
 
   // ── Salvar template editado ──
@@ -340,6 +368,7 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
     function abrirEditor() {
       setEditorTitulo(titulo)
       setEditorConteudo(documentoGerado)
+      setEditorTipo(tipoDoc)
       setModalAberto(null)
       setEditorAberto(true)
     }
@@ -405,12 +434,20 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
             />
           )}
           {!documentoGerado && tipo === 'declaracao' && (
-            <Input
-              label="Renda mensal aproximada (opcional)"
-              value={rendaMensal}
-              onChange={e => setRendaMensal(e.target.value)}
-              placeholder="Ex.: R$ 1.500,00"
-            />
+            <>
+              <Input
+                label="Renda mensal aproximada (opcional)"
+                value={rendaMensal}
+                onChange={e => setRendaMensal(e.target.value)}
+                placeholder="Ex.: R$ 1.500,00"
+              />
+              <Input
+                label="Número de dependentes (opcional)"
+                value={numeroDependentes}
+                onChange={e => setNumeroDependentes(e.target.value)}
+                placeholder="Ex.: 2"
+              />
+            </>
           )}
           {documentoGerado && (
             <div className="flex flex-col items-center gap-3 py-4">
@@ -632,6 +669,8 @@ export function AcessoRapidoFooter({ atendimentoId, clienteId, area }: AcessoRap
           titulo={editorTitulo}
           conteudo={editorConteudo}
           onVoltar={() => { setEditorAberto(false); resetDocModal() }}
+          onSalvar={atendimentoId ? salvarNoCaso : undefined}
+          salvando={salvandoCaso}
         />
       )}
 
