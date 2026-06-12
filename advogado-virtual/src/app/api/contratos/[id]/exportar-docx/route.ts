@@ -39,6 +39,7 @@ export async function POST(
   const buffer = await markdownToDocx(contrato.conteudo_markdown, {
     titulo: contrato.titulo ?? 'Contrato',
     estilo,
+    contrato: true,
   })
 
   const fileName = (contrato.titulo ?? 'contrato').replace(/[^a-zA-Z0-9\s_-]/g, '').trim()

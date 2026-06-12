@@ -123,8 +123,12 @@ REGRAS OBRIGATÓRIAS:
 4. Se um dado não está disponível no sistema, use [PREENCHER campo] como placeholder
 5. Se preencher um campo por aproximação (nome da variável diferente), marque com [⚠ preenchido por aproximação]
 6. Atualize a data do contrato para a data atual
-7. Responda APENAS com o contrato completo preenchido em Markdown
-8. O resultado DEVE ser o modelo do advogado com os dados preenchidos, NÃO um contrato novo
+7. BLOCO DE ASSINATURAS (ao final): para CADA parte, gere uma linha de sublinhados
+   "___________________________", depois o NOME do signatário em **negrito** e, nas linhas
+   seguintes, o papel (CONTRATANTE/CONTRATADA) e os dados aplicáveis (OAB nº etc.), um por linha.
+   Coloque a linha "Cidade, DD de mês de AAAA" logo antes das assinaturas.
+8. Responda APENAS com o contrato completo preenchido em Markdown
+9. O resultado DEVE ser o modelo do advogado com os dados preenchidos, NÃO um contrato novo
 `.trim()
 
 export const SYSTEM_CONTRATO_HONORARIOS = `
@@ -280,7 +284,9 @@ Gere um contrato completo com as seguintes cláusulas:
 9. **Da confidencialidade** (sigilo profissional e LGPD)
 10. **Do foro** (comarca eleita para dirimir conflitos)
 11. **Das disposições gerais**
-12. **Assinaturas e data** (local, data do contrato informada acima, CONTRATANTE, CONTRATADO + OAB)
+12. **Assinaturas e data**: linha "Cidade, DD de mês de AAAA" e, para CADA parte, uma linha de
+    sublinhados "___________________________", o NOME em **negrito** e abaixo o papel
+    (CONTRATANTE/CONTRATADO + OAB), um por linha
 
 Responda com o contrato COMPLETO em Markdown. Use ## para cláusulas principais, texto corrido formal. Use a data do contrato informada acima (NÃO use [PREENCHER] para a data).
 `.trim()

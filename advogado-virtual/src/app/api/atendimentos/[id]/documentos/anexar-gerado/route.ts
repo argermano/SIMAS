@@ -15,6 +15,14 @@ const TIPOS_COMPACTOS = new Set([
   'substabelecimento',
 ])
 
+// Contratos/notificações: denso (multi-página) com fecho/assinaturas centralizados
+const TIPOS_CONTRATO = new Set([
+  'contrato',
+  'contrato_honorarios',
+  'notificacao',
+  'notificacao_extrajudicial',
+])
+
 // POST /api/atendimentos/[id]/documentos/anexar-gerado
 // Gera o .docx a partir do markdown (estilo do escritório + papel timbrado, se houver)
 // e ANEXA ao caso (tabela documentos), aparecendo em "Documentos do Caso".
@@ -42,7 +50,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // Gera o .docx (mesmo pipeline do export) e aplica o papel timbrado, se houver
   const estilo = await carregarEstiloTenant(supabase, usuario.tenant_id)
-  let buffer = await markdownToDocx(conteudo, { titulo, estilo, compacto: TIPOS_COMPACTOS.has(tipo ?? '') })
+  let buffer = await markdownToDocx(conteudo, {
+    titulo, estilo,
+    compacto: TIPOS_COMPACTOS.has(tipo ?? ''),
+    contrato: TIPOS_CONTRATO.has(tipo ?? ''),
+  })
   const { data: timbrado } = await supabase.storage
     .from('documentos')
     .download(`${usuario.tenant_id}/timbrado/timbrado.docx`)

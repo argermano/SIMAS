@@ -14,6 +14,10 @@ export { limparMarkdownParaDocx }
 // Endereçamento ao juízo (1ª linha da peça): "EXCELENTÍSSIMO...", "EXMO.", "AO JUÍZO..."
 const RE_ENDERECAMENTO = /^\s*(?:EXCELENT[IÍ]SSIM|EXM[OA]\b|MERIT[IÍ]SSIM|AO\s+(?:JU[IÍ]ZO|EXCELENT|MERIT|DOUTO))/i
 
+// Fecho do contrato: linha ISOLADA "Cidade, [em] DD de MÊS de AAAA" (a data encerra a linha)
+// — inicia o bloco data + assinaturas. O âncora final evita pegar datas no meio do texto.
+const RE_FECHO_DATA = /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ\s().\/-]*,\s*(?:em\s+)?\d{1,2}\s+de\s+[A-Za-zà-ÿ]+\s+de\s+\d{4}\.?\s*$/i
+
 /** Valores do estilo já convertidos para as unidades do docx. */
 interface EstiloDocx {
   font: string
@@ -54,6 +58,11 @@ interface DocxOptions {
    * de modo que o documento caiba em uma única página.
    */
   compacto?: boolean
+  /**
+   * Modo contrato: espaçamento mais denso (entrelinha ~1,15, sem parágrafos vazios)
+   * aproximando-se dos modelos do escritório, e CENTRALIZA o fecho (data + assinaturas).
+   */
+  contrato?: boolean
 }
 
 /**
@@ -64,14 +73,18 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
   const estilo = resolverEstilo(opts?.estilo)
   const e = estiloParaDocx(estilo)
   const compacto = opts?.compacto ?? false
+  const contrato = opts?.contrato ?? false
+  // "tight": sem parágrafos vazios + títulos comprimidos (compacto e contrato)
+  const tight = compacto || contrato
   const afterCorpo = compacto ? 60 : 120
-  // No compacto reduz a entrelinha (máx. ~1,15) p/ caber em uma página mesmo com
-  // cabeçalho/rodapé do papel timbrado consumindo a área útil.
-  const lineCorpo = compacto ? Math.min(e.lineSpacing, 276) : e.lineSpacing
+  // Reduz a entrelinha (máx. ~1,15) em documentos densos (procuração/declaração/contrato),
+  // aproximando do padrão dos modelos do escritório (espaçamento praticamente simples).
+  const lineCorpo = tight ? Math.min(e.lineSpacing, 276) : e.lineSpacing
   const lines = limparMarkdownParaDocx(markdown).split('\n')
   const paragraphs: Paragraph[] = []
 
   let enderecamentoAplicado = false
+  let inFecho = false // contrato: a partir da data de encerramento, centraliza data + assinaturas
   let inBlockquote = false
   let blockquoteLines: string[] = []
 
@@ -101,9 +114,22 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
     }
 
     if (!trimmed) {
-      // Em modo compacto não emitimos parágrafo vazio: o espaço entre parágrafos
-      // já vem do spacing.after, evitando que o documento "estoure" para 2ª página.
-      if (!compacto) paragraphs.push(new Paragraph({ spacing: { after: 120 } }))
+      // Em modo denso (compacto/contrato) não emitimos parágrafo vazio: o espaço entre
+      // parágrafos já vem do spacing.after, evitando documento "arejado"/estourar página.
+      if (!tight) paragraphs.push(new Paragraph({ spacing: { after: 120 } }))
+      continue
+    }
+
+    // Fecho de contrato/procuração/declaração: a partir da linha de data ("Cidade, DD de
+    // mês de AAAA"), centraliza tudo (data + assinaturas), como nos modelos do escritório.
+    // Vale para documentos densos (compacto/contrato); peças não usam.
+    if (tight && !inFecho && RE_FECHO_DATA.test(trimmed)) inFecho = true
+    if (inFecho) {
+      paragraphs.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: afterCorpo, line: lineCorpo },
+        children: parseInlineFormatting(trimmed, e.size, e.font),
+      }))
       continue
     }
 
@@ -127,7 +153,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       const texto = trimmed.replace(/^#\s*/, '').replace(/\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: compacto ? 120 : 360, after: compacto ? 120 : 240 },
+        spacing: { before: tight ? 120 : 360, after: tight ? 120 : 240 },
         children: [new TextRun({ text: texto.toUpperCase(), bold: true, size: e.size, font: e.font, color: COLOR_BLACK })],
       }))
       continue
@@ -138,7 +164,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       const texto = trimmed.replace(/^##\s*/, '').replace(/\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.LEFT,
-        spacing: { before: compacto ? 160 : 360, after: compacto ? 100 : 200 },
+        spacing: { before: tight ? 160 : 360, after: tight ? 100 : 200 },
         children: [new TextRun({ text: texto, bold: true, size: e.size, font: e.font, color: COLOR_BLACK })],
       }))
       continue
@@ -147,7 +173,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
       const texto = trimmed.replace(/^###\s*/, '').replace(/\*/g, '')
       paragraphs.push(new Paragraph({
         alignment: AlignmentType.LEFT,
-        spacing: { before: compacto ? 120 : 240, after: compacto ? 80 : 160 },
+        spacing: { before: tight ? 120 : 240, after: tight ? 80 : 160 },
         children: [new TextRun({ text: texto, bold: true, size: e.size, font: e.font, color: COLOR_BLACK })],
       }))
       continue

@@ -213,6 +213,11 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
         onVoltar={() => { if (atendimentoId) router.back(); else setModoEditor(false) }}
         onSalvar={atendimentoId ? salvarNoCaso : undefined}
         salvando={salvandoCaso}
+        exportOpts={
+          tipoModelo === 'procuracao' || tipoModelo === 'declaracao_hipossuficiencia' || tipoModelo === 'substabelecimento'
+            ? { compacto: true }   // documentos de 1 página
+            : { contrato: true }   // contrato/notificação: denso, multi-página
+        }
         extraAcoes={modeloDocxExiste && cliente ? (
           <Button
             size="sm"

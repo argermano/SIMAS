@@ -249,6 +249,7 @@ export function EditorContratoClient({
           onSalvar={handleSalvar}
           salvando={salvando}
           extraAcoes={<>{acaoAprovar}{acaoAssinar}</>}
+          exportOpts={{ contrato: true }}
         />
 
         {temAssinaturaAtiva && (

@@ -52,9 +52,11 @@ interface DocumentEditorProps {
   onSalvar?: (conteudo: string) => Promise<void> | void
   salvando?: boolean
   extraAcoes?: ReactNode
+  /** Opções de exportação .docx (ex.: { contrato: true } ou { compacto: true }). */
+  exportOpts?: { compacto?: boolean; contrato?: boolean }
 }
 
-export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSalvar, salvando, extraAcoes }: DocumentEditorProps) {
+export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSalvar, salvando, extraAcoes, exportOpts }: DocumentEditorProps) {
   const { success, error: toastError } = useToast()
   const [titulo, setTitulo]           = useState(tituloInicial)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -103,7 +105,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
       const res = await fetch('/api/exportar-documento', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ conteudo: md, titulo }),
+        body:    JSON.stringify({ conteudo: md, titulo, ...exportOpts }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -123,7 +125,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
     } finally {
       setBaixando(false)
     }
-  }, [editor, titulo])
+  }, [editor, titulo, exportOpts])
 
   // contexto para a IA: título + primeiros 500 chars do markdown
   const contextoDocumento = `Documento: ${titulo}\n\n${getMarkdown().slice(0, 500)}`

@@ -8,7 +8,9 @@ import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
 // POST /api/exportar-documento — gerar DOCX a partir de markdown raw (sem pecaId)
 export async function POST(req: NextRequest) {
   try {
-    const { conteudo, titulo } = await req.json() as { conteudo: string; titulo?: string }
+    const { conteudo, titulo, contrato, compacto } = await req.json() as {
+      conteudo: string; titulo?: string; contrato?: boolean; compacto?: boolean
+    }
 
     if (!conteudo?.trim()) {
       return jsonError('Conteúdo obrigatório', 400)
@@ -19,7 +21,7 @@ export async function POST(req: NextRequest) {
     const { supabase, usuario } = auth
 
     const estilo = await carregarEstiloTenant(supabase, usuario.tenant_id)
-    let buffer = await markdownToDocx(conteudo, { titulo, estilo })
+    let buffer = await markdownToDocx(conteudo, { titulo, estilo, contrato, compacto })
 
     // Aplica o papel timbrado do escritório, se houver (preserva cabeçalho/marca d'água/rodapé)
     const { data: timbrado } = await supabase.storage
