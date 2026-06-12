@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,7 @@ import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
 import {
   Users, MessageSquare, Mic, Keyboard, Brain, Loader2, Save,
   AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle, UserCheck,
-  Printer, Mail,
+  Printer, Mail, Paperclip,
 } from 'lucide-react'
 import { ChatDiagnostico } from '@/components/atendimento/ChatDiagnostico'
 
@@ -56,6 +56,47 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
   const [carregando,       setCarregando]       = useState(!!atendimentoIdInicial)
   const [salvando,         setSalvando]         = useState(false)
   const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string }>>([])
+  // Anexo de resumo/transcrição no modo "Digitar": o texto extraído entra no relato (e na análise)
+  const arquivoTextoRef = useRef<HTMLInputElement>(null)
+  const [extraindoArquivo, setExtraindoArquivo] = useState(false)
+
+  async function anexarArquivoTexto(file: File) {
+    setExtraindoArquivo(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res  = await fetch('/api/extrair-texto', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toastError('Erro', data.error ?? 'Não foi possível ler o arquivo')
+        return
+      }
+      const extraido = String(data.texto ?? '').trim()
+      if (!extraido) {
+        const detalhe = data.erro ? ` (${data.erro})` : ''
+        toastError('Sem texto', `Não foi encontrado texto extraível no arquivo${detalhe}.`)
+        return
+      }
+      // Limita p/ não estourar o contexto da análise (arquivos muito grandes)
+      const MAX = 40_000
+      const trecho = extraido.length > MAX ? extraido.slice(0, MAX) : extraido
+      setTextoRelato(prev => {
+        const cabecalho = `--- Conteúdo de ${file.name} ---\n`
+        return prev.trim() ? `${prev.trim()}\n\n${cabecalho}${trecho}` : `${cabecalho}${trecho}`
+      })
+      success(
+        'Arquivo anexado',
+        extraido.length > MAX
+          ? 'Texto adicionado ao relato (arquivo grande — usei o início do conteúdo).'
+          : 'Texto adicionado ao relato e será usado na análise.',
+      )
+    } catch {
+      toastError('Erro', 'Falha de rede ao processar o arquivo')
+    } finally {
+      setExtraindoArquivo(false)
+      if (arquivoTextoRef.current) arquivoTextoRef.current.value = ''
+    }
+  }
 
   // Atualizar URL com atendimentoId sem navegar (preserva resultado ao voltar)
   const atualizarUrl = useCallback((id: string) => {
@@ -368,14 +409,42 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           )}
 
           {modoInput === 'texto' && (
-            <Textarea
-              label="Descreva o caso do cliente"
-              value={textoRelato}
-              onChange={(e) => setTextoRelato(e.target.value)}
-              placeholder="Ex.: Cliente trabalhou por 30 anos com carteira assinada, foi demitido sem justa causa e não recebeu todas as verbas rescisórias. Também tem problemas de saúde que podem ter relação com o trabalho..."
-              hint="Quanto mais detalhes, mais precisa será a análise da área jurídica"
-              rows={8}
-            />
+            <div className="space-y-3">
+              <Textarea
+                label="Descreva o caso do cliente"
+                value={textoRelato}
+                onChange={(e) => setTextoRelato(e.target.value)}
+                placeholder="Ex.: Cliente trabalhou por 30 anos com carteira assinada, foi demitido sem justa causa e não recebeu todas as verbas rescisórias. Também tem problemas de saúde que podem ter relação com o trabalho..."
+                hint="Quanto mais detalhes, mais precisa será a análise da área jurídica"
+                rows={8}
+              />
+
+              {/* Anexar resumo / transcrição — o texto extraído entra no relato e na análise */}
+              <input
+                ref={arquivoTextoRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.md"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) anexarArquivoTexto(f) }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => arquivoTextoRef.current?.click()}
+                  disabled={extraindoArquivo}
+                  className="gap-1.5"
+                >
+                  {extraindoArquivo
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Extraindo texto…</>
+                    : <><Paperclip className="h-4 w-4" /> Anexar resumo / transcrição</>}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  PDF, DOCX ou TXT — o conteúdo é adicionado ao relato e usado na análise
+                </span>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
