@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, Tag } from 'lucide-react'
+import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, Tag, CheckCircle, AlertTriangle, Info } from 'lucide-react'
 import { formatarData } from '@/lib/utils'
 import { isEncryptionConfigured } from '@/lib/encryption'
 import { LABELS_ROLE } from '@/types'
@@ -62,7 +62,7 @@ export default async function ConfiguracoesPage() {
             Escritório
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <CardContent className="pt-0">
           <InfoItem label="Nome do escritório" valor={tenant?.nome ?? '—'} />
           <InfoItem label="CNPJ" valor={tenant?.cnpj ?? 'Não informado'} />
           <InfoItem
@@ -95,7 +95,7 @@ export default async function ConfiguracoesPage() {
             Minha Conta
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <CardContent className="pt-0">
           <InfoItem label="Nome" valor={usuario.nome} />
           <InfoItem label="E-mail" valor={usuario.email} />
           <InfoItem
@@ -172,29 +172,16 @@ export default async function ConfiguracoesPage() {
             Segurança e Privacidade
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p className="flex items-start gap-2">
-            <span className="mt-0.5 text-success">✓</span>
-            Dados transmitidos com criptografia TLS
-          </p>
-          <p className="flex items-start gap-2">
-            <span className={`mt-0.5 ${criptoAtiva ? 'text-success' : 'text-warning'}`}>{criptoAtiva ? '✓' : '⚠'}</span>
+        <CardContent className="space-y-2.5 pt-0">
+          <ItemSeguranca>Dados transmitidos com criptografia TLS</ItemSeguranca>
+          <ItemSeguranca estado={criptoAtiva ? 'ok' : 'alerta'}>
             {criptoAtiva
               ? 'Dados sensíveis (CPF/RG) armazenados com criptografia (AES-256-GCM)'
               : 'Criptografia de CPF/RG inativa neste ambiente (ENCRYPTION_KEY não configurada)'}
-          </p>
-          <p className="flex items-start gap-2">
-            <span className="mt-0.5 text-success">✓</span>
-            Isolamento total entre escritórios (Row Level Security)
-          </p>
-          <p className="flex items-start gap-2">
-            <span className="mt-0.5 text-success">✓</span>
-            Chave de IA nunca exposta ao navegador
-          </p>
-          <p className="flex items-start gap-2">
-            <span className="mt-0.5 text-info">ℹ</span>
-            Em conformidade com a LGPD (Lei 13.709/2018)
-          </p>
+          </ItemSeguranca>
+          <ItemSeguranca>Isolamento total entre escritórios (Row Level Security)</ItemSeguranca>
+          <ItemSeguranca>Chave de IA nunca exposta ao navegador</ItemSeguranca>
+          <ItemSeguranca estado="info">Em conformidade com a LGPD (Lei 13.709/2018)</ItemSeguranca>
         </CardContent>
       </Card>
 
@@ -206,15 +193,21 @@ export default async function ConfiguracoesPage() {
             Plano e Uso
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-lg bg-warning/5 border border-warning/20 p-4">
-            <p className="text-base font-semibold text-warning">
-              Você está no plano Trial
-            </p>
-            <p className="mt-1 text-sm text-warning">
-              O plano trial permite testar todas as funcionalidades.
-              Em breve, planos pagos estarão disponíveis.
-            </p>
+        <CardContent className="pt-0">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
+            <div>
+              <p className="text-base font-semibold text-foreground">
+                {LABELS_PLANO[tenant?.plano ?? 'trial'] ?? tenant?.plano}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {tenant?.plano && tenant.plano !== 'trial'
+                  ? 'Plano ativo, com todas as funcionalidades liberadas.'
+                  : 'Período de testes — todas as funcionalidades liberadas. Planos pagos estarão disponíveis em breve.'}
+              </p>
+            </div>
+            <Badge variant={tenant?.status === 'ativo' ? 'success' : 'warning'}>
+              {tenant?.status === 'ativo' ? 'Ativo' : (tenant?.status ?? '—')}
+            </Badge>
           </div>
         </CardContent>
       </Card>
@@ -227,7 +220,7 @@ export default async function ConfiguracoesPage() {
             Versão do Sistema
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <CardContent className="pt-0">
           <InfoItem
             label="Build (commit)"
             valor={<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">{buildSha}</code>}
@@ -303,9 +296,26 @@ function InfoItem({
   valor: React.ReactNode
 }) {
   return (
-    <div>
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <div className="mt-1 text-base text-foreground">{valor}</div>
+    <div className="flex items-center justify-between gap-4 border-b border-border/60 py-2.5 last:border-0">
+      <p className="shrink-0 text-sm text-muted-foreground">{label}</p>
+      <div className="text-right text-sm font-medium text-foreground">{valor}</div>
     </div>
+  )
+}
+
+function ItemSeguranca({
+  estado = 'ok',
+  children,
+}: {
+  estado?: 'ok' | 'alerta' | 'info'
+  children: React.ReactNode
+}) {
+  const Icon = estado === 'ok' ? CheckCircle : estado === 'alerta' ? AlertTriangle : Info
+  const cor = estado === 'ok' ? 'text-success' : estado === 'alerta' ? 'text-warning' : 'text-info'
+  return (
+    <p className="flex items-start gap-2.5 text-sm text-muted-foreground">
+      <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${cor}`} />
+      <span>{children}</span>
+    </p>
   )
 }

@@ -25,7 +25,6 @@ import type { DadosExtraidosAutor, DadosExtraidosReu } from '@/lib/prompts/extra
 import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, UserCheck, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { AcessoRapidoFooter } from '@/components/acesso-rapido/AcessoRapidoFooter'
 
 const ESTADOS_BR = [
   { value: 'AC', label: 'AC' }, { value: 'AL', label: 'AL' }, { value: 'AP', label: 'AP' },
@@ -754,15 +753,6 @@ export function TelaAtendimento({
           <Zap className="h-5 w-5" />
           Gerar Peça IA
         </Button>
-      </div>
-
-      {/* Acesso Rápido */}
-      <div className="border-t pt-6">
-        <AcessoRapidoFooter
-          atendimentoId={atendimentoId}
-          clienteId={cliente?.id ?? null}
-          area={area}
-        />
       </div>
 
     </div>

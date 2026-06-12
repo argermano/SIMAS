@@ -1,10 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
-import { ScrollText, FileText, ExternalLink, FileSignature, FilePlus, Download } from 'lucide-react'
+import { ScrollText, FileText, ExternalLink, FileSignature, FilePlus, Download, Trash2, Loader2 } from 'lucide-react'
 
 interface PecaExistente {
   id: string
@@ -46,12 +47,28 @@ export function DocumentosDoCaso({
   contratosExistentes,
   documentosAnexados = [],
 }: DocumentosDoCasoProps) {
+  const [anexados, setAnexados] = useState<DocumentoAnexado[]>(documentosAnexados)
+  const [excluindo, setExcluindo] = useState<string | null>(null)
+
   async function baixarAnexado(docId: string) {
     try {
       const res = await fetch(`/api/documentos/${docId}/url`)
       const data = await res.json()
       if (data.url) window.open(data.url, '_blank')
     } catch { /* silencioso */ }
+  }
+
+  async function excluirAnexado(docId: string) {
+    if (!window.confirm('Excluir este documento do caso? Esta ação não pode ser desfeita.')) return
+    setExcluindo(docId)
+    try {
+      const res = await fetch(`/api/documentos/${docId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setAnexados((prev) => prev.filter((d) => d.id !== docId))
+      }
+    } catch { /* silencioso */ } finally {
+      setExcluindo(null)
+    }
   }
 
   return (
@@ -134,23 +151,36 @@ export function DocumentosDoCaso({
         )}
 
         {/* Documentos gerados/anexados (procuração, declaração, etc.) */}
-        {documentosAnexados.length > 0 && (
+        {anexados.length > 0 && (
           <div className="space-y-1.5">
             <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Documentos anexados</p>
-            {documentosAnexados.map((doc) => (
-              <button
+            {anexados.map((doc) => (
+              <div
                 key={doc.id}
-                onClick={() => baixarAnexado(doc.id)}
-                className="group flex w-full items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+                className="group flex items-center gap-1 rounded-lg border bg-card pr-1.5 transition-colors hover:bg-muted/50"
               >
-                <div className="flex min-w-0 items-center gap-2">
+                <button
+                  onClick={() => baixarAnexado(doc.id)}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5 text-left"
+                >
                   <FileText className="h-4 w-4 shrink-0 text-primary" />
                   <span className="truncate text-sm font-medium text-foreground">
                     {doc.file_name ?? doc.tipo}
                   </span>
-                </div>
-                <Download className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
-              </button>
+                  <Download className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+                </button>
+                <button
+                  onClick={() => excluirAnexado(doc.id)}
+                  disabled={excluindo === doc.id}
+                  title="Excluir documento"
+                  aria-label="Excluir documento"
+                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                >
+                  {excluindo === doc.id
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Trash2 className="h-3.5 w-3.5" />}
+                </button>
+              </div>
             ))}
           </div>
         )}

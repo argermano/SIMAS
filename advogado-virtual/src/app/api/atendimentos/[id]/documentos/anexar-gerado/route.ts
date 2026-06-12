@@ -7,6 +7,14 @@ import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
+// Documentos curtos que devem caber em uma única página (espaçamento compacto)
+const TIPOS_COMPACTOS = new Set([
+  'procuracao',
+  'declaracao',
+  'declaracao_hipossuficiencia',
+  'substabelecimento',
+])
+
 // POST /api/atendimentos/[id]/documentos/anexar-gerado
 // Gera o .docx a partir do markdown (estilo do escritório + papel timbrado, se houver)
 // e ANEXA ao caso (tabela documentos), aparecendo em "Documentos do Caso".
@@ -33,7 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // Gera o .docx (mesmo pipeline do export) e aplica o papel timbrado, se houver
   const estilo = await carregarEstiloTenant(supabase, usuario.tenant_id)
-  let buffer = await markdownToDocx(conteudo, { titulo, estilo })
+  let buffer = await markdownToDocx(conteudo, { titulo, estilo, compacto: TIPOS_COMPACTOS.has(tipo ?? '') })
   const { data: timbrado } = await supabase.storage
     .from('documentos')
     .download(`${usuario.tenant_id}/timbrado/timbrado.docx`)

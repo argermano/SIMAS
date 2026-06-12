@@ -31,6 +31,14 @@ const OPCOES_PAGAMENTO = [
   { value: 'Êxito',             label: 'Somente êxito'      },
 ]
 
+// Máscara de moeda (R$) a partir dos dígitos digitados: "150000" → "R$ 1.500,00"
+function formatarMoedaInput(valor: string): string {
+  const digitos = valor.replace(/\D/g, '')
+  if (!digitos) return ''
+  const numero = parseInt(digitos, 10) / 100
+  return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
 interface ModeloProntoClientProps {
   tipo: string
   tipoNome: string
@@ -310,16 +318,18 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
               <Input
                 label="Renda mensal aproximada"
                 value={rendaMensal}
-                onChange={(e) => setRendaMensal(e.target.value)}
+                onChange={(e) => setRendaMensal(formatarMoedaInput(e.target.value))}
                 placeholder="Ex.: R$ 1.500,00"
+                inputMode="numeric"
               />
             </div>
             <div className="col-span-2 sm:col-span-1">
               <Input
                 label="Número de dependentes"
                 value={numeroDependentes}
-                onChange={(e) => setNumeroDependentes(e.target.value)}
+                onChange={(e) => setNumeroDependentes(e.target.value.replace(/\D/g, ''))}
                 placeholder="Ex.: 2"
+                inputMode="numeric"
               />
             </div>
           </CardContent>

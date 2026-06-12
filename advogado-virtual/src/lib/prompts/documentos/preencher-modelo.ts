@@ -14,7 +14,12 @@ REGRAS OBRIGATÓRIAS:
 3. MANTENHA os dados do ESCRITÓRIO/ADVOGADO que já constam no modelo (NÃO os troque pelos do cliente).
 4. Se algum dado do cliente NÃO foi fornecido, use [PREENCHER: nome_do_campo] no lugar.
 5. Atualize a data para a data atual informada.
-6. Responda APENAS com o documento final em Markdown, sem comentários nem explicações.
+6. Os DADOS DO CASO informados (ex.: renda mensal, número de dependentes, objeto/finalidade)
+   DEVEM constar no documento final. Se o modelo já tiver um campo equivalente, use o valor
+   informado; se NÃO houver, incorpore a informação de forma natural e juridicamente adequada
+   no ponto pertinente (ex.: na declaração de hipossuficiência, informe a renda mensal e o número
+   de dependentes como fundamento da hipossuficiência), sem alterar o restante do texto.
+7. Responda APENAS com o documento final em Markdown, sem comentários nem explicações.
 `.trim()
 
 interface DadosCliente {
@@ -89,5 +94,7 @@ Data atual (use para a data do documento): ${dataExtenso}
 
 Gere o documento final em Markdown: idêntico ao modelo em estrutura e redação, porém com os
 DADOS DO CLIENTE acima no lugar dos dados de exemplo. Mantenha os dados do escritório/advogado
-que já estão no modelo. NÃO deixe [PREENCHER] para dados que foram fornecidos acima.`
+que já estão no modelo. Os DADOS DO CASO informados (renda, dependentes, objeto etc.) DEVEM
+aparecer no documento — incorpore-os de forma natural caso o modelo não tenha campo próprio.
+NÃO deixe [PREENCHER] para dados que foram fornecidos acima.`
 }

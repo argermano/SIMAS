@@ -18,7 +18,6 @@ import {
   AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle, UserCheck,
   Printer, Mail,
 } from 'lucide-react'
-import { AcessoRapidoFooter } from '@/components/acesso-rapido/AcessoRapidoFooter'
 import { ChatDiagnostico } from '@/components/atendimento/ChatDiagnostico'
 
 const COR_URGENCIA: Record<string, string> = {
@@ -680,14 +679,6 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           </div>
         </div>
       )}
-
-      {/* Acesso Rápido */}
-      <div className="border-t pt-6 mt-2">
-        <AcessoRapidoFooter
-          atendimentoId={atendimentoId}
-          clienteId={cliente?.id ?? null}
-        />
-      </div>
     </div>
   )
 }

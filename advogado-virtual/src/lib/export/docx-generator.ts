@@ -48,6 +48,12 @@ interface DocxOptions {
   area?: string
   /** Estilo de apresentação; default = ABNT/forense. */
   estilo?: Partial<EstiloDocumento> | null
+  /**
+   * Modo compacto p/ documentos curtos (procuração, declaração): não insere
+   * parágrafos vazios para linhas em branco e reduz o espaço entre parágrafos,
+   * de modo que o documento caiba em uma única página.
+   */
+  compacto?: boolean
 }
 
 /**
@@ -57,6 +63,8 @@ interface DocxOptions {
 export async function markdownToDocx(markdown: string, opts?: DocxOptions): Promise<Buffer> {
   const estilo = resolverEstilo(opts?.estilo)
   const e = estiloParaDocx(estilo)
+  const compacto = opts?.compacto ?? false
+  const afterCorpo = compacto ? 60 : 120
   const lines = limparMarkdownParaDocx(markdown).split('\n')
   const paragraphs: Paragraph[] = []
 
@@ -90,7 +98,9 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
     }
 
     if (!trimmed) {
-      paragraphs.push(new Paragraph({ spacing: { after: 120 } }))
+      // Em modo compacto não emitimos parágrafo vazio: o espaço entre parágrafos
+      // já vem do spacing.after, evitando que o documento "estoure" para 2ª página.
+      if (!compacto) paragraphs.push(new Paragraph({ spacing: { after: 120 } }))
       continue
     }
 
@@ -178,7 +188,7 @@ export async function markdownToDocx(markdown: string, opts?: DocxOptions): Prom
     // Parágrafo normal — justificado, recuo de 1ª linha, entrelinha do estilo
     paragraphs.push(new Paragraph({
       alignment: AlignmentType.JUSTIFIED,
-      spacing: { after: 120, line: e.lineSpacing },
+      spacing: { after: afterCorpo, line: e.lineSpacing },
       indent: { firstLine: e.indentFirstLine },
       children: parseInlineFormatting(trimmed, e.size, e.font),
     }))
@@ -246,7 +256,10 @@ function parseInlineFormatting(text: string, fontSize: number, font: string, for
     } else if (part.startsWith('*') && part.endsWith('*') && !part.startsWith('**')) {
       runs.push(new TextRun({ text: part.slice(1, -1), italics: true, bold: forceBold || undefined, size: fontSize, font, color: COLOR_BLACK }))
     } else {
-      runs.push(new TextRun({ text: part, bold: forceBold || undefined, size: fontSize, font, color: COLOR_BLACK }))
+      // Remove asteriscos soltos (negrito/itálico não fechado) que, sem par,
+      // escapariam como literal "*" no documento final.
+      const limpo = part.replace(/\*/g, '')
+      if (limpo) runs.push(new TextRun({ text: limpo, bold: forceBold || undefined, size: fontSize, font, color: COLOR_BLACK }))
     }
   }
 
