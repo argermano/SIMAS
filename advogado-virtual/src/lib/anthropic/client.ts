@@ -53,6 +53,36 @@ function comGuardrail(system: string): string {
   return (system ?? '') + ANTI_INJECTION
 }
 
+// Instrução de saída para chamadas JSON. Suprime prosa/raciocínio na resposta
+// visível — relevante em modelos que, com "thinking" desligado, escrevem reflexão
+// antes do JSON (ex.: Opus 4.8), o que quebraria o JSON.parse.
+const JSON_ONLY = '\n\n## FORMATO DA RESPOSTA (OBRIGATÓRIO)\nResponda EXCLUSIVAMENTE com UM único JSON válido — começando com "{" e terminando com "}". NÃO escreva nenhum texto antes ou depois, sem comentários e sem cercas de código (```).'
+
+/**
+ * Extrai o primeiro JSON balanceado do texto, ignorando prosa e cercas de código
+ * que alguns modelos colocam ao redor. Conta chaves respeitando strings/escapes.
+ */
+export function extrairJsonDoTexto(texto: string): string {
+  const fence = texto.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  const alvo = fence?.[1] ?? texto
+  const inicio = alvo.search(/[{[]/)
+  if (inicio === -1) return alvo.trim()
+  const abre = alvo[inicio]
+  const fecha = abre === '{' ? '}' : ']'
+  let prof = 0, emString = false, escapando = false
+  for (let i = inicio; i < alvo.length; i++) {
+    const c = alvo[i]
+    if (emString) {
+      if (escapando) escapando = false
+      else if (c === '\\') escapando = true
+      else if (c === '"') emString = false
+    } else if (c === '"') emString = true
+    else if (c === abre) prof++
+    else if (c === fecha && --prof === 0) return alvo.slice(inicio, i + 1)
+  }
+  return alvo.slice(inicio).trim() // truncado: JSON.parse falhará → erro controlado
+}
+
 /**
  * Faz uma chamada com streaming e retorna um ReadableStream para SSE
  */
@@ -204,7 +234,7 @@ export async function completionJSON<T = unknown>(params: {
   const message = await client.messages.create({
     model: params.model ?? DEFAULT_MODEL,
     max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
-    system: comGuardrail(params.system),
+    system: comGuardrail(params.system) + JSON_ONLY,
     messages: [{ role: 'user', content: params.prompt }],
   })
 
@@ -213,9 +243,8 @@ export async function completionJSON<T = unknown>(params: {
     .map((b) => b.text)
     .join('')
 
-  // Extrair JSON do texto (pode vir envolto em ```json ... ```)
-  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ?? text.match(/\{[\s\S]*\}/)
-  const jsonStr = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : text
+  // Extrai o JSON do texto (ignora prosa/cercas que alguns modelos colocam ao redor)
+  const jsonStr = extrairJsonDoTexto(text)
 
   let parsed: unknown
   try {

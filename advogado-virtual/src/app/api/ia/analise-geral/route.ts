@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     const { result, usage } = await completionJSON<ResultadoAnaliseGeral>({
       system: SYSTEM_ANALISE_GERAL,
       prompt,
-      maxTokens: 2048,
+      maxTokens: 4096,
       model: modelo,
     })
 
