@@ -10,7 +10,7 @@ import { LABELS_AREA, LABELS_STATUS_ATENDIMENTO } from '@/types'
 import type { AtendimentoStatus, AreaJuridica } from '@/types'
 import {
   Shield, Briefcase, Scale, Gavel, Receipt, Building2,
-  Heart, Stethoscope,
+  Heart, Stethoscope, ShoppingCart, Home, Landmark,
   ArrowRight, Clock, ChevronRight, Brain,
 } from 'lucide-react'
 
@@ -18,6 +18,7 @@ export const metadata = { title: 'Início' }
 
 const ICONE_AREA: Record<string, React.ComponentType<{ className?: string }>> = {
   Shield, Briefcase, Scale, Gavel, Receipt, Building2, Heart, Stethoscope,
+  ShoppingCart, Home, Landmark,
 }
 
 const BADGE_STATUS: Record<AtendimentoStatus, { variant: 'success' | 'warning' | 'secondary'; label: string }> = {

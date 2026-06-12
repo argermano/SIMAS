@@ -181,6 +181,74 @@ export const AREAS = {
       'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'comprovante_residencia', 'outro',
     ],
   },
+  consumidor: {
+    id: 'consumidor',
+    nome: 'Consumidor',
+    icone: 'ShoppingCart',
+    cor: '#7C3AED',
+    corBg: 'bg-[#7C3AED]/10',
+    corTexto: 'text-[#7C3AED]',
+    corBorda: 'border-[#7C3AED]/20',
+    ativo: true,
+    descricao: 'Relações de consumo, vícios, cobranças indevidas e danos',
+    pecas: [
+      'peticao_inicial', 'contestacao', 'replica', 'apelacao', 'agravo',
+      'embargos', 'recurso_especial', 'tutela', 'cumprimento', 'contrarrazoes', 'acordo',
+    ],
+    modelos: [
+      'procuracao', 'contrato_honorarios', 'notificacao_extrajudicial', 'declaracao_hipossuficiencia',
+    ],
+    tipos_documento: [
+      'nota_fiscal', 'contrato', 'comprovante_pagamento', 'protocolo_atendimento',
+      'print_conversa', 'boletim_ocorrencia',
+      'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'comprovante_residencia', 'outro',
+    ],
+  },
+  imobiliario: {
+    id: 'imobiliario',
+    nome: 'Imobiliário',
+    icone: 'Home',
+    cor: '#0891B2',
+    corBg: 'bg-[#0891B2]/10',
+    corTexto: 'text-[#0891B2]',
+    corBorda: 'border-[#0891B2]/20',
+    ativo: true,
+    descricao: 'Locação, compra e venda, posse, condomínio e usucapião',
+    pecas: [
+      'peticao_inicial', 'contestacao', 'replica', 'apelacao', 'agravo',
+      'embargos', 'recurso_especial', 'tutela', 'cumprimento', 'contrarrazoes', 'acordo',
+    ],
+    modelos: [
+      'procuracao', 'contrato_honorarios', 'notificacao_extrajudicial', 'substabelecimento',
+    ],
+    tipos_documento: [
+      'matricula_imovel', 'escritura_imovel', 'contrato_locacao', 'contrato_compra_venda',
+      'iptu', 'comprovante_pagamento', 'laudo_avaliacao',
+      'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'comprovante_residencia', 'outro',
+    ],
+  },
+  administrativo: {
+    id: 'administrativo',
+    nome: 'Administrativo',
+    icone: 'Landmark',
+    cor: '#64748B',
+    corBg: 'bg-[#64748B]/10',
+    corTexto: 'text-[#64748B]',
+    corBorda: 'border-[#64748B]/20',
+    ativo: true,
+    descricao: 'Atos administrativos, licitações, servidores e concursos',
+    pecas: [
+      'mandado_seguranca', 'peticao_inicial', 'recurso_administrativo', 'acao_anulatoria',
+      'contestacao', 'apelacao', 'agravo', 'embargos', 'tutela', 'cumprimento', 'contrarrazoes',
+    ],
+    modelos: [
+      'procuracao', 'contrato_honorarios', 'substabelecimento',
+    ],
+    tipos_documento: [
+      'processo_administrativo', 'edital', 'ato_administrativo', 'portaria',
+      'notificacao_administrativa', 'sentenca', 'acordao', 'procuracao', 'rg_cpf', 'cnpj', 'outro',
+    ],
+  },
 } as const
 
 export type AreaId = keyof typeof AREAS

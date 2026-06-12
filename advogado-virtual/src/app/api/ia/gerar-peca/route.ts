@@ -19,7 +19,10 @@ import { buildPromptContestacaoFamilia, SYSTEM_CONTESTACAO_FAMILIA } from '@/lib
 import { buildPromptPeticaoInicialMedico, SYSTEM_PETICAO_MEDICO } from '@/lib/prompts/pecas/medico/peticao-inicial'
 import { buildPromptContestacaoMedico, SYSTEM_CONTESTACAO_MEDICO } from '@/lib/prompts/pecas/medico/contestacao'
 import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
+import { SYSTEM_PECA_GENERICA, buildPromptPecaGenerica } from '@/lib/prompts/pecas/generico/peca'
 import { buscarModeloPadrao } from '@/lib/modelos/buscar-modelo'
+import { AREAS, type AreaId } from '@/lib/constants/areas'
+import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 
 type QualificacaoPartes = {
   autor?: {
@@ -237,9 +240,13 @@ export async function POST(req: NextRequest) {
     // Selecionar prompt
     const promptConfig = PROMPT_MAP[area]?.[tipo]
     if (!promptConfig) {
-      // Fallback: usar petição inicial como base genérica
-      const fallback = PROMPT_MAP[area]?.peticao_inicial ?? PROMPT_MAP.previdenciario.peticao_inicial
-      let prompt = fallback.build({
+      // Sem prompt dedicado p/ (área, tipo) → gerador GENÉRICO ciente da área e do tipo.
+      // (Antes caía no prompt de "petição inicial previdenciária" — viés errado.)
+      const areaNome = AREAS[area as AreaId]?.nome ?? area
+      const tipoNome = TIPOS_PECA[tipo]?.nome ?? tipo
+      let prompt = buildPromptPecaGenerica({
+        areaNome,
+        tipoNome,
         analise,
         transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
         pedido_especifico: atendimento.pedidos_especificos,
@@ -265,6 +272,7 @@ export async function POST(req: NextRequest) {
           tenant_id: usuario.tenant_id,
           tipo,
           area,
+          modelo_ia: modelo,
           status: statusInicial,
           created_by: usuario.id,
         })
@@ -276,7 +284,7 @@ export async function POST(req: NextRequest) {
         return jsonError('Erro ao criar registro da peça', 500)
       }
 
-      const { stream } = await streamCompletion({ system: fallback.system, prompt, maxTokens: 32768, model: modelo })
+      const { stream } = await streamCompletion({ system: SYSTEM_PECA_GENERICA, prompt, maxTokens: 32768, model: modelo })
 
       return new Response(stream, {
         headers: {

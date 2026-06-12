@@ -22,6 +22,7 @@ export const TIPOS_PECA: Record<string, { id: string; nome: string; descricao: s
   impugnacao_auto_infracao:     { id: 'impugnacao_auto_infracao',     nome: 'Impugnação a Auto de Infração',  descricao: 'Defesa administrativa contra autuação fiscal' },
   recurso_administrativo_fiscal:{ id: 'recurso_administrativo_fiscal',nome: 'Recurso Administrativo Fiscal',  descricao: 'Recurso em processo administrativo tributário' },
   acao_anulatoria:              { id: 'acao_anulatoria',              nome: 'Ação Anulatória',                descricao: 'Anulação de lançamento fiscal ou débito tributário' },
+  recurso_administrativo:       { id: 'recurso_administrativo',       nome: 'Recurso Administrativo',         descricao: 'Recurso em processo administrativo (geral)' },
 }
 
 export const MODELOS_PRONTOS: Record<string, { id: string; nome: string; descricao: string }> = {

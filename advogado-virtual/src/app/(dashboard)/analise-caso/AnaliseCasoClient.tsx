@@ -15,6 +15,7 @@ import { MicrofoneInline } from '@/components/atendimento/MicrofoneInline'
 import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
 import { SeletorVersaoIA } from '@/components/atendimento/SeletorVersaoIA'
 import { VERSAO_IA_PADRAO, type VersaoIA } from '@/lib/anthropic/versoes'
+import { AREAS } from '@/lib/constants/areas'
 import {
   Users, MessageSquare, Mic, Keyboard, Brain, Loader2, Save,
   AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle, UserCheck,
@@ -38,8 +39,8 @@ const LABEL_RELEVANCIA: Record<string, string> = {
   secundaria: 'Área relacionada',
 }
 
-// Áreas que têm rota ativa no sistema
-const AREAS_ATIVAS = ['previdenciario', 'trabalhista', 'civel', 'criminal', 'tributario', 'empresarial']
+// Áreas ativas — fonte única em areas.ts (campo `ativo`). Evita lista desatualizada.
+const AREAS_ATIVAS: string[] = Object.values(AREAS).filter((a) => a.ativo).map((a) => a.id)
 
 export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInicial?: string }) {
   const router   = useRouter()

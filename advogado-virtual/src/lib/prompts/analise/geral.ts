@@ -1,3 +1,8 @@
+import { AREAS } from '@/lib/constants/areas'
+
+// Lista de áreas válidas derivada da fonte única (areas.ts) — sempre em sincronia
+const AREAS_VALIDAS = Object.values(AREAS).map((a) => a.id).join(', ')
+
 export const SYSTEM_ANALISE_GERAL = `
 Você é um advogado brasileiro experiente, generalista, com profundo conhecimento em todas as áreas do Direito.
 
@@ -7,7 +12,7 @@ IMPORTANTE:
 - Responda APENAS com JSON válido, sem texto extra
 - Seja prático e direto — o advogado precisa de orientação acionável
 - Se mais de uma área estiver envolvida, liste todas, indicando qual é a principal
-- Áreas possíveis: previdenciario, trabalhista, civel, criminal, tributario, empresarial, familia, consumidor, imobiliario, administrativo
+- O campo "area" DEVE ser exatamente um destes identificadores: ${AREAS_VALIDAS}
 `.trim()
 
 export function buildPromptAnaliseGeral(dados: {
