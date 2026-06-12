@@ -21,7 +21,6 @@ import { VERSAO_IA_PADRAO, type VersaoIA } from '@/lib/anthropic/versoes'
 import { ConfirmarDadosModal } from './ConfirmarDadosModal'
 import { ModalGeracaoPeca } from './ModalGeracaoPeca'
 import { ModalExtraindoDados } from './ModalExtraindoDados'
-import { DocumentosDoCaso } from './DocumentosDoCaso'
 import type { ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import type { DadosExtraidosAutor, DadosExtraidosReu } from '@/lib/prompts/extracao/dados-cliente'
 import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, UserCheck, MapPin } from 'lucide-react'
@@ -86,8 +85,6 @@ export function TelaAtendimento({
   const [hasAudio, setHasAudio] = useState(false)
   const [extraindo, setExtraindo] = useState(false)
   const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string }>>([])
-  const [pecasExistentes, setPecasExistentes] = useState<Array<{ id: string; tipo: string; area: string; versao: number; status: string; created_at: string }>>([])
-  const [contratosExistentes, setContratosExistentes] = useState<Array<{ id: string; titulo: string; status: string; area: string; created_at: string }>>([])
   const [dadosExtraidos, setDadosExtraidos] = useState<{ autor: DadosExtraidosAutor; reu?: DadosExtraidosReu } | null>(null)
   const [dadosAtuaisCliente, setDadosAtuaisCliente] = useState<Partial<DadosExtraidosAutor>>({})
   const qualificacaoRef = useRef<{ autor?: DadosExtraidosAutor; reu?: DadosExtraidosReu } | undefined>(undefined)
@@ -123,8 +120,6 @@ export function TelaAtendimento({
         setPedidoEspecifico(at.pedidos_especificos ?? '')
         if (at.audio_url) setHasAudio(true)
         if (at.documentos) setDocumentosExistentes(at.documentos)
-        if (at.pecas) setPecasExistentes(at.pecas)
-        if (data.contratos) setContratosExistentes(data.contratos)
       } catch {
         toastError('Erro', 'Não foi possível carregar o caso')
       } finally {
@@ -475,18 +470,6 @@ export function TelaAtendimento({
           dadosAtuaisCliente={dadosAtuaisCliente}
           onConfirmar={handleConfirmarDados}
           onPular={handlePularDados}
-        />
-      )}
-
-      {/* Documentos gerados neste caso */}
-      {(pecasExistentes.length > 0 || contratosExistentes.length > 0 || cliente) && (
-        <DocumentosDoCaso
-          area={area}
-          atendimentoId={atendimentoId}
-          cliente={cliente}
-          pecasExistentes={pecasExistentes}
-          contratosExistentes={contratosExistentes}
-          documentosAnexados={documentosExistentes}
         />
       )}
 
