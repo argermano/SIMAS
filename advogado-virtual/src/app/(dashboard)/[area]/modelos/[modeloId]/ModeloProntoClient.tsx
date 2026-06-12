@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -41,6 +42,7 @@ interface ModeloProntoClientProps {
 
 export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimentoId }: ModeloProntoClientProps) {
   const tipoModelo = tipo as TipoModelo
+  const router = useRouter()
   const { success, error: toastError } = useToast()
 
   const [cliente, setCliente] = useState<{ id: string; nome: string } | null>(null)
@@ -204,7 +206,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
       <EditorDocumentoPronto
         titulo={tipoNome}
         conteudo={documentoGerado}
-        onVoltar={() => setModoEditor(false)}
+        onVoltar={() => { if (atendimentoId) router.back(); else setModoEditor(false) }}
         onSalvar={atendimentoId ? salvarNoCaso : undefined}
         salvando={salvandoCaso}
         extraAcoes={modeloDocxExiste && cliente ? (

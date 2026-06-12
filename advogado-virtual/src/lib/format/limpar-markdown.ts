@@ -12,7 +12,8 @@
 export function limparMarkdownParaDocx(markdown: string): string {
   return markdown
     .split('\n')
-    .filter((line) => !/^\s*```[a-zA-Z]*\s*$/.test(line))
+    // remove cercas de código (```) e linhas com um asterisco/bullet solto (artefato)
+    .filter((line) => !/^\s*```[a-zA-Z]*\s*$/.test(line) && !/^\s*\*\s*$/.test(line))
     .join('\n')
     .replace(/^[ \t]+/gm, '') // remove indentação que vira "bloco de código"
     .replace(/\\([[\]().!_~|{}+])/g, '$1')
