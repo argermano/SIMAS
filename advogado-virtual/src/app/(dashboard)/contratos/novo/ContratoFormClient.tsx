@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { formatarMoedaInput, moedaParaNumero } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -121,9 +122,9 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
         // 1. Existe modelo de contrato padrão nas Configurações? (modelos_documento tipo=contrato)
         let temConfig = false
         try {
-          const resCfg  = await fetch('/api/documentos/exportar-modelo?tipo=contrato')
+          const resCfg  = await fetch('/api/modelos-documento?tipo=contrato')
           const dataCfg = await resCfg.json()
-          temConfig = !!dataCfg.existe
+          temConfig = (dataCfg.modelos?.length ?? 0) > 0
         } catch { /* ignora */ }
         setTemModeloConfig(temConfig)
 
@@ -214,7 +215,7 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
           cliente_id:       cliente.id,
           atendimento_id:   atendimentoId || null,
           area:             area || null,
-          valor_fixo:       valorFixo ? parseFloat(valorFixo) : null,
+          valor_fixo:       moedaParaNumero(valorFixo),
           percentual_exito: percentualExito ? parseFloat(percentualExito) : null,
           forma_pagamento:  formaPagamento || null,
         }),
@@ -381,11 +382,11 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
           />
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Honorários fixos (R$)"
-              type="number"
+              label="Honorários fixos"
               value={valorFixo}
-              onChange={e => setValorFixo(e.target.value)}
-              placeholder="Ex.: 3000"
+              onChange={e => setValorFixo(formatarMoedaInput(e.target.value))}
+              placeholder="Ex.: R$ 3.000,00"
+              inputMode="numeric"
               hint="Deixe em branco se for somente êxito"
             />
             <Input

@@ -13,6 +13,7 @@ import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
 import { EditorDocumentoPronto } from '@/components/documentos/EditorDocumentoPronto'
 import { TIPOS_COM_MODELO_DOCX } from '@/lib/export/tipos-modelo-docx'
 import { Users, FileText, CheckCircle, AlertCircle, Loader2, Zap } from 'lucide-react'
+import { formatarMoedaInput } from '@/lib/utils'
 
 // ── Tipos e constantes ────────────────────────────────────────────────────────
 
@@ -30,14 +31,6 @@ const OPCOES_PAGAMENTO = [
   { value: 'Entrada + parcelas', label: 'Entrada + parcelas' },
   { value: 'Êxito',             label: 'Somente êxito'      },
 ]
-
-// Máscara de moeda (R$) a partir dos dígitos digitados: "150000" → "R$ 1.500,00"
-function formatarMoedaInput(valor: string): string {
-  const digitos = valor.replace(/\D/g, '')
-  if (!digitos) return ''
-  const numero = parseInt(digitos, 10) / 100
-  return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
 
 interface ModeloProntoClientProps {
   tipo: string
@@ -405,10 +398,11 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <Input
-                label="Valor fixo (R$)"
+                label="Valor fixo"
                 value={valorFixo}
-                onChange={(e) => setValorFixo(e.target.value)}
-                placeholder="Ex.: 3000"
+                onChange={(e) => setValorFixo(formatarMoedaInput(e.target.value))}
+                placeholder="Ex.: R$ 3.000,00"
+                inputMode="numeric"
               />
               <Input
                 label="Percentual de êxito (%)"

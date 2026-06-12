@@ -26,6 +26,23 @@ export function formatarTelefone(tel: string): string {
   return apenas.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
 }
 
+// Máscara de moeda (R$) a partir dos dígitos digitados: "150000" → "R$ 1.500,00".
+// Use em onChange de campos de valor para o usuário ver o valor formatado.
+export function formatarMoedaInput(valor: string): string {
+  const digitos = valor.replace(/\D/g, '')
+  if (!digitos) return ''
+  const numero = parseInt(digitos, 10) / 100
+  return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+// Converte um valor monetário mascarado/numérico para número: "R$ 1.500,00" → 1500.
+// Retorna null quando vazio.
+export function moedaParaNumero(valor: string): number | null {
+  const digitos = valor.replace(/\D/g, '')
+  if (!digitos) return null
+  return parseInt(digitos, 10) / 100
+}
+
 // Formata data ISO para pt-BR: "2024-03-15" → "15/03/2024"
 export function formatarData(iso: string): string {
   if (!iso) return ''
