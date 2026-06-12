@@ -43,7 +43,7 @@ export default async function DashboardPage() {
 
   const { data: ultimosAtendimentos } = await supabase
     .from('atendimentos')
-    .select('id, status, created_at, area, tipo_peca_origem, clientes(nome)')
+    .select('id, status, created_at, area, tipo_peca_origem, cliente_id, clientes(nome)')
     .eq('tenant_id', usuario.tenant_id)
     .order('created_at', { ascending: false })
     .limit(5)
@@ -167,11 +167,9 @@ export default async function DashboardPage() {
                   const badge   = BADGE_STATUS[status] ?? BADGE_STATUS.caso_novo
                   const cliente = at.clientes as { nome?: string } | null
                   const area    = at.area as AreaJuridica
-                  const href = at.area === 'geral'
-                    ? `/analise-caso?atendimentoId=${at.id}`
-                    : at.tipo_peca_origem
-                      ? `/${at.area}/pecas/${at.tipo_peca_origem}?id=${at.id}`
-                      : `/${at.area}`
+                  const href = at.cliente_id
+                    ? `/clientes/${at.cliente_id}/casos/${at.id}`
+                    : `/analise-caso?atendimentoId=${at.id}`
                   return (
                     <Link key={at.id} href={href} className="block">
                       <Card className="transition-shadow hover:shadow-card-hover">

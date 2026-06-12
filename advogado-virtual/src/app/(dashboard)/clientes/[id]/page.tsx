@@ -90,10 +90,9 @@ const ICONES_AREA: Record<string, string> = {
   geral:          'violet',
 }
 
-function hrefAtendimento(at: { area: string; tipo_peca_origem?: string | null; id: string }): string {
-  if (at.area === 'geral') return `/analise-caso?atendimentoId=${at.id}`
-  if (at.tipo_peca_origem) return `/${at.area}/pecas/${at.tipo_peca_origem}?id=${at.id}`
-  return `/${at.area}`
+// "Abrir caso" leva SEMPRE à Casa do caso (a mesma tela, comece como começar).
+function hrefCaso(clienteId: string, atendimentoId: string): string {
+  return `/clientes/${clienteId}/casos/${atendimentoId}`
 }
 
 type Filtro = 'atendimentos' | 'analises' | 'pecas' | 'documentos' | 'contratos' | null
@@ -382,7 +381,7 @@ export default async function DossieClientePage({
                                     <div className="flex items-center gap-2 shrink-0">
                                       <BotaoExcluirAtendimento atendimentoId={at.id} />
                                       <Link
-                                        href={hrefAtendimento(at)}
+                                        href={hrefCaso(id, at.id)}
                                         className="flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary hover:bg-primary/20 transition-colors"
                                         title="Abrir o caso (estudo + peças geradas)"
                                       >
@@ -483,8 +482,8 @@ export default async function DossieClientePage({
                                     <div className="mt-3 border-t pt-3">
                                       <p className="text-xs text-muted-foreground italic">
                                         Nenhuma análise ou peça gerada ainda.{' '}
-                                        <Link href={hrefAtendimento(at)} className="text-primary hover:underline">
-                                          {at.area === 'geral' ? 'Analisar caso' : 'Gerar peça'}
+                                        <Link href={hrefCaso(id, at.id)} className="text-primary hover:underline">
+                                          Abrir caso
                                         </Link>
                                       </p>
                                     </div>
