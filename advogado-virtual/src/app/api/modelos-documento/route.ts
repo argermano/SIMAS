@@ -78,7 +78,21 @@ export async function POST(req: NextRequest) {
     // Upload para Storage
     const timestamp = Date.now()
     const ext = arquivo.name.split('.').pop()?.toLowerCase() ?? 'bin'
-    const path = `${usuario.tenant_id}/modelos/${tipo}/${timestamp}_${arquivo.name}`
+
+    // .doc (formato antigo) não é suportado para extração/preenchimento
+    if (ext === 'doc') {
+      return jsonError(
+        'Envie o documento em .docx (no Word: Arquivo → Salvar como → Documento do Word .docx). O formato .doc antigo não é suportado.',
+        400,
+      )
+    }
+
+    // Nome seguro para a chave do Storage (sem acentos/caracteres especiais)
+    const nomeSeguro = arquivo.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')   // remove acentos (diacríticos)
+      .replace(/[^a-zA-Z0-9._-]/g, '_')  // só caracteres seguros na chave
+    const path = `${usuario.tenant_id}/modelos/${tipo}/${timestamp}_${nomeSeguro}`
 
     const { error: uploadError } = await supabase.storage
       .from('documentos')
