@@ -2,8 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { extrairEstiloDocx } from '@/lib/modelos/extrair-estilo-docx'
+import { extrairTextoDocx, templatizarDocx } from '@/lib/modelos/templatizar-docx'
+import { detectarPlaceholders } from '@/lib/modelos/detectar-placeholders'
 
 const TIPOS_VALIDOS = ['peca', 'contrato', 'procuracao', 'declaracao', 'substabelecimento']
+
+// Tipos que viram template preenchível (.docx com placeholders) automaticamente
+const NOME_TIPO_TEMPLATE: Record<string, string> = {
+  contrato: 'contrato',
+  procuracao: 'procuração',
+  declaracao: 'declaração',
+  substabelecimento: 'substabelecimento',
+}
 
 // GET /api/modelos-documento?tipo=peca — lista modelos do tenant
 export async function GET(req: NextRequest) {
@@ -101,6 +111,29 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error('[modelos-documento] Erro na extração:', err)
+    }
+
+    // Cria o template automaticamente: a IA detecta os valores variáveis do .docx
+    // (exemplo preenchido) e os troca por {{placeholders}}, preservando a formatação.
+    // Invisível para o usuário — ele sobe o documento normal.
+    const ehDocx =
+      arquivo.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || ext === 'docx'
+    if (ehDocx && NOME_TIPO_TEMPLATE[tipo]) {
+      try {
+        const texto = extrairTextoDocx(buffer)
+        // só se houver texto e ainda não for um template (sem {{...}} manual)
+        if (texto.trim().length > 30 && !texto.includes('{{')) {
+          const pares = await detectarPlaceholders(texto, NOME_TIPO_TEMPLATE[tipo])
+          if (pares.length > 0) {
+            const { buffer: template } = templatizarDocx(buffer, pares)
+            await supabase.storage
+              .from('documentos')
+              .upload(path, template, { contentType: arquivo.type, upsert: true })
+          }
+        }
+      } catch (err) {
+        console.error('[modelos-documento] templatização automática falhou:', err)
+      }
     }
   } else {
     // Conteúdo inserido manualmente
