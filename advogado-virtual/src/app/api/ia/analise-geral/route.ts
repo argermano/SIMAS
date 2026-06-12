@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { completionJSON } from '@/lib/anthropic/client'
+import { modeloDaVersao } from '@/lib/anthropic/versoes'
 import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptAnaliseGeral, SYSTEM_ANALISE_GERAL } from '@/lib/prompts/analise/geral'
@@ -36,16 +37,20 @@ export async function POST(req: NextRequest) {
   const start = Date.now()
 
   try {
-    const { transcricao, pedidoEspecifico, documentos, atendimentoId } = await req.json() as {
+    const { transcricao, pedidoEspecifico, documentos, atendimentoId, versao } = await req.json() as {
       transcricao:       string
       pedidoEspecifico?: string
       documentos?:       Array<{ tipo: string; texto_extraido: string; file_name: string }>
       atendimentoId?:    string
+      versao?:           string
     }
 
     if (!transcricao?.trim()) {
       return jsonError('Descreva o caso para análise', 400)
     }
+
+    // Versão escolhida pelo usuário (Padrão x Raciocínio estendido) → modelo
+    const modelo = modeloDaVersao(versao)
 
     const auth = await getAuthContext()
     if (!auth.ok) return auth.response
@@ -60,13 +65,14 @@ export async function POST(req: NextRequest) {
       system: SYSTEM_ANALISE_GERAL,
       prompt,
       maxTokens: 2048,
+      model: modelo,
     })
 
     await logUsage({
       tenantId:    usuario.tenant_id,
       userId:      usuario.id,
       endpoint:    'analise_geral',
-      modelo:      DEFAULT_MODEL,
+      modelo:      modelo,
       tokensInput:  usage.input,
       tokensOutput: usage.output,
       latenciaMs:   Date.now() - start,

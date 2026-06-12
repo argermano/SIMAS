@@ -13,6 +13,8 @@ import { TranscricaoActions } from '@/components/atendimento/TranscricaoActions'
 import type { ResultadoAnaliseGeral } from '@/app/api/ia/analise-geral/route'
 import { MicrofoneInline } from '@/components/atendimento/MicrofoneInline'
 import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
+import { SeletorVersaoIA } from '@/components/atendimento/SeletorVersaoIA'
+import { VERSAO_IA_PADRAO, type VersaoIA } from '@/lib/anthropic/versoes'
 import {
   Users, MessageSquare, Mic, Keyboard, Brain, Loader2, Save,
   AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle, UserCheck,
@@ -49,6 +51,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
   const [textoRelato,      setTextoRelato]      = useState('')
   const [transcricao,      setTranscricao]      = useState('')
   const [pedido,           setPedido]           = useState('')
+  const [versaoIA,         setVersaoIA]         = useState<VersaoIA>(VERSAO_IA_PADRAO)
   const [analisando,       setAnalisando]       = useState(false)
   const [resultado,        setResultado]        = useState<ResultadoAnaliseGeral | null>(null)
   const [atendimentoId,    setAtendimentoId]    = useState<string | null>(atendimentoIdInicial ?? null)
@@ -198,7 +201,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
       const res = await fetch('/api/ia/analise-geral', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcricao: texto, pedidoEspecifico: pedido, atendimentoId: aidAtual }),
+        body: JSON.stringify({ transcricao: texto, pedidoEspecifico: pedido, atendimentoId: aidAtual, versao: versaoIA }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -500,8 +503,13 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
         </Card>
       )}
 
-      {/* Botões: Salvar + Analisar */}
-      <div className="flex justify-end gap-3">
+      {/* Versão da IA + Botões: Salvar + Analisar */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">Versão da IA para a análise</p>
+          <SeletorVersaoIA value={versaoIA} onChange={setVersaoIA} disabled={analisando} />
+        </div>
+        <div className="flex justify-end gap-3">
         {atendimentoId && (
           <Button
             size="lg"
@@ -529,6 +537,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
             <><Brain className="h-5 w-5" /> Analisar Caso</>
           )}
         </Button>
+        </div>
       </div>
 
       {/* 4. Resultado */}

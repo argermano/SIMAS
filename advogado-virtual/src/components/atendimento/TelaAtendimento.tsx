@@ -16,6 +16,8 @@ import { UploadAudioTranscricao } from './UploadAudioTranscricao'
 import { TranscricaoActions } from './TranscricaoActions'
 import { UploadDocumentos } from './UploadDocumentos'
 import { SeletorTribunais } from './SeletorTribunais'
+import { SeletorVersaoIA } from './SeletorVersaoIA'
+import { VERSAO_IA_PADRAO, type VersaoIA } from '@/lib/anthropic/versoes'
 import { ConfirmarDadosModal } from './ConfirmarDadosModal'
 import { ModalGeracaoPeca } from './ModalGeracaoPeca'
 import { ModalExtraindoDados } from './ModalExtraindoDados'
@@ -68,6 +70,7 @@ export function TelaAtendimento({
   // Estado do atendimento
   const [atendimentoId, setAtendimentoId]     = useState<string | null>(atendimentoIdInicial ?? null)
   const [cliente, setCliente]                   = useState<{ id: string; nome: string } | null>(null)
+  const [versaoIA, setVersaoIA]                 = useState<VersaoIA>(VERSAO_IA_PADRAO)
   const [modoInput, setModoInput]               = useState<'durante_reuniao' | 'pos_reuniao' | 'texto'>('durante_reuniao')
   const [textoRelato, setTextoRelato]           = useState('')
   const [transcricao, setTranscricao]           = useState('')
@@ -374,6 +377,7 @@ export function TelaAtendimento({
       jurisprudencia,
       tribunais: tribunaisSelecionados,
       qualificacao: qualificacao ?? qualificacaoRef.current,
+      versao: versaoIA,
     })
 
     if (!resultado) {
@@ -714,8 +718,13 @@ export function TelaAtendimento({
         onTribunaisChange={setTribunaisSelecionados}
       />
 
-      {/* 6. Botões de ação */}
-      <div className="flex flex-wrap justify-end gap-3 pb-8">
+      {/* 6. Versão da IA + Botões de ação */}
+      <div className="flex flex-col gap-4 pb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">Versão da IA para gerar a peça</p>
+          <SeletorVersaoIA value={versaoIA} onChange={setVersaoIA} disabled={gerando || salvando} />
+        </div>
+        <div className="flex flex-wrap justify-end gap-3">
         <Button
           variant="secondary"
           size="lg"
@@ -753,6 +762,7 @@ export function TelaAtendimento({
           <Zap className="h-5 w-5" />
           Gerar Peça IA
         </Button>
+        </div>
       </div>
 
     </div>

@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { streamCompletion, completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { streamCompletion, completionJSON } from '@/lib/anthropic/client'
+import { modeloDaVersao } from '@/lib/anthropic/versoes'
 import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { decryptClienteFields } from '@/lib/encryption'
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
   const start = Date.now()
 
   try {
-    const { atendimentoId, analiseId, tipo, area, jurisprudencia, tribunais, qualificacao } = await req.json() as {
+    const { atendimentoId, analiseId, tipo, area, jurisprudencia, tribunais, qualificacao, versao } = await req.json() as {
       atendimentoId: string
       analiseId?: string
       tipo: string
@@ -77,11 +78,15 @@ export async function POST(req: NextRequest) {
       jurisprudencia?: ResultadoJurisprudencia[]
       tribunais?: string[]
       qualificacao?: QualificacaoPartes
+      versao?: string
     }
 
     if (!atendimentoId || !tipo || !area) {
       return jsonError('atendimentoId, tipo e area são obrigatórios', 400)
     }
+
+    // Versão escolhida pelo usuário (Padrão x Raciocínio estendido) → modelo
+    const modelo = modeloDaVersao(versao)
 
     const auth = await getAuthContext()
     if (!auth.ok) return auth.response
@@ -271,7 +276,7 @@ export async function POST(req: NextRequest) {
         return jsonError('Erro ao criar registro da peça', 500)
       }
 
-      const { stream } = await streamCompletion({ system: fallback.system, prompt, maxTokens: 32768 })
+      const { stream } = await streamCompletion({ system: fallback.system, prompt, maxTokens: 32768, model: modelo })
 
       return new Response(stream, {
         headers: {
@@ -313,7 +318,7 @@ export async function POST(req: NextRequest) {
         tipo,
         area,
         prompt_utilizado: prompt.substring(0, 500),
-        modelo_ia: DEFAULT_MODEL,
+        modelo_ia: modelo,
         status: statusInicial,
         created_by: usuario.id,
       })
@@ -329,6 +334,7 @@ export async function POST(req: NextRequest) {
       system: promptConfig.system,
       prompt,
       maxTokens: 32768,
+      model: modelo,
     })
 
     // Log assíncrono (não bloqueia o stream)
@@ -337,7 +343,7 @@ export async function POST(req: NextRequest) {
         tenantId: usuario.tenant_id,
         userId: usuario.id,
         endpoint: 'gerar_peca',
-        modelo: DEFAULT_MODEL,
+        modelo: modelo,
         tokensInput: usage.input,
         tokensOutput: usage.output,
         latenciaMs: Date.now() - start,
