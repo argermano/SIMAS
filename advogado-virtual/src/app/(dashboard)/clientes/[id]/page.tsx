@@ -379,10 +379,15 @@ export default async function DossieClientePage({
                                       {at.pedidos_especificos && <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2">{at.pedidos_especificos}</p>}
                                       {at.audio_url && <PlayerAudio atendimentoId={at.id} />}
                                     </div>
-                                    <div className="flex items-center gap-1 shrink-0">
+                                    <div className="flex items-center gap-2 shrink-0">
                                       <BotaoExcluirAtendimento atendimentoId={at.id} />
-                                      <Link href={hrefAtendimento(at)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-muted-foreground transition-colors" title="Abrir caso">
-                                        <ChevronRight className="h-5 w-5" />
+                                      <Link
+                                        href={hrefAtendimento(at)}
+                                        className="flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-semibold text-primary hover:bg-primary/20 transition-colors"
+                                        title="Abrir o caso (estudo + peças geradas)"
+                                      >
+                                        Abrir caso
+                                        <ChevronRight className="h-4 w-4" />
                                       </Link>
                                     </div>
                                   </div>
