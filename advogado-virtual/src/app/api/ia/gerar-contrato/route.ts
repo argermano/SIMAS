@@ -107,21 +107,20 @@ export async function POST(req: NextRequest) {
       'Access-Control-Expose-Headers': 'X-Contrato-Id',
     }
 
-    // Sem modelo explícito? Usa o modelo de contrato cadastrado em Configurações → Padrões
-    // (modelos_documento), unificando a fonte de modelo com o resto do sistema.
-    let modeloEfetivo = modeloTexto
-    if (!modeloEfetivo?.trim()) {
-      const { data: modeloDoc } = await supabase
-        .from('modelos_documento')
-        .select('conteudo_markdown')
-        .eq('tenant_id', usuarioLogado.tenant_id)
-        .eq('tipo', 'contrato')
-        .not('conteudo_markdown', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (modeloDoc?.conteudo_markdown) modeloEfetivo = modeloDoc.conteudo_markdown
-    }
+    // PRIORIDADE: modelo de contrato cadastrado em Configurações → Padrões (modelos_documento).
+    // Só usa o modeloTexto passado pela tela se não houver modelo nos Padrões.
+    let modeloEfetivo = ''
+    const { data: modeloDoc } = await supabase
+      .from('modelos_documento')
+      .select('conteudo_markdown')
+      .eq('tenant_id', usuarioLogado.tenant_id)
+      .eq('tipo', 'contrato')
+      .not('conteudo_markdown', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (modeloDoc?.conteudo_markdown?.trim()) modeloEfetivo = modeloDoc.conteudo_markdown
+    else if (modeloTexto?.trim()) modeloEfetivo = modeloTexto
 
     // ── FLUXO COM MODELO: IA segue o modelo e preenche os dados ─────────────
     console.log('[gerar-contrato] FLUXO:', modeloEfetivo ? 'COM MODELO' : 'SEM MODELO (IA gera do zero)')

@@ -7,7 +7,17 @@ import { SYSTEM_DECLARACAO, buildPromptDeclaracao } from '@/lib/prompts/document
 import { SYSTEM_SUBSTABELECIMENTO, buildPromptSubstabelecimento } from '@/lib/prompts/documentos/substabelecimento'
 import { SYSTEM_NOTIFICACAO, buildPromptNotificacao } from '@/lib/prompts/documentos/notificacao-extrajudicial'
 import { SYSTEM_CONTRATO_HONORARIOS, buildPromptContratoHonorarios } from '@/lib/prompts/documentos/contrato-honorarios-modelo'
+import { SYSTEM_PREENCHER_DOCUMENTO, buildPromptPreencherDocumento } from '@/lib/prompts/documentos/preencher-modelo'
 import { decryptClienteFields } from '@/lib/encryption'
+
+// Mapeia o tipo de geração → tipo do modelo .docx em modelos_documento
+const TIPO_MODELO_DOC: Record<string, string | null> = {
+  procuracao: 'procuracao',
+  declaracao_hipossuficiencia: 'declaracao',
+  substabelecimento: 'substabelecimento',
+  contrato_honorarios: 'contrato',
+  notificacao_extrajudicial: null,
+}
 
 type TipoDoc =
   | 'procuracao'
@@ -65,7 +75,7 @@ export async function POST(req: NextRequest) {
     // Buscar dados do cliente
     const { data: clienteRaw } = await supabase
       .from('clientes')
-      .select('nome, cpf, endereco, cidade, estado')
+      .select('nome, cpf, rg, orgao_expedidor, estado_civil, nacionalidade, profissao, telefone, email, endereco, bairro, cidade, estado, cep')
       .eq('id', clienteId)
       .eq('tenant_id', usuario.tenant_id)
       .single()
@@ -74,6 +84,41 @@ export async function POST(req: NextRequest) {
 
     // Decifra CPF/RG (criptografados em repouso) antes de montar o documento
     const cliente = decryptClienteFields(clienteRaw)
+
+    // PRIORIDADE: modelo .docx do escritório (Configurações → Padrões). A IA preenche o
+    // modelo com os dados do cliente, mantendo a estrutura/redação do escritório (confiável).
+    const tipoModeloDoc = TIPO_MODELO_DOC[tipo]
+    if (tipoModeloDoc) {
+      const { data: modeloEscritorio } = await supabase
+        .from('modelos_documento')
+        .select('conteudo_markdown')
+        .eq('tenant_id', usuario.tenant_id)
+        .eq('tipo', tipoModeloDoc)
+        .not('conteudo_markdown', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (modeloEscritorio?.conteudo_markdown?.trim()) {
+        const anthropic = getAnthropicClient()
+        const message = await anthropic.messages.create({
+          model: DEFAULT_MODEL,
+          max_tokens: DEFAULT_MAX_TOKENS,
+          system: SYSTEM_PREENCHER_DOCUMENTO,
+          messages: [{
+            role: 'user',
+            content: buildPromptPreencherDocumento({
+              modelo: modeloEscritorio.conteudo_markdown,
+              cliente,
+              dataExtenso: dataExtenso(),
+              extras: camposExtras,
+            }),
+          }],
+        })
+        const conteudo = message.content.filter(b => b.type === 'text').map(b => b.text).join('')
+        return NextResponse.json({ conteudo, templateExistia: false })
+      }
+    }
 
     // Verificar se já existe template salvo
     const { data: templateExistente } = await supabase

@@ -19,4 +19,7 @@ export function limparMarkdownParaDocx(markdown: string): string {
     // Links markdown de e-mail/URL viram texto puro (peça não tem hyperlink):
     // [lico@gmail.com](mailto:lico@gmail.com) → lico@gmail.com
     .replace(/\[([^\]]+)\]\((?:https?:|mailto:|tel:)[^)]*\)/gi, '$1')
+    // Colapsa linhas em branco excessivas (evita espaços demais na prévia/exportação)
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
