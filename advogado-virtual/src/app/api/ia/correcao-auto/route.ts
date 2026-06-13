@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
-import { logUsage } from '@/lib/anthropic/usage'
+import { respostaStreamPeca, logUsagePosStream, salvarVersaoAnterior } from '@/lib/ia/pecas/motor'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 
 const SYSTEM = `Você é um advogado revisor. Aplique a correção solicitada à peça e retorne a peça completa corrigida em Markdown. Não adicione explicações, apenas a peça corrigida.`
@@ -54,37 +54,14 @@ export async function POST(req: NextRequest) {
 
     const { stream, getUsage } = await streamCompletion({ system: SYSTEM, prompt })
 
-    // Salvar versão antiga
-    await supabase.from('pecas_versoes').insert({
-      peca_id: pecaId,
-      versao: peca.versao,
-      conteudo_markdown: peca.conteudo_markdown,
-      alterado_por: usuario.id,
-    })
-
-    // Incrementar versão
+    // Salvar versão antiga e incrementar
+    await salvarVersaoAnterior(supabase, { pecaId, versao: peca.versao, conteudoMarkdown: peca.conteudo_markdown, usuarioId: usuario.id })
     await supabase.from('pecas').update({ versao: peca.versao + 1 }).eq('id', pecaId)
 
     // Log assíncrono
-    getUsage().then(async (usage) => {
-      await logUsage({
-        tenantId: usuario.tenant_id,
-        userId: usuario.id,
-        endpoint: `correcao_${tipo}`,
-        modelo: DEFAULT_MODEL,
-        tokensInput: usage.input,
-        tokensOutput: usage.output,
-        latenciaMs: Date.now() - start,
-      })
-    }).catch((e) => console.error('[logUsage] erro pós-stream (correcao):', e))
+    logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: `correcao_${tipo}`, modelo: DEFAULT_MODEL, start })
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      },
-    })
+    return respostaStreamPeca(stream)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     return jsonError(message, 500)

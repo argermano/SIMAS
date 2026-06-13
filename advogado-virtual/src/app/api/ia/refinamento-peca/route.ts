@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
-import { logUsage } from '@/lib/anthropic/usage'
+import { statusInicialPeca, respostaStreamPeca, logUsagePosStream } from '@/lib/ia/pecas/motor'
 import { SYSTEM_REGRAS_FORENSE } from '@/lib/prompts/pecas/regras-formatacao'
 
 const LABELS_AREA: Record<string, string> = {
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     if (!auth.ok) return auth.response
     const { supabase, usuario } = auth
 
-    const statusInicial = usuario.role === 'colaborador' ? 'aguardando_revisao' : 'rascunho'
+    const statusInicial = statusInicialPeca(usuario.role)
 
     // Buscar atendimento + documentos + cliente
     const { data: atendimento } = await supabase
@@ -137,27 +137,9 @@ export async function POST(req: NextRequest) {
     })
 
     // Log assíncrono
-    getUsage().then(async (usage) => {
-      await logUsage({
-        tenantId: usuario.tenant_id,
-        userId: usuario.id,
-        endpoint: 'refinamento_peca',
-        modelo: DEFAULT_MODEL,
-        tokensInput: usage.input,
-        tokensOutput: usage.output,
-        latenciaMs: Date.now() - start,
-      })
-    }).catch((e) => console.error('[logUsage] erro pós-stream (refinamento_peca):', e))
+    logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'refinamento_peca', modelo: DEFAULT_MODEL, start })
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Peca-Id': peca?.id ?? '',
-        'Access-Control-Expose-Headers': 'X-Peca-Id',
-      },
-    })
+    return respostaStreamPeca(stream, peca?.id ?? '')
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[refinamento-peca] Erro:', message, err)

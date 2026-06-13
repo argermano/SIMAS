@@ -3,70 +3,20 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, completionJSON } from '@/lib/anthropic/client'
 import { modeloDaVersao } from '@/lib/anthropic/versoes'
-import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { decryptClienteFields } from '@/lib/encryption'
 import { buscarJurisprudencia, formatarParaPrompt, type ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import { TRIBUNAIS_DEFAULT } from '@/lib/jurisprudencia/tribunais'
-import { buildPromptPeticaoInicialPrev, SYSTEM_PETICAO_PREV } from '@/lib/prompts/pecas/previdenciario/peticao-inicial'
-import { buildPromptContestacaoPrev, SYSTEM_CONTESTACAO_PREV } from '@/lib/prompts/pecas/previdenciario/contestacao'
-import { buildPromptPeticaoInicialTrab, SYSTEM_PETICAO_TRAB } from '@/lib/prompts/pecas/trabalhista/peticao-inicial'
-import { buildPromptContestacaoTrab, SYSTEM_CONTESTACAO_TRAB } from '@/lib/prompts/pecas/trabalhista/contestacao'
-import { buildPromptPeticaoInicialCivel, SYSTEM_PETICAO_CIVEL } from '@/lib/prompts/pecas/civel/peticao-inicial'
-import { buildPromptContestacaoCivel, SYSTEM_CONTESTACAO_CIVEL } from '@/lib/prompts/pecas/civel/contestacao'
-import { buildPromptPeticaoInicialFamilia, SYSTEM_PETICAO_FAMILIA } from '@/lib/prompts/pecas/familia/peticao-inicial'
-import { buildPromptContestacaoFamilia, SYSTEM_CONTESTACAO_FAMILIA } from '@/lib/prompts/pecas/familia/contestacao'
-import { buildPromptPeticaoInicialMedico, SYSTEM_PETICAO_MEDICO } from '@/lib/prompts/pecas/medico/peticao-inicial'
-import { buildPromptContestacaoMedico, SYSTEM_CONTESTACAO_MEDICO } from '@/lib/prompts/pecas/medico/contestacao'
+import { selecionarPromptPeca, type QualificacaoPartes } from '@/lib/ia/pecas/registro-pecas'
+import { statusInicialPeca, anexarModeloEJurisprudencia, respostaStreamPeca, logUsagePosStream } from '@/lib/ia/pecas/motor'
 import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
 import { SYSTEM_PECA_GENERICA, buildPromptPecaGenerica } from '@/lib/prompts/pecas/generico/peca'
 import { buscarModeloPadrao } from '@/lib/modelos/buscar-modelo'
 import { AREAS, type AreaId } from '@/lib/constants/areas'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 
-type QualificacaoPartes = {
-  autor?: {
-    nome?: string; cpf?: string; rg?: string; orgao_expedidor?: string
-    estado_civil?: string; nacionalidade?: string; profissao?: string
-    endereco?: string; bairro?: string; cidade?: string; estado?: string; cep?: string
-    telefone?: string; email?: string
-  }
-  reu?: {
-    nome?: string; cnpj_cpf?: string; endereco?: string; cidade?: string; estado?: string
-  }
-}
-
-type PromptBuilder = (dados: {
-  analise?: Record<string, unknown>
-  transcricao: string
-  pedido_especifico?: string
-  documentos: Array<{ tipo: string; texto_extraido: string; file_name: string }>
-  localizacao?: { cidade?: string; estado?: string }
-  qualificacao?: QualificacaoPartes
-}) => string
-
-const PROMPT_MAP: Record<string, Record<string, { system: string; build: PromptBuilder }>> = {
-  previdenciario: {
-    peticao_inicial: { system: SYSTEM_PETICAO_PREV, build: buildPromptPeticaoInicialPrev },
-    contestacao:     { system: SYSTEM_CONTESTACAO_PREV, build: buildPromptContestacaoPrev },
-  },
-  trabalhista: {
-    peticao_inicial: { system: SYSTEM_PETICAO_TRAB, build: buildPromptPeticaoInicialTrab },
-    contestacao:     { system: SYSTEM_CONTESTACAO_TRAB, build: buildPromptContestacaoTrab },
-  },
-  civel: {
-    peticao_inicial: { system: SYSTEM_PETICAO_CIVEL, build: buildPromptPeticaoInicialCivel },
-    contestacao:     { system: SYSTEM_CONTESTACAO_CIVEL, build: buildPromptContestacaoCivel },
-  },
-  familia: {
-    peticao_inicial: { system: SYSTEM_PETICAO_FAMILIA, build: buildPromptPeticaoInicialFamilia },
-    contestacao:     { system: SYSTEM_CONTESTACAO_FAMILIA, build: buildPromptContestacaoFamilia },
-  },
-  medico: {
-    peticao_inicial: { system: SYSTEM_PETICAO_MEDICO, build: buildPromptPeticaoInicialMedico },
-    contestacao:     { system: SYSTEM_CONTESTACAO_MEDICO, build: buildPromptContestacaoMedico },
-  },
-}
+// Tipos (QualificacaoPartes) e o registro de prompts curados (PROMPT_MAP +
+// selecionarPromptPeca) ficam em @/lib/ia/pecas/registro-pecas.
 
 // POST /api/ia/gerar-peca — gerar peça com streaming SSE
 export async function POST(req: NextRequest) {
@@ -99,7 +49,7 @@ export async function POST(req: NextRequest) {
     if (!cota.permitido) return jsonError(mensagemCotaExcedida(cota), 429)
 
     // Colaboradores não podem publicar diretamente — peça vai para fila de revisão
-    const statusInicial = usuario.role === 'colaborador' ? 'aguardando_revisao' : 'rascunho'
+    const statusInicial = statusInicialPeca(usuario.role)
 
     // Buscar atendimento + documentos + dados completos do cliente
     const { data: atendimento } = await supabase
@@ -237,14 +187,14 @@ export async function POST(req: NextRequest) {
       // Falha silenciosa — segue sem modelo
     }
 
-    // Selecionar prompt
-    const promptConfig = PROMPT_MAP[area]?.[tipo]
+    // Selecionar prompt curado (área, tipo) — null cai no gerador genérico
+    const promptConfig = selecionarPromptPeca({ area, tipo })
     if (!promptConfig) {
       // Sem prompt dedicado p/ (área, tipo) → gerador GENÉRICO ciente da área e do tipo.
       // (Antes caía no prompt de "petição inicial previdenciária" — viés errado.)
       const areaNome = AREAS[area as AreaId]?.nome ?? area
       const tipoNome = TIPOS_PECA[tipo]?.nome ?? tipo
-      let prompt = buildPromptPecaGenerica({
+      const promptBase = buildPromptPecaGenerica({
         areaNome,
         tipoNome,
         analise,
@@ -254,14 +204,7 @@ export async function POST(req: NextRequest) {
         localizacao,
         qualificacao: qualificacaoFinal,
       })
-
-      if (modeloPadrao) {
-        prompt += `\n\n## MODELO DE REFERÊNCIA DO ESCRITÓRIO\nUse o modelo abaixo apenas como REFERÊNCIA DE ESTRUTURA (seções, ordem e tom de escrita) — NÃO copie o conteúdo dele. A apresentação visual (fonte, margens, entrelinha, recuo) é aplicada automaticamente na exportação; não tente reproduzi-la no texto. Adapte a estrutura ao caso concreto:\n\n${modeloPadrao}`
-      }
-
-      if (jurisprudenciaTexto) {
-        prompt += `\n\n${jurisprudenciaTexto}\n\nUse a jurisprudência acima como referência para fundamentar a peça. Cite os processos relevantes quando aplicável.`
-      }
+      const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto })
 
       // Cria a peça ANTES do stream para garantir um X-Peca-Id válido sempre.
       const { data: peca, error: pecaError } = await supabase
@@ -286,20 +229,12 @@ export async function POST(req: NextRequest) {
 
       const { stream } = await streamCompletion({ system: SYSTEM_PECA_GENERICA, prompt, maxTokens: 32768, model: modelo })
 
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          Connection: 'keep-alive',
-          'X-Peca-Id': peca.id,
-          'Access-Control-Expose-Headers': 'X-Peca-Id',
-        },
-      })
+      return respostaStreamPeca(stream, peca.id)
     }
 
     const documentos = documentosFiltrados
 
-    let prompt = promptConfig.build({
+    const promptBase = promptConfig.build({
       analise,
       transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
       pedido_especifico: atendimento.pedidos_especificos,
@@ -307,14 +242,7 @@ export async function POST(req: NextRequest) {
       localizacao,
       qualificacao: qualificacaoFinal,
     })
-
-    if (modeloPadrao) {
-      prompt += `\n\n## MODELO DE REFERÊNCIA DO ESCRITÓRIO\nUse o modelo abaixo apenas como REFERÊNCIA DE ESTRUTURA (seções, ordem e tom de escrita) — NÃO copie o conteúdo dele. A apresentação visual (fonte, margens, entrelinha, recuo) é aplicada automaticamente na exportação; não tente reproduzi-la no texto. Adapte a estrutura ao caso concreto:\n\n${modeloPadrao}`
-    }
-
-    if (jurisprudenciaTexto) {
-      prompt += `\n\n${jurisprudenciaTexto}\n\nUse a jurisprudência acima como referência para fundamentar a peça. Cite os processos relevantes quando aplicável.`
-    }
+    const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto })
 
     // Criar peça no banco (status rascunho) ANTES do stream → X-Peca-Id sempre válido
     const { data: peca, error: pecaError } = await supabase
@@ -346,27 +274,9 @@ export async function POST(req: NextRequest) {
     })
 
     // Log assíncrono (não bloqueia o stream)
-    getUsage().then(async (usage) => {
-      await logUsage({
-        tenantId: usuario.tenant_id,
-        userId: usuario.id,
-        endpoint: 'gerar_peca',
-        modelo: modelo,
-        tokensInput: usage.input,
-        tokensOutput: usage.output,
-        latenciaMs: Date.now() - start,
-      })
-    }).catch((e) => console.error('[logUsage] erro pós-stream (gerar_peca):', e))
+    logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'gerar_peca', modelo, start })
 
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Peca-Id': peca.id,
-        'Access-Control-Expose-Headers': 'X-Peca-Id',
-      },
-    })
+    return respostaStreamPeca(stream, peca.id)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     console.error('[gerar-peca] Erro:', message, err)

@@ -3,6 +3,7 @@ import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptRefinar, SYSTEM_REFINAR } from '@/lib/prompts/refinamento/refinar-com-documentos'
+import { salvarVersaoAnterior } from '@/lib/ia/pecas/motor'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 
@@ -56,12 +57,7 @@ export async function POST(req: NextRequest) {
     }>({ system: SYSTEM_REFINAR, prompt })
 
     // Salvar versão antiga
-    await supabase.from('pecas_versoes').insert({
-      peca_id: pecaId,
-      versao: peca.versao,
-      conteudo_markdown: peca.conteudo_markdown,
-      alterado_por: usuario.id,
-    })
+    await salvarVersaoAnterior(supabase, { pecaId, versao: peca.versao, conteudoMarkdown: peca.conteudo_markdown, usuarioId: usuario.id })
 
     // Atualizar peça
     await supabase
