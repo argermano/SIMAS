@@ -24,6 +24,30 @@
 
 ---
 
+## Decisões aprovadas e estado de implementação
+
+Decisões do product owner (2026-06-13) e o que já foi implementado:
+
+| # | Decisão | Estado |
+|---|---|---|
+| 1 | **Consultoria não é obrigatória** — o Estudo deve levar direto à peça | ✅ Implementado: Estudo permite escolher o tipo de peça e gerar direto (`/[area]/pecas/[tipo]?id=`); "aprofundar análise" virou opcional. |
+| 2 | **Um Caso pode ter peças de várias áreas**; documentos, contrato, procuração e declarações pertencem ao Caso e são reutilizáveis entre peças | ✅ Já garantido no modelo (`atendimento` = Caso): `gerar-peca` carrega `documentos(*)` por atendimento; Casa do caso lista docs/contratos/peças do caso. |
+| 3 | **Sem campo "etapa"**; andamento como linha do tempo derivada | ✅ Implementado: "Linha do tempo" na Casa do caso (estudo, peças, contratos, documentos por data). |
+| 4 | **Manter "Contratos a assinar", remover "Histórico" do menu** | ✅ Menu já sem Histórico; removido o último link órfão no dashboard. |
+| 5 | **Implementar tudo, fase a fase** | 🔄 Em andamento (ver abaixo). |
+
+**Princípio do motor (decisão complementar):** unificar a **orquestração**, mas manter/expandir **prompts curados por área+peça** — geração não depende só da IA (público são advogados com pouca familiaridade com IA). Camadas: `base + área + peça + modo`.
+
+**Incrementos entregues:**
+- **Inc. 1** (`513fc09`): Estudo→peça direto, Casa do caso como hub (seletor de peças + linha do tempo), editor "voltar ao caso", limpeza do link de Histórico.
+- **Inc. 2** (`381d834`): `/api/ia/analise` extensível por área (registro + fallback genérico ciente da área) — remove o viés previdenciário para áreas sem prompt curado.
+
+**Pendente (refatorações internas, sem efeito visível, maior risco de regressão):**
+- **Motor único** `gerarPeca({atendimentoId, area, tipo, modo, contexto})` consolidando `gerar-peca`/`refinamento-peca`/`refinar-peca`/`correcao-auto` — preservando os prompts curados byte-a-byte.
+- **Unificar** `TelaAtendimento` e `TelaRefinamento` num componente com `modo`.
+
+---
+
 # FASE 1 — Mapa do estado atual
 
 ## 1.1 Rotas (Next.js App Router)
