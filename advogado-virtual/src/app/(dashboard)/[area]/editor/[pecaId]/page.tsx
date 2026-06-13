@@ -80,6 +80,7 @@ export default async function EditorPecaPage({
         <EditorPecaClient
           pecaId={peca.id}
           atendimentoId={peca.atendimento_id ?? ''}
+          clienteId={clienteId}
           area={peca.area}
           tipo={peca.tipo}
           tipoNome={tipoNome}

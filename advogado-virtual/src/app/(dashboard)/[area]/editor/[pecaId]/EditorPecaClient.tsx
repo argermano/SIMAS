@@ -10,6 +10,7 @@ import { Send, CheckCircle, Clock } from 'lucide-react'
 interface EditorPecaClientProps {
   pecaId: string
   atendimentoId: string
+  clienteId?: string
   area: string
   tipo: string
   tipoNome: string
@@ -30,6 +31,7 @@ const PRAZO_OPTIONS = [
 export function EditorPecaClient({
   pecaId,
   atendimentoId,
+  clienteId,
   area,
   tipo,
   tipoNome,
@@ -143,7 +145,11 @@ export function EditorPecaClient({
     <DocumentEditor
       titulo={tipoNome ?? tipo}
       conteudo={conteudoInicial}
-      onVoltar={() => router.push(`/${area}/pecas/${tipo}?id=${atendimentoId}`)}
+      onVoltar={() => router.push(
+        clienteId && atendimentoId
+          ? `/clientes/${clienteId}/casos/${atendimentoId}`
+          : `/${area}`
+      )}
       onSalvar={handleSalvar}
       salvando={salvando}
       extraAcoes={botaoRevisao}
