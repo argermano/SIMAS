@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { useStreaming } from '@/components/shared/StreamingText'
-import { formatarPeca } from '@/lib/format/formatar-peca'
+import { finalizarGeracaoPeca } from '@/lib/ia/pecas/finalizar-geracao'
 import { SeletorCliente } from './SeletorCliente'
 import { GravadorAudio } from './GravadorAudio'
 import { MicrofoneInline } from './MicrofoneInline'
@@ -381,55 +381,19 @@ export function TelaAtendimento({
       return
     }
 
-    const { fullText, headers } = resultado
-    const pecaId = headers.get('X-Peca-Id')
-
-    if (!pecaId) {
+    // Formata, salva a peça, marca o caso e resolve o destino (helper compartilhado)
+    const fin = await finalizarGeracaoPeca({ resultado, area, atendimentoId, roleUsuario })
+    if (!fin.ok) {
       setMostraModalGeracao(false)
-      toastError('Erro', 'Não foi possível identificar a peça gerada.')
+      toastError('Erro ao salvar', fin.erro)
       return
     }
 
-    // 3. Aplica formatação forense padronizada antes de salvar
-    const conteudoFormatado = formatarPeca(fullText)
-
-    // 4. Salva o conteúdo formatado no banco — aborta a navegação se falhar
-    try {
-      const resSalvar = await fetch('/api/ia/salvar-peca', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pecaId, conteudo: conteudoFormatado }),
-      })
-      if (!resSalvar.ok) {
-        const data = await resSalvar.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Falha ao salvar a peça')
-      }
-
-      // 4b. Atualiza status do atendimento para peca_gerada
-      const resStatus = await fetch(`/api/atendimentos/${atendimentoId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'peca_gerada' }),
-      })
-      if (!resStatus.ok) {
-        const data = await resStatus.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Falha ao atualizar o caso')
-      }
-    } catch (e) {
-      setMostraModalGeracao(false)
-      toastError('Erro ao salvar', e instanceof Error ? e.message : 'Tente novamente.')
-      return
-    }
-
-    // 5. Colaboradores não vão direto ao editor — peça aguarda revisão
-    if (roleUsuario === 'colaborador') {
+    // Colaboradores não vão direto ao editor — peça aguarda revisão
+    if (fin.emRevisao) {
       success('Peça enviada para revisão!', 'Um advogado ou administrador irá avaliar e aprovar a peça.')
-      router.push(`/${area}`)
-      return
     }
-
-    // 6. Outros perfis vão direto ao editor
-    router.push(`/${area}/editor/${pecaId}`)
+    router.push(fin.destino)
   }
 
   const podeGravar = !!atendimentoId

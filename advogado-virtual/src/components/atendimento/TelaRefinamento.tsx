@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { useStreaming } from '@/components/shared/StreamingText'
-import { formatarPeca } from '@/lib/format/formatar-peca'
+import { finalizarGeracaoPeca } from '@/lib/ia/pecas/finalizar-geracao'
 import { SeletorCliente } from './SeletorCliente'
 import { UploadDocumentos } from './UploadDocumentos'
 import { MicrofoneInline } from './MicrofoneInline'
@@ -153,39 +153,18 @@ export function TelaRefinamento({
       return
     }
 
-    const { fullText, headers } = resultado
-    const pecaId = headers.get('X-Peca-Id')
-
-    if (!pecaId) {
+    // Formata, salva a peça, marca o caso e resolve o destino (helper compartilhado)
+    const fin = await finalizarGeracaoPeca({ resultado, area, atendimentoId, roleUsuario })
+    if (!fin.ok) {
       setMostraModalGeracao(false)
-      toastError('Erro', 'Não foi possível identificar a peça gerada.')
+      toastError('Erro ao salvar', fin.erro)
       return
     }
 
-    // Aplica formatação forense padronizada antes de salvar
-    const conteudoFormatado = formatarPeca(fullText)
-
-    // Salva conteúdo formatado
-    await fetch('/api/ia/salvar-peca', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pecaId, conteudo: conteudoFormatado }),
-    })
-
-    // Atualiza status do atendimento
-    await fetch(`/api/atendimentos/${atendimentoId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'peca_gerada' }),
-    })
-
-    if (roleUsuario === 'colaborador') {
+    if (fin.emRevisao) {
       success('Peça enviada para revisão!', 'Um advogado ou administrador irá avaliar e aprovar a peça.')
-      router.push(`/${area}`)
-      return
     }
-
-    router.push(`/${area}/editor/${pecaId}`)
+    router.push(fin.destino)
   }
 
   const podeGerar = !!atendimentoId && pecaOriginal.trim().length > 50
