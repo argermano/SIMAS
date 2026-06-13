@@ -17,6 +17,7 @@ const BADGE_STATUS: Record<string, { variant: 'success' | 'warning' | 'secondary
   em_revisao: { variant: 'warning',   label: 'Em revisão' },
   aprovado:   { variant: 'success',   label: 'Aprovado'   },
   exportado:  { variant: 'success',   label: 'Exportado'  },
+  assinado:   { variant: 'success',   label: 'Assinado'   },
 }
 
 const LABEL_AREA: Record<string, string> = {
@@ -83,7 +84,8 @@ export default async function ContratosPage({
   } else if (status) {
     query = query.eq('status', status)
   } else {
-    query = query.neq('status', 'exportado')
+    // Pendentes ("a assinar") = ainda não finalizados: exclui exportados e assinados
+    query = query.not('status', 'in', '(exportado,assinado)')
   }
 
   const { data: contratos, count } = await query

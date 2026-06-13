@@ -14,7 +14,8 @@ const STATUS_OPTIONS = [
   { value: 'rascunho',   label: 'Rascunho' },
   { value: 'em_revisao', label: 'Em revisão' },
   { value: 'aprovado',   label: 'Aprovado' },
-  { value: 'exportado',  label: 'Finalizados' },
+  { value: 'assinado',   label: 'Assinados' },
+  { value: 'exportado',  label: 'Exportados' },
   { value: 'todos',      label: 'Todos' },
 ]
 
