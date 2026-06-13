@@ -80,12 +80,15 @@ export default async function CasoPage({
   type Evento = { quando: string; tipo: 'estudo' | 'peca' | 'contrato' | 'documento'; titulo: string; href?: string }
   const eventos: Evento[] = [
     ...(analiseRow ? [{ quando: analiseRow.created_at, tipo: 'estudo' as const, titulo: 'Estudo de caso', href: `/analise-caso?atendimentoId=${atendimentoId}` }] : []),
-    ...pecas.map((p) => ({
-      quando: p.created_at,
-      tipo: 'peca' as const,
-      titulo: `Peça — ${TIPOS_PECA[p.tipo]?.nome ?? p.tipo}${areaMeta(p.area) ? ` (${areaMeta(p.area)!.nome})` : ''}`,
-      href: `/${p.area}/editor/${p.id}`,
-    })),
+    ...pecas.map((p) => {
+      const m = areaMeta(p.area)
+      return {
+        quando: p.created_at,
+        tipo: 'peca' as const,
+        titulo: `Peça — ${TIPOS_PECA[p.tipo]?.nome ?? p.tipo}${m ? ` (${m.nome})` : ''}`,
+        href: `/${p.area}/editor/${p.id}`,
+      }
+    }),
     ...((contratos ?? []) as Array<{ id: string; titulo: string; created_at: string }>).map((c) => ({
       quando: c.created_at,
       tipo: 'contrato' as const,
@@ -187,7 +190,7 @@ export default async function CasoPage({
                       </span>
                     )
                     return (
-                      <li key={i} className="relative">
+                      <li key={`${ev.tipo}-${ev.quando}-${i}`} className="relative">
                         <span className="absolute -left-[23px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-primary/60" />
                         {ev.href ? (
                           <Link href={ev.href} className="block rounded-md px-2 py-1 hover:bg-muted/50 transition-colors">
