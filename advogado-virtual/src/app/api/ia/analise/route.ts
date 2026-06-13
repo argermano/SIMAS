@@ -4,8 +4,26 @@ import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptAnalisePrev, SYSTEM_ANALISE_PREV } from '@/lib/prompts/analise/previdenciario'
 import { buildPromptAnaliseTrab, SYSTEM_ANALISE_TRAB } from '@/lib/prompts/analise/trabalhista'
+import { buildPromptAnaliseGenerica, SYSTEM_ANALISE_GENERICA } from '@/lib/prompts/analise/generico'
+import { AREAS, type AreaId } from '@/lib/constants/areas'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+
+// Dados comuns a todos os prompts de análise
+type DadosAnalise = {
+  transcricao: string
+  pedido_especifico?: string
+  documentos: Array<{ tipo: string; texto_extraido: string; file_name: string }>
+  tipo_peca_origem?: string
+}
+
+// Registro de prompts curados por área. Áreas sem entrada caem no genérico
+// ciente da área (não mais no previdenciário). Cf. princípio "prompts curados
+// por área+peça": basta adicionar uma entrada aqui para curar uma nova área.
+const REGISTRO_ANALISE: Record<string, { system: string; build: (d: DadosAnalise) => string }> = {
+  previdenciario: { system: SYSTEM_ANALISE_PREV, build: buildPromptAnalisePrev },
+  trabalhista:    { system: SYSTEM_ANALISE_TRAB, build: buildPromptAnaliseTrab },
+}
 
 // POST /api/ia/analise — gerar análise jurídica
 export async function POST(req: NextRequest) {
@@ -45,26 +63,25 @@ export async function POST(req: NextRequest) {
       file_name: d.file_name as string,
     }))
 
-    // Selecionar prompt por área
+    // Selecionar prompt por área — curado (registro) ou genérico ciente da área
+    const dadosAnalise: DadosAnalise = {
+      transcricao,
+      pedido_especifico: atendimento.pedidos_especificos,
+      documentos,
+      tipo_peca_origem: atendimento.tipo_peca_origem,
+    }
+
+    const curado = REGISTRO_ANALISE[atendimento.area as string]
     let system: string
     let prompt: string
 
-    if (atendimento.area === 'trabalhista') {
-      system = SYSTEM_ANALISE_TRAB
-      prompt = buildPromptAnaliseTrab({
-        transcricao,
-        pedido_especifico: atendimento.pedidos_especificos,
-        documentos,
-        tipo_peca_origem: atendimento.tipo_peca_origem,
-      })
+    if (curado) {
+      system = curado.system
+      prompt = curado.build(dadosAnalise)
     } else {
-      system = SYSTEM_ANALISE_PREV
-      prompt = buildPromptAnalisePrev({
-        transcricao,
-        pedido_especifico: atendimento.pedidos_especificos,
-        documentos,
-        tipo_peca_origem: atendimento.tipo_peca_origem,
-      })
+      const areaNome = AREAS[atendimento.area as AreaId]?.nome ?? 'Direito (área geral)'
+      system = SYSTEM_ANALISE_GENERICA
+      prompt = buildPromptAnaliseGenerica({ areaNome, ...dadosAnalise })
     }
 
     // Chamar Claude (JSON mode)
