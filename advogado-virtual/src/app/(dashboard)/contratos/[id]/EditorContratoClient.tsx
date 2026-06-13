@@ -245,7 +245,7 @@ export function EditorContratoClient({
         <DocumentEditor
           titulo={contrato.titulo}
           conteudo={contrato.conteudo_markdown}
-          onVoltar={() => { if (atendimentoId) router.back(); else router.push('/contratos') }}
+          onVoltar={() => { if (atendimentoId) { router.back(); router.refresh() } else router.push('/contratos') }}
           onSalvar={handleSalvar}
           salvando={salvando}
           extraAcoes={<>{acaoAprovar}{acaoAssinar}</>}

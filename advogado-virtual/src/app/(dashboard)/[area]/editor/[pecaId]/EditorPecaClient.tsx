@@ -145,11 +145,14 @@ export function EditorPecaClient({
     <DocumentEditor
       titulo={tipoNome ?? tipo}
       conteudo={conteudoInicial}
-      onVoltar={() => router.push(
-        clienteId && atendimentoId
-          ? `/clientes/${clienteId}/casos/${atendimentoId}`
-          : `/${area}`
-      )}
+      onVoltar={() => {
+        router.push(
+          clienteId && atendimentoId
+            ? `/clientes/${clienteId}/casos/${atendimentoId}`
+            : `/${area}`
+        )
+        router.refresh()
+      }}
       onSalvar={handleSalvar}
       salvando={salvando}
       extraAcoes={botaoRevisao}
