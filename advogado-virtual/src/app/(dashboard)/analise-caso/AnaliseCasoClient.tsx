@@ -15,7 +15,9 @@ import { MicrofoneInline } from '@/components/atendimento/MicrofoneInline'
 import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
 import { SeletorVersaoIA } from '@/components/atendimento/SeletorVersaoIA'
 import { VERSAO_IA_PADRAO, type VersaoIA } from '@/lib/anthropic/versoes'
+import { Select } from '@/components/ui/select'
 import { AREAS } from '@/lib/constants/areas'
+import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import {
   Users, MessageSquare, Mic, Keyboard, Brain, Loader2, Save,
   AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle, UserCheck,
@@ -255,7 +257,8 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
     }
   }
 
-  async function irParaArea(area: string) {
+  // Persiste o relato/pedido atuais no atendimento antes de navegar (best-effort)
+  async function salvarRelatoAtual() {
     if (atendimentoId && textoRelato.trim()) {
       try {
         await fetch(`/api/atendimentos/${atendimentoId}`, {
@@ -271,11 +274,18 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
         // Silencioso — navega mesmo assim
       }
     }
-    if (atendimentoId) {
-      router.push(`/${area}/consultoria?atendimentoId=${atendimentoId}`)
-    } else {
-      router.push(`/${area}/consultoria`)
-    }
+  }
+
+  // Gera a peça direto a partir do estudo, levando o contexto do caso (atendimentoId)
+  async function gerarPecaDireto(area: string, tipo: string) {
+    await salvarRelatoAtual()
+    router.push(atendimentoId ? `/${area}/pecas/${tipo}?id=${atendimentoId}` : `/${area}/pecas/${tipo}`)
+  }
+
+  // Caminho opcional: aprofundar a análise (parecer/estratégia) na área
+  async function aprofundarConsultoria(area: string) {
+    await salvarRelatoAtual()
+    router.push(atendimentoId ? `/${area}/consultoria?atendimentoId=${atendimentoId}` : `/${area}/consultoria`)
   }
 
   const podeAnalisar = textoRelato.trim().length > 20
@@ -600,15 +610,11 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
                         <p className="mt-1 text-sm text-muted-foreground">{a.justificativa}</p>
                       </div>
                       {ativa && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => irParaArea(a.area)}
-                          className="shrink-0 gap-1.5"
-                        >
-                          Aprofundar análise
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Button>
+                        <AcoesGerarPeca
+                          areaId={a.area}
+                          onGerar={gerarPecaDireto}
+                          onAprofundar={aprofundarConsultoria}
+                        />
                       )}
                       {!ativa && (
                         <span className="shrink-0 rounded-lg bg-muted px-3 py-1.5 text-xs text-muted-foreground">
@@ -768,6 +774,61 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Ações por área no resultado do Estudo: escolher o tipo de peça e gerar direto
+// (caminho principal), ou aprofundar a análise/parecer (opcional).
+function AcoesGerarPeca({
+  areaId,
+  onGerar,
+  onAprofundar,
+}: {
+  areaId: string
+  onGerar: (area: string, tipo: string) => void
+  onAprofundar: (area: string) => void
+}) {
+  const pecas = ((AREAS as Record<string, { pecas?: readonly string[] }>)[areaId]?.pecas ?? []) as readonly string[]
+  const tipoPadrao = pecas.includes('peticao_inicial') ? 'peticao_inicial' : (pecas[0] ?? '')
+  const [tipo, setTipo] = useState(tipoPadrao)
+
+  // Sem peças mapeadas para a área: oferece apenas o caminho de análise
+  if (pecas.length === 0) {
+    return (
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={() => onAprofundar(areaId)}
+        className="shrink-0 gap-1.5"
+      >
+        Aprofundar análise
+        <ArrowRight className="h-3.5 w-3.5" />
+      </Button>
+    )
+  }
+
+  return (
+    <div className="flex flex-col items-stretch gap-1.5 sm:w-72 sm:shrink-0">
+      <div className="flex items-end gap-2">
+        <div className="flex-1 min-w-0">
+          <Select
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value)}
+            options={pecas.map((p) => ({ value: p, label: TIPOS_PECA[p]?.nome ?? p }))}
+          />
+        </div>
+        <Button size="sm" onClick={() => onGerar(areaId, tipo)} className="gap-1.5">
+          Gerar peça
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      <button
+        onClick={() => onAprofundar(areaId)}
+        className="self-end text-xs font-medium text-muted-foreground hover:text-primary underline underline-offset-2"
+      >
+        ou aprofundar análise (parecer)
+      </button>
     </div>
   )
 }

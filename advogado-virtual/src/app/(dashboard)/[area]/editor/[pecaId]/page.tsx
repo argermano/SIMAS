@@ -38,10 +38,10 @@ export default async function EditorPecaPage({
     .single()
   if (!usuario) redirect('/login')
 
-  // Carrega a peça com dados do atendimento
+  // Carrega a peça com dados do atendimento (inclui cliente p/ voltar à Casa do caso)
   const { data: peca } = await supabase
     .from('pecas')
-    .select('id, tipo, area, conteudo_markdown, versao, status, atendimento_id')
+    .select('id, tipo, area, conteudo_markdown, versao, status, atendimento_id, atendimentos(cliente_id)')
     .eq('id', pecaId)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -51,6 +51,14 @@ export default async function EditorPecaPage({
   const tipoConfig = TIPOS_PECA[peca.tipo]
   const tipoNome = tipoConfig?.nome ?? peca.tipo.replace(/_/g, ' ')
 
+  // Resolve o cliente do caso (relação 1:N pode vir como objeto ou array)
+  const atRel = peca.atendimentos as unknown as { cliente_id?: string } | { cliente_id?: string }[] | null
+  const clienteId = Array.isArray(atRel) ? atRel[0]?.cliente_id : atRel?.cliente_id
+  const hrefVoltar = peca.atendimento_id && clienteId
+    ? `/clientes/${clienteId}/casos/${peca.atendimento_id}`
+    : `/${area}`
+  const labelVoltar = peca.atendimento_id && clienteId ? 'Voltar ao caso' : areaConfig.nome
+
   return (
     <>
       <Header
@@ -59,11 +67,11 @@ export default async function EditorPecaPage({
         nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
         acoes={
           <Link
-            href={`/${area}`}
+            href={hrefVoltar}
             className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
-            {areaConfig.nome}
+            {labelVoltar}
           </Link>
         }
       />

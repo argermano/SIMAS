@@ -7,11 +7,11 @@ import { Badge } from '@/components/ui/badge'
 import { PecasPorArea } from '@/components/atendimento/PecasPorArea'
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
 import { AREAS } from '@/lib/constants/areas'
-import { MODELOS_PRONTOS } from '@/lib/constants/tipos-peca'
+import { MODELOS_PRONTOS, TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import { formatarDataHora, formatarDataRelativa } from '@/lib/utils'
 import {
-  Brain, ChevronLeft, ScrollText, FilePlus, FileText, FileSignature,
-  AlertTriangle, Clock, CheckCircle, ArrowRight,
+  Brain, ChevronLeft, ChevronDown, ScrollText, FilePlus, FileText, FileSignature,
+  AlertTriangle, Clock, CheckCircle, ArrowRight, History,
 } from 'lucide-react'
 import type { ResultadoAnaliseGeral } from '@/app/api/ia/analise-geral/route'
 
@@ -31,7 +31,7 @@ const URGENCIA: Record<string, { cor: string; label: string; Icone: typeof Alert
 }
 
 const areaMeta = (id: string) =>
-  (AREAS as Record<string, { nome: string; corBg: string; corTexto: string; modelos: readonly string[] }>)[id]
+  (AREAS as Record<string, { nome: string; corBg: string; corTexto: string; modelos: readonly string[]; pecas: readonly string[] }>)[id]
 
 export default async function CasoPage({
   params,
@@ -68,12 +68,34 @@ export default async function CasoPage({
     .order('created_at', { ascending: false })
 
   const cliente = at.clientes as unknown as { id: string; nome: string } | null
-  const analise = ((at.analises as Array<{ plano_a: ResultadoAnaliseGeral }> | null)?.[0]?.plano_a ?? null)
+  const analiseRow = (at.analises as Array<{ id: string; plano_a: ResultadoAnaliseGeral; created_at: string }> | null)?.[0] ?? null
+  const analise = analiseRow?.plano_a ?? null
   const areasIdent = analise?.areas_identificadas ?? []
   const pecas = (at.pecas ?? []) as Array<{ id: string; tipo: string; area: string; versao: number; status: string; created_at: string }>
   const documentos = (at.documentos ?? []) as Array<{ id: string; file_name: string; tipo: string; created_at: string }>
   const status = at.status as string
   const badge = BADGE_STATUS[status] ?? BADGE_STATUS.caso_novo
+
+  // Linha do tempo do caso — andamento derivado dos eventos (estudo, peças, contratos, documentos)
+  type Evento = { quando: string; tipo: 'estudo' | 'peca' | 'contrato' | 'documento'; titulo: string; href?: string }
+  const eventos: Evento[] = [
+    ...(analiseRow ? [{ quando: analiseRow.created_at, tipo: 'estudo' as const, titulo: 'Estudo de caso', href: `/analise-caso?atendimentoId=${atendimentoId}` }] : []),
+    ...pecas.map((p) => ({
+      quando: p.created_at,
+      tipo: 'peca' as const,
+      titulo: `Peça — ${TIPOS_PECA[p.tipo]?.nome ?? p.tipo}${areaMeta(p.area) ? ` (${areaMeta(p.area)!.nome})` : ''}`,
+      href: `/${p.area}/editor/${p.id}`,
+    })),
+    ...((contratos ?? []) as Array<{ id: string; titulo: string; created_at: string }>).map((c) => ({
+      quando: c.created_at,
+      tipo: 'contrato' as const,
+      titulo: `Contrato — ${c.titulo}`,
+      href: `/contratos/${c.id}`,
+    })),
+    ...documentos.map((d) => ({ quando: d.created_at, tipo: 'documento' as const, titulo: d.file_name })),
+  ].sort((x, y) => new Date(y.quando).getTime() - new Date(x.quando).getTime())
+
+  const ICONE_EVENTO = { estudo: Brain, peca: ScrollText, contrato: FileSignature, documento: FileText } as const
 
   // Área principal (p/ os modelos): da análise, senão da 1ª peça, senão a do caso; fallback cível
   const areaPrincipalRaw = areasIdent.find((a) => a.relevancia === 'principal')?.area
@@ -142,7 +164,47 @@ export default async function CasoPage({
             </CardContent>
           </Card>
 
-          {/* Gerar peça (por área) */}
+          {/* Linha do tempo (andamento do caso) */}
+          {eventos.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <History className="h-5 w-5 text-muted-foreground" />
+                  Linha do tempo
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ol className="relative space-y-3 border-l border-border pl-5">
+                  {eventos.map((ev, i) => {
+                    const Icone = ICONE_EVENTO[ev.tipo]
+                    const conteudo = (
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <Icone className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate text-sm text-foreground">{ev.titulo}</span>
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">{formatarDataRelativa(ev.quando)}</span>
+                      </span>
+                    )
+                    return (
+                      <li key={i} className="relative">
+                        <span className="absolute -left-[23px] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-primary/60" />
+                        {ev.href ? (
+                          <Link href={ev.href} className="block rounded-md px-2 py-1 hover:bg-muted/50 transition-colors">
+                            {conteudo}
+                          </Link>
+                        ) : (
+                          <span className="block px-2 py-1">{conteudo}</span>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ol>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Gerar peça (por área) — escolha o tipo e gere com o contexto do caso */}
           {areasParaGerar.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
@@ -154,22 +216,44 @@ export default async function CasoPage({
               <CardContent className="space-y-2">
                 {areasParaGerar.map((a) => {
                   const m = areaMeta(a.area)
+                  const pecasArea = m?.pecas ?? []
                   return (
-                    <Link
-                      key={a.area}
-                      href={`/${a.area}/consultoria?atendimentoId=${atendimentoId}`}
-                      className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5 hover:bg-muted/50 transition-colors group"
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${m?.corBg ?? 'bg-muted'} ${m?.corTexto ?? 'text-muted-foreground'}`}>
-                          {m?.nome ?? a.nome}
+                    <details key={a.area} className="group rounded-lg border bg-card">
+                      <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-3 py-2.5 hover:bg-muted/50 transition-colors [&::-webkit-details-marker]:hidden">
+                        <span className="flex items-center gap-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${m?.corBg ?? 'bg-muted'} ${m?.corTexto ?? 'text-muted-foreground'}`}>
+                            {m?.nome ?? a.nome}
+                          </span>
+                          {a.principal && <span className="text-xs text-muted-foreground">principal</span>}
                         </span>
-                        {a.principal && <span className="text-xs text-muted-foreground">principal</span>}
-                      </span>
-                      <span className="flex items-center gap-1 text-sm font-semibold text-primary">
-                        Gerar peça <ArrowRight className="h-3.5 w-3.5" />
-                      </span>
-                    </Link>
+                        <span className="flex items-center gap-1 text-sm font-semibold text-primary">
+                          Gerar peça <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+                        </span>
+                      </summary>
+                      <div className="space-y-2 border-t px-3 py-3">
+                        {pecasArea.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {pecasArea.map((tipo) => (
+                              <Link
+                                key={tipo}
+                                href={`/${a.area}/pecas/${tipo}?id=${atendimentoId}`}
+                                className="rounded-lg border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:border-primary/30 hover:bg-primary/10 transition-colors"
+                              >
+                                {TIPOS_PECA[tipo]?.nome ?? tipo}
+                              </Link>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Sem peças mapeadas para esta área.</p>
+                        )}
+                        <Link
+                          href={`/${a.area}/consultoria?atendimentoId=${atendimentoId}`}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary"
+                        >
+                          ou aprofundar análise (parecer) <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      </div>
+                    </details>
                   )
                 })}
               </CardContent>

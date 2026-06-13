@@ -154,10 +154,10 @@ export default async function DashboardPage() {
                   Últimos casos
                 </h2>
                 <Link
-                  href="/historico"
+                  href="/clientes"
                   className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                 >
-                  Ver todos <ArrowRight className="h-4 w-4" />
+                  Ver clientes <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
 
