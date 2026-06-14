@@ -20,7 +20,7 @@ import { AREAS } from '@/lib/constants/areas'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import {
   Users, MessageSquare, Mic, Keyboard, Brain, Loader2, Save,
-  AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle, UserCheck,
+  AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle,
   Printer, Mail, Paperclip,
 } from 'lucide-react'
 import { ChatDiagnostico } from '@/components/atendimento/ChatDiagnostico'
@@ -50,7 +50,8 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
   const { success, error: toastError } = useToast()
 
   const [cliente,          setCliente]          = useState<{ id: string; nome: string } | null>(null)
-  const [modoInput,        setModoInput]        = useState<'durante_reuniao' | 'pos_reuniao' | 'texto'>('durante_reuniao')
+  const [modoInput,        setModoInput]        = useState<'audio' | 'texto'>('audio')
+  const [comClientePresente, setComClientePresente] = useState(true)
   const [textoRelato,      setTextoRelato]      = useState('')
   const [transcricao,      setTranscricao]      = useState('')
   const [pedido,           setPedido]           = useState('')
@@ -129,8 +130,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           setTranscricao(texto)
         }
         if (at.pedidos_especificos) setPedido(at.pedidos_especificos)
-        if (at.modo_input === 'texto') setModoInput('texto')
-        else setModoInput('pos_reuniao')
+        setModoInput(at.modo_input === 'texto' ? 'texto' : 'audio')
         // Carregar documentos existentes
         if (at.documentos) setDocumentosExistentes(at.documentos)
         // Carregar diagnóstico salvo
@@ -327,25 +327,16 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Tabs: 3 modos */}
+          {/* Tabs: 2 modos */}
           <div className="flex rounded-lg border bg-muted/50 p-1 gap-1">
             <button
-              onClick={() => setModoInput('durante_reuniao')}
+              onClick={() => setModoInput('audio')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                modoInput === 'durante_reuniao' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <UserCheck className="h-4 w-4" />
-              Gravar com cliente
-            </button>
-            <button
-              onClick={() => setModoInput('pos_reuniao')}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                modoInput === 'pos_reuniao' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                modoInput === 'audio' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Mic className="h-4 w-4" />
-              Relato pós-reunião
+              Áudio
             </button>
             <button
               onClick={() => setModoInput('texto')}
@@ -358,44 +349,28 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
             </button>
           </div>
 
-          {modoInput === 'durante_reuniao' && (
+          {modoInput === 'audio' && (
             <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">
-                Grave o áudio <strong>com o cliente presente</strong>. O consentimento LGPD será solicitado antes de iniciar.
-              </p>
-              <GravadorAudio
-                onTranscricao={handleTranscricao}
-                atendimentoId={atendimentoId}
-                disabled={false}
-                requerConsentimento={true}
-              />
-              {transcricao && (
-                <Textarea
-                  label="Transcrição (edite se necessário)"
-                  value={textoRelato}
-                  onChange={(e) => setTextoRelato(e.target.value)}
-                  rows={8}
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={comClientePresente}
+                  onChange={(e) => setComClientePresente(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-border accent-primary"
                 />
-              )}
-            </div>
-          )}
-
-          {modoInput === 'pos_reuniao' && (
-            <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">
-                Relate os fatos com <strong>suas próprias palavras</strong> após a reunião. Sem necessidade de consentimento LGPD.
-              </p>
+                Gravação <strong className="font-semibold text-foreground">com o cliente presente</strong> — solicita o consentimento LGPD antes de gravar
+              </label>
               <GravadorAudio
                 onTranscricao={handleTranscricao}
                 atendimentoId={atendimentoId}
                 disabled={false}
-                requerConsentimento={false}
+                requerConsentimento={comClientePresente}
               />
 
               {/* Separador */}
               <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground">ou</span>
+                <span className="text-xs text-muted-foreground">ou envie um arquivo de áudio</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
 

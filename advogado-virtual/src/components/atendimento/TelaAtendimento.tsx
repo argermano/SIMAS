@@ -23,7 +23,7 @@ import { ModalGeracaoPeca } from './ModalGeracaoPeca'
 import { ModalExtraindoDados } from './ModalExtraindoDados'
 import type { ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import type { DadosExtraidosAutor, DadosExtraidosReu } from '@/lib/prompts/extracao/dados-cliente'
-import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, UserCheck, MapPin } from 'lucide-react'
+import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, MapPin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 
@@ -70,7 +70,8 @@ export function TelaAtendimento({
   const [atendimentoId, setAtendimentoId]     = useState<string | null>(atendimentoIdInicial ?? null)
   const [cliente, setCliente]                   = useState<{ id: string; nome: string } | null>(null)
   const [versaoIA, setVersaoIA]                 = useState<VersaoIA>(VERSAO_IA_PADRAO)
-  const [modoInput, setModoInput]               = useState<'durante_reuniao' | 'pos_reuniao' | 'texto'>('durante_reuniao')
+  const [modoInput, setModoInput]               = useState<'audio' | 'texto'>('audio')
+  const [comClientePresente, setComClientePresente] = useState(true)
   const [textoRelato, setTextoRelato]           = useState('')
   const [transcricao, setTranscricao]           = useState('')
   const [pedidoEspecifico, setPedidoEspecifico] = useState('')
@@ -114,7 +115,7 @@ export function TelaAtendimento({
           } catch { /* silencioso */ }
         }
         const modoSalvo = at.modo_input
-        setModoInput(modoSalvo === 'texto' ? 'texto' : modoSalvo === 'pos_reuniao' ? 'pos_reuniao' : 'durante_reuniao')
+        setModoInput(modoSalvo === 'texto' ? 'texto' : 'audio')
         setTextoRelato(at.transcricao_editada ?? at.transcricao_raw ?? '')
         setTranscricao(at.transcricao_editada ?? at.transcricao_raw ?? '')
         setPedidoEspecifico(at.pedidos_especificos ?? '')
@@ -487,29 +488,18 @@ export function TelaAtendimento({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Tabs: 3 modos de entrada */}
+          {/* Tabs: 2 modos de entrada */}
           <div className="flex rounded-lg border bg-muted/50 p-1 gap-1">
             <button
-              onClick={() => setModoInput('durante_reuniao')}
+              onClick={() => setModoInput('audio')}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                modoInput === 'durante_reuniao'
-                  ? 'bg-card text-primary shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <UserCheck className="h-4 w-4" />
-              Gravar com cliente
-            </button>
-            <button
-              onClick={() => setModoInput('pos_reuniao')}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                modoInput === 'pos_reuniao'
+                modoInput === 'audio'
                   ? 'bg-card text-primary shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <Mic className="h-4 w-4" />
-              Relato pós-reunião
+              Áudio
             </button>
             <button
               onClick={() => setModoInput('texto')}
@@ -525,45 +515,28 @@ export function TelaAtendimento({
           </div>
 
           {/* Conteúdo da tab */}
-          {modoInput === 'durante_reuniao' && (
+          {modoInput === 'audio' && (
             <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">
-                Grave o áudio <strong>com o cliente presente</strong>. O consentimento LGPD será solicitado antes de iniciar.
-              </p>
-              <GravadorAudio
-                onTranscricao={handleTranscricao}
-                atendimentoId={atendimentoId}
-                disabled={!podeGravar}
-                requerConsentimento={true}
-              />
-              {transcricao && (
-                <Textarea
-                  label="Transcrição (edite se necessário)"
-                  value={textoRelato}
-                  onChange={(e) => setTextoRelato(e.target.value)}
-                  placeholder="A transcrição aparecerá aqui..."
-                  rows={8}
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={comClientePresente}
+                  onChange={(e) => setComClientePresente(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-border accent-primary"
                 />
-              )}
-            </div>
-          )}
-
-          {modoInput === 'pos_reuniao' && (
-            <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">
-                Relate os fatos com <strong>suas próprias palavras</strong> após a reunião. Sem necessidade de consentimento LGPD.
-              </p>
+                Gravação <strong className="font-semibold text-foreground">com o cliente presente</strong> — solicita o consentimento LGPD antes de gravar
+              </label>
               <GravadorAudio
                 onTranscricao={handleTranscricao}
                 atendimentoId={atendimentoId}
                 disabled={!podeGravar}
-                requerConsentimento={false}
+                requerConsentimento={comClientePresente}
               />
 
               {/* Separador */}
               <div className="flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground">ou</span>
+                <span className="text-xs text-muted-foreground">ou envie um arquivo de áudio</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
 
