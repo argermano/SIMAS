@@ -19,6 +19,18 @@ import { buildPromptPeticaoInicialFamilia, SYSTEM_PETICAO_FAMILIA } from '@/lib/
 import { buildPromptContestacaoFamilia, SYSTEM_CONTESTACAO_FAMILIA } from '@/lib/prompts/pecas/familia/contestacao'
 import { buildPromptPeticaoInicialMedico, SYSTEM_PETICAO_MEDICO } from '@/lib/prompts/pecas/medico/peticao-inicial'
 import { buildPromptContestacaoMedico, SYSTEM_CONTESTACAO_MEDICO } from '@/lib/prompts/pecas/medico/contestacao'
+// Prompts curados novos (RASCUNHO — pendentes de revisão de curadoria humana):
+// réplica, apelação e recurso ordinário. Ver docs/PLANO-DESENVOLVIMENTO-OPUS.md (Lote 5).
+import { buildPromptReplicaPrev, SYSTEM_REPLICA_PREV } from '@/lib/prompts/pecas/previdenciario/replica'
+import { buildPromptApelacaoPrev, SYSTEM_APELACAO_PREV } from '@/lib/prompts/pecas/previdenciario/apelacao'
+import { buildPromptReplicaTrab, SYSTEM_REPLICA_TRAB } from '@/lib/prompts/pecas/trabalhista/replica'
+import { buildPromptRecursoOrdinarioTrab, SYSTEM_RECURSO_ORDINARIO_TRAB } from '@/lib/prompts/pecas/trabalhista/recurso-ordinario'
+import { buildPromptReplicaCivel, SYSTEM_REPLICA_CIVEL } from '@/lib/prompts/pecas/civel/replica'
+import { buildPromptApelacaoCivel, SYSTEM_APELACAO_CIVEL } from '@/lib/prompts/pecas/civel/apelacao'
+import { buildPromptReplicaFamilia, SYSTEM_REPLICA_FAMILIA } from '@/lib/prompts/pecas/familia/replica'
+import { buildPromptApelacaoFamilia, SYSTEM_APELACAO_FAMILIA } from '@/lib/prompts/pecas/familia/apelacao'
+import { buildPromptReplicaMedico, SYSTEM_REPLICA_MEDICO } from '@/lib/prompts/pecas/medico/replica'
+import { buildPromptApelacaoMedico, SYSTEM_APELACAO_MEDICO } from '@/lib/prompts/pecas/medico/apelacao'
 
 export type QualificacaoPartes = {
   autor?: {
@@ -48,22 +60,32 @@ export const PROMPT_MAP: Record<string, Record<string, PromptCurado>> = {
   previdenciario: {
     peticao_inicial: { system: SYSTEM_PETICAO_PREV, build: buildPromptPeticaoInicialPrev },
     contestacao:     { system: SYSTEM_CONTESTACAO_PREV, build: buildPromptContestacaoPrev },
+    replica:         { system: SYSTEM_REPLICA_PREV, build: buildPromptReplicaPrev },
+    apelacao:        { system: SYSTEM_APELACAO_PREV, build: buildPromptApelacaoPrev },
   },
   trabalhista: {
-    peticao_inicial: { system: SYSTEM_PETICAO_TRAB, build: buildPromptPeticaoInicialTrab },
-    contestacao:     { system: SYSTEM_CONTESTACAO_TRAB, build: buildPromptContestacaoTrab },
+    peticao_inicial:   { system: SYSTEM_PETICAO_TRAB, build: buildPromptPeticaoInicialTrab },
+    contestacao:       { system: SYSTEM_CONTESTACAO_TRAB, build: buildPromptContestacaoTrab },
+    replica:           { system: SYSTEM_REPLICA_TRAB, build: buildPromptReplicaTrab },
+    recurso_ordinario: { system: SYSTEM_RECURSO_ORDINARIO_TRAB, build: buildPromptRecursoOrdinarioTrab },
   },
   civel: {
     peticao_inicial: { system: SYSTEM_PETICAO_CIVEL, build: buildPromptPeticaoInicialCivel },
     contestacao:     { system: SYSTEM_CONTESTACAO_CIVEL, build: buildPromptContestacaoCivel },
+    replica:         { system: SYSTEM_REPLICA_CIVEL, build: buildPromptReplicaCivel },
+    apelacao:        { system: SYSTEM_APELACAO_CIVEL, build: buildPromptApelacaoCivel },
   },
   familia: {
     peticao_inicial: { system: SYSTEM_PETICAO_FAMILIA, build: buildPromptPeticaoInicialFamilia },
     contestacao:     { system: SYSTEM_CONTESTACAO_FAMILIA, build: buildPromptContestacaoFamilia },
+    replica:         { system: SYSTEM_REPLICA_FAMILIA, build: buildPromptReplicaFamilia },
+    apelacao:        { system: SYSTEM_APELACAO_FAMILIA, build: buildPromptApelacaoFamilia },
   },
   medico: {
     peticao_inicial: { system: SYSTEM_PETICAO_MEDICO, build: buildPromptPeticaoInicialMedico },
     contestacao:     { system: SYSTEM_CONTESTACAO_MEDICO, build: buildPromptContestacaoMedico },
+    replica:         { system: SYSTEM_REPLICA_MEDICO, build: buildPromptReplicaMedico },
+    apelacao:        { system: SYSTEM_APELACAO_MEDICO, build: buildPromptApelacaoMedico },
   },
 }
 

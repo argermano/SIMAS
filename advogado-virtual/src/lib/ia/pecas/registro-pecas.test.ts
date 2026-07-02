@@ -19,14 +19,41 @@ describe('selecionarPromptPeca', () => {
   })
 
   it('retorna null para tipo de peça sem curadoria na área', () => {
-    // previdenciário tem petição inicial e contestação curadas, mas não 'apelacao'
-    expect(selecionarPromptPeca({ area: 'previdenciario', tipo: 'apelacao' })).toBeNull()
+    // as 5 áreas têm inicial/contestação/réplica/recurso curados, mas não 'agravo'
+    expect(selecionarPromptPeca({ area: 'previdenciario', tipo: 'agravo' })).toBeNull()
+    expect(selecionarPromptPeca({ area: 'civel', tipo: 'embargos' })).toBeNull()
   })
 
   it('cobre as 5 áreas curadas com petição inicial e contestação', () => {
     for (const area of ['previdenciario', 'trabalhista', 'civel', 'familia', 'medico']) {
       expect(selecionarPromptPeca({ area, tipo: 'peticao_inicial' })).not.toBeNull()
       expect(selecionarPromptPeca({ area, tipo: 'contestacao' })).not.toBeNull()
+    }
+  })
+
+  it('cobre a réplica nas 5 áreas curadas', () => {
+    for (const area of ['previdenciario', 'trabalhista', 'civel', 'familia', 'medico']) {
+      expect(selecionarPromptPeca({ area, tipo: 'replica' })).not.toBeNull()
+    }
+  })
+
+  it('cobre o recurso de 2º grau correto por área (apelação; RO no trabalhista)', () => {
+    // Cível/família/médico/previdenciário: apelação (CPC). Trabalhista: recurso ordinário (CLT).
+    for (const area of ['previdenciario', 'civel', 'familia', 'medico']) {
+      expect(selecionarPromptPeca({ area, tipo: 'apelacao' })).not.toBeNull()
+    }
+    expect(selecionarPromptPeca({ area: 'trabalhista', tipo: 'recurso_ordinario' })).not.toBeNull()
+    // No trabalhista o recurso contra sentença é o RO, não a apelação
+    expect(selecionarPromptPeca({ area: 'trabalhista', tipo: 'apelacao' })).toBeNull()
+  })
+
+  it('todo prompt curado expõe system (string) e build (função)', () => {
+    for (const tipos of Object.values(PROMPT_MAP)) {
+      for (const curado of Object.values(tipos)) {
+        expect(typeof curado.system).toBe('string')
+        expect(curado.system.length).toBeGreaterThan(0)
+        expect(typeof curado.build).toBe('function')
+      }
     }
   })
 })
