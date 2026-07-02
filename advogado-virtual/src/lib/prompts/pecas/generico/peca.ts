@@ -1,4 +1,5 @@
 import { REGRAS_FORMATACAO_FORENSE, SYSTEM_REGRAS_FORENSE } from '../regras-formatacao'
+import { formatarDocumentos } from '../_shared/qualificacao'
 
 // Gerador GENÉRICO, ciente da ÁREA e do TIPO da peça. Usado como fallback quando
 // não há prompt dedicado para (área, tipo). Substitui o fallback antigo, que usava
@@ -65,7 +66,8 @@ ${dados.analise ? `### Análise jurídica prévia:\n${JSON.stringify(dados.anali
 
 ### Transcrição: ${dados.transcricao}
 ### Pedido específico: ${dados.pedido_especifico || 'Nenhum.'}
-### Documentos: ${dados.documentos.length > 0 ? dados.documentos.map(d => `- ${d.file_name} (${d.tipo}): ${d.texto_extraido?.substring(0, 500) ?? 'sem texto'}`).join('\n') : 'Nenhum documento.'}
+### Documentos:
+${formatarDocumentos(dados.documentos)}
 ### Localização do cliente: ${dados.localizacao?.cidade ? comarca : 'Não informada'}
 ${formatarQualificacao(dados.qualificacao)}
 

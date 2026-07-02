@@ -8,7 +8,7 @@
 // permanecem com sua própria implementação e estão travados por snapshot.
 
 import { REGRAS_FORMATACAO_FORENSE, SYSTEM_REGRAS_FORENSE } from '../regras-formatacao'
-import { formatarQualificacao, formatarDocumentosIntegrais, type DadosQualificacao } from './qualificacao'
+import { formatarQualificacao, formatarDocumentos, type DadosQualificacao } from './qualificacao'
 
 export interface DadosPeca {
   analise?: Record<string, unknown>
@@ -41,7 +41,7 @@ ${d.analise ? `### Análise jurídica prévia:\n${JSON.stringify(d.analise, null
 ### ${rotuloRelato}: ${d.transcricao}
 ### ${rotuloPedido}: ${d.pedido_especifico || 'Nenhum.'}
 ### Documentos do caso (conteúdo integral):
-${formatarDocumentosIntegrais(d.documentos)}
+${formatarDocumentos(d.documentos)}
 ${formatarQualificacao(d.qualificacao)}`
 }
 

@@ -41,16 +41,35 @@ export function formatarQualificacao(q?: DadosQualificacao): string {
 }
 
 /**
- * Formata os documentos do caso com o texto INTEGRAL (sem truncar). Os prompts
- * NOVOS passam o conteúdo completo das provas — a triagem de relevância e o teto
- * MAX_PROMPT_CHARS já protegem contra estouro de contexto. (Os prompts antigos
- * truncavam em 500 chars; isso é bug reconhecido, corrigido separadamente.)
+ * Orçamento generoso de caracteres por documento. Evita que um único anexo
+ * gigante (ex.: OCR de autos inteiros) estoure o contexto, sem cortar as provas
+ * a um parágrafo. A triagem de relevância e MAX_PROMPT_CHARS (600k) são os
+ * guardas externos. Resumir docs acima do teto via Haiku fica como evolução
+ * futura; hoje truncamos com marca explícita.
  */
-export function formatarDocumentosIntegrais(
+export const MAX_CHARS_POR_DOC = 30_000
+
+/**
+ * Formata os documentos do caso com o texto INTEGRAL (até o orçamento por
+ * documento). Usado por TODOS os prompts curados (antigos e novos) — antes, os
+ * builders truncavam cada documento em 500 caracteres, e a peça era redigida
+ * praticamente sem ler as provas.
+ */
+export function formatarDocumentos(
   documentos: Array<{ tipo: string; texto_extraido: string; file_name: string }>,
+  opts: { maxCharsPorDoc?: number } = {},
 ): string {
   if (documentos.length === 0) return 'Nenhum documento.'
+  const limite = opts.maxCharsPorDoc ?? MAX_CHARS_POR_DOC
   return documentos
-    .map((d) => `- ${d.file_name} (${d.tipo}):\n${d.texto_extraido?.trim() || 'sem texto extraído'}`)
+    .map((d) => {
+      const texto = (d.texto_extraido ?? '').trim()
+      if (!texto) return `- ${d.file_name} (${d.tipo}):\nsem texto extraído`
+      const corpo =
+        texto.length > limite
+          ? `${texto.slice(0, limite)}\n[...documento truncado em ${limite.toLocaleString('pt-BR')} caracteres — íntegra anexada ao caso]`
+          : texto
+      return `- ${d.file_name} (${d.tipo}):\n${corpo}`
+    })
     .join('\n\n')
 }

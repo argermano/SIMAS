@@ -223,8 +223,12 @@ exports[`snapshot dos prompts curados > civel / contestacao — system e prompt 
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS): Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (20
-- rg.png (documento_pessoal): João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Qualificação das partes (dados extraídos dos documentos):
 **AUTOR:**
 - Nome: João da Silva
@@ -413,8 +417,12 @@ exports[`snapshot dos prompts curados > civel / peticao_inicial — system e pro
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS): Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (20
-- rg.png (documento_pessoal): João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Localização do cliente: Campinas/SP
 ### Qualificação das partes (dados extraídos dos documentos):
 **AUTOR:**
@@ -1014,8 +1022,12 @@ exports[`snapshot dos prompts curados > familia / contestacao — system e promp
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS): Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (20
-- rg.png (documento_pessoal): João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Qualificação das partes (dados extraídos dos documentos):
 **REQUERENTE:**
 - Nome: João da Silva
@@ -1206,8 +1218,12 @@ exports[`snapshot dos prompts curados > familia / peticao_inicial — system e p
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS): Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (20
-- rg.png (documento_pessoal): João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Localização do cliente: Campinas/SP
 ### Qualificação das partes (dados extraídos dos documentos):
 **REQUERENTE:**
@@ -1812,8 +1828,12 @@ exports[`snapshot dos prompts curados > medico / contestacao — system e prompt
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS): Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (20
-- rg.png (documento_pessoal): João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Qualificação das partes (dados extraídos dos documentos):
 **AUTOR:**
 - Nome: João da Silva
@@ -2009,8 +2029,12 @@ exports[`snapshot dos prompts curados > medico / peticao_inicial — system e pr
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS): Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (20
-- rg.png (documento_pessoal): João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Localização do cliente: Campinas/SP
 ### Qualificação das partes (dados extraídos dos documentos):
 **AUTOR:**
@@ -2622,8 +2646,12 @@ exports[`snapshot dos prompts curados > previdenciario / contestacao — system 
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS)
-- rg.png (documento_pessoal)
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Qualificação das partes (dados extraídos dos documentos):
 **AUTOR:**
 - Nome: João da Silva
@@ -2811,8 +2839,12 @@ exports[`snapshot dos prompts curados > previdenciario / peticao_inicial — sys
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS): Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (20
-- rg.png (documento_pessoal): João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Localização do cliente: Campinas/SP
 ### Qualificação das partes (dados extraídos dos documentos):
 **AUTOR:**
@@ -3205,8 +3237,12 @@ exports[`snapshot dos prompts curados > trabalhista / contestacao — system e p
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS)
-- rg.png (documento_pessoal)
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Qualificação das partes (dados extraídos dos documentos):
 **RECLAMANTE:**
 - Nome: João da Silva
@@ -3394,8 +3430,12 @@ exports[`snapshot dos prompts curados > trabalhista / peticao_inicial — system
 
 ### Transcrição: O cliente relatou que trabalhou de 2005 a 2020 em atividades diversas e que teve seu pedido administrativo indeferido. Descreveu as condições e os fatos relevantes para a pretensão, com datas e valores aproximados.
 ### Pedido específico: Reforma da decisão e acolhimento integral da pretensão.
-### Documentos: - cnis.pdf (CNIS): Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (20
-- rg.png (documento_pessoal): João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
+### Documentos:
+- cnis.pdf (CNIS):
+Vínculos empregatícios registrados: Empresa Alfa Ltda (2005-2010), Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020). Empresa Beta S/A (2011-2016), Empresa Gama ME (2017-2020).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00, RG 12.345.678 SSP/SP.
 ### Localização do cliente: Campinas/SP
 ### Qualificação das partes (dados extraídos dos documentos):
 **RECLAMANTE:**

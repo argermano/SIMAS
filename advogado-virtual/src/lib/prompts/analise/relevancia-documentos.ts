@@ -17,10 +17,12 @@ export function buildPromptRelevancia(params: {
   transcricao: string
   documentos: Array<{ id: string; tipo: string; file_name: string; texto_extraido: string }>
 }): string {
+  // Trecho maior por documento (3.000 chars) para a triagem decidir relevância
+  // com mais contexto — decisão só de inclusão/exclusão, não precisa da íntegra.
   const docsTexto = params.documentos
     .map(
       (d) =>
-        `ID: ${d.id}\nTipo: ${d.tipo}\nArquivo: ${d.file_name}\nConteúdo (trecho):\n${d.texto_extraido.substring(0, 800)}`
+        `ID: ${d.id}\nTipo: ${d.tipo}\nArquivo: ${d.file_name}\nConteúdo (trecho):\n${d.texto_extraido.substring(0, 3000)}`
     )
     .join('\n\n---\n\n')
 
@@ -29,7 +31,7 @@ de uma "${params.tipo_peca}" na área de Direito ${params.area}.
 
 CONTEXTO DO CASO:
 ${params.pedido ? `Pedido específico: ${params.pedido}\n` : ''}\
-Transcrição do atendimento: ${params.transcricao.substring(0, 600)}
+Transcrição do atendimento: ${params.transcricao.substring(0, 3000)}
 
 DOCUMENTOS PARA TRIAGEM:
 ${docsTexto}

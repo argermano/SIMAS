@@ -1,4 +1,5 @@
 import { REGRAS_FORMATACAO_FORENSE, SYSTEM_REGRAS_FORENSE } from '../regras-formatacao'
+import { formatarDocumentos } from '../_shared/qualificacao'
 
 function formatarQualificacao(q?: {
   autor?: Record<string, string | undefined>
@@ -49,7 +50,8 @@ ${dados.analise ? `### Análise jurídica prévia:\n${JSON.stringify(dados.anali
 
 ### Transcrição: ${dados.transcricao}
 ### Pedido específico: ${dados.pedido_especifico || 'Nenhum.'}
-### Documentos: ${dados.documentos.length > 0 ? dados.documentos.map(d => `- ${d.file_name} (${d.tipo}): ${d.texto_extraido?.substring(0, 500) ?? 'sem texto'}`).join('\n') : 'Nenhum documento.'}
+### Documentos:
+${formatarDocumentos(dados.documentos)}
 ${formatarQualificacao(dados.qualificacao)}
 
 ## ESTRUTURA OBRIGATÓRIA
