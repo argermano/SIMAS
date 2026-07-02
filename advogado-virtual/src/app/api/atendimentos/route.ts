@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
+import { pertenceAoTenant } from '@/lib/ownership'
 
 // GET /api/atendimentos?cliente_id=UUID — lista atendimentos de um cliente
 export async function GET(req: NextRequest) {
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
     .select('id, area, tipo_peca_origem, status, created_at')
     .eq('cliente_id', clienteId)
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
   return NextResponse.json({ atendimentos: data ?? [] })
@@ -41,6 +43,11 @@ export async function POST(req: Request) {
   if (!parsed.ok) return parsed.response
 
   const dados = parsed.data
+
+  // A8: o cliente referenciado precisa pertencer ao tenant do usuário.
+  if (!(await pertenceAoTenant(supabase, 'clientes', dados.cliente_id, usuario.tenant_id))) {
+    return jsonError('Cliente inválido', 400)
+  }
 
   // Monta o objeto de inserção sem incluir campos nulos de colunas opcionais
   // (evita erro de schema cache quando a migration ainda não foi aplicada)

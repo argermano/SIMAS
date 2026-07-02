@@ -45,6 +45,7 @@ export default async function DashboardPage() {
     .from('atendimentos')
     .select('id, status, created_at, area, tipo_peca_origem, cliente_id, clientes(nome)')
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(5)
 

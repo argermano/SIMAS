@@ -126,6 +126,7 @@ export default async function DossieClientePage({
     .select('*')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .single()
 
   if (!clienteRaw) notFound()
@@ -171,6 +172,7 @@ export default async function DossieClientePage({
       .select('id, titulo, status, area, atendimento_id, valor_fixo, percentual_exito, created_at')
       .eq('cliente_id', id)
       .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
       .order('created_at', { ascending: false }),
   ])
 

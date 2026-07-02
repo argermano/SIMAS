@@ -7,6 +7,8 @@ import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptRevisarValidar, SYSTEM_VALIDAR } from '@/lib/prompts/validacao/revisar-validar'
 import { validarFormatacaoPeca } from '@/lib/format/validar-peca'
 
+export const maxDuration = 120
+
 // POST /api/ia/validar-peca — revisar e validar peça
 export async function POST(req: NextRequest) {
   const start = Date.now()

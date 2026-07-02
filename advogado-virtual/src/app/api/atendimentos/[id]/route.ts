@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getAuthContext } from '@/lib/auth'
+import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { logAudit } from '@/lib/audit'
 
 // GET /api/atendimentos/[id] — retorna atendimento com documentos
 export async function GET(
@@ -19,6 +20,7 @@ export async function GET(
     .select('*, clientes(id, nome), documentos(*), analises(id, plano_a, resumo_fatos, status, created_at), pecas(id, tipo, area, versao, status, created_at)')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .single()
 
   if (error || !atendimento) {
@@ -79,7 +81,8 @@ export async function PATCH(
   return NextResponse.json({ atendimento })
 }
 
-// DELETE /api/atendimentos/[id] — exclui atendimento e dados relacionados
+// DELETE /api/atendimentos/[id] — soft-delete do caso (preserva peças, análises,
+// documentos e áudio; some das listagens e pode ser revertido/auditado).
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -90,60 +93,27 @@ export async function DELETE(
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
 
-  // Verificar que o atendimento pertence ao tenant
+  // Só admin/advogado pode excluir um caso (antes: qualquer papel, com cascata
+  // hard-delete irreversível de peças/análises/documentos + remoção do Storage).
+  const semPermissao = requireRole(usuario, ['admin', 'advogado'])
+  if (semPermissao) return semPermissao
+
+  // Verificar que o atendimento pertence ao tenant e ainda está ativo
   const { data: at } = await supabase
     .from('atendimentos')
-    .select('id, audio_url')
+    .select('id')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .single()
 
   if (!at) {
     return jsonError('Atendimento não encontrado', 404)
   }
 
-  // Coleta paths de Storage a remover (áudios + documentos)
-  const storagePaths: string[] = []
-
-  if (at.audio_url) {
-    try {
-      const parsed = JSON.parse(at.audio_url)
-      if (Array.isArray(parsed)) storagePaths.push(...parsed.filter((p): p is string => typeof p === 'string'))
-      else if (typeof parsed === 'string') storagePaths.push(parsed)
-    } catch {
-      storagePaths.push(at.audio_url)
-    }
-  }
-
-  const { data: docs } = await supabase
-    .from('documentos')
-    .select('file_url')
-    .eq('atendimento_id', id)
-
-  if (docs) {
-    for (const d of docs) {
-      if (d.file_url) storagePaths.push(d.file_url)
-    }
-  }
-
-  // Excluir dados relacionados em cascata
-  const { data: pecasIds } = await supabase
-    .from('pecas')
-    .select('id')
-    .eq('atendimento_id', id)
-
-  if (pecasIds && pecasIds.length > 0) {
-    const ids = pecasIds.map(p => p.id)
-    await supabase.from('pecas_versoes').delete().in('peca_id', ids)
-    await supabase.from('pecas').delete().in('id', ids)
-  }
-
-  await supabase.from('analises').delete().eq('atendimento_id', id)
-  await supabase.from('documentos').delete().eq('atendimento_id', id)
-
   const { error: delError } = await supabase
     .from('atendimentos')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
 
@@ -151,20 +121,14 @@ export async function DELETE(
     return jsonError('Erro ao excluir atendimento', 500)
   }
 
-  // Remove arquivos do Storage (best-effort: falhas são logadas mas não revertem o DELETE)
-  if (storagePaths.length > 0) {
-    const { error: storageError } = await supabase.storage
-      .from('documentos')
-      .remove(storagePaths)
-
-    if (storageError) {
-      console.error('[atendimentos/DELETE] falha ao limpar storage', {
-        atendimento_id: id,
-        paths: storagePaths,
-        error: storageError.message,
-      })
-    }
-  }
+  await logAudit({
+    tenantId: usuario.tenant_id,
+    userId: usuario.id,
+    action: 'atendimento.delete',
+    resourceType: 'atendimento',
+    resourceId: id,
+    metadata: { soft: true },
+  })
 
   return NextResponse.json({ ok: true })
 }

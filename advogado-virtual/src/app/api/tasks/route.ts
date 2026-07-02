@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
+import { pertenceAoTenant } from '@/lib/ownership'
 
 const schemaCreate = z.object({
   description:      z.string().min(1).max(2000),
@@ -110,6 +111,15 @@ export async function POST(req: NextRequest) {
   if (!parsed.ok) return parsed.response
 
   const { extra_assignees, tag_ids, ...taskData } = parsed.data
+
+  // A8: os responsáveis (assignee + extras) precisam ser usuários do tenant —
+  // impede vincular tarefa a usuário de outro tenant (link cruzado / sondagem de IDs).
+  const responsaveis = [taskData.assignee_id, ...(extra_assignees ?? [])]
+  for (const uid of responsaveis) {
+    if (!(await pertenceAoTenant(supabase, 'users', uid, usuario.tenant_id))) {
+      return jsonError('Responsável inválido', 400)
+    }
+  }
 
   const { data: task, error } = await supabase
     .from('tasks')

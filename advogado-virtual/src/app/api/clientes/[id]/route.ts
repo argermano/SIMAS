@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getAuthContext } from '@/lib/auth'
+import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { createClient } from '@/lib/supabase/server'
 import { encryptClienteFields, decryptClienteFields } from '@/lib/encryption'
+import { logAudit } from '@/lib/audit'
 
 const schemaUpdate = z.object({
   nome:         z.string().min(2).max(200).optional(),
@@ -34,6 +35,7 @@ async function buscarCliente(
     .select('*')
     .eq('id', clienteId)
     .eq('tenant_id', tenantId)
+    .is('deleted_at', null)
     .single()
 
   return cliente
@@ -61,6 +63,7 @@ export async function GET(
     .select('id, status, area, created_at')
     .eq('cliente_id', id)
     .order('created_at', { ascending: false })
+    .is('deleted_at', null)
     .limit(10)
 
   return NextResponse.json({
@@ -120,15 +123,30 @@ export async function DELETE(
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
 
+  // Só admin/advogado pode excluir um cliente (antes: qualquer papel, inclusive colaborador).
+  const semPermissao = requireRole(usuario, ['admin', 'advogado'])
+  if (semPermissao) return semPermissao
+
   const cliente = await buscarCliente(supabase, id, usuario.tenant_id)
   if (!cliente) return jsonError('Não encontrado', 404)
 
+  // Soft-delete: preserva o registro (reversível/auditável) e some das listagens.
   const { error } = await supabase
     .from('clientes')
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
+    .eq('tenant_id', usuario.tenant_id)
 
   if (error) return jsonError(error.message, 500)
+
+  await logAudit({
+    tenantId: usuario.tenant_id,
+    userId: usuario.id,
+    action: 'cliente.delete',
+    resourceType: 'cliente',
+    resourceId: id,
+    metadata: { nome: (cliente as { nome?: string }).nome ?? null, soft: true },
+  })
 
   return NextResponse.json({ ok: true })
 }

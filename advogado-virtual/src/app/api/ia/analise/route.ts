@@ -9,6 +9,8 @@ import { AREAS, type AreaId } from '@/lib/constants/areas'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 
+export const maxDuration = 120
+
 // Dados comuns a todos os prompts de análise
 type DadosAnalise = {
   transcricao: string

@@ -7,6 +7,8 @@ import { salvarVersaoAnterior } from '@/lib/ia/pecas/motor'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 
+export const maxDuration = 120
+
 // POST /api/ia/refinar-peca — refinar peça com novos documentos
 export async function POST(req: NextRequest) {
   const start = Date.now()

@@ -57,6 +57,7 @@ export default async function CasoPage({
     .eq('id', atendimentoId)
     .eq('cliente_id', id)
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .single()
   if (!at) notFound()
 

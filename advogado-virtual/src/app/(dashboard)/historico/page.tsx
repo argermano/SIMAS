@@ -44,6 +44,7 @@ export default async function HistoricoPage() {
     .from('atendimentos')
     .select('id, status, area, tipo_peca_origem, created_at, pedidos_especificos, clientes(id, nome)')
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(50)
 

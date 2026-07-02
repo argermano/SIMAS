@@ -8,6 +8,8 @@ import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptAnaliseGeral, SYSTEM_ANALISE_GERAL } from '@/lib/prompts/analise/geral'
 
+export const maxDuration = 120
+
 function getAdminSupabase() {
   return createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

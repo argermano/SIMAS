@@ -10,6 +10,8 @@ import { SYSTEM_CONTRATO_HONORARIOS, buildPromptContratoHonorarios } from '@/lib
 import { SYSTEM_PREENCHER_DOCUMENTO, buildPromptPreencherDocumento } from '@/lib/prompts/documentos/preencher-modelo'
 import { decryptClienteFields } from '@/lib/encryption'
 
+export const maxDuration = 120
+
 // Mapeia o tipo de geração → tipo do modelo .docx em modelos_documento
 const TIPO_MODELO_DOC: Record<string, string | null> = {
   procuracao: 'procuracao',

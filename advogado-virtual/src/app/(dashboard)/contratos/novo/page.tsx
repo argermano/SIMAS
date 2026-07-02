@@ -35,6 +35,7 @@ export default async function NovoContratoPage({
       .select('id, nome')
       .eq('id', cliente_id)
       .eq('tenant_id', usuario.tenant_id)
+      .is('deleted_at', null)
       .single()
     if (cli) clienteInicial = { id: cli.id, nome: cli.nome }
   }

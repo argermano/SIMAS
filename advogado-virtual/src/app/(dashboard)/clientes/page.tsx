@@ -51,6 +51,7 @@ export default async function ClientesPage({
     .from('clientes')
     .select('*', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .order('nome', { ascending: true })
     .range(offset, offset + limit - 1)
 

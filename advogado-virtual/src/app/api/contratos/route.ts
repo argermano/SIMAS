@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
+import { pertenceAoTenant } from '@/lib/ownership'
 
 const schemaContrato = z.object({
   cliente_id:       z.string().uuid().optional().nullable(),
@@ -55,6 +56,15 @@ export async function POST(req: NextRequest) {
   if (!parsed.ok) return parsed.response
 
   const dados = parsed.data
+
+  // A8: cliente/atendimento referenciados precisam pertencer ao tenant.
+  if (dados.cliente_id && !(await pertenceAoTenant(supabase, 'clientes', dados.cliente_id, usuario.tenant_id))) {
+    return jsonError('Cliente inválido', 400)
+  }
+  if (dados.atendimento_id && !(await pertenceAoTenant(supabase, 'atendimentos', dados.atendimento_id, usuario.tenant_id))) {
+    return jsonError('Atendimento inválido', 400)
+  }
+
   const inserir: Record<string, unknown> = {
     tenant_id:  usuario.tenant_id,
     criado_por: usuario.id,

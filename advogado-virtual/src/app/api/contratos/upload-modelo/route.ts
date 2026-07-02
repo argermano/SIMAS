@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthContext } from '@/lib/auth'
+import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { detectarTipoReal } from '@/lib/file-validation'
 
@@ -9,6 +9,11 @@ export async function POST(req: NextRequest) {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
+
+  // A8: configurar o modelo do escritório é ação de admin/advogado (as demais
+  // rotas de contrato já exigem papel; esta só exigia autenticação).
+  const semPermissao = requireRole(usuario, ['admin', 'advogado'])
+  if (semPermissao) return semPermissao
 
   const formData  = await req.formData()
   const arquivo   = formData.get('modelo') as File | null
@@ -73,7 +78,18 @@ export async function POST(req: NextRequest) {
 
   console.log('[upload-modelo] tipo:', ext, '| texto extraído length:', textoExtraido.length)
 
-  const textoLimitado = textoExtraido.substring(0, 8000)
+  const LIMITE_MODELO = 8000
+  const textoLimitado = textoExtraido.substring(0, LIMITE_MODELO)
+  // Avisa (não silencioso) quando o modelo é maior que o teto — cláusulas finais
+  // podem não entrar na geração via IA.
+  const modeloTruncado = textoExtraido.length > LIMITE_MODELO
+  if (modeloTruncado) {
+    console.warn('[upload-modelo] modelo truncado', {
+      tenant: usuario.tenant_id,
+      original: textoExtraido.length,
+      limite: LIMITE_MODELO,
+    })
+  }
 
   // Salvar como template no banco para uso futuro
   let templateId: string | null = null
@@ -96,5 +112,9 @@ export async function POST(req: NextRequest) {
     modelo_url:     path,
     texto_extraido: textoLimitado,
     template_id:    templateId,
+    truncado:       modeloTruncado,
+    ...(modeloTruncado && {
+      aviso: `O modelo tem ${textoExtraido.length.toLocaleString('pt-BR')} caracteres e foi cortado em ${LIMITE_MODELO.toLocaleString('pt-BR')} — as cláusulas finais podem não entrar na geração via IA.`,
+    }),
   })
 }
