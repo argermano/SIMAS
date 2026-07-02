@@ -1,7 +1,8 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ToastProvider } from '@/components/ui/toast'
 import { HashTokenHandler } from '@/components/auth/HashTokenHandler'
+import { RegistrarServiceWorker } from '@/components/shared/RegistrarServiceWorker'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://simas.app'),
@@ -33,6 +34,22 @@ export const metadata: Metadata = {
     description:
       'Analise casos com IA, gere peças processuais e organize o escritório — em minutos.',
   },
+  appleWebApp: {
+    capable: true,
+    title: 'SIMAS',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    icon: '/icon.svg',
+    apple: '/apple-touch-icon.png',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#2A3E5F',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({
@@ -56,6 +73,7 @@ export default function RootLayout({
       <body>
         <ToastProvider>
           <HashTokenHandler />
+          <RegistrarServiceWorker />
           {children}
         </ToastProvider>
       </body>
