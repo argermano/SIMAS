@@ -90,6 +90,37 @@ export function decryptField<T extends string | null | undefined>(value: T): T |
 /** Campos sensíveis de um cliente que são criptografados em repouso. */
 const CAMPOS_SENSIVEIS = ['cpf', 'rg'] as const
 
+/**
+ * Campos de transcrição do atendimento cifrados em repouso. O relato do cliente
+ * é dado pessoal — na área médica inclui diagnósticos e histórico de saúde
+ * (dado sensível, LGPD Art. 11). Mesma retrocompatibilidade: sem chave, passa
+ * texto-plano; leitura de dados legados (sem prefixo) é devolvida intacta.
+ */
+const CAMPOS_TRANSCRICAO = ['transcricao_raw', 'transcricao_editada'] as const
+
+/** Cifra os campos de transcrição de um objeto de atendimento (cópia). */
+export function encryptTranscricaoFields<T extends Record<string, unknown>>(obj: T): T {
+  const out: Record<string, unknown> = { ...obj }
+  for (const campo of CAMPOS_TRANSCRICAO) {
+    if (campo in out && typeof out[campo] === 'string') {
+      out[campo] = encryptField(out[campo] as string)
+    }
+  }
+  return out as T
+}
+
+/** Decifra os campos de transcrição de um objeto de atendimento (cópia). */
+export function decryptTranscricaoFields<T extends Record<string, unknown> | null | undefined>(obj: T): T {
+  if (!obj) return obj
+  const out: Record<string, unknown> = { ...obj }
+  for (const campo of CAMPOS_TRANSCRICAO) {
+    if (campo in out && typeof out[campo] === 'string') {
+      out[campo] = decryptField(out[campo] as string)
+    }
+  }
+  return out as T
+}
+
 /** Cifra os campos sensíveis (cpf/rg) de um objeto de cliente, retornando uma cópia. */
 export function encryptClienteFields<T extends Record<string, unknown>>(obj: T): T {
   const out: Record<string, unknown> = { ...obj }

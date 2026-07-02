@@ -4,6 +4,8 @@ import {
   decryptField,
   encryptClienteFields,
   decryptClienteFields,
+  encryptTranscricaoFields,
+  decryptTranscricaoFields,
   isEncryptionConfigured,
 } from './encryption'
 
@@ -59,5 +61,33 @@ describe('encryption', () => {
 
   it('decryptClienteFields lida com null', () => {
     expect(decryptClienteFields(null)).toBe(null)
+  })
+
+  it('cifra e decifra os campos de transcrição (round-trip)', () => {
+    const at = {
+      id: 'abc',
+      transcricao_raw: 'Cliente relatou dor no joelho desde 2020.',
+      transcricao_editada: 'Relato revisado pelo advogado.',
+      area: 'medico',
+    }
+    const cifrado = encryptTranscricaoFields(at)
+    expect(cifrado.transcricao_raw).toMatch(/^enc:v1:/)
+    expect(cifrado.transcricao_editada).toMatch(/^enc:v1:/)
+    // campos não sensíveis ficam intactos
+    expect(cifrado.area).toBe('medico')
+    expect(cifrado.id).toBe('abc')
+
+    const decifrado = decryptTranscricaoFields(cifrado)
+    expect(decifrado.transcricao_raw).toBe('Cliente relatou dor no joelho desde 2020.')
+    expect(decifrado.transcricao_editada).toBe('Relato revisado pelo advogado.')
+  })
+
+  it('decryptTranscricaoFields devolve texto-plano legado intacto', () => {
+    const legado = { transcricao_raw: 'texto sem prefixo (dado antigo)' }
+    expect(decryptTranscricaoFields(legado).transcricao_raw).toBe('texto sem prefixo (dado antigo)')
+  })
+
+  it('decryptTranscricaoFields lida com null', () => {
+    expect(decryptTranscricaoFields(null)).toBe(null)
   })
 })

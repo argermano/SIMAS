@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
+import { encryptField, decryptTranscricaoFields } from '@/lib/encryption'
 
 // GET /api/atendimentos/[id] — retorna atendimento com documentos
 export async function GET(
@@ -34,7 +35,8 @@ export async function GET(
     .eq('atendimento_id', id)
     .order('created_at', { ascending: false })
 
-  return NextResponse.json({ atendimento, contratos: contratos ?? [] })
+  // Decifra a transcrição antes de devolver (o cliente exibe o relato).
+  return NextResponse.json({ atendimento: decryptTranscricaoFields(atendimento), contratos: contratos ?? [] })
 }
 
 const schemaUpdate = z.object({
@@ -66,9 +68,15 @@ export async function PATCH(
     return jsonError('Dados inválidos', 400, resultado.error.flatten())
   }
 
+  // Cifra a transcrição editada em repouso (dado pessoal/sensível).
+  const dadosUpdate = { ...resultado.data }
+  if (typeof dadosUpdate.transcricao_editada === 'string') {
+    dadosUpdate.transcricao_editada = encryptField(dadosUpdate.transcricao_editada)
+  }
+
   const { data: atendimento, error } = await supabase
     .from('atendimentos')
-    .update(resultado.data)
+    .update(dadosUpdate)
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .select('id, status')

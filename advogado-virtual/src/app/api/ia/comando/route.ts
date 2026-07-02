@@ -5,6 +5,7 @@ import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { PROMPTS_COMANDOS } from '@/lib/prompts/comandos'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { decryptField } from '@/lib/encryption'
 
 // POST /api/ia/comando — executar comando rápido
 export async function POST(req: NextRequest) {
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
       .single()
     if (!atendimento) return jsonError('Atendimento não encontrado', 404)
 
-    const transcricao = atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? ''
+    const transcricao = decryptField(atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '')
     if (!transcricao.trim()) {
       return jsonError('Sem transcrição disponível', 400)
     }

@@ -4,7 +4,7 @@ import { jsonError } from '@/lib/api'
 import { streamCompletion, completionJSON } from '@/lib/anthropic/client'
 import { modeloDaVersao } from '@/lib/anthropic/versoes'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
-import { decryptClienteFields } from '@/lib/encryption'
+import { decryptClienteFields, decryptField } from '@/lib/encryption'
 import { buscarJurisprudencia, formatarParaPrompt, type ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import { TRIBUNAIS_DEFAULT } from '@/lib/jurisprudencia/tribunais'
 import { selecionarPromptPeca, type QualificacaoPartes } from '@/lib/ia/pecas/registro-pecas'
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       let resultadosJurisp = jurisprudencia ?? []
 
       if (resultadosJurisp.length === 0) {
-        const transcricao = atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? ''
+        const transcricao = decryptField(atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '')
         const pedidos = atendimento.pedidos_especificos ?? ''
         const termosBusca = extrairTermosBusca(pedidos, transcricao, area)
         const tribunaisBusca = tribunais?.length ? tribunais : (TRIBUNAIS_DEFAULT[area] ?? TRIBUNAIS_DEFAULT.previdenciario)
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
               area,
               tipo_peca: tipo,
               pedido: atendimento.pedidos_especificos,
-              transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
+              transcricao: decryptField(atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? ''),
               documentos: docsComTexto,
             }),
             maxTokens: 1024,
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
         areaNome,
         tipoNome,
         analise,
-        transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
+        transcricao: decryptField(atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? ''),
         pedido_especifico: atendimento.pedidos_especificos,
         documentos: documentosFiltrados,
         localizacao,
@@ -236,7 +236,7 @@ export async function POST(req: NextRequest) {
 
     const promptBase = promptConfig.build({
       analise,
-      transcricao: atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '',
+      transcricao: decryptField(atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? ''),
       pedido_especifico: atendimento.pedidos_especificos,
       documentos,
       localizacao,

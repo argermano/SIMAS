@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import type { Usuario } from '@/lib/auth'
 import type { createClient } from '@/lib/supabase/server'
+import { decryptTranscricaoFields } from '@/lib/encryption'
 import { z } from 'zod'
 
 const schemaUpdate = z.object({
@@ -55,6 +56,12 @@ export async function GET(
     .select('*, clientes(nome, cpf, endereco, cidade, estado), atendimentos(transcricao_editada, transcricao_raw, area, pedidos_especificos)')
     .eq('id', id)
     .single()
+
+  // Decifra a transcrição aninhada do atendimento antes de devolver.
+  const detalheDec = detalhe as { atendimentos?: Record<string, unknown> | null } | null
+  if (detalheDec?.atendimentos) {
+    detalheDec.atendimentos = decryptTranscricaoFields(detalheDec.atendimentos)
+  }
 
   return NextResponse.json({
     contrato: detalhe ?? acesso.contrato,

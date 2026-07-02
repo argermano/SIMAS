@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion } from '@/lib/anthropic/client'
-import { decryptClienteFields } from '@/lib/encryption'
+import { decryptClienteFields, decryptField } from '@/lib/encryption'
 import {
   buildPromptContratoHonorarios,
   SYSTEM_CONTRATO_HONORARIOS,
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     const atendimento = contrato.atendimentos as { transcricao_editada?: string; transcricao_raw?: string; pedidos_especificos?: string; area?: string } | null
 
     const resumoCaso = atendimento
-      ? (atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '').substring(0, 1000)
+      ? decryptField(atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '').substring(0, 1000)
       : ''
 
     const dadosSubstituicao = {

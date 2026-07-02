@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Groq from 'groq-sdk'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { encryptField, decryptField } from '@/lib/encryption'
 
 // POST /api/atendimentos/[id]/audio — upload áudio + transcrição Groq
 export async function POST(
@@ -89,8 +90,9 @@ export async function POST(
 
     // 4. Acumula a transcrição no servidor (APPEND, nunca sobrescrever):
     // se a aba fechar no meio de uma gravação longa, tudo que já foi
-    // transcrito permanece salvo no banco.
-    const anterior = (atendimento.transcricao_raw as string | null) ?? ''
+    // transcrito permanece salvo no banco. O valor no banco está cifrado —
+    // decifra antes de concatenar (concatenar ciphertext geraria lixo).
+    const anterior = decryptField((atendimento.transcricao_raw as string | null) ?? '')
     let transcricaoCompleta = anterior
     const ehPlaceholder = transcricao.startsWith('[Transcrição indisponível')
     if (transcricao && !(ehPlaceholder && anterior.includes('[Transcrição indisponível'))) {
@@ -101,7 +103,7 @@ export async function POST(
       .from('atendimentos')
       .update({
         audio_url:        JSON.stringify(audioPaths),
-        transcricao_raw:  transcricaoCompleta,
+        transcricao_raw:  encryptField(transcricaoCompleta), // cifrado; resposta devolve texto-plano
         modo_input:       'audio',
       })
       .eq('id', id)

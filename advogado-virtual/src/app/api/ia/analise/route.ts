@@ -6,6 +6,7 @@ import { buildPromptAnalisePrev, SYSTEM_ANALISE_PREV } from '@/lib/prompts/anali
 import { buildPromptAnaliseTrab, SYSTEM_ANALISE_TRAB } from '@/lib/prompts/analise/trabalhista'
 import { buildPromptAnaliseGenerica, SYSTEM_ANALISE_GENERICA } from '@/lib/prompts/analise/generico'
 import { AREAS, type AreaId } from '@/lib/constants/areas'
+import { decryptField } from '@/lib/encryption'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     if (!atendimento) return jsonError('Atendimento não encontrado', 404)
 
-    const transcricao = atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? ''
+    const transcricao = decryptField(atendimento.transcricao_editada ?? atendimento.transcricao_raw ?? '')
     if (!transcricao.trim()) {
       return jsonError('Atendimento sem transcrição ou texto', 400)
     }

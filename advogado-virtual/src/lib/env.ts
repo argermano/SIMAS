@@ -42,7 +42,7 @@ export type ServerEnv = z.infer<typeof serverSchema>
 export const FEATURE_VARS: Record<string, string> = {
   GROQ_API_KEY: 'transcrição de áudio (Whisper)',
   RESEND_API_KEY: 'envio de e-mails',
-  ENCRYPTION_KEY: 'criptografia de CPF/RG em repouso',
+  // ENCRYPTION_KEY tem tratamento próprio (com enforcement opt-in) em instrumentation.ts.
   D4SIGN_TOKEN_API: 'assinatura digital (D4Sign)',
   D4SIGN_WEBHOOK_SECRET: 'validação do webhook D4Sign',
 }

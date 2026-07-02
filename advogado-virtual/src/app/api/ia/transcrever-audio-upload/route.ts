@@ -2,6 +2,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { encryptField } from '@/lib/encryption'
 import Groq from 'groq-sdk'
 
 export const maxDuration = 120
@@ -199,7 +200,7 @@ export async function PATCH(req: Request) {
     .from('atendimentos')
     .update({
       audio_url:       audioPaths.length > 0 ? JSON.stringify(audioPaths) : null,
-      transcricao_raw: transcricaoFinal,
+      transcricao_raw: encryptField(transcricaoFinal), // cifrado em repouso; resposta devolve texto-plano
       modo_input:      'audio',
     })
     .eq('id', atendimentoId)
