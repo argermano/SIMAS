@@ -3,11 +3,64 @@
 > **Origem:** [ANALISE-COMPLETA-2026-07.md](ANALISE-COMPLETA-2026-07.md) (parecer completo com evidências) + [REVISAO-ARQUITETURAL.md](REVISAO-ARQUITETURAL.md) (decisões de UX de jun/2026, ainda válidas).
 > **Contexto:** produto pré-produção, sem dados reais. Push direto na main faz deploy (Vercel) — autorizado pelo dono do produto para mudanças pedidas.
 >
+> **Decisões do dono do produto (2026-07-02):**
+> - **Despriorizados por ora:** cobrança/billing (D1), go-to-market/registro (D2) e D4Sign de produção — a assinatura manual é o caminho no curto prazo. O item A1 fica reduzido ao mínimo de higiene (fail-closed do webhook) até a decisão sobre a conta D4Sign.
+> - **Priorizados imediatamente:** (a) **expansão da curadoria de prompts** (B6) — primeira leva: réplica e apelação nas 5 áreas curadas + recurso inominado (previdenciário) + recurso ordinário (trabalhista), como rascunhos para revisão de curadoria humana; (b) **mobile/PWA** (C5 ampliado) — gravar relato pelo celular em campo é cenário-chave: gravação resiliente offline (A4+A5+A7 incluídos nesta frente), PWA instalável e correções de layout mobile.
+>
 > **Regras para quem for executar:**
 > 1. Um item = um PR/commit coeso, com testes quando houver lógica pura. Rodar `npx tsc --noEmit` e `npm test` antes de cada push.
 > 2. **Preservar os prompts curados byte-a-byte** exceto quando o item mandar alterá-los explicitamente. Eles são o ativo do produto.
 > 3. Itens marcados **[DECISÃO]** dependem de resposta do dono do produto (perguntas na §9 do parecer) — não iniciar sem resposta.
-> 4. Ordem recomendada: P0 (inteiro) → B1–B3 do motor → C1–C4 de UX → o resto conforme decisão de negócio.
+> 4. Ordem recomendada: §0 (abaixo) → P0 restante → B1–B3 do motor → C1–C4 de UX → o resto conforme decisão de negócio.
+
+---
+
+## §0 — ORDEM DE EXECUÇÃO IMEDIATA (Opus executa e se auto-orquestra)
+
+> Esta seção é auto-contida: contém tudo que a análise já descobriu, para NÃO reinvestigar.
+> **Modo de trabalho:** executar os lotes EM ORDEM, sequencialmente. Ao fim de cada lote: `npx tsc --noEmit` + `npm test` limpos → commit + push na main (autorizado) com mensagem descritiva → próximo lote. Em ambiguidade real, PARAR e perguntar ao dono do produto (não improvisar em decisão de produto). Não tocar nos arquivos listados como "não alterar".
+
+### ✅ Já executado (não refazer)
+- Commit `c3c3985`: estes dois documentos.
+- Commit `d4da958` — **Lote 1 (gravação resiliente) CONCLUÍDO**: rota `api/atendimentos/[id]/audio` agora faz APPEND de `transcricao_raw` (era overwrite) e retorna `transcricao_completa`; `GravadorAudio.tsx` reescrito com fila de upload serializada, persistência de trechos em IndexedDB antes do upload (`src/lib/audio-pendentes.ts`), retry automático no evento `online`, banner de recuperação de trechos de sessão anterior. **Decisão A5 tomada:** os chunks de áudio em `audio_url` (array JSON) SÃO o registro reproduzível do atendimento — NÃO apagar após transcrição; os WAVs do incidente de Storage eram de implementação antiga, já limpos.
+
+### Lote 2 — SSE robusto no cliente (arquivo: `src/components/shared/StreamingText.tsx`)
+**Bug diagnosticado (não reinvestigar):** o componente `StreamingText` e o hook `useStreaming` fazem `chunk.split('\n')` sem guardar a linha parcial entre reads — um evento `data: {...}` cortado na fronteira de chunks gera erro de parse. No hook (linhas ~163-168), o catch RELANÇA qualquer erro cuja mensagem `!== 'Unexpected'` — as mensagens reais do JSON.parse são "Unexpected token..." (≠ 'Unexpected'), então **o stream inteiro aborta** de forma intermitente em gerações longas (pior em rede móvel). Além disso o evento `done` carrega `stopReason` e ninguém lê — peça truncada por `max_tokens` é salva como completa.
+**Fazer:**
+1. Parser SSE compartilhado com buffer: acumular `restante += chunk`, `split('\n')`, a última linha volta ao buffer (`restante = linhas.pop()`); fazer `JSON.parse` num try próprio (linha malformada → `continue`) e despachar o evento FORA do try (para `type:'error'` continuar lançando).
+2. Usar o parser no componente E no hook.
+3. `startStream` retorna `{ fullText, headers, stopReason }` (extrair do evento `done`); expor também como estado do hook se útil.
+4. Consumidores (`TelaAtendimento.tsx:369`, `TelaRefinamento.tsx:143`): se `stopReason === 'max_tokens'`, toast de aviso "A peça pode ter sido cortada por limite de tamanho — revise o final" ANTES de chamar `finalizarGeracaoPeca` (que continua salvando; o tipo `ResultadoStream` em `src/lib/ia/pecas/finalizar-geracao.ts` pode ganhar o campo opcional). `ComandosRapidos.tsx` também usa o hook mas está órfão — só manter compilando.
+
+### Lote 3 — PWA instalável
+1. `src/app/manifest.ts` (Next 15): name "SIMAS — Advogado Virtual", short_name "SIMAS", `display: 'standalone'`, `start_url: '/dashboard'`, theme/background do design system.
+2. Ícones PNG 192/512 + maskable em `public/`, gerados de `src/app/icon.svg` — tentar `sips`/`qlmanage` (macOS) num script único em `scripts/`; se não der, devDependency mínima (`sharp`) usada só no script (relatar no commit).
+3. `public/sw.js` escrito à mão (SEM next-pwa): precache do shell básico, network-first para navegação com fallback offline simples, **nunca cachear `/api/**`**. Registro num componente client pequeno montado no layout raiz.
+4. Meta iOS no layout (`apple-touch-icon`, `apple-mobile-web-app-capable`).
+
+### Lote 4 — Layout mobile
+1. Hambúrguer (`Sidebar.tsx`, `fixed left-4 top-4 z-40`) sobrepõe o título do `Header.tsx` (sticky z-30): integrar o botão ao Header ou reservar espaço à esquerda em mobile.
+2. `TelaAtendimento.tsx`: grid da localização `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`; `ContratoFormClient.tsx`: honorários `grid-cols-2` → `grid-cols-1 sm:grid-cols-2`.
+3. `/tarefas`: o calendário some abaixo de `xl` sem alternativa — exibir lista simples de próximos prazos em telas menores.
+4. (Bônus barato) `KeyboardSensor` no dnd-kit do kanban.
+
+### Lote 5 — Expansão da curadoria de prompts (prioridade do dono do produto)
+**Contexto pronto:** registro em `src/lib/ia/pecas/registro-pecas.ts` (`PROMPT_MAP`, 5 áreas × 2 tipos); padrão dos prompts em `src/lib/prompts/pecas/{area}/{peca}.ts` (74–104 linhas; ver `previdenciario/peticao-inicial.ts` como referência); tipos válidos já existentes em `constants/tipos-peca.ts`: `replica`, `apelacao`, `recurso_ordinario` (NÃO criar tipo novo — exigiria migration no CHECK).
+**Fazer, nesta ordem:**
+1. **Snapshot de proteção ANTES de tudo:** teste (ex.: `src/lib/ia/pecas/prompts-snapshot.test.ts`) que chama os 10 builders existentes com entrada fixa determinística e grava `toMatchSnapshot()` do prompt+system. Os 10 existentes NÃO podem mudar neste lote.
+2. **10 novos prompts curados** (cada arquivo inicia com `// RASCUNHO gerado por IA — pendente de revisão de curadoria humana (2026-07-02)`), seguindo fielmente o padrão dos existentes (persona, CONTEXTO com os mesmos campos, ESTRUTURA OBRIGATÓRIA numerada, REGRAS com "NÃO invente jurisprudência — [VERIFICAR]", "[PREENCHER]", "GERE A PEÇA COMPLETA", + `REGRAS_FORMATACAO_FORENSE`):
+   - `replica` (impugnação à contestação, CPC arts. 350–353): previdenciario, trabalhista, civel, familia, medico
+   - `apelacao` (CPC arts. 1.009–1.014): previdenciario, civel, familia, medico — **não** trabalhista
+   - `recurso_ordinario` (CLT art. 895): trabalhista
+   Fundamentos legais: SOMENTE dispositivos consolidados e verificáveis; em dúvida, referência genérica — nunca inventar número de súmula/artigo.
+   **Exceção autorizada ao padrão:** nos prompts NOVOS, incluir documentos com texto INTEGRAL (não copiar o `substring(0, 500)` dos antigos — esse truncamento é bug reconhecido; B1 removerá dos antigos depois).
+3. Registrar as 10 entradas no `PROMPT_MAP`; conferir/adicionar os tipos nas listas `pecas` das áreas em `constants/areas.ts` (é config de UI); estender `registro-pecas.test.ts` + snapshots dos novos.
+4. **NÃO fazer neste lote** a refatoração em 4 camadas (B6) — fica para depois da revisão humana dos rascunhos.
+
+### Pontos de parada obrigatórios (avisar o dono do produto)
+- Fim do Lote 2: informar que gerações longas ficaram estáveis (nada a validar visualmente).
+- Fim do Lote 4: pedir validação rápida no celular (instalar PWA, gravar um relato de teste).
+- Fim do Lote 5: **entregar a lista das 10 combinações para revisão de curadoria humana** — os rascunhos não devem ser considerados prontos para produção sem essa revisão.
 
 ---
 
