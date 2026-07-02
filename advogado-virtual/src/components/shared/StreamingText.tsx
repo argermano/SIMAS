@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { createSSEParser } from '@/lib/sse-parser'
 
 interface StreamingTextProps {
   url: string
@@ -38,32 +39,27 @@ export function StreamingText({ url, body, onComplete, onError, className }: Str
         if (!reader) throw new Error('Sem stream disponível')
 
         const decoder = new TextDecoder()
+        const parser = createSSEParser()
         let fullText = ''
+
+        const despachar = (data: ReturnType<typeof parser.feed>[number]) => {
+          if (data.type === 'text') {
+            fullText += (data as { text: string }).text
+            setText(fullText)
+          } else if (data.type === 'done') {
+            onComplete?.(fullText)
+          } else if (data.type === 'error') {
+            throw new Error((data as { error?: string }).error ?? 'Erro na geração')
+          }
+        }
 
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-
           const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split('\n')
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue
-            try {
-              const data = JSON.parse(line.slice(6))
-              if (data.type === 'text') {
-                fullText += data.text
-                setText(fullText)
-              } else if (data.type === 'done') {
-                onComplete?.(fullText)
-              } else if (data.type === 'error') {
-                throw new Error(data.error)
-              }
-            } catch {
-              // Ignorar linhas malformadas
-            }
-          }
+          for (const ev of parser.feed(chunk)) despachar(ev)
         }
+        for (const ev of parser.flush()) despachar(ev)
 
         setLoading(false)
       } catch (err) {
@@ -106,6 +102,14 @@ export function StreamingText({ url, body, onComplete, onError, className }: Str
   )
 }
 
+/** Resultado de uma geração via streaming. */
+export interface ResultadoStreaming {
+  fullText: string
+  headers: Headers
+  /** Motivo de término reportado pelo modelo ('end_turn', 'max_tokens', ...). */
+  stopReason?: string | null
+}
+
 /**
  * Hook para streaming de texto
  */
@@ -115,7 +119,7 @@ export function useStreaming() {
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController>(undefined)
 
-  async function startStream(url: string, body: Record<string, unknown>): Promise<{ fullText: string; headers: Headers } | null> {
+  async function startStream(url: string, body: Record<string, unknown>): Promise<ResultadoStreaming | null> {
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -141,36 +145,31 @@ export function useStreaming() {
       if (!reader) throw new Error('Sem stream disponível')
 
       const decoder = new TextDecoder()
+      const parser = createSSEParser()
       let fullText = ''
+      let stopReason: string | null | undefined
+
+      const despachar = (data: ReturnType<typeof parser.feed>[number]) => {
+        if (data.type === 'text') {
+          fullText += (data as { text: string }).text
+          setText(fullText)
+        } else if (data.type === 'done') {
+          stopReason = (data as { stopReason?: string | null }).stopReason
+        } else if (data.type === 'error') {
+          throw new Error((data as { error?: string }).error ?? 'Erro na geração')
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
         const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            const data = JSON.parse(line.slice(6))
-            if (data.type === 'text') {
-              fullText += data.text
-              setText(fullText)
-            } else if (data.type === 'error') {
-              throw new Error(data.error ?? 'Erro na geração')
-            }
-          } catch (parseErr) {
-            if (parseErr instanceof Error && parseErr.message !== 'Unexpected') {
-              throw parseErr
-            }
-            // Ignorar linhas JSON malformadas
-          }
-        }
+        for (const ev of parser.feed(chunk)) despachar(ev)
       }
+      for (const ev of parser.flush()) despachar(ev)
 
       setLoading(false)
-      return { fullText, headers: res.headers }
+      return { fullText, headers: res.headers, stopReason }
     } catch (err) {
       if ((err as Error).name === 'AbortError') return null
       const msg = (err as Error).message

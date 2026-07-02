@@ -7,7 +7,7 @@
 
 import { formatarPeca } from '@/lib/format/formatar-peca'
 
-export type ResultadoStream = { fullText: string; headers: Headers }
+export type ResultadoStream = { fullText: string; headers: Headers; stopReason?: string | null }
 
 export type FinalizacaoPeca =
   | { ok: true; pecaId: string; destino: string; emRevisao: boolean }

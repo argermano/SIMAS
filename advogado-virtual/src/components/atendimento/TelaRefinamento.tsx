@@ -34,7 +34,7 @@ export function TelaRefinamento({
   tiposDocumento,
 }: TelaRefinamentoProps) {
   const router = useRouter()
-  const { success, error: toastError } = useToast()
+  const { success, error: toastError, warning: toastWarning } = useToast()
   const { text: textoGerado, loading: gerando, error: erroStream, startStream } = useStreaming()
 
   const [atendimentoId, setAtendimentoId] = useState<string | null>(null)
@@ -151,6 +151,10 @@ export function TelaRefinamento({
       setMostraModalGeracao(false)
       toastError('Erro', erroStream ?? 'Falha ao refinar a peça. Tente novamente.')
       return
+    }
+
+    if (resultado.stopReason === 'max_tokens') {
+      toastWarning('Peça possivelmente cortada', 'A geração atingiu o limite de tamanho — revise o final da peça no editor.')
     }
 
     // Formata, salva a peça, marca o caso e resolve o destino (helper compartilhado)

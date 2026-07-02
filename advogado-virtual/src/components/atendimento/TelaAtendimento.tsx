@@ -63,7 +63,7 @@ export function TelaAtendimento({
   clienteIdInicial,
 }: TelaAtendimentoProps) {
   const router = useRouter()
-  const { success, error: toastError } = useToast()
+  const { success, error: toastError, warning: toastWarning } = useToast()
   const { text: textoGerado, loading: gerando, error: erroStream, startStream } = useStreaming()
 
   // Estado do atendimento
@@ -380,6 +380,12 @@ export function TelaAtendimento({
       setMostraModalGeracao(false)
       toastError('Erro', erroStream ?? 'Falha ao gerar a peça. Tente novamente.')
       return
+    }
+
+    // A peça é salva mesmo quando cortada por limite de tamanho — só avisamos
+    // o advogado para revisar o final antes de considerá-la pronta.
+    if (resultado.stopReason === 'max_tokens') {
+      toastWarning('Peça possivelmente cortada', 'A geração atingiu o limite de tamanho — revise o final da peça no editor.')
     }
 
     // Formata, salva a peça, marca o caso e resolve o destino (helper compartilhado)
