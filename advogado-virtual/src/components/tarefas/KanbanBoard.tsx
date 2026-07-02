@@ -5,14 +5,17 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core'
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { useToast } from '@/components/ui/toast'
 import { KanbanColumn } from './KanbanColumn'
 import { KanbanCalendar } from './KanbanCalendar'
+import { ProximosPrazos } from './ProximosPrazos'
 import { TaskCard, type TaskData } from './TaskCard'
 import { TaskFormModal } from './TaskFormModal'
 import { TaskDetailModal } from './TaskDetailModal'
@@ -62,7 +65,8 @@ export function KanbanBoard({
   const [tags,         setTags]         = useState<TaskTag[]>([])
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
   const columns = useMemo(
@@ -174,35 +178,40 @@ export function KanbanBoard({
 
   return (
     <>
-      <div className="flex h-full gap-4">
-        {/* Colunas Kanban */}
-        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="flex flex-1 gap-4 overflow-x-auto pb-4 pt-2 h-full">
-            {columns.map(col => (
-              <KanbanColumn
-                key={col.id}
-                id={col.id}
-                name={col.name}
-                color={col.color}
-                tasks={tasksForColumn(col.id)}
-                onNewTask={openNewTask}
-                onTaskClick={handleTaskClick}
-              />
-            ))}
+      <div className="flex h-full flex-col gap-3">
+        {/* Abaixo de xl (onde o calendário fica oculto): lista de próximos prazos */}
+        <ProximosPrazos tasks={tasks} onTaskClick={handleTaskClick} />
+
+        <div className="flex min-h-0 flex-1 gap-4">
+          {/* Colunas Kanban */}
+          <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="flex flex-1 gap-4 overflow-x-auto pb-4 pt-2 h-full">
+              {columns.map(col => (
+                <KanbanColumn
+                  key={col.id}
+                  id={col.id}
+                  name={col.name}
+                  color={col.color}
+                  tasks={tasksForColumn(col.id)}
+                  onNewTask={openNewTask}
+                  onTaskClick={handleTaskClick}
+                />
+              ))}
+            </div>
+
+            <DragOverlay>
+              {activeTask && (
+                <div className="rotate-2 opacity-90">
+                  <TaskCard task={activeTask} />
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+
+          {/* Calendário (xl+) */}
+          <div className="hidden xl:block pt-2 overflow-y-auto shrink-0">
+            <KanbanCalendar tasks={tasks} columns={columns} />
           </div>
-
-          <DragOverlay>
-            {activeTask && (
-              <div className="rotate-2 opacity-90">
-                <TaskCard task={activeTask} />
-              </div>
-            )}
-          </DragOverlay>
-        </DndContext>
-
-        {/* Calendários */}
-        <div className="hidden xl:block pt-2 overflow-y-auto shrink-0">
-          <KanbanCalendar tasks={tasks} columns={columns} />
         </div>
       </div>
 

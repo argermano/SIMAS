@@ -463,8 +463,8 @@ export function TelaAtendimento({
                 <MapPin className="h-3.5 w-3.5" />
                 Localização do cliente
               </p>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="sm:col-span-2">
                   <Input
                     label="Município"
                     value={localizacao.cidade}

@@ -57,7 +57,8 @@ export function KanbanPageClient({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* ─── Header ─────────────────────────────────────────────────────────── */}
-      <div className="border-b border-border bg-card px-6 py-4">
+      {/* max-lg:pl-16 reserva espaço para o botão de menu (fixed left-4) no mobile */}
+      <div className="border-b border-border bg-card px-6 py-4 max-lg:pl-16">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold text-foreground">Gestão kanban</h1>

@@ -11,7 +11,8 @@ interface HeaderProps {
 export function Header({ titulo, subtitulo, acoes, nomeUsuario }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
-      <div className="flex items-center justify-between gap-4 px-6 py-4">
+      {/* max-lg:pl-16 reserva espaço para o botão de menu (fixed left-4) no mobile */}
+      <div className="flex items-center justify-between gap-4 px-6 py-4 max-lg:pl-16">
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-bold text-foreground font-heading">{titulo}</h1>
           {subtitulo && (
