@@ -14,10 +14,10 @@ export async function POST(
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
 
-  // Verifica se o atendimento pertence ao tenant
+  // Verifica se o atendimento pertence ao tenant (e carrega o acumulado atual)
   const { data: atendimento } = await supabase
     .from('atendimentos')
-    .select('id')
+    .select('id, audio_url, transcricao_raw')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -72,30 +72,36 @@ export async function POST(
       transcricao = '[Transcrição indisponível — configure GROQ_API_KEY no .env.local]'
     }
 
-    // 3. Busca paths existentes e acumula (todos os chunks ficam armazenados)
-    const { data: atData } = await supabase
-      .from('atendimentos')
-      .select('audio_url')
-      .eq('id', id)
-      .single()
-
+    // 3. Acumula paths de áudio (todos os chunks ficam armazenados — são o
+    // registro reproduzível do atendimento) usando o valor lido na checagem
+    // de tenant. Os uploads são serializados no cliente (GravadorAudio), o que
+    // torna este read-modify-write seguro no fluxo normal.
     let audioPaths: string[] = []
-    if (atData?.audio_url) {
+    if (atendimento.audio_url) {
       try {
-        const parsed = JSON.parse(atData.audio_url)
-        audioPaths = Array.isArray(parsed) ? parsed : [atData.audio_url]
+        const parsed = JSON.parse(atendimento.audio_url)
+        audioPaths = Array.isArray(parsed) ? parsed : [atendimento.audio_url]
       } catch {
-        audioPaths = [atData.audio_url]
+        audioPaths = [atendimento.audio_url]
       }
     }
     audioPaths.push(path)
 
-    // 4. Atualiza o atendimento com todos os paths de áudio e transcrição
+    // 4. Acumula a transcrição no servidor (APPEND, nunca sobrescrever):
+    // se a aba fechar no meio de uma gravação longa, tudo que já foi
+    // transcrito permanece salvo no banco.
+    const anterior = (atendimento.transcricao_raw as string | null) ?? ''
+    let transcricaoCompleta = anterior
+    const ehPlaceholder = transcricao.startsWith('[Transcrição indisponível')
+    if (transcricao && !(ehPlaceholder && anterior.includes('[Transcrição indisponível'))) {
+      transcricaoCompleta = anterior ? `${anterior}\n${transcricao}` : transcricao
+    }
+
     const { error: updateError } = await supabase
       .from('atendimentos')
       .update({
         audio_url:        JSON.stringify(audioPaths),
-        transcricao_raw:  transcricao,
+        transcricao_raw:  transcricaoCompleta,
         modo_input:       'audio',
       })
       .eq('id', id)
@@ -106,6 +112,7 @@ export async function POST(
 
     return NextResponse.json({
       transcricao,
+      transcricao_completa: transcricaoCompleta,
       audio_url: path,
     })
   } catch (err) {

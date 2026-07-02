@@ -4,7 +4,14 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { Mic, Square, Pause, Play, Loader2, ShieldCheck } from 'lucide-react'
+import { Mic, Square, Pause, Play, Loader2, ShieldCheck, CloudOff, RefreshCw } from 'lucide-react'
+import {
+  salvarChunkPendente,
+  removerChunkPendente,
+  listarChunksPendentes,
+  descartarChunksPendentes,
+  type ChunkPendente,
+} from '@/lib/audio-pendentes'
 
 // Limites de gravação
 const LIMITE_SEGUNDOS = 3600  // 60 minutos
@@ -18,8 +25,10 @@ interface GravadorAudioProps {
   requerConsentimento?: boolean
 }
 
+type RespostaUpload = { transcricao: string; transcricaoCompleta: string } | null
+
 export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerConsentimento = true }: GravadorAudioProps) {
-  const { warning: toastWarning, error: toastError } = useToast()
+  const { warning: toastWarning, error: toastError, success: toastSuccess } = useToast()
 
   const [estado, setEstado]               = useState<'idle' | 'gravando' | 'pausado' | 'enviando'>('idle')
   const [tempo, setTempo]                 = useState(0)
@@ -28,6 +37,11 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
   const [modalConsentimento, setModalConsentimento] = useState(false)
   const [checkboxMarcado, setCheckboxMarcado]     = useState(false)
   const [processandoChunk, setProcessandoChunk]   = useState(false)
+  // Trechos que falharam no upload nesta sessão (aguardando conexão)
+  const [pendentes, setPendentes]                 = useState(0)
+  const [reenviando, setReenviando]               = useState(false)
+  // Trechos de uma sessão anterior (aba fechada/crash) encontrados no IndexedDB
+  const [recuperaveis, setRecuperaveis]           = useState<ChunkPendente[] | null>(null)
 
   const mediaRecorderRef       = useRef<MediaRecorder | null>(null)
   const streamRef              = useRef<MediaStream | null>(null)
@@ -37,6 +51,10 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
   const transcricaoAcumuladaRef = useRef('')
   // Evita disparar processarChunk múltiplas vezes no mesmo segundo
   const chunkEmAndamentoRef    = useRef(false)
+  // Fila serializada de uploads: garante ordem dos trechos e evita corrida de
+  // read-modify-write no servidor (que faz APPEND da transcrição).
+  const filaUploadRef          = useRef<Promise<void>>(Promise.resolve())
+  const reenvioEmCursoRef      = useRef(false)
 
   // ─── Timer de gravação ──────────────────────────────────────────
   useEffect(() => {
@@ -49,8 +67,6 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
   }, [estado])
 
   // ─── Cleanup no unmount: libera microfone e recorder ────────────
-  // Sem isto, desmontar durante a gravação deixa o MediaStream ativo
-  // (microfone aberto) e vaza recursos.
   useEffect(() => {
     return () => {
       try {
@@ -64,42 +80,22 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
     }
   }, [])
 
-  // ─── Limites de tempo e chunking ────────────────────────────────
+  // ─── Recuperação: trechos não enviados de uma sessão anterior ───
   useEffect(() => {
-    if (estado !== 'gravando') return
+    if (!atendimentoId) return
+    let ativo = true
+    listarChunksPendentes(atendimentoId).then(itens => {
+      if (ativo && itens.length > 0) setRecuperaveis(itens)
+    })
+    return () => { ativo = false }
+  }, [atendimentoId])
 
-    // Avisos
-    if (tempo === LIMITE_SEGUNDOS - 300) {
-      toastWarning('Aviso de gravação', '5 minutos restantes de gravação')
-    }
-    if (tempo === LIMITE_SEGUNDOS - 60) {
-      toastWarning('Aviso de gravação', '1 minuto restante — a gravação será encerrada automaticamente')
-    }
-
-    // Auto-stop ao atingir o limite
-    if (tempo >= LIMITE_SEGUNDOS) {
-      pararGravacaoFinal()
-      return
-    }
-
-    // Chunking automático a cada 10 minutos (exceto no segundo 0)
-    if (tempo > 0 && tempo % CHUNK_SEGUNDOS === 0 && !chunkEmAndamentoRef.current) {
-      chunkEmAndamentoRef.current = true
-      processarChunk().finally(() => { chunkEmAndamentoRef.current = false })
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tempo, estado])
-
-  const formatarTempo = (s: number) => {
-    const h   = Math.floor(s / 3600)
-    const min = Math.floor((s % 3600) / 60).toString().padStart(2, '0')
-    const sec = (s % 60).toString().padStart(2, '0')
-    return h > 0 ? `${h}:${min}:${sec}` : `${min}:${sec}`
-  }
-
-  // ─── Enviar um chunk para transcrição ───────────────────────────
-  const enviarChunkParaAPI = useCallback(async (blob: Blob, chunkNum: number): Promise<string> => {
-    if (!atendimentoId) return ''
+  // ─── Envio de um trecho (com persistência local antes do upload) ─
+  // O blob é salvo no IndexedDB ANTES da tentativa; só é removido após o
+  // servidor confirmar. Falha de rede → o trecho fica guardado para retry.
+  const enviarChunk = useCallback(async (blob: Blob, chunkNum: number): Promise<RespostaUpload> => {
+    if (!atendimentoId) return null
+    await salvarChunkPendente({ atendimentoId, chunkNum, blob, mimeType: blob.type })
     try {
       const formData = new FormData()
       formData.append('audio', blob, `gravacao_chunk_${chunkNum}.webm`)
@@ -108,12 +104,79 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
         method: 'POST',
         body:   formData,
       })
+      if (!res.ok) return null
       const data = await res.json()
-      return res.ok ? (data.transcricao ?? '') : ''
+      await removerChunkPendente(atendimentoId, chunkNum)
+      return {
+        transcricao:         data.transcricao ?? '',
+        transcricaoCompleta: data.transcricao_completa ?? data.transcricao ?? '',
+      }
     } catch {
-      return ''
+      return null
     }
   }, [atendimentoId])
+
+  // ─── Reenvio dos pendentes (manual ou ao voltar a conexão) ───────
+  const reenviarPendentes = useCallback(async (): Promise<string | null> => {
+    if (!atendimentoId || reenvioEmCursoRef.current) return null
+    reenvioEmCursoRef.current = true
+    setReenviando(true)
+    let ultimaCompleta: string | null = null
+    try {
+      const itens = await listarChunksPendentes(atendimentoId)
+      for (const item of itens) {
+        const resp = await enviarChunk(item.blob, item.chunkNum)
+        if (!resp) break // ainda sem conexão — para e mantém o restante guardado
+        ultimaCompleta = resp.transcricaoCompleta
+      }
+      const restantes = await listarChunksPendentes(atendimentoId)
+      setPendentes(restantes.length)
+      if (restantes.length === 0) setRecuperaveis(null)
+      return ultimaCompleta
+    } finally {
+      reenvioEmCursoRef.current = false
+      setReenviando(false)
+    }
+  }, [atendimentoId, enviarChunk])
+
+  // Ao voltar a conexão, tenta reenviar automaticamente o que ficou guardado
+  useEffect(() => {
+    const aoVoltarConexao = () => {
+      listarChunksPendentes(atendimentoId ?? '').then(itens => {
+        if (itens.length > 0) {
+          reenviarPendentes().then(completa => {
+            if (completa !== null) {
+              toastSuccess('Conexão restabelecida', 'Os trechos de áudio guardados foram enviados e transcritos.')
+            }
+          })
+        }
+      })
+    }
+    window.addEventListener('online', aoVoltarConexao)
+    return () => window.removeEventListener('online', aoVoltarConexao)
+  }, [atendimentoId, reenviarPendentes, toastSuccess])
+
+  // ─── Enfileira o upload de um trecho (serializado, sem bloquear UI) ─
+  const enfileirarUpload = useCallback((blob: Blob, chunkNum: number): Promise<RespostaUpload> => {
+    const resultado = filaUploadRef.current.then(() => enviarChunk(blob, chunkNum))
+    filaUploadRef.current = resultado.then(resp => {
+      if (resp?.transcricao) {
+        const sep = transcricaoAcumuladaRef.current ? '\n' : ''
+        transcricaoAcumuladaRef.current += sep + resp.transcricao
+      }
+      if (!resp) {
+        setPendentes(p => p + 1)
+      }
+    })
+    return resultado
+  }, [enviarChunk])
+
+  const formatarTempo = (s: number) => {
+    const h   = Math.floor(s / 3600)
+    const min = Math.floor((s % 3600) / 60).toString().padStart(2, '0')
+    const sec = (s % 60).toString().padStart(2, '0')
+    return h > 0 ? `${h}:${min}:${sec}` : `${min}:${sec}`
+  }
 
   // ─── Processar chunk intermediário (sem parar o stream) ─────────
   const processarChunk = useCallback(async () => {
@@ -143,14 +206,32 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
     novoRecorder.start(1000)
     mediaRecorderRef.current = novoRecorder
 
-    // Transcreve em background sem bloquear UI
-    enviarChunkParaAPI(blob, chunkNum).then(transcricao => {
-      if (transcricao) {
-        const sep = transcricaoAcumuladaRef.current ? '\n' : ''
-        transcricaoAcumuladaRef.current += sep + transcricao
-      }
-    }).finally(() => setProcessandoChunk(false))
-  }, [enviarChunkParaAPI])
+    // Envia em background pela fila serializada (persistido antes do upload)
+    enfileirarUpload(blob, chunkNum).finally(() => setProcessandoChunk(false))
+  }, [enfileirarUpload])
+
+  // ─── Limites de tempo e chunking ────────────────────────────────
+  useEffect(() => {
+    if (estado !== 'gravando') return
+
+    if (tempo === LIMITE_SEGUNDOS - 300) {
+      toastWarning('Aviso de gravação', '5 minutos restantes de gravação')
+    }
+    if (tempo === LIMITE_SEGUNDOS - 60) {
+      toastWarning('Aviso de gravação', '1 minuto restante — a gravação será encerrada automaticamente')
+    }
+
+    if (tempo >= LIMITE_SEGUNDOS) {
+      pararGravacaoFinal()
+      return
+    }
+
+    if (tempo > 0 && tempo % CHUNK_SEGUNDOS === 0 && !chunkEmAndamentoRef.current) {
+      chunkEmAndamentoRef.current = true
+      processarChunk().finally(() => { chunkEmAndamentoRef.current = false })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tempo, estado])
 
   // ─── Parar gravação e consolidar transcrição ────────────────────
   const pararGravacaoFinal = useCallback(async () => {
@@ -174,35 +255,36 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
 
     try {
       const chunkNum = chunkNumeroRef.current + 1
-      const formData = new FormData()
-      formData.append('audio', blob, `gravacao_chunk_${chunkNum}.webm`)
+      // Passa pela mesma fila serializada: garante que os trechos anteriores
+      // (ainda em upload) cheguem ao servidor antes do trecho final.
+      const resp = await enfileirarUpload(blob, chunkNum)
 
-      const res  = await fetch(`/api/atendimentos/${atendimentoId}/audio`, {
-        method: 'POST',
-        body:   formData,
-      })
-      const data = await res.json()
-
-      if (!res.ok) {
-        setErro(data.error ?? 'Erro ao enviar áudio')
+      if (!resp) {
+        // O trecho está guardado no dispositivo — nada foi perdido.
+        const guardados = await listarChunksPendentes(atendimentoId)
+        setPendentes(guardados.length)
+        setErro('Sem conexão no momento. Os trechos gravados estão guardados neste dispositivo — use "Enviar trechos guardados" quando a conexão voltar.')
+        // Entrega o que já foi transcrito com sucesso até aqui
+        if (transcricaoAcumuladaRef.current) {
+          onTranscricao(transcricaoAcumuladaRef.current)
+        }
       } else {
         const transcricaoFinal = transcricaoAcumuladaRef.current
-          ? transcricaoAcumuladaRef.current + '\n' + (data.transcricao ?? '')
-          : (data.transcricao ?? '')
+          ? transcricaoAcumuladaRef.current + '\n' + resp.transcricao
+          : resp.transcricao
 
-        // Reset acumulador
         transcricaoAcumuladaRef.current = ''
         chunkNumeroRef.current = 0
 
         onTranscricao(transcricaoFinal)
       }
     } catch {
-      setErro('Erro de rede ao enviar áudio')
+      setErro('Erro ao enviar o áudio. Os trechos gravados estão guardados neste dispositivo.')
     } finally {
       setEstado('idle')
       setTempo(0)
     }
-  }, [atendimentoId, onTranscricao])
+  }, [atendimentoId, onTranscricao, enfileirarUpload])
 
   // ─── Iniciar gravação ────────────────────────────────────────────
   const iniciarGravacaoReal = useCallback(async () => {
@@ -217,7 +299,10 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
 
       const mediaRecorder = new MediaRecorder(stream, { mimeType })
       chunksRef.current = []
-      chunkNumeroRef.current = 0
+      // Continua a numeração após eventuais trechos guardados (não enviados)
+      // de uma sessão anterior — evita sobrescrever os blobs no IndexedDB.
+      const guardados = atendimentoId ? await listarChunksPendentes(atendimentoId) : []
+      chunkNumeroRef.current = guardados.reduce((max, c) => Math.max(max, c.chunkNum), 0)
       transcricaoAcumuladaRef.current = ''
 
       mediaRecorder.ondataavailable = (e) => {
@@ -274,7 +359,29 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
     }
   }, [])
 
+  // ─── Ações do banner de recuperação/pendências ───────────────────
+  const handleEnviarGuardados = useCallback(async () => {
+    const completa = await reenviarPendentes()
+    if (completa !== null) {
+      setErro('')
+      toastSuccess('Trechos enviados', 'Os trechos guardados foram transcritos e salvos no caso.')
+      onTranscricao(completa)
+    } else {
+      toastError('Ainda sem conexão', 'Os trechos continuam guardados neste dispositivo. Tente novamente mais tarde.')
+    }
+  }, [reenviarPendentes, onTranscricao, toastSuccess, toastError])
+
+  const handleDescartarGuardados = useCallback(async () => {
+    if (!atendimentoId) return
+    await descartarChunksPendentes(atendimentoId)
+    setRecuperaveis(null)
+    setPendentes(0)
+    setErro('')
+  }, [atendimentoId])
+
   const desabilitado = disabled || !atendimentoId
+
+  const temGuardados = pendentes > 0 || (recuperaveis?.length ?? 0) > 0
 
   return (
     <>
@@ -314,14 +421,14 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
             O áudio será utilizado exclusivamente para transcrição e apoio no registro do atendimento,
             sendo armazenado de forma segura e vinculado ao prontuário do cliente.
           </p>
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
             <input
               type="checkbox"
               checked={checkboxMarcado}
               onChange={e => setCheckboxMarcado(e.target.checked)}
               className="mt-0.5 h-4 w-4 rounded border-border text-primary"
             />
-            <span className="text-sm font-medium text-amber-900">
+            <span className="text-sm font-medium text-amber-900 dark:text-amber-200">
               Confirmo que o cliente autorizou expressamente a gravação desta consulta
             </span>
           </label>
@@ -330,6 +437,27 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
 
       {/* Controles de gravação */}
       <div className="space-y-3">
+        {/* Banner: trechos guardados no dispositivo (desta sessão ou de uma anterior) */}
+        {temGuardados && estado === 'idle' && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+            <CloudOff className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+            <span className="text-sm text-amber-900 dark:text-amber-200">
+              {recuperaveis && pendentes === 0
+                ? `Há ${recuperaveis.length} trecho(s) de áudio de uma gravação anterior guardados neste dispositivo.`
+                : `${pendentes} trecho(s) de áudio aguardando conexão — guardados neste dispositivo.`}
+            </span>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleEnviarGuardados} disabled={reenviando} className="gap-1.5">
+                {reenviando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Enviar trechos guardados
+              </Button>
+              <Button size="sm" variant="secondary" onClick={handleDescartarGuardados} disabled={reenviando}>
+                Descartar
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3 flex-wrap">
           {estado === 'idle' && (
             <Button
@@ -392,12 +520,18 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
                   salvando...
                 </span>
               )}
+              {pendentes > 0 && (
+                <span className="text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                  <CloudOff className="h-3 w-3" />
+                  {pendentes} trecho(s) aguardando conexão
+                </span>
+              )}
             </div>
           )}
         </div>
 
         {/* Dica */}
-        {estado === 'idle' && !desabilitado && (
+        {estado === 'idle' && !desabilitado && !temGuardados && (
           <p className="text-xs text-muted-foreground">
             {requerConsentimento
               ? 'Grave o atendimento com o cliente. O áudio será transcrito automaticamente pela IA. Limite de 60 minutos.'
