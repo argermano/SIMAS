@@ -11,6 +11,25 @@ interface ValidacaoData {
   score_confianca?: number
   correcoes_sugeridas?: Array<{ tipo: string; descricao: string; prioridade: string }>
   formatacao?: Array<{ tipo: string; mensagem: string; severidade: string }>
+  citacoes?: {
+    itens: Array<{ tipo: 'processo' | 'sumula' | 'lei'; texto: string; status: 'verificada' | 'conferir' | 'nao_verificada'; detalhe: string }>
+    total: number
+    verificadas: number
+    aConferir: number
+    problemas: number
+  }
+}
+
+const CITACAO_ICON: Record<string, React.ReactNode> = {
+  verificada:     <CheckCircle className="h-4 w-4 text-success" />,
+  conferir:       <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
+  nao_verificada: <XCircle className="h-4 w-4 text-destructive" />,
+}
+
+const CITACAO_TIPO_LABEL: Record<string, string> = {
+  processo: 'Processo',
+  sumula:   'Súmula',
+  lei:      'Lei',
 }
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
@@ -81,6 +100,49 @@ export function RelatorioValidacao({ data, onCorrecao }: { data: ValidacaoData; 
                   <div key={i} className="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs">
                     {a.severidade === 'erro' ? STATUS_ICON.nao_validado : STATUS_ICON.parcial}
                     <p className="text-foreground">{a.mensagem}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Verificação determinística de citações (processo/súmula/lei) */}
+      {data.citacoes && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-sm">
+              {data.citacoes.problemas > 0
+                ? STATUS_ICON.nao_validado
+                : data.citacoes.aConferir > 0
+                  ? STATUS_ICON.parcial
+                  : STATUS_ICON.validado}
+              Citações verificadas
+              {data.citacoes.total > 0 && (
+                <span className="text-xs font-normal text-muted-foreground">
+                  {data.citacoes.verificadas} ok · {data.citacoes.aConferir} a conferir · {data.citacoes.problemas} suspeita{data.citacoes.problemas === 1 ? '' : 's'}
+                </span>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.citacoes.total === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Nenhuma citação de processo, súmula ou lei detectada automaticamente.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {data.citacoes.itens.map((c, i) => (
+                  <div key={i} className="flex items-start gap-2 rounded-md bg-muted/50 px-3 py-2 text-xs">
+                    {CITACAO_ICON[c.status] ?? CITACAO_ICON.conferir}
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground">
+                        <span className="text-muted-foreground">{CITACAO_TIPO_LABEL[c.tipo] ?? c.tipo}: </span>
+                        {c.texto}
+                      </p>
+                      <p className="mt-0.5 text-muted-foreground">{c.detalhe}</p>
+                    </div>
                   </div>
                 ))}
               </div>

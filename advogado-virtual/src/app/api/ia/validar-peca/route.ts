@@ -6,6 +6,7 @@ import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptRevisarValidar, SYSTEM_VALIDAR } from '@/lib/prompts/validacao/revisar-validar'
 import { validarFormatacaoPeca } from '@/lib/format/validar-peca'
+import { verificarCitacoes } from '@/lib/jurisprudencia/verificador-citacoes'
 
 export const maxDuration = 120
 
@@ -74,7 +75,11 @@ export async function POST(req: NextRequest) {
     // Validação determinística de formatação (complementa a validação por IA)
     const formatacao = validarFormatacaoPeca(peca.conteudo_markdown)
 
-    return NextResponse.json({ ...result, formatacao })
+    // Verificação determinística de citações (processo/súmula/lei) — não depende
+    // do modelo, que é a fonte de alucinação que estamos justamente flagrando.
+    const citacoes = verificarCitacoes(peca.conteudo_markdown)
+
+    return NextResponse.json({ ...result, formatacao, citacoes })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     return jsonError(message, 500)
