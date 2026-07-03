@@ -1,0 +1,48 @@
+name: CI
+
+# Roda a cada push na main e em todo pull request. Gates: type-check, testes e
+# build de produção — a mesma verificação feita localmente antes de cada push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Um push cancela runs anteriores ainda em andamento do mesmo ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: advogado-virtual
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: advogado-virtual/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm test
+
+      - name: Build de produção
+        run: npm run build
+        # Variáveis placeholder: são lidas de forma preguiçosa (em runtime), mas
+        # setar evita qualquer surpresa em avaliação no load de módulo. Nenhum
+        # segredo real é necessário para o build.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role
+          ANTHROPIC_API_KEY: placeholder-anthropic
