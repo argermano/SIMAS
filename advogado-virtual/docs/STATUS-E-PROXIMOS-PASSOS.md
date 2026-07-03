@@ -1,7 +1,9 @@
 # Status e Próximos Passos — SIMAS / Advogado Virtual
 
 > **Atualizado:** 2026-07-03 · **Objetivo imediato definido pelo dono do produto:** implantar o sistema **no próprio escritório** para validar na prática, **antes** de comercializar. Billing, cadastro self-serve e venda multi-tenant ficam **congelados** até essa validação.
-> **Documentos irmãos:** [ANALISE-COMPLETA-2026-07.md](ANALISE-COMPLETA-2026-07.md) (parecer) · [PLANO-DESENVOLVIMENTO-OPUS.md](PLANO-DESENVOLVIMENTO-OPUS.md) (backlog completo) · [REVISAO-ARQUITETURAL.md](REVISAO-ARQUITETURAL.md).
+> **Foco do produto (decisão 2026-07-03):** GERAÇÃO DE PEÇAS — não competir com o Astrea (gestão, já contratado pelo escritório).
+> **Fase 2 aprovada:** E1, E2, E3(enxuto), E4, E6, E9, E10 + pacote UX — plano de execução em [PLANO-FASE-2-OPUS.md](PLANO-FASE-2-OPUS.md). Adiados: E5, E7. Backlog: E8.
+> **Documentos irmãos:** [ANALISE-COMPLETA-2026-07.md](ANALISE-COMPLETA-2026-07.md) (parecer) · [PLANO-DESENVOLVIMENTO-OPUS.md](PLANO-DESENVOLVIMENTO-OPUS.md) (backlog completo) · [PARECER-FABLE-2026-07-03.md](PARECER-FABLE-2026-07-03.md) (curadoria) · [REVISAO-ARQUITETURAL.md](REVISAO-ARQUITETURAL.md).
 
 ---
 
