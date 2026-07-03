@@ -65,3 +65,44 @@ export async function safeLogUsage(params: Parameters<typeof logUsage>[0]): Prom
     console.error(`[logUsage] erro inesperado (${params.endpoint}):`, err instanceof Error ? err.message : err)
   }
 }
+
+// Preço do Whisper (Groq whisper-large-v3): US$ por SEGUNDO de áudio.
+// A Groq cobra por hora de áudio (~US$ 0,111/h em jul/2026) — dividimos por
+// 3600. A transcrição não gera tokens Anthropic; o custo é função da duração.
+// Ajustável via GROQ_WHISPER_PRECO_SEG caso o preço mude.
+const PRECO_WHISPER_SEG = Number(process.env.GROQ_WHISPER_PRECO_SEG ?? (0.111 / 3600))
+
+/**
+ * Registra o custo de uma transcrição de áudio no mesmo `api_usage_log` das
+ * chamadas de IA — antes a transcrição (Groq/Whisper) não entrava no painel de
+ * custo, deixando um buraco na visibilidade de uso. Nunca lança (fire-safe):
+ * uma falha de log não pode derrubar a transcrição já concluída.
+ */
+export async function logTranscricao(params: {
+  tenantId: string
+  userId: string
+  endpoint: string
+  segundosAudio: number
+  latenciaMs: number
+  modelo?: string
+}): Promise<void> {
+  try {
+    const custoEstimado = Math.max(0, params.segundosAudio || 0) * PRECO_WHISPER_SEG
+    const supabase = await createClient()
+    const { error } = await supabase.from('api_usage_log').insert({
+      tenant_id:      params.tenantId,
+      user_id:        params.userId,
+      endpoint:       params.endpoint,
+      modelo:         params.modelo ?? 'groq-whisper-large-v3',
+      tokens_input:   0,
+      tokens_output:  0,
+      custo_estimado: custoEstimado,
+      latencia_ms:    params.latenciaMs,
+    })
+    if (error) {
+      console.error(`[logTranscricao] falha ao registrar (${params.endpoint}, tenant ${params.tenantId}):`, error.message)
+    }
+  } catch (err) {
+    console.error(`[logTranscricao] erro inesperado (${params.endpoint}):`, err instanceof Error ? err.message : err)
+  }
+}

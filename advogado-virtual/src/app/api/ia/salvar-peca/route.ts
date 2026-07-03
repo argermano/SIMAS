@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 
+export const maxDuration = 120
+
 // POST /api/ia/salvar-peca — salva conteúdo editado da peça
 export async function POST(req: NextRequest) {
   try {

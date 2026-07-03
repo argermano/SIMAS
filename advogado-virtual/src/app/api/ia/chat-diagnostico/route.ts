@@ -4,6 +4,8 @@ import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
 
+export const maxDuration = 120
+
 const SYSTEM_CHAT_DIAGNOSTICO = `Você é um consultor jurídico experiente ajudando um advogado a entender e aprofundar a análise diagnóstica de um caso.
 
 CONTEXTO: O advogado já recebeu um diagnóstico automatizado (análise de caso) e agora quer tirar dúvidas, explorar estratégias ou refinar o entendimento antes de gerar a peça processual.

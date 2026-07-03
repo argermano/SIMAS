@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { encryptField } from '@/lib/encryption'
+import { logTranscricao } from '@/lib/anthropic/usage'
 import Groq from 'groq-sdk'
 
 export const maxDuration = 120
@@ -129,6 +130,8 @@ export async function PATCH(req: Request) {
   const groq = new Groq({ apiKey: groqKey })
 
   let transcricao = ''
+  let segundosAudio = 0
+  const inicioTranscricao = Date.now()
 
   try {
     const transcription = await comRetry(() => groq.audio.transcriptions.create({
@@ -142,6 +145,7 @@ export async function PATCH(req: Request) {
     // verbose_json retorna segments com timestamps
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = transcription as any
+    segundosAudio = Number(result?.duration) || 0
     console.log('[transcrever-audio] response keys:', Object.keys(result), 'segments count:', result?.segments?.length ?? 0)
 
     if (result?.segments && Array.isArray(result.segments) && result.segments.length > 0) {
@@ -210,6 +214,15 @@ export async function PATCH(req: Request) {
     console.error('[transcrever-audio] falha ao salvar transcrição:', updateError.message)
     return jsonError('Transcrição concluída, mas falhou ao salvar no atendimento. Tente novamente.', 500)
   }
+
+  // Registra o custo desta transcrição (por segundo de áudio) no painel de uso.
+  await logTranscricao({
+    tenantId:      usuario.tenant_id,
+    userId:        usuario.id,
+    endpoint:      'transcrever_upload',
+    segundosAudio,
+    latenciaMs:    Date.now() - inicioTranscricao,
+  })
 
   return NextResponse.json({ transcricao: transcricaoFinal })
 }

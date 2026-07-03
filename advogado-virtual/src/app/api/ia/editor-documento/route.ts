@@ -4,6 +4,8 @@ import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsagePosStream } from '@/lib/ia/pecas/motor'
 
+export const maxDuration = 120
+
 type Acao = 'reescrever' | 'gerar_topico' | 'comando_livre'
 
 const SYSTEM_EDITOR = `Você é um especialista jurídico brasileiro especializado em redação de documentos jurídicos formais.

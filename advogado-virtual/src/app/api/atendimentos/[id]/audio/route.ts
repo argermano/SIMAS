@@ -3,6 +3,9 @@ import Groq from 'groq-sdk'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { encryptField, decryptField } from '@/lib/encryption'
+import { logTranscricao } from '@/lib/anthropic/usage'
+
+export const maxDuration = 120
 
 // POST /api/atendimentos/[id]/audio — upload áudio + transcrição Groq
 export async function POST(
@@ -55,20 +58,26 @@ export async function POST(
     // 2. Transcrição via Groq Whisper
     const groqKey = process.env.GROQ_API_KEY
     let transcricao = ''
+    let segundosAudio = 0
+    let houveTranscricao = false
+    const inicioTranscricao = Date.now()
 
     if (groqKey && groqKey !== 'PREENCHA_AQUI') {
       const groq = new Groq({ apiKey: groqKey })
 
+      // verbose_json em vez de 'text': dá a duração do áudio para registrar o
+      // custo da transcrição (o texto retornado é o mesmo, sem timestamps).
       const transcription = await groq.audio.transcriptions.create({
         file: audioFile,
         model: 'whisper-large-v3',
         language: 'pt',
-        response_format: 'text',
+        response_format: 'verbose_json',
       })
 
-      transcricao = typeof transcription === 'string'
-        ? transcription
-        : (transcription as { text?: string }).text ?? ''
+      const result = transcription as { text?: string; duration?: number }
+      transcricao = typeof transcription === 'string' ? transcription : (result.text ?? '')
+      segundosAudio = result.duration ?? 0
+      houveTranscricao = true
     } else {
       transcricao = '[Transcrição indisponível — configure GROQ_API_KEY no .env.local]'
     }
@@ -110,6 +119,18 @@ export async function POST(
 
     if (updateError) {
       return jsonError(updateError.message, 500)
+    }
+
+    // Registra o custo da transcrição no painel de uso (só quando de fato houve
+    // chamada à Groq). Não bloqueia a resposta em caso de falha de log.
+    if (houveTranscricao) {
+      await logTranscricao({
+        tenantId:      usuario.tenant_id,
+        userId:        usuario.id,
+        endpoint:      'transcrever_gravacao',
+        segundosAudio,
+        latenciaMs:    Date.now() - inicioTranscricao,
+      })
     }
 
     return NextResponse.json({

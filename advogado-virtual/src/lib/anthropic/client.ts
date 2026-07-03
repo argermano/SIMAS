@@ -23,6 +23,16 @@ export const DEFAULT_MAX_TOKENS = Number(process.env.ANTHROPIC_MAX_TOKENS ?? 819
  */
 export const MAX_PROMPT_CHARS = Number(process.env.ANTHROPIC_MAX_PROMPT_CHARS ?? 600_000)
 
+/**
+ * Teto de tokens de SAÍDA da extração/OCR de documentos (Haiku Vision/PDF).
+ * Antes era fixo em 4.096 → documentos longos (ex.: CNIS de 10 páginas) tinham
+ * o texto extraído CORTADO na origem, o que anulava o contexto documental
+ * íntegro do B1. 8.192 (≈12 páginas de texto) cobre o caso comum sem risco de
+ * 400 (é o mesmo teto do DEFAULT_MAX_TOKENS). Para autos muito longos, a
+ * extração por página continua como evolução (B2.7). Ajustável por env.
+ */
+export const MAX_TOKENS_EXTRACAO = Number(process.env.ANTHROPIC_MAX_TOKENS_OCR ?? 8192)
+
 /** Erro de entrada grande demais (mapeado para HTTP 413 nas rotas). */
 export class PromptTooLargeError extends Error {
   status = 413
@@ -172,7 +182,7 @@ export async function extractTextFromImage(params: {
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 4096,
+    max_tokens: MAX_TOKENS_EXTRACAO,
     messages: [{
       role: 'user',
       content: [
@@ -208,7 +218,7 @@ export async function extractTextFromPdf(params: {
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 4096,
+    max_tokens: MAX_TOKENS_EXTRACAO,
     messages: [{
       role: 'user',
       content: [

@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, Tag, CheckCircle, AlertTriangle, Info } from 'lucide-react'
+import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, CheckCircle, AlertTriangle, Info } from 'lucide-react'
 import { formatarData } from '@/lib/utils'
 import { isEncryptionConfigured } from '@/lib/encryption'
 import { LABELS_ROLE } from '@/types'
@@ -176,8 +176,8 @@ export default async function ConfiguracoesPage() {
           <ItemSeguranca>Dados transmitidos com criptografia TLS</ItemSeguranca>
           <ItemSeguranca estado={criptoAtiva ? 'ok' : 'alerta'}>
             {criptoAtiva
-              ? 'Dados sensíveis (CPF/RG) armazenados com criptografia (AES-256-GCM)'
-              : 'Criptografia de CPF/RG inativa neste ambiente (ENCRYPTION_KEY não configurada)'}
+              ? 'Dados sensíveis (CPF, RG e transcrições) guardados com criptografia forte'
+              : 'Criptografia de dados sensíveis inativa neste ambiente — contate o suporte antes de cadastrar clientes reais'}
           </ItemSeguranca>
           <ItemSeguranca>Isolamento total entre escritórios (Row Level Security)</ItemSeguranca>
           <ItemSeguranca>Chave de IA nunca exposta ao navegador</ItemSeguranca>
@@ -212,40 +212,13 @@ export default async function ConfiguracoesPage() {
         </CardContent>
       </Card>
 
-      {/* Versão do sistema — identifica o build em produção */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Tag className="h-5 w-5 text-muted-foreground" />
-            Versão do Sistema
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <InfoItem
-            label="Build (commit)"
-            valor={<code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">{buildSha}</code>}
-          />
-          <InfoItem
-            label="Ambiente"
-            valor={
-              <Badge variant={buildEnv === 'production' ? 'success' : 'warning'}>
-                {buildEnv}
-              </Badge>
-            }
-          />
-          {buildTime && (
-            <InfoItem label="Data do build" valor={new Date(buildTime).toLocaleString('pt-BR')} />
-          )}
-          <InfoItem
-            label="Criptografia de dados"
-            valor={
-              <Badge variant={criptoAtiva ? 'success' : 'warning'}>
-                {criptoAtiva ? 'Ativa' : 'Inativa'}
-              </Badge>
-            }
-          />
-        </CardContent>
-      </Card>
+      {/* Rodapé discreto — identificação da versão (útil para o suporte técnico).
+          Antes era um card "Versão do Sistema" com jargão de dev (commit, ambiente). */}
+      <p className="pt-2 text-center text-xs text-muted-foreground/60">
+        SIMAS · versão <span className="font-mono">{buildSha}</span>
+        {buildEnv !== 'production' && ` · ${buildEnv}`}
+        {buildTime && ` · ${new Date(buildTime).toLocaleDateString('pt-BR')}`}
+      </p>
     </>
   )
 

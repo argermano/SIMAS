@@ -7,6 +7,8 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { decryptField } from '@/lib/encryption'
 
+export const maxDuration = 120
+
 // POST /api/ia/comando — executar comando rápido
 export async function POST(req: NextRequest) {
   const start = Date.now()
