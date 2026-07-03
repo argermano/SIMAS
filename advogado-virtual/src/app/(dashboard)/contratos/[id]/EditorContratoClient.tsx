@@ -11,7 +11,7 @@ import { EnviarAssinaturaModal } from '@/components/contratos/EnviarAssinaturaMo
 import { PainelAssinatura } from '@/components/contratos/PainelAssinatura'
 import { createClient } from '@/lib/supabase/client'
 import { formatarDataHora } from '@/lib/utils'
-import { CheckCircle, Loader2, PenLine, ChevronDown, FileDown, Monitor, FileText, Upload, Download, FileSignature } from 'lucide-react'
+import { CheckCircle, Loader2, PenLine, ChevronDown, FileDown, Monitor, FileText, Upload, Download, FileSignature, X } from 'lucide-react'
 
 interface Signer {
   id:           string
@@ -82,6 +82,7 @@ export function EditorContratoClient({
   const [importando,       setImportando]       = useState(false)
   const [arquivoNome,      setArquivoNome]       = useState<string | null>(contrato.arquivo_assinado_nome ?? null)
   const [assinadoEm,       setAssinadoEm]        = useState<string | null>(contrato.assinado_em ?? null)
+  const [painelAssinaturaAberto, setPainelAssinaturaAberto] = useState(false)
   const inputAssinadoRef = useRef<HTMLInputElement>(null)
 
   const podeAprovar        = ['admin', 'advogado'].includes(role)
@@ -392,24 +393,51 @@ export function EditorContratoClient({
         }}
       />
 
-      <div className="space-y-6">
-        <DocumentEditor
-          titulo={contrato.titulo}
-          conteudo={contrato.conteudo_markdown}
-          onVoltar={() => { if (atendimentoId) { router.back(); router.refresh() } else router.push('/contratos') }}
-          onSalvar={handleSalvar}
-          salvando={salvando}
-          extraAcoes={<>{acaoAprovar}{acaoAssinar}{acaoAssinado}</>}
-          exportOpts={{ contrato: true }}
-        />
+      <DocumentEditor
+        titulo={contrato.titulo}
+        conteudo={contrato.conteudo_markdown}
+        onVoltar={() => { if (atendimentoId) { router.back(); router.refresh() } else router.push('/contratos') }}
+        onSalvar={handleSalvar}
+        salvando={salvando}
+        extraAcoes={
+          <>
+            {acaoAprovar}{acaoAssinar}{acaoAssinado}
+            {temAssinaturaAtiva && (
+              <Button size="sm" variant="secondary" onClick={() => setPainelAssinaturaAberto(true)} className="gap-1.5">
+                <FileSignature className="h-4 w-4" />
+                Acompanhar assinatura
+              </Button>
+            )}
+          </>
+        }
+        exportOpts={{ contrato: true }}
+      />
 
-        {temAssinaturaAtiva && (
-          <PainelAssinatura
-            contratoId={contratoId}
-            initial={assinatura!}
-          />
-        )}
-      </div>
+      {/* Painel de acompanhamento da assinatura — drawer SOBRE o editor
+          (fixed inset-0 z-40); antes era renderizado atrás do editor e ficava invisível. */}
+      {temAssinaturaAtiva && painelAssinaturaAberto && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setPainelAssinaturaAberto(false)} />
+          <aside className="relative flex w-full max-w-md flex-col overflow-hidden bg-background shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="flex items-center gap-2 font-semibold text-foreground">
+                <FileSignature className="h-4 w-4 text-primary" />
+                Assinatura digital
+              </h2>
+              <button
+                onClick={() => setPainelAssinaturaAberto(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <PainelAssinatura contratoId={contratoId} initial={assinatura!} />
+            </div>
+          </aside>
+        </div>
+      )}
     </>
   )
 }
