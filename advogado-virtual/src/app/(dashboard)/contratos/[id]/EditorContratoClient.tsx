@@ -178,24 +178,26 @@ export function EditorContratoClient({
     }
   }, [contratoId, toastError])
 
-  const handleSalvar = useCallback(async (conteudo: string) => {
-    setSalvando(true)
+  const handleSalvar = useCallback(async (conteudo: string, opts?: { silencioso?: boolean }) => {
+    const silencioso = opts?.silencioso ?? false
+    if (!silencioso) setSalvando(true)
     try {
       const res  = await fetch(`/api/contratos/${contratoId}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ conteudo_markdown: conteudo }),
+        // Autosave (silencioso) não versiona; o save manual versiona.
+        body:    JSON.stringify({ conteudo_markdown: conteudo, semVersao: silencioso }),
       })
       const data = await res.json()
       if (!res.ok) {
-        toastError('Erro ao salvar', data.error ?? 'Tente novamente')
-      } else {
+        if (!silencioso) toastError('Erro ao salvar', data.error ?? 'Tente novamente')
+      } else if (!silencioso) {
         success('Salvo!', `Versão ${data.contrato.versao} registrada`)
       }
     } catch {
-      toastError('Erro', 'Falha de rede')
+      if (!silencioso) toastError('Erro', 'Falha de rede')
     } finally {
-      setSalvando(false)
+      if (!silencioso) setSalvando(false)
     }
   }, [contratoId, success, toastError])
 

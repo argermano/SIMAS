@@ -14,6 +14,7 @@ interface DocumentHeaderProps {
   baixando: boolean
   onSalvar?: () => void | Promise<void>
   salvando?: boolean
+  temAlteracoes?: boolean
   extraAcoes?: ReactNode
   onComandoIa?: () => void
   onBuscarJurisprudencia?: () => void
@@ -28,6 +29,7 @@ export function DocumentHeader({
   baixando,
   onSalvar,
   salvando,
+  temAlteracoes,
   extraAcoes,
   onComandoIa,
   onBuscarJurisprudencia,
@@ -125,6 +127,13 @@ export function DocumentHeader({
 
         {/* Ações extras (opcional) */}
         {extraAcoes}
+
+        {/* Indicador sutil de alterações não salvas (o autosave cuida do resto) */}
+        {temAlteracoes && !salvando && !salvandoLocal && (
+          <span className="hidden sm:inline text-xs text-muted-foreground" title="Alterações ainda não salvas — salvamento automático em segundos">
+            não salvo
+          </span>
+        )}
 
         {/* Salvar (opcional) */}
         {onSalvar && (

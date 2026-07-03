@@ -91,9 +91,13 @@ export async function PATCH(
 
   const dados   = resultado.data
   const contrato = acesso.contrato
+  // Autosave não versiona (senão gera dezenas de versões durante a edição).
+  const semVersao = body?.semVersao === true
 
-  // Se o conteúdo mudou, salvar versão anterior
-  if (dados.conteudo_markdown && dados.conteudo_markdown !== contrato.conteudo_markdown && contrato.conteudo_markdown) {
+  const conteudoMudou = !!dados.conteudo_markdown && dados.conteudo_markdown !== contrato.conteudo_markdown
+
+  // Se o conteúdo mudou (e não é autosave), salvar versão anterior
+  if (conteudoMudou && contrato.conteudo_markdown && !semVersao) {
     await supabase.from('contratos_versoes').insert({
       contrato_id:      id,
       conteudo_markdown: contrato.conteudo_markdown,
@@ -102,7 +106,7 @@ export async function PATCH(
   }
 
   const atualizacao: Record<string, unknown> = { ...dados }
-  if (dados.conteudo_markdown && dados.conteudo_markdown !== contrato.conteudo_markdown) {
+  if (conteudoMudou && !semVersao) {
     atualizacao.versao = (contrato.versao ?? 1) + 1
   }
 

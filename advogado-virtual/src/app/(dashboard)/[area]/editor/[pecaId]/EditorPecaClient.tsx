@@ -73,25 +73,27 @@ export function EditorPecaClient({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [menuOpen])
 
-  async function handleSalvar(conteudo: string) {
-    setSalvando(true)
+  async function handleSalvar(conteudo: string, opts?: { silencioso?: boolean }) {
+    const silencioso = opts?.silencioso ?? false
+    if (!silencioso) setSalvando(true)
     try {
       const res = await fetch('/api/ia/salvar-peca', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ pecaId, conteudo }),
+        // Autosave (silencioso) não cria versão; o save manual versiona.
+        body:    JSON.stringify({ pecaId, conteudo, semVersao: silencioso }),
       })
       if (res.ok) {
         setConteudoAtual(conteudo)
-        success('Peça salva!', 'Conteúdo salvo com sucesso.')
+        if (!silencioso) success('Peça salva!', 'Conteúdo salvo com sucesso.')
       } else {
         const data = await res.json()
-        toastError('Erro ao salvar', data.error ?? 'Tente novamente')
+        if (!silencioso) toastError('Erro ao salvar', data.error ?? 'Tente novamente')
       }
     } catch {
-      toastError('Erro', 'Falha de rede')
+      if (!silencioso) toastError('Erro', 'Falha de rede')
     } finally {
-      setSalvando(false)
+      if (!silencioso) setSalvando(false)
     }
   }
 

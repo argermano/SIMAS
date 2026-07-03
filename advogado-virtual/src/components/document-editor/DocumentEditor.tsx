@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo, type ReactNode } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -49,7 +49,7 @@ interface DocumentEditorProps {
   titulo: string
   conteudo: string
   onVoltar: () => void
-  onSalvar?: (conteudo: string) => Promise<void> | void
+  onSalvar?: (conteudo: string, opts?: { silencioso?: boolean }) => Promise<void> | void
   salvando?: boolean
   extraAcoes?: ReactNode
   /** Opções de exportação .docx (ex.: { contrato: true } ou { compacto: true }). */
@@ -64,6 +64,8 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
   const [baixando, setBaixando]       = useState(false)
   const [comandoIaOpen, setComandoIaOpen] = useState(false)
   const [jurisprudenciaOpen, setJurisprudenciaOpen] = useState(false)
+  // Alterações não salvas (dirty). Alimenta o autosave e a guarda de saída.
+  const [temAlteracoes, setTemAlteracoes] = useState(false)
 
   // Converte o markdown inicial para HTML uma vez
   const conteudoHtml = useMemo(() => mdToHtml(conteudo), [conteudo])
@@ -85,6 +87,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
       HighlightPlaceholders,
     ],
     content: conteudoHtml,
+    onUpdate: () => setTemAlteracoes(true),
   })
 
   // Exporta o conteúdo atual como markdown
@@ -92,6 +95,49 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
     if (!editor) return conteudo
     return htmlToMd(editor.getHTML())
   }
+
+  // onSalvar via ref: evita re-disparar os efeitos quando o pai re-renderiza
+  // (handleSalvar do pai não é memoizado).
+  const onSalvarRef = useRef(onSalvar)
+  onSalvarRef.current = onSalvar
+  const salvandoAutoRef = useRef(false)
+
+  // Autosave: salva silenciosamente ~3s após a última edição. O conteúdo gerado
+  // por IA + editado pelo advogado é o ativo mais caro; um clique errado não
+  // pode mais descartá-lo.
+  useEffect(() => {
+    if (!temAlteracoes || !onSalvarRef.current || !editor) return
+    const t = setTimeout(async () => {
+      if (salvandoAutoRef.current) return
+      salvandoAutoRef.current = true
+      try {
+        await onSalvarRef.current?.(getMarkdown(), { silencioso: true })
+        setTemAlteracoes(false)
+      } catch { /* mantém dirty; tenta de novo na próxima edição */ }
+      finally { salvandoAutoRef.current = false }
+    }, 3000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [temAlteracoes, editor])
+
+  // Guarda de fechamento/refresh do navegador quando há alterações não salvas.
+  useEffect(() => {
+    if (!temAlteracoes) return
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [temAlteracoes])
+
+  // Voltar salvando o que estiver pendente (sem confirm intrusivo).
+  const handleVoltar = useCallback(async () => {
+    if (temAlteracoes && onSalvarRef.current && editor) {
+      try {
+        await onSalvarRef.current(htmlToMd(editor.getHTML()), { silencioso: true })
+        setTemAlteracoes(false)
+      } catch { /* segue para a navegação mesmo se o save falhar */ }
+    }
+    onVoltar()
+  }, [temAlteracoes, editor, onVoltar])
 
   const copiar = useCallback(() => {
     navigator.clipboard.writeText(getMarkdown())
@@ -136,12 +182,13 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
       <DocumentHeader
         titulo={titulo}
         onTituloChange={setTitulo}
-        onVoltar={onVoltar}
+        onVoltar={handleVoltar}
         onCopiar={copiar}
         onBaixarDocx={baixarDocx}
         baixando={baixando}
-        onSalvar={onSalvar ? () => onSalvar(getMarkdown()) : undefined}
+        onSalvar={onSalvar ? async () => { await onSalvar(getMarkdown()); setTemAlteracoes(false) } : undefined}
         salvando={salvando}
+        temAlteracoes={temAlteracoes}
         extraAcoes={extraAcoes}
         onComandoIa={() => setComandoIaOpen(true)}
         onBuscarJurisprudencia={() => setJurisprudenciaOpen(true)}
