@@ -13,10 +13,11 @@ import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/
 import { blocoFundamentacaoParaPrompt } from '@/lib/fundamentacao'
 import { SYSTEM_PECA_GENERICA, buildPromptPecaGenerica } from '@/lib/prompts/pecas/generico/peca'
 
-// Geração de peça é a rota de IA mais pesada (streaming longo + jurisprudência +
-// persistência pós-stream). Sem este teto ela cairia no default baixo da Vercel
-// e poderia ser cortada no meio do stream (e o after() de salvamento junto).
-export const maxDuration = 120
+// SEM maxDuration: a geração de peça longa leva 150–275s (medido). Um teto
+// (ex.: 120) MATA a função no meio e a peça sai truncada — foi exatamente o que
+// aconteceu. Sem teto, o stream roda até o fim, como sempre funcionou. Só
+// migrar isto para fila/etapas (B4) se algum dia bater no limite máximo do plano.
+export const maxDuration = 300
 import { buscarModeloPadrao } from '@/lib/modelos/buscar-modelo'
 import { AREAS, type AreaId } from '@/lib/constants/areas'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'

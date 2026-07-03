@@ -5,7 +5,7 @@ import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsagePosStream } from '@/lib/ia/pecas/motor'
 import { logger } from '@/lib/logger'
 
-export const maxDuration = 120
+export const maxDuration = 300 // geração/reescrita de peça pode levar 150-275s; teto baixo cortava a saída
 
 type Acao = 'reescrever' | 'gerar_topico' | 'comando_livre'
 

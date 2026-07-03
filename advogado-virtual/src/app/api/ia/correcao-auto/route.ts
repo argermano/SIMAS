@@ -5,7 +5,7 @@ import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { respostaStreamPeca, logUsagePosStream } from '@/lib/ia/pecas/motor'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 
-export const maxDuration = 120
+export const maxDuration = 300 // geração/reescrita de peça pode levar 150-275s; teto baixo cortava a saída
 
 const SYSTEM = `Você é um advogado revisor. Aplique a correção solicitada à peça e retorne a peça completa corrigida em Markdown. Não adicione explicações, apenas a peça corrigida.`
 

@@ -7,7 +7,7 @@ import { salvarVersaoAnterior } from '@/lib/ia/pecas/motor'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 
-export const maxDuration = 120
+export const maxDuration = 300 // geração/reescrita de peça pode levar 150-275s; teto baixo cortava a saída
 
 // POST /api/ia/refinar-peca — refinar peça com novos documentos
 export async function POST(req: NextRequest) {

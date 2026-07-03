@@ -7,7 +7,7 @@ import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { SYSTEM_REGRAS_FORENSE } from '@/lib/prompts/pecas/regras-formatacao'
 import { logger } from '@/lib/logger'
 
-export const maxDuration = 120
+export const maxDuration = 300 // geração/reescrita de peça pode levar 150-275s; teto baixo cortava a saída
 
 const LABELS_AREA: Record<string, string> = {
   previdenciario: 'Previdenciário',
