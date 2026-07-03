@@ -107,6 +107,62 @@ export async function contarProcessoExato(
 }
 
 /**
+ * Busca UM processo pelo número exato e devolve seus metadados (classe, órgão,
+ * assuntos, movimentos) — para a capa do caso (E2). Best-effort: null em
+ * erro/timeout ou se não localizado. O alias do índice é derivado do próprio nº.
+ */
+export async function buscarProcessoPorNumero(
+  alias: string,
+  numeroLimpo: string,
+  timeoutMs = 12000,
+): Promise<ResultadoJurisprudencia | null> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await fetch(`${DATAJUD_BASE}/api_publica_${alias}/_search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `APIKey ${DATAJUD_API_KEY}`,
+      },
+      body: JSON.stringify({
+        size: 1,
+        query: { term: { numeroProcesso: numeroLimpo } },
+        _source: ['numeroProcesso', 'classe', 'assuntos', 'orgaoJulgador', 'dataAjuizamento', 'dataHoraUltimaAtualizacao', 'grau', 'movimentos'],
+      }),
+      signal: ctrl.signal,
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const hit = data.hits?.hits?.[0]
+    if (!hit) return null
+    const src = hit._source as Record<string, unknown>
+    const assuntos = (src.assuntos as Array<{ nome?: string }>) ?? []
+    const movimentos = (src.movimentos as Array<{ nome?: string; dataHora?: string }>) ?? []
+    const orgao = (src.orgaoJulgador as { nome?: string }) ?? {}
+    const classe = (src.classe as { nome?: string }) ?? {}
+    return {
+      tribunal: alias.toUpperCase(),
+      numeroProcesso: (src.numeroProcesso as string) ?? numeroLimpo,
+      classe: classe.nome ?? '',
+      assuntos: assuntos.map((a) => a.nome ?? '').filter(Boolean),
+      orgaoJulgador: orgao.nome ?? '',
+      dataAjuizamento: (src.dataAjuizamento as string)?.substring(0, 10) ?? '',
+      ultimaAtualizacao: (src.dataHoraUltimaAtualizacao as string)?.substring(0, 10) ?? '',
+      grau: (src.grau as string) ?? '',
+      movimentos: movimentos
+        .filter((m) => m.nome)
+        .slice(-5)
+        .map((m) => ({ nome: m.nome ?? '', data: m.dataHora?.substring(0, 10) ?? '' })),
+    }
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * Consulta um tribunal específico na API DataJud
  */
 async function consultarTribunal(

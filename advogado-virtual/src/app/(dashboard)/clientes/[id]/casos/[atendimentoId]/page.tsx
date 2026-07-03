@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PecasPorArea } from '@/components/atendimento/PecasPorArea'
+import { CapaProcesso, type DadosProcesso } from '@/components/atendimento/CapaProcesso'
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
 import { AREAS } from '@/lib/constants/areas'
 import { MODELOS_PRONTOS, TIPOS_PECA } from '@/lib/constants/tipos-peca'
@@ -53,7 +54,7 @@ export default async function CasoPage({
 
   const { data: at } = await supabase
     .from('atendimentos')
-    .select('id, area, status, created_at, clientes(id, nome), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at), documentos(id, file_name, tipo, created_at)')
+    .select('id, area, status, created_at, numero_processo, dados_processo, clientes(id, nome), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at), documentos(id, file_name, tipo, created_at)')
     .eq('id', atendimentoId)
     .eq('cliente_id', id)
     .eq('tenant_id', usuario.tenant_id)
@@ -132,6 +133,13 @@ export default async function CasoPage({
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-3xl space-y-5">
+
+          {/* Capa do processo (nº CNJ + DataJud) */}
+          <CapaProcesso
+            atendimentoId={atendimentoId}
+            numeroInicial={(at as { numero_processo?: string | null }).numero_processo ?? null}
+            dadosIniciais={(at as { dados_processo?: DadosProcesso | null }).dados_processo ?? null}
+          />
 
           {/* Estudo de Caso */}
           <Card>
