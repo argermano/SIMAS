@@ -4,6 +4,7 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { encryptField } from '@/lib/encryption'
 import { logTranscricao } from '@/lib/anthropic/usage'
+import { validarAudio } from '@/lib/file-validation'
 import Groq from 'groq-sdk'
 
 export const maxDuration = 120
@@ -118,6 +119,13 @@ export async function PATCH(req: Request) {
 
   if (downloadError || !fileBlob) {
     return jsonError('Erro ao baixar áudio do storage', 500)
+  }
+
+  // Segurança (A8): confere os magic bytes do arquivo baixado antes de mandar
+  // ao transcritor — impede que um arquivo disfarçado de áudio seja processado.
+  const cabecalho = new Uint8Array(await fileBlob.slice(0, 16).arrayBuffer())
+  if (!validarAudio(cabecalho)) {
+    return jsonError('O arquivo enviado não é um áudio reconhecido.', 400)
   }
 
   // Determina extensão e mime type do arquivo

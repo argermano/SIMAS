@@ -4,6 +4,7 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { encryptField, decryptField } from '@/lib/encryption'
 import { logTranscricao } from '@/lib/anthropic/usage'
+import { validarAudio } from '@/lib/file-validation'
 
 export const maxDuration = 120
 
@@ -43,6 +44,12 @@ export async function POST(
     const timestamp = Date.now()
     const path = `${usuario.tenant_id}/${id}/audio_${timestamp}.webm`
     const arrayBuffer = await audioFile.arrayBuffer()
+
+    // Segurança (A8): confere os magic bytes — o file.type do cliente não é
+    // confiável. Impede subir/transcrever um arquivo disfarçado de áudio.
+    if (!validarAudio(new Uint8Array(arrayBuffer.slice(0, 16)))) {
+      return jsonError('O arquivo enviado não é um áudio reconhecido.', 400)
+    }
 
     const { error: uploadError } = await supabase.storage
       .from('documentos')
