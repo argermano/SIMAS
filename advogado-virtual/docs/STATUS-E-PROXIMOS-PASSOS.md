@@ -31,6 +31,10 @@ Tudo com `tsc` limpo, build de produção ok e a suíte de testes passando (subi
 | Anti-alucinação B5.1 | `3ed1764` | **DataJud vira estatística, não jurisprudência citável** — parou de induzir o modelo a citar número de processo (sem ementa/resultado) como precedente |
 | Anti-alucinação B5.2 | `124aa8e` | **Verificador determinístico de citações** no painel "Revisar peça": nº CNJ (dígito verificador), súmula (faixa por tribunal) e lei (base local) → verificada ✓ / a conferir ⚠ / suspeita ✗ |
 | Anti-alucinação B5.2 online | `16648de` | **Verificação online** eleva ⚠→✓/✗: **LexML** confirma existência de lei federal; **DataJud** confirma processo por nº exato. Roda em paralelo com o LLM. Limites: LexML só federal/nível de lei; DataJud lento (best-effort) |
+| CI D9 | `41af1e9` | **GitHub Actions** roda typecheck + 137 testes + build em todo push/PR (antes nada rodava em PR) |
+| Segurança A8(c) | `aec360b` | **Magic bytes de áudio** validados no upload/transcrição — arquivo disfarçado de áudio é rejeitado antes de processar |
+| E-mails D4 | `de32cf2` | Autor recebe e-mail quando a peça é **aprovada** ou **rejeitada** (com motivo) — fecha o ciclo do colaborador; envio reutilizável via Resend |
+| Observabilidade D3 | `5e1a7bc` | `onRequestError` app-wide + `logger.ts` estruturado nas 8 rotas de IA críticas — erro em produção deixa de ser invisível (logs pesquisáveis na Vercel; gancho pronto para Sentry) |
 
 **Onde a Segurança P0 está:** A2, A3 e A8 **completos**. É o que torna seguro colocar dados reais de cliente.
 
@@ -57,14 +61,15 @@ Estas dependem de você e do ambiente (Vercel/Supabase) — não são código.
 
 ## 3. Recomendado ANTES de dados reais (posso executar quando quiser)
 
-Itens de "prontidão para piloto" que **não dependem de decisão comercial** e que valem para operar com dados reais com segurança/visibilidade. Ordem sugerida:
+Itens de "prontidão para piloto" que **não dependem de decisão comercial** e que valem para operar com dados reais com segurança/visibilidade.
 
-> **Já feitos nesta 2ª leva:** ✅ **C1** (autosave + guarda de saída no editor, painel de assinatura acessível, dark mode legível, labels centralizados) e ✅ **B2** (rede de segurança server-side da geração). Eram os itens que evitavam perda de trabalho no uso real.
+> **Já feitos:** ✅ **C1** e ✅ **B2** (perda de trabalho); ✅ **B5.1/B5.2 + online** (anti-alucinação de citações); ✅ **D9** (CI), ✅ **A8(c)** (magic bytes de áudio), ✅ **D4** (e-mail de peça aprovada/rejeitada), ✅ **D3** (observabilidade — `onRequestError` app-wide + `logger.ts` nas rotas de IA críticas).
 
-1. **Observabilidade (D3) — mais importante para um piloto.** Hoje errar em produção é **invisível**: não há Sentry/analytics, e o `logger.ts` estruturado existe mas nenhuma rota o usa (usam `console.*`). Num piloto real você precisa saber o que quebra. Escopo: Sentry (client+server) + adotar o `logger.ts` nas rotas + alerta de custo de IA por tenant. Baixo risco.
-2. **E-mails transacionais (D4).** Completar com a identidade que já existe (`lib/email.ts`): boas-vindas, peça aprovada/rejeitada com motivo, prazo de tarefa. Hoje sem `RESEND_API_KEY` o convite "funciona" e o e-mail silenciosamente não sai.
-3. **Portabilidade/retenção LGPD (D7, versão mínima).** Endpoint de **exportação** dos dados de um cliente (JSON/ZIP) e política de retenção de áudios/transcrições. Menos urgente com um só escritório, mas é o que fecha o ciclo LGPD antes de escalar.
-4. **Fila para jobs longos (D5).** Só vira necessário quando for ligar o **pipeline multi-etapa do motor (B4/B5)** — ver seção 5. Não é pré-requisito do piloto básico.
+O que ainda faz sentido antes/no início do piloto:
+
+1. **Sentry (fecha o D3).** O gancho já existe no `onRequestError`; falta a conta + `SENTRY_DSN` (ação sua) e ligar o SDK para ter **alerta** quando erro dispara (hoje os logs estruturados já aparecem no painel da Vercel, mas sem alerta ativo).
+2. **Portabilidade/retenção LGPD (D7, versão mínima).** Endpoint de **exportação** dos dados de um cliente (JSON/ZIP) e política de retenção de áudios/transcrições. Menos urgente com um só escritório, mas fecha o ciclo LGPD antes de escalar.
+3. **Fila para jobs longos (D5).** Só vira necessário para o **pipeline multi-etapa do motor (B4)** e para **e-mail de prazo de tarefa** (precisa de agendador). Não é pré-requisito do piloto básico.
 
 *Rate limiting real (D6) é baixa prioridade para um único escritório (pouca concorrência).*
 
