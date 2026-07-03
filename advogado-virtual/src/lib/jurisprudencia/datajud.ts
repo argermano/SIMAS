@@ -157,29 +157,44 @@ async function consultarTribunal(
 }
 
 /**
- * Formata resultados de jurisprudência para inclusão no prompt da IA
+ * Formata os resultados do DataJud para inclusão no prompt da IA — como
+ * ESTATÍSTICA de volume processual, NÃO como jurisprudência.
+ *
+ * O DataJud é uma base de METADADOS de acompanhamento processual do CNJ: ele
+ * devolve número, classe, assunto, órgão e movimentações — mas NÃO a ementa, o
+ * relator, a tese ou o resultado do julgamento. Apresentar esses números como
+ * "jurisprudência consultada" e mandar o modelo citá-los induzia à alucinação
+ * (número real vestido de ementa inventada, ou processo citado "a favor" que na
+ * verdade foi julgado improcedente). Por isso o dado entra apenas como medida
+ * de litigiosidade do tema, explicitamente não citável como precedente.
  */
 export function formatarParaPrompt(resultados: ResultadoJurisprudencia[]): string {
   if (resultados.length === 0) return ''
 
-  const linhas = resultados.map((r, i) => {
-    const assuntos = r.assuntos.join(', ')
-    const ultimoMovimento = r.movimentos.at(-1)
-    return [
-      `[${i + 1}] ${r.tribunal} — Processo ${r.numeroProcesso}`,
-      `    Classe: ${r.classe}`,
-      `    Órgão julgador: ${r.orgaoJulgador}`,
-      `    Assuntos: ${assuntos}`,
-      `    Data ajuizamento: ${r.dataAjuizamento}`,
-      ultimoMovimento ? `    Último movimento: ${ultimoMovimento.nome} (${ultimoMovimento.data})` : '',
-    ].filter(Boolean).join('\n')
-  })
+  const total = resultados.length
+
+  // Volume por tribunal (ex.: "TRF4 (3), TRF1 (2)")
+  const porTribunal = new Map<string, number>()
+  for (const r of resultados) {
+    if (r.tribunal) porTribunal.set(r.tribunal, (porTribunal.get(r.tribunal) ?? 0) + 1)
+  }
+  const tribunaisLinha = [...porTribunal.entries()]
+    .map(([t, n]) => `${t} (${n})`)
+    .join(', ')
+
+  // Assuntos distintos predominantes (metadado de classificação do CNJ)
+  const assuntos = [...new Set(resultados.flatMap((r) => r.assuntos))].filter(Boolean).slice(0, 8)
 
   return [
-    '=== JURISPRUDÊNCIA CONSULTADA (DataJud/CNJ) ===',
+    '=== ESTATÍSTICA PROCESSUAL (DataJud/CNJ) — NÃO É JURISPRUDÊNCIA ===',
     '',
-    ...linhas,
+    `Localizados ${total} processo(s) sobre o tema nos tribunais consultados${tribunaisLinha ? `: ${tribunaisLinha}` : ''}.`,
+    assuntos.length ? `Assuntos predominantes (classificação CNJ): ${assuntos.join('; ')}.` : '',
     '',
-    '=== FIM DA JURISPRUDÊNCIA ===',
-  ].join('\n')
+    'NATUREZA DESTE DADO: levantamento de VOLUME processual (metadado de',
+    'acompanhamento). NÃO contém ementas, teses nem resultados de julgamento.',
+    'Serve apenas para dimensionar que o tema é litigado. NÃO cite estes',
+    'processos como precedente e NÃO construa ementas a partir deles.',
+    '=== FIM DA ESTATÍSTICA ===',
+  ].filter(Boolean).join('\n')
 }

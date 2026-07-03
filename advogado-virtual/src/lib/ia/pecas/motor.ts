@@ -82,7 +82,7 @@ export function anexarModeloEJurisprudencia(
     out += `\n\n## MODELO DE REFERÊNCIA DO ESCRITÓRIO\nUse o modelo abaixo apenas como REFERÊNCIA DE ESTRUTURA (seções, ordem e tom de escrita) — NÃO copie o conteúdo dele. A apresentação visual (fonte, margens, entrelinha, recuo) é aplicada automaticamente na exportação; não tente reproduzi-la no texto. Adapte a estrutura ao caso concreto:\n\n${opts.modeloPadrao}`
   }
   if (opts.jurisprudenciaTexto) {
-    out += `\n\n${opts.jurisprudenciaTexto}\n\nUse a jurisprudência acima como referência para fundamentar a peça. Cite os processos relevantes quando aplicável.`
+    out += `\n\n${opts.jurisprudenciaTexto}\n\nUse os dados acima APENAS como estatística de litigiosidade do tema — jamais como fundamentação citável. NÃO cite os números de processo do DataJud como precedente e NÃO invente ementas a partir deles. Qualquer jurisprudência (súmula, acórdão, ementa) que você mencionar de conhecimento próprio DEVE vir marcada com [VERIFICAR], para conferência humana — nunca apresente como confirmada uma decisão que não foi fornecida no material do caso.`
   }
   return out
 }
