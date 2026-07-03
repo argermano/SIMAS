@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { d4signDownloadDocument } from '@/lib/d4sign/client'
+import { getProvedorAssinatura } from '@/lib/assinatura'
 import type { D4SignWebhookPayload } from '@/lib/d4sign/types'
-
-const D4SIGN_STATUS_MAP: Record<string, string> = {
-  '1': 'uploaded',
-  '2': 'waiting_signatures',
-  '3': 'waiting_signatures',
-  '4': 'download_ready',
-  '5': 'completed',
-  '6': 'cancelled',
-}
 
 function timingSafeEqualStr(a: string, b: string): boolean {
   const ab = Buffer.from(a)
@@ -74,7 +65,8 @@ export async function POST(req: NextRequest) {
 
   if (!signature) return NextResponse.json({ ok: true }) // documento desconhecido — ignorar
 
-  const novoStatus = D4SIGN_STATUS_MAP[status]
+  const provedor = getProvedorAssinatura()
+  const novoStatus = provedor.mapearStatusWebhook(status)
   if (!novoStatus) return NextResponse.json({ ok: true })
 
   // Idempotência
@@ -83,9 +75,9 @@ export async function POST(req: NextRequest) {
   const update: Record<string, unknown> = { status: novoStatus }
 
   // Documento finalizado — baixar e salvar URL
-  if (status === '4') {
+  if (novoStatus === 'download_ready') {
     try {
-      const downloadUrl = await d4signDownloadDocument(uuid)
+      const downloadUrl = await provedor.urlDocumentoAssinado(uuid)
       if (downloadUrl) update.signed_file_url = downloadUrl
       update.completed_at = new Date().toISOString()
     } catch { /* silencioso — atualiza status mesmo se download falhar */ }
@@ -108,12 +100,12 @@ export async function POST(req: NextRequest) {
     } catch { /* silencioso */ }
   }
 
-  if (status === '6') {
+  if (novoStatus === 'cancelled') {
     update.cancelled_at = new Date().toISOString()
   }
 
-  // Atualizar signatários se finalizou (status "4")
-  if (status === '4') {
+  // Atualizar signatários se finalizou (documento pronto)
+  if (novoStatus === 'download_ready') {
     // Marcar todos como assinados (não temos detalhe por signatário via webhook genérico)
     await supabase
       .from('contract_signature_signers')

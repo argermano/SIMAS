@@ -2,15 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { d4signGetStatus, d4signGetSigningLink, d4signCancelDocument } from '@/lib/d4sign/client'
-
-const D4SIGN_STATUS_MAP: Record<string, string> = {
-  '1': 'uploaded',
-  '2': 'waiting_signatures',
-  '3': 'waiting_signatures',
-  '4': 'completed',
-  '5': 'completed',
-  '6': 'cancelled',
-}
+import { mapearStatusD4Sign } from '@/lib/assinatura'
 
 // GET /api/contratos/[id]/assinatura
 export async function GET(
@@ -82,11 +74,15 @@ export async function PATCH(
 
   try {
     const docStatus = await d4signGetStatus(signature.d4sign_uuid)
-    const novoStatus = D4SIGN_STATUS_MAP[docStatus?.statusDoc?.id] ?? signature.status
+    const novoStatus = mapearStatusD4Sign(docStatus?.statusDoc?.id) ?? signature.status
 
     if (novoStatus !== signature.status) {
       const update: Record<string, unknown> = { status: novoStatus }
-      if (novoStatus === 'completed') update.completed_at = new Date().toISOString()
+      // Trata download_ready ('4') e completed ('5') como finalização — preserva
+      // o comportamento antigo (que marcava '4' como completed) com o mapa único.
+      if (novoStatus === 'download_ready' || novoStatus === 'completed') {
+        update.completed_at = new Date().toISOString()
+      }
       await supabase.from('contract_signatures').update(update).eq('id', signature.id)
     }
 
