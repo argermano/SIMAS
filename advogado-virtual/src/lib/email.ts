@@ -3,6 +3,8 @@
  * Cores: primary #4f5fcc (índigo), foreground #1e293b, muted #94a3b8
  */
 
+import { logger } from './logger'
+
 interface EmailTemplateOptions {
   titulo: string
   conteudo: string
@@ -63,3 +65,88 @@ export function emailTemplate({ titulo, conteudo, botao, rodape }: EmailTemplate
 </body>
 </html>`
 }
+
+/** Escapa texto do usuário antes de interpolar no HTML do e-mail. */
+function escaparHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ))
+}
+
+function baseUrl(): string {
+  return process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+}
+
+/**
+ * Envia um e-mail via Resend. Retorna `true` se saiu, `false` se não há
+ * RESEND_API_KEY (feature desligada) ou se o envio falhou — nunca lança, para
+ * não derrubar a operação principal (a notificação é um efeito colateral).
+ */
+export async function enviarEmail(opts: { para: string; assunto: string; html: string }): Promise<boolean> {
+  if (!process.env.RESEND_API_KEY) {
+    logger.warn('email.resend_ausente', { assunto: opts.assunto })
+    return false
+  }
+  try {
+    const { Resend } = await import('resend')
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    await resend.emails.send({
+      from: 'SIMAS <contato@simas.app>',
+      to: opts.para,
+      subject: opts.assunto,
+      html: opts.html,
+    })
+    return true
+  } catch (err) {
+    logger.error('email.envio_falha', { assunto: opts.assunto }, err)
+    return false
+  }
+}
+
+interface NotificacaoPeca {
+  para: string
+  nomeAutor: string
+  descricaoPeca: string   // ex.: "Petição Inicial (Previdenciário)"
+  cliente?: string | null
+  pecaUrl: string
+}
+
+/** Notifica o autor de que sua peça foi APROVADA na revisão. */
+export function enviarEmailPecaAprovada(n: NotificacaoPeca): Promise<boolean> {
+  const cli = n.cliente ? ` do cliente <strong>${escaparHtml(n.cliente)}</strong>` : ''
+  return enviarEmail({
+    para: n.para,
+    assunto: 'Sua peça foi aprovada ✓',
+    html: emailTemplate({
+      titulo: `Peça aprovada, ${escaparHtml(n.nomeAutor)}!`,
+      conteudo: `
+        <p>Boa notícia: sua peça <strong>${escaparHtml(n.descricaoPeca)}</strong>${cli} foi <strong>aprovada</strong> na revisão.</p>
+        <p>Ela já está liberada como rascunho para finalização e exportação.</p>
+      `,
+      botao: { texto: 'Abrir a peça', url: n.pecaUrl },
+    }),
+  })
+}
+
+/** Notifica o autor de que sua peça foi DEVOLVIDA (rejeitada), com o motivo. */
+export function enviarEmailPecaRejeitada(n: NotificacaoPeca & { motivo: string }): Promise<boolean> {
+  const cli = n.cliente ? ` do cliente <strong>${escaparHtml(n.cliente)}</strong>` : ''
+  return enviarEmail({
+    para: n.para,
+    assunto: 'Sua peça precisa de ajustes',
+    html: emailTemplate({
+      titulo: 'Peça devolvida para ajustes',
+      conteudo: `
+        <p>Olá, ${escaparHtml(n.nomeAutor)}. Sua peça <strong>${escaparHtml(n.descricaoPeca)}</strong>${cli} foi <strong>devolvida</strong> na revisão.</p>
+        <p style="margin:16px 0 6px;"><strong>Motivo apontado pelo revisor:</strong></p>
+        <blockquote style="margin:0;padding:12px 16px;border-left:3px solid #4f5fcc;background:#f8f9fc;color:#475569;border-radius:6px;">
+          ${escaparHtml(n.motivo)}
+        </blockquote>
+        <p style="margin-top:16px;">Revise os pontos e reenvie a peça para nova revisão.</p>
+      `,
+      botao: { texto: 'Abrir a peça', url: n.pecaUrl },
+    }),
+  })
+}
+
+export { baseUrl as urlBaseApp }

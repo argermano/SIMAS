@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { enviarEmailPecaAprovada, urlBaseApp } from '@/lib/email'
+import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
+import { LABELS_AREA } from '@/types'
 
 const ROLES_REVISORES = ['admin', 'advogado']
+
+/** Monta uma descrição legível da peça para a notificação (ex.: "Réplica (Cível)"). */
+function descreverPeca(tipo: string, area: string): string {
+  const nomeTipo = TIPOS_PECA[tipo]?.nome ?? tipo
+  const nomeArea = LABELS_AREA[area as keyof typeof LABELS_AREA] ?? area
+  return `${nomeTipo} (${nomeArea})`
+}
 
 // POST /api/pecas/[id]/aprovar — aprova peça em fila de revisão
 export async function POST(
@@ -28,7 +38,7 @@ export async function POST(
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .eq('status', 'aguardando_revisao')
-    .select('id, status')
+    .select('id, status, area, tipo, autor:users!pecas_created_by_fkey(nome, email), atendimentos(clientes(nome))')
     .single()
 
   if (error || !peca) {
@@ -67,5 +77,20 @@ export async function POST(
       .eq('id', taskRevisao.id)
   }
 
-  return NextResponse.json({ ok: true, peca })
+  // Notifica o autor (o colaborador perde a peça de vista ao enviar; o e-mail
+  // fecha o ciclo). Efeito colateral best-effort — não bloqueia o resultado.
+  const autor = peca.autor as unknown as { nome?: string; email?: string } | null
+  const cliente = (peca.atendimentos as unknown as { clientes?: { nome?: string } | null } | null)?.clientes?.nome ?? null
+  let emailNotificado = false
+  if (autor?.email) {
+    emailNotificado = await enviarEmailPecaAprovada({
+      para: autor.email,
+      nomeAutor: autor.nome ?? 'colega',
+      descricaoPeca: descreverPeca(peca.tipo, peca.area),
+      cliente,
+      pecaUrl: `${urlBaseApp()}/${peca.area}/editor/${id}`,
+    })
+  }
+
+  return NextResponse.json({ ok: true, peca: { id: peca.id, status: peca.status }, emailNotificado })
 }

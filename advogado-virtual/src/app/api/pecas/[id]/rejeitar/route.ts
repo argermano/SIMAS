@@ -2,8 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { z } from 'zod'
+import { enviarEmailPecaRejeitada, urlBaseApp } from '@/lib/email'
+import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
+import { LABELS_AREA } from '@/types'
 
 const ROLES_REVISORES = ['admin', 'advogado']
+
+function descreverPeca(tipo: string, area: string): string {
+  const nomeTipo = TIPOS_PECA[tipo]?.nome ?? tipo
+  const nomeArea = LABELS_AREA[area as keyof typeof LABELS_AREA] ?? area
+  return `${nomeTipo} (${nomeArea})`
+}
 
 const schema = z.object({
   motivo: z.string().min(1, 'Motivo é obrigatório'),
@@ -37,12 +46,28 @@ export async function POST(
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .eq('status', 'aguardando_revisao')
-    .select('id, status')
+    .select('id, status, area, tipo, autor:users!pecas_created_by_fkey(nome, email), atendimentos(clientes(nome))')
     .single()
 
   if (error || !peca) {
     return jsonError('Peça não encontrada ou não está aguardando revisão', 404)
   }
 
-  return NextResponse.json({ ok: true, peca })
+  // Notifica o autor com o motivo — sem isso, o colaborador não sabe que a peça
+  // voltou nem por quê. Best-effort, não bloqueia o resultado.
+  const autor = peca.autor as unknown as { nome?: string; email?: string } | null
+  const cliente = (peca.atendimentos as unknown as { clientes?: { nome?: string } | null } | null)?.clientes?.nome ?? null
+  let emailNotificado = false
+  if (autor?.email) {
+    emailNotificado = await enviarEmailPecaRejeitada({
+      para: autor.email,
+      nomeAutor: autor.nome ?? 'colega',
+      descricaoPeca: descreverPeca(peca.tipo, peca.area),
+      cliente,
+      motivo: parsed.data.motivo,
+      pecaUrl: `${urlBaseApp()}/${peca.area}/editor/${id}`,
+    })
+  }
+
+  return NextResponse.json({ ok: true, peca: { id: peca.id, status: peca.status }, emailNotificado })
 }
