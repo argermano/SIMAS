@@ -9,17 +9,9 @@ import { BotoesRevisao } from './BotoesRevisao'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import { Calendar, ScrollText, User, ChevronRight } from 'lucide-react'
 import { formatarDataRelativa } from '@/lib/utils'
+import { LABELS_AREA } from '@/types'
 
 const ROLES_REVISORES = ['admin', 'advogado']
-
-const LABELS_AREA: Record<string, string> = {
-  previdenciario: 'Previdenciário',
-  civel:          'Cível',
-  trabalhista:    'Trabalhista',
-  criminal:       'Criminal',
-  tributario:     'Tributário',
-  empresarial:    'Empresarial',
-}
 
 export default async function RevisaoPage() {
   const supabase = await createClient()
@@ -97,7 +89,7 @@ export default async function RevisaoPage() {
                               {tipoPeca?.nome ?? peca.tipo}
                             </span>
                             <Badge variant="secondary" className="text-xs">
-                              {LABELS_AREA[peca.area] ?? peca.area}
+                              {LABELS_AREA[peca.area as keyof typeof LABELS_AREA] ?? peca.area}
                             </Badge>
                             <Badge variant="warning" className="text-xs">
                               Aguardando Revisão

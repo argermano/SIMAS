@@ -15,7 +15,7 @@ interface ValidacaoData {
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
   validado:     <CheckCircle className="h-4 w-4 text-success" />,
-  parcial:      <AlertTriangle className="h-4 w-4 text-amber-600" />,
+  parcial:      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
   nao_validado: <XCircle className="h-4 w-4 text-destructive" />,
   inconsistente: <XCircle className="h-4 w-4 text-destructive" />,
 }
@@ -28,8 +28,8 @@ const STATUS_BADGE: Record<string, string> = {
 }
 
 function ScoreCircle({ score }: { score: number }) {
-  const cor = score >= 80 ? 'text-success' : score >= 60 ? 'text-amber-600' : 'text-destructive'
-  const bgCor = score >= 80 ? 'border-success/20' : score >= 60 ? 'border-amber-200' : 'border-destructive/20'
+  const cor = score >= 80 ? 'text-success' : score >= 60 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'
+  const bgCor = score >= 80 ? 'border-success/20' : score >= 60 ? 'border-amber-200 dark:border-amber-900' : 'border-destructive/20'
   return (
     <div className={`flex h-20 w-20 items-center justify-center rounded-full border-4 ${bgCor}`}>
       <span className={`text-2xl font-bold ${cor}`}>{score}</span>

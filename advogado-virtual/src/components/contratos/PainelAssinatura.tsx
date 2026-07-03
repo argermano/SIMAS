@@ -40,8 +40,8 @@ interface PainelAssinaturaProps {
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   draft:               { label: 'Rascunho',          color: 'bg-muted text-muted-foreground',    icon: <Clock className="h-3.5 w-3.5" /> },
-  uploaded:            { label: 'Enviado',            color: 'bg-blue-100 text-blue-700',    icon: <Clock className="h-3.5 w-3.5" /> },
-  signers_registered:  { label: 'Signatários ok',     color: 'bg-blue-100 text-blue-700',    icon: <Clock className="h-3.5 w-3.5" /> },
+  uploaded:            { label: 'Enviado',            color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',    icon: <Clock className="h-3.5 w-3.5" /> },
+  signers_registered:  { label: 'Signatários ok',     color: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',    icon: <Clock className="h-3.5 w-3.5" /> },
   waiting_signatures:  { label: 'Aguardando',         color: 'bg-warning/10 text-warning',  icon: <Clock className="h-3.5 w-3.5" /> },
   completed:           { label: 'Concluída',          color: 'bg-success/10 text-success',  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
   download_ready:      { label: 'Assinado',           color: 'bg-success/10 text-success',  icon: <CheckCircle2 className="h-3.5 w-3.5" /> },

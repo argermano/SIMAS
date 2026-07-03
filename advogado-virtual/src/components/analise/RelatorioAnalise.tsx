@@ -99,10 +99,10 @@ export function RelatorioAnalise({ data, onGerarPeca }: { data: AnaliseData; onG
           </Card>
         )}
         {data.plano_b && (
-          <Card className="border-amber-200">
+          <Card className="border-amber-200 dark:border-amber-900">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
-                <ShieldAlert className="h-4 w-4 text-amber-600" />
+                <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                 Plano B
               </CardTitle>
             </CardHeader>
@@ -123,7 +123,7 @@ export function RelatorioAnalise({ data, onGerarPeca }: { data: AnaliseData; onG
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               Riscos ({data.riscos.length})
             </CardTitle>
           </CardHeader>

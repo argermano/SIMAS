@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { History } from 'lucide-react'
 import { formatarDataRelativa } from '@/lib/utils'
-import type { AtendimentoStatus } from '@/types'
+import { LABELS_AREA, type AtendimentoStatus } from '@/types'
 
 export const metadata = { title: 'Histórico' }
 
@@ -15,15 +15,6 @@ const BADGE_STATUS: Record<AtendimentoStatus, { variant: 'success' | 'warning' |
   caso_novo:   { variant: 'warning',   label: 'Caso Novo'   },
   peca_gerada: { variant: 'secondary', label: 'Peça Gerada' },
   finalizado:  { variant: 'success',   label: 'Finalizado'  },
-}
-
-const LABELS_AREA: Record<string, string> = {
-  previdenciario: 'Previdenciário',
-  trabalhista:    'Trabalhista',
-  civel:          'Cível',
-  criminal:       'Criminal',
-  tributario:     'Tributário',
-  empresarial:    'Empresarial',
 }
 
 export default async function HistoricoPage() {
@@ -85,7 +76,7 @@ export default async function HistoricoPage() {
                             {cliente?.nome ?? 'Cliente'}
                           </p>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span>{LABELS_AREA[at.area] ?? at.area}</span>
+                            <span>{LABELS_AREA[at.area as keyof typeof LABELS_AREA] ?? at.area}</span>
                             <span>·</span>
                             <span>{formatarDataRelativa(at.created_at)}</span>
                           </div>

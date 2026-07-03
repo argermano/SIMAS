@@ -39,7 +39,7 @@ const TITULOS_CONSULTORIA: Record<string, string> = {
 
 const COR_URGENCIA: Record<string, string> = {
   alta:  'border-destructive/20 bg-destructive/5 text-destructive',
-  media: 'border-amber-200 bg-amber-50 text-amber-800',
+  media: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200',
   baixa: 'border-success/20 bg-success/5 text-success',
 }
 const ICONE_URGENCIA: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -550,7 +550,7 @@ export function ConsultoriaClient({
           }
         >
           {!tipoServico && (
-            <p className="mb-3 text-xs text-warning bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="mb-3 text-xs text-warning bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg px-3 py-2">
               Tipo de serviço não definido. Exibindo lista para <strong>Administrativo</strong>.
             </p>
           )}
@@ -562,12 +562,12 @@ export function ConsultoriaClient({
           ) : (
             <ul className="space-y-2">
               {checklistFaltante.map((item) => (
-                <li key={item.id} className="flex items-start gap-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5">
+                <li key={item.id} className="flex items-start gap-3 rounded-lg border border-amber-100 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-3 py-2.5">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                   <div>
                     <p className="text-sm font-medium text-foreground">{item.nome}</p>
                     {item.obrigatorio && (
-                      <span className="text-xs text-amber-600">Obrigatório</span>
+                      <span className="text-xs text-amber-600 dark:text-amber-400">Obrigatório</span>
                     )}
                   </div>
                 </li>

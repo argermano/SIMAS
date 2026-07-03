@@ -52,7 +52,7 @@ function KanbanColumnBase({ id, name, color, tasks, onNewTask, onTaskClick }: Ka
         ref={setNodeRef}
         className={cn(
           'flex flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 min-h-[120px]',
-          isOver && 'bg-blue-50 rounded-b-xl'
+          isOver && 'bg-blue-50 dark:bg-blue-950/40 rounded-b-xl'
         )}
       >
         <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>

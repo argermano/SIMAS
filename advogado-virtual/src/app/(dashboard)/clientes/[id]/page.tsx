@@ -428,12 +428,12 @@ export default async function DossieClientePage({
                                           peca.status === 'rascunho'  ? Edit3 : Clock
                                         return (
                                           <Link key={peca.id} href={`/${peca.area}/editor/${peca.id}`}
-                                            className="flex items-center gap-3 rounded-lg bg-emerald-50/60 px-3 py-2 text-sm hover:bg-emerald-100/60 transition-colors group"
+                                            className="flex items-center gap-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40/60 px-3 py-2 text-sm hover:bg-emerald-100 dark:bg-emerald-900/40/60 transition-colors group"
                                           >
                                             <ScrollText className="h-4 w-4 text-emerald-500 shrink-0" />
                                             <div className="min-w-0 flex-1">
                                               <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="font-medium text-emerald-900 group-hover:text-emerald-800">{tipoPeca?.nome ?? peca.tipo}</span>
+                                                <span className="font-medium text-emerald-900 dark:text-emerald-200 group-hover:text-emerald-800 dark:text-emerald-200">{tipoPeca?.nome ?? peca.tipo}</span>
                                                 {pcArea && (
                                                   <span className={`rounded-full px-1.5 py-0 text-[10px] font-semibold ${pcArea.corBg} ${pcArea.corTexto}`}>
                                                     {pcArea.nome}
@@ -455,12 +455,12 @@ export default async function DossieClientePage({
                                         const ctBadge = BADGE_CONTRATO_STATUS[contrato.status] ?? BADGE_CONTRATO_STATUS.rascunho
                                         return (
                                           <Link key={contrato.id} href={`/contratos/${contrato.id}`}
-                                            className="flex items-center gap-3 rounded-lg bg-blue-50/60 px-3 py-2 text-sm hover:bg-blue-100/60 transition-colors group"
+                                            className="flex items-center gap-3 rounded-lg bg-blue-50 dark:bg-blue-950/40/60 px-3 py-2 text-sm hover:bg-blue-100 dark:bg-blue-900/40/60 transition-colors group"
                                           >
                                             <FileSignature className="h-4 w-4 text-blue-500 shrink-0" />
                                             <div className="min-w-0 flex-1">
                                               <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="font-medium text-blue-900 group-hover:text-blue-800">{contrato.titulo}</span>
+                                                <span className="font-medium text-blue-900 dark:text-blue-200 group-hover:text-blue-800 dark:text-blue-200">{contrato.titulo}</span>
                                                 <Badge variant={ctBadge.variant} className="text-xs px-1.5 py-0">{ctBadge.label}</Badge>
                                               </div>
                                               {(contrato.valor_fixo || contrato.percentual_exito) && (
@@ -511,7 +511,7 @@ export default async function DossieClientePage({
                   <FileSignature className="h-5 w-5 text-muted-foreground" />
                   Contratos de Honorários
                   {contratosList.length > 0 && (
-                    <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                    <span className="ml-1 rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
                       {contratosList.length}
                     </span>
                   )}
@@ -538,12 +538,12 @@ export default async function DossieClientePage({
                       <Link
                         key={contrato.id}
                         href={`/contratos/${contrato.id}`}
-                        className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm hover:border-blue-200 hover:bg-blue-50/40 transition-colors group"
+                        className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm hover:border-blue-200 dark:border-blue-900 hover:bg-blue-50 dark:bg-blue-950/40/40 transition-colors group"
                       >
                         <FileSignature className="h-5 w-5 shrink-0 text-blue-500" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-foreground group-hover:text-blue-900">{contrato.titulo}</span>
+                            <span className="font-semibold text-foreground group-hover:text-blue-900 dark:text-blue-200">{contrato.titulo}</span>
                             <Badge variant={ctBadge.variant} className="text-xs px-1.5 py-0">{ctBadge.label}</Badge>
                             {contrato.area && (
                               <span className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5">
@@ -610,9 +610,9 @@ function ResumoCard({
   const cores = {
     primary: { bg: 'bg-primary/5',  text: 'text-primary',  ring: 'ring-primary/40'  },
     violet:  { bg: 'bg-primary/5',   text: 'text-primary',   ring: 'ring-primary/40'   },
-    emerald: { bg: 'bg-emerald-50',  text: 'text-emerald-600',  ring: 'ring-emerald-400'  },
-    amber:   { bg: 'bg-amber-50',    text: 'text-amber-600',    ring: 'ring-amber-400'    },
-    blue:    { bg: 'bg-blue-50',     text: 'text-blue-600',     ring: 'ring-blue-400'     },
+    emerald: { bg: 'bg-emerald-50 dark:bg-emerald-950/40',  text: 'text-emerald-600',  ring: 'ring-emerald-400'  },
+    amber:   { bg: 'bg-amber-50 dark:bg-amber-950/40',    text: 'text-amber-600 dark:text-amber-400',    ring: 'ring-amber-400'    },
+    blue:    { bg: 'bg-blue-50 dark:bg-blue-950/40',     text: 'text-blue-600',     ring: 'ring-blue-400'     },
   }
   const { bg, text, ring } = cores[cor]
   return (

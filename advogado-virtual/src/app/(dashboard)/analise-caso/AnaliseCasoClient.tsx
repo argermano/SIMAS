@@ -27,7 +27,7 @@ import { ChatDiagnostico } from '@/components/atendimento/ChatDiagnostico'
 
 const COR_URGENCIA: Record<string, string> = {
   alta:  'border-destructive/20 bg-destructive/5 text-destructive',
-  media: 'border-amber-200 bg-amber-50 text-amber-800',
+  media: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-200',
   baixa: 'border-success/20 bg-success/5 text-success',
 }
 const ICONE_URGENCIA: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -729,8 +729,8 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
 
           {/* Observações */}
           {resultado.observacoes && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-sm font-semibold text-amber-800 mb-1">Observações</p>
+            <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-4 py-3">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">Observações</p>
               <p className="text-sm text-warning">{resultado.observacoes}</p>
             </div>
           )}

@@ -16,7 +16,7 @@ export function PainelArea({ area }: PainelAreaProps) {
 
       {/* Análise de Caso com IA */}
       <Link href="/analise-caso" className="group block">
-        <div className="flex items-center gap-5 rounded-2xl border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-white p-6 transition-all hover:border-primary/40 hover:shadow-md">
+        <div className="flex items-center gap-5 rounded-2xl border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-white dark:to-card p-6 transition-all hover:border-primary/40 hover:shadow-md">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
             <Brain className="h-7 w-7 text-primary" />
           </div>
@@ -68,12 +68,12 @@ export function PainelArea({ area }: PainelAreaProps) {
 
       {/* Refinamento de Peça */}
       <Link href={`/${area.id}/refinamento`} className="group block">
-        <div className="flex items-center gap-5 rounded-2xl border-2 border-emerald-200 bg-gradient-to-r from-emerald-50 to-white p-6 transition-all hover:border-emerald-400 hover:shadow-md">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-100">
+        <div className="flex items-center gap-5 rounded-2xl border-2 border-emerald-200 dark:border-emerald-900 bg-gradient-to-r from-emerald-50 to-white dark:to-card p-6 transition-all hover:border-emerald-400 hover:shadow-md">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/40">
             <RefreshCw className="h-7 w-7 text-emerald-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-bold text-foreground group-hover:text-emerald-700">
+            <h2 className="text-lg font-bold text-foreground group-hover:text-emerald-700 dark:text-emerald-300">
               Refinamento de Peça
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
@@ -89,7 +89,7 @@ export function PainelArea({ area }: PainelAreaProps) {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning/10">
-              <FileText className="h-4 w-4 text-amber-600" />
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             </span>
             Modelos Prontos
           </CardTitle>
@@ -103,9 +103,9 @@ export function PainelArea({ area }: PainelAreaProps) {
                 <Link
                   key={modelo.id}
                   href={`/${area.id}/modelos/${modelo.id}`}
-                  className="group flex flex-col rounded-xl border-2 border-border bg-card p-4 text-left transition-all hover:border-amber-300 hover:bg-amber-50 hover:shadow-sm"
+                  className="group flex flex-col rounded-xl border-2 border-border bg-card p-4 text-left transition-all hover:border-amber-300 hover:bg-amber-50 dark:bg-amber-950/40 hover:shadow-sm"
                 >
-                  <span className="font-semibold text-foreground group-hover:text-amber-800 text-sm leading-tight">
+                  <span className="font-semibold text-foreground group-hover:text-amber-800 dark:text-amber-200 text-sm leading-tight">
                     {modelo.nome}
                   </span>
                   <span className="mt-1 text-xs text-muted-foreground leading-tight">
