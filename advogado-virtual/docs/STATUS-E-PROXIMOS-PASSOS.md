@@ -2,7 +2,7 @@
 
 > **Atualizado:** 2026-07-03 · **Objetivo imediato definido pelo dono do produto:** implantar o sistema **no próprio escritório** para validar na prática, **antes** de comercializar. Billing, cadastro self-serve e venda multi-tenant ficam **congelados** até essa validação.
 > **Foco do produto (decisão 2026-07-03):** GERAÇÃO DE PEÇAS — não competir com o Astrea (gestão, já contratado pelo escritório).
-> **Fase 2 aprovada:** E1, E2, E3(enxuto), E4, E6, E9, E10 + pacote UX — plano de execução em [PLANO-FASE-2-OPUS.md](PLANO-FASE-2-OPUS.md). Adiados: E5, E7. Backlog: E8.
+> **Fase 2 CONCLUÍDA (2026-07-03):** ✅ pacote UX (revisão automática pós-geração, toast de notificação, checklist do dashboard, retorno previsível), ✅ E1 (selo citações), ✅ E2 (capa DataJud), ✅ E3 (lembrete de prazo por cron), ✅ E4+B5.3 (base curada + biblioteca), ✅ E10 (telemetria de edições), ✅ E6 (abstração de assinatura + conserta A1d), ✅ E9 (diff/aceite por seção). Plano: [PLANO-FASE-2-OPUS.md](PLANO-FASE-2-OPUS.md). Adiados: E5, E7. Backlog: E8. 151 testes, CI verde.
 > **Documentos irmãos:** [ANALISE-COMPLETA-2026-07.md](ANALISE-COMPLETA-2026-07.md) (parecer) · [PLANO-DESENVOLVIMENTO-OPUS.md](PLANO-DESENVOLVIMENTO-OPUS.md) (backlog completo) · [PARECER-FABLE-2026-07-03.md](PARECER-FABLE-2026-07-03.md) (curadoria) · [REVISAO-ARQUITETURAL.md](REVISAO-ARQUITETURAL.md).
 
 ---
