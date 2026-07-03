@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { AREAS, type AreaId } from '@/lib/constants/areas'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import { EditorPecaClient } from './EditorPecaClient'
+import type { ValidacaoData } from '@/components/pecas/RelatorioValidacao'
 import { ChevronLeft } from 'lucide-react'
 
 export async function generateMetadata({
@@ -41,12 +42,32 @@ export default async function EditorPecaPage({
   // Carrega a peça com dados do atendimento (inclui cliente p/ voltar à Casa do caso)
   const { data: peca } = await supabase
     .from('pecas')
-    .select('id, tipo, area, conteudo_markdown, versao, status, atendimento_id, atendimentos(cliente_id)')
+    .select('id, tipo, area, conteudo_markdown, versao, status, atendimento_id, validacao_coerencia, validacao_fontes, atendimentos(cliente_id)')
     .eq('id', pecaId)
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
   if (!peca) notFound()
+
+  // Reconstrói a revisão automática persistida (validarPecaPosStream) para o
+  // editor abrir com o badge/painel prontos, sem re-chamar a IA.
+  const vf = peca.validacao_fontes as {
+    legislacao?: ValidacaoData['legislacao']
+    jurisprudencia?: ValidacaoData['jurisprudencia']
+    score?: number
+    correcoes?: ValidacaoData['correcoes_sugeridas']
+    formatacao?: ValidacaoData['formatacao']
+    citacoes?: ValidacaoData['citacoes']
+  } | null
+  const validacaoInicial: ValidacaoData | null = (peca.validacao_coerencia || vf) ? {
+    coerencia: (peca.validacao_coerencia as ValidacaoData['coerencia']) ?? undefined,
+    score_confianca: vf?.score,
+    legislacao: vf?.legislacao,
+    jurisprudencia: vf?.jurisprudencia,
+    correcoes_sugeridas: vf?.correcoes,
+    formatacao: vf?.formatacao,
+    citacoes: vf?.citacoes,
+  } : null
 
   const tipoConfig = TIPOS_PECA[peca.tipo]
   const tipoNome = tipoConfig?.nome ?? peca.tipo.replace(/_/g, ' ')
@@ -87,6 +108,7 @@ export default async function EditorPecaPage({
           conteudoInicial={peca.conteudo_markdown ?? ''}
           versaoInicial={peca.versao ?? 1}
           statusInicial={peca.status ?? 'rascunho'}
+          validacaoInicial={validacaoInicial}
         />
       </main>
     </>

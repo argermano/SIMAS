@@ -11,7 +11,7 @@ import type { AtendimentoStatus, AreaJuridica } from '@/types'
 import {
   Shield, Briefcase, Scale, Gavel, Receipt, Building2,
   Heart, Stethoscope, ShoppingCart, Home, Landmark,
-  ArrowRight, Clock, ChevronRight, Brain,
+  ArrowRight, Clock, ChevronRight, Brain, CheckCircle2, Circle, Settings,
 } from 'lucide-react'
 
 export const metadata = { title: 'Início' }
@@ -35,11 +35,31 @@ export default async function DashboardPage() {
 
   const { data: usuario } = await supabase
     .from('users')
-    .select('id, nome, tenant_id')
+    .select('id, nome, tenant_id, role')
     .eq('auth_user_id', user.id)
     .single()
 
   if (!usuario) redirect('/login')
+
+  // Checklist de primeira configuração (só admin). Some quando os itens
+  // essenciais para gerar contratos completos estão prontos — dados
+  // profissionais, papel timbrado e modelo de contrato. É a principal causa de
+  // contrato saindo incompleto no primeiro uso.
+  let checklistConfig: { label: string; ok: boolean; href: string }[] | null = null
+  if (usuario.role === 'admin') {
+    const [tenantCfg, timbrado, modelos] = await Promise.all([
+      supabase.from('tenants').select('oab_numero, nome_responsavel').eq('id', usuario.tenant_id).single(),
+      supabase.storage.from('documentos').list(`${usuario.tenant_id}/timbrado`),
+      supabase.from('templates_contrato').select('id', { count: 'exact', head: true }),
+    ])
+    const temTimbrado = (timbrado.data ?? []).some((f) => f.name && f.name !== '.emptyFolderPlaceholder')
+    const itens = [
+      { label: 'Dados profissionais (OAB e responsável)', ok: !!(tenantCfg.data?.oab_numero && tenantCfg.data?.nome_responsavel), href: '/configuracoes' },
+      { label: 'Papel timbrado do escritório', ok: temTimbrado, href: '/configuracoes' },
+      { label: 'Modelo de contrato de honorários', ok: (modelos.count ?? 0) > 0, href: '/configuracoes' },
+    ]
+    if (itens.some((i) => !i.ok)) checklistConfig = itens
+  }
 
   const { data: ultimosAtendimentos } = await supabase
     .from('atendimentos')
@@ -65,6 +85,38 @@ export default async function DashboardPage() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-5xl space-y-10">
+
+          {/* Checklist de primeira configuração (some quando completo) */}
+          {checklistConfig && (
+            <section>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 dark:border-amber-900 dark:bg-amber-950/40">
+                <div className="flex items-start gap-3">
+                  <Settings className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-semibold text-amber-900 dark:text-amber-200">Configure o escritório</h2>
+                    <p className="mt-0.5 text-sm text-amber-800/80 dark:text-amber-200/70">
+                      Complete estes itens para que os contratos saiam com todos os dados corretos.
+                    </p>
+                    <ul className="mt-3 space-y-1.5">
+                      {checklistConfig.map((item) => (
+                        <li key={item.label}>
+                          <Link href={item.href} className="group flex items-center gap-2 text-sm">
+                            {item.ok
+                              ? <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+                              : <Circle className="h-4 w-4 shrink-0 text-amber-500/60" />}
+                            <span className={item.ok ? 'text-muted-foreground line-through' : 'font-medium text-amber-900 group-hover:underline dark:text-amber-100'}>
+                              {item.label}
+                            </span>
+                            {!item.ok && <ChevronRight className="h-3.5 w-3.5 text-amber-500 opacity-0 transition-opacity group-hover:opacity-100" />}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* Card de acesso rápido — Análise de Caso */}
           <section>

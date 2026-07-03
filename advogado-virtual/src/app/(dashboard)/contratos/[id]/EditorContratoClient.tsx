@@ -54,6 +54,7 @@ interface EditorContratoClientProps {
   versoes: { id: string; versao: number; created_at: string }[]
   role: string
   atendimentoId?: string | null
+  clienteId?: string | null
   assinatura?: SignatureData | null
   tenant?: {
     nome_responsavel?: string | null
@@ -64,7 +65,7 @@ interface EditorContratoClientProps {
 }
 
 export function EditorContratoClient({
-  contratoId, contrato, role, atendimentoId, assinatura: assinaturaInicial, tenant,
+  contratoId, contrato, role, atendimentoId, clienteId, assinatura: assinaturaInicial, tenant,
 }: EditorContratoClientProps) {
   const router = useRouter()
   const { success, error: toastError } = useToast()
@@ -396,7 +397,7 @@ export function EditorContratoClient({
       <DocumentEditor
         titulo={contrato.titulo}
         conteudo={contrato.conteudo_markdown}
-        onVoltar={() => { if (atendimentoId) { router.back(); router.refresh() } else router.push('/contratos') }}
+        onVoltar={() => router.push(clienteId ? `/clientes/${clienteId}` : '/contratos')}
         onSalvar={handleSalvar}
         salvando={salvando}
         extraAcoes={

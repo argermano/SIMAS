@@ -210,7 +210,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
       <EditorDocumentoPronto
         titulo={tipoNome}
         conteudo={documentoGerado}
-        onVoltar={() => { if (atendimentoId) { router.back(); router.refresh() } else setModoEditor(false) }}
+        onVoltar={() => { if (clienteIdInicial) router.push(`/clientes/${clienteIdInicial}`); else setModoEditor(false) }}
         onSalvar={atendimentoId ? salvarNoCaso : undefined}
         salvando={salvandoCaso}
         exportOpts={

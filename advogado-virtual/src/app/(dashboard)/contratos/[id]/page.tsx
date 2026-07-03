@@ -14,6 +14,7 @@ type ContratoDetalhe = {
   titulo: string
   area: string | null
   atendimento_id: string | null
+  cliente_id: string | null
   conteudo_markdown: string
   status: string
   versao: number
@@ -113,6 +114,7 @@ export default async function ContratoPage({
             contratoId={id}
             contrato={contrato as ContratoDetalhe}
             atendimentoId={(contrato as ContratoDetalhe).atendimento_id ?? null}
+            clienteId={(contrato as ContratoDetalhe).cliente_id ?? null}
             versoes={(versoes ?? []) as { id: string; versao: number; created_at: string }[]}
             role={usuario.role}
             assinatura={assinatura ?? null}

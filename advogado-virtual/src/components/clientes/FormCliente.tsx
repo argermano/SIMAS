@@ -338,7 +338,7 @@ export function FormCliente({ cliente, onSucesso }: FormClienteProps) {
           type="button"
           variant="secondary"
           size="lg"
-          onClick={() => router.back()}
+          onClick={() => router.push(modoEdicao ? `/clientes/${cliente.id}` : '/clientes')}
           disabled={loading}
         >
           Cancelar

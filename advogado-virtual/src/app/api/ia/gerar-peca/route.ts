@@ -8,7 +8,7 @@ import { decryptClienteFields, decryptField } from '@/lib/encryption'
 import { buscarJurisprudencia, formatarParaPrompt, type ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import { TRIBUNAIS_DEFAULT } from '@/lib/jurisprudencia/tribunais'
 import { selecionarPromptPeca, type QualificacaoPartes } from '@/lib/ia/pecas/registro-pecas'
-import { statusInicialPeca, anexarModeloEJurisprudencia, respostaStreamPeca, logUsagePosStream, salvarPecaPosStreamSeVazia } from '@/lib/ia/pecas/motor'
+import { statusInicialPeca, anexarModeloEJurisprudencia, respostaStreamPeca, logUsagePosStream, salvarPecaPosStreamSeVazia, validarPecaPosStream } from '@/lib/ia/pecas/motor'
 import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
 import { SYSTEM_PECA_GENERICA, buildPromptPecaGenerica } from '@/lib/prompts/pecas/generico/peca'
 
@@ -239,6 +239,8 @@ export async function POST(req: NextRequest) {
       logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'gerar_peca', modelo, start })
       // Rede de segurança: salva no servidor se o cliente não salvar (aba fechada).
       salvarPecaPosStreamSeVazia({ getFinal, pecaId: peca.id, atendimentoId })
+      // Revisão automática pós-geração (abre o editor com a revisão pronta).
+      validarPecaPosStream({ getFinal, pecaId: peca.id, area, tipo, tenantId: usuario.tenant_id, userId: usuario.id })
 
       return respostaStreamPeca(stream, peca.id)
     }
@@ -288,6 +290,8 @@ export async function POST(req: NextRequest) {
     logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'gerar_peca', modelo, start })
     // Rede de segurança: salva no servidor se o cliente não salvar (aba fechada no meio do stream).
     salvarPecaPosStreamSeVazia({ getFinal, pecaId: peca.id, atendimentoId })
+    // Revisão automática pós-geração (abre o editor com a revisão pronta).
+    validarPecaPosStream({ getFinal, pecaId: peca.id, area, tipo, tenantId: usuario.tenant_id, userId: usuario.id })
 
     return respostaStreamPeca(stream, peca.id)
   } catch (err) {

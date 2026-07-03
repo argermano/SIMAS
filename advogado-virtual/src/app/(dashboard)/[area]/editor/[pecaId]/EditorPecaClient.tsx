@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { Send, CheckCircle, Clock, ClipboardCheck, X, Loader2 } from 'lucide-react'
 
+type ValidacaoData = ComponentProps<typeof RelatorioValidacao>['data']
+
 interface EditorPecaClientProps {
   pecaId: string
   atendimentoId: string
@@ -20,9 +22,8 @@ interface EditorPecaClientProps {
   conteudoInicial: string
   versaoInicial: number
   statusInicial: string
+  validacaoInicial?: ValidacaoData | null
 }
-
-type ValidacaoData = ComponentProps<typeof RelatorioValidacao>['data']
 
 const PRAZO_OPTIONS = [
   { label: '24 horas',  days: 1 },
@@ -42,6 +43,7 @@ export function EditorPecaClient({
   tipoNome,
   conteudoInicial,
   statusInicial,
+  validacaoInicial,
 }: EditorPecaClientProps) {
   const router = useRouter()
   const { success, error: toastError } = useToast()
@@ -59,7 +61,8 @@ export function EditorPecaClient({
   // Painel de revisão automática (validar → corrigir)
   const [painelAberto, setPainelAberto] = useState(false)
   const [validando, setValidando]       = useState(false)
-  const [validacao, setValidacao]       = useState<ValidacaoData | null>(null)
+  // Inicia com a revisão automática pós-geração, se já gravada (validarPecaPosStream).
+  const [validacao, setValidacao]       = useState<ValidacaoData | null>(validacaoInicial ?? null)
   const [corrigindo, setCorrigindo]     = useState<string | null>(null)
   const { startStream } = useStreaming()
 
@@ -223,8 +226,28 @@ export function EditorPecaClient({
     </div>
   ) : null
 
+  // Badge da revisão automática (aparece quando há score gravado pós-geração).
+  const scoreRevisao = validacao?.score_confianca
+  const badgeRevisao = scoreRevisao !== undefined && !validando && !painelAberto ? (
+    <button
+      onClick={() => setPainelAberto(true)}
+      title="Ver revisão automática da peça"
+      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+        scoreRevisao >= 80
+          ? 'bg-success/10 text-success hover:bg-success/20'
+          : scoreRevisao >= 60
+            ? 'bg-warning/10 text-warning hover:bg-warning/20'
+            : 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+      }`}
+    >
+      <ClipboardCheck className="h-3.5 w-3.5" />
+      Revisão {scoreRevisao}
+    </button>
+  ) : null
+
   const acoes = (
     <div className="flex items-center gap-2">
+      {badgeRevisao}
       <Button
         size="sm"
         variant="secondary"

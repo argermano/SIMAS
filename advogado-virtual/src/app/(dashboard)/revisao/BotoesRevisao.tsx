@@ -3,14 +3,23 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/ui/toast'
 import { CheckCircle2, XCircle } from 'lucide-react'
 
 interface BotoesRevisaoProps {
   pecaId: string
 }
 
+/** Mensagem sobre a notificação ao autor conforme o e-mail saiu ou não. */
+function avisoEmail(emailNotificado: boolean): string {
+  return emailNotificado
+    ? 'O autor foi notificado por e-mail.'
+    : 'O autor NÃO foi notificado (serviço de e-mail não configurado).'
+}
+
 export function BotoesRevisao({ pecaId }: BotoesRevisaoProps) {
   const router = useRouter()
+  const { success } = useToast()
   const [aprovando, setAprovando]           = useState(false)
   const [rejeitando, setRejeitando]         = useState(false)
   const [modoRejeitar, setModoRejeitar]     = useState(false)
@@ -22,11 +31,12 @@ export function BotoesRevisao({ pecaId }: BotoesRevisaoProps) {
     setErro(null)
     try {
       const res = await fetch(`/api/pecas/${pecaId}/aprovar`, { method: 'POST' })
+      const data = await res.json()
       if (!res.ok) {
-        const data = await res.json()
         setErro(data.error ?? 'Erro ao aprovar')
         return
       }
+      success('Peça aprovada', avisoEmail(!!data.emailNotificado))
       router.refresh()
     } finally {
       setAprovando(false)
@@ -46,11 +56,12 @@ export function BotoesRevisao({ pecaId }: BotoesRevisaoProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ motivo: motivo.trim() }),
       })
+      const data = await res.json()
       if (!res.ok) {
-        const data = await res.json()
         setErro(data.error ?? 'Erro ao rejeitar')
         return
       }
+      success('Peça devolvida ao autor', avisoEmail(!!data.emailNotificado))
       router.refresh()
     } finally {
       setRejeitando(false)

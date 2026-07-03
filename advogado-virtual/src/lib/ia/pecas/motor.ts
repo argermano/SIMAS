@@ -9,7 +9,11 @@
 import { after } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { logUsage } from '@/lib/anthropic/usage'
+import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { formatarPeca } from '@/lib/format/formatar-peca'
+import { validarFormatacaoPeca } from '@/lib/format/validar-peca'
+import { buildPromptRevisarValidar, SYSTEM_VALIDAR } from '@/lib/prompts/validacao/revisar-validar'
+import { verificarCitacoesOnline } from '@/lib/jurisprudencia/verificador-citacoes-online'
 import type { createClient } from '@/lib/supabase/server'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
@@ -59,6 +63,73 @@ export function salvarPecaPosStreamSeVazia(params: {
       console.warn(`[motor] rede de segurança salvou peça ${params.pecaId} (cliente não salvou).`)
     } catch (e) {
       console.error('[motor] rede de segurança pós-stream falhou:', e instanceof Error ? e.message : e)
+    }
+  })
+}
+
+/**
+ * Revisão automática pós-geração (Lote 0): ao fim do stream, valida a peça no
+ * servidor (coerência/formatação por IA + citações determinísticas/online) e
+ * grava o resultado nos campos validacao_* — SEM alterar o status (aprovar é
+ * ação humana). O editor abre já com a revisão pronta (badge no header). Roda em
+ * after() (best-effort, nunca bloqueia a geração) e usa o service_role. O uso é
+ * logado como 'validar_peca_auto' para se distinguir da revisão manual no painel.
+ */
+export function validarPecaPosStream(params: {
+  getFinal: () => Promise<{ text: string }>
+  pecaId: string
+  area: string
+  tipo: string
+  tenantId: string
+  userId: string
+}): void {
+  after(async () => {
+    const start = Date.now()
+    try {
+      const { text } = await params.getFinal()
+      const conteudo = formatarPeca(text)
+      if (!conteudo.trim()) return
+
+      const [{ result, usage }, citacoes] = await Promise.all([
+        completionJSON<Record<string, unknown>>({
+          system: SYSTEM_VALIDAR,
+          prompt: buildPromptRevisarValidar({ peca: conteudo, area: params.area, tipo_peca: params.tipo }),
+        }),
+        verificarCitacoesOnline(conteudo),
+      ])
+      const formatacao = validarFormatacaoPeca(conteudo)
+
+      const admin = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      )
+      await admin
+        .from('pecas')
+        .update({
+          validacao_coerencia: result.coerencia ?? null,
+          validacao_fontes: {
+            legislacao: result.legislacao,
+            jurisprudencia: result.jurisprudencia,
+            doutrina: result.doutrina,
+            score: result.score_confianca,
+            correcoes: result.correcoes_sugeridas,
+            formatacao,
+            citacoes,
+          },
+        })
+        .eq('id', params.pecaId)
+
+      await logUsage({
+        tenantId: params.tenantId,
+        userId: params.userId,
+        endpoint: 'validar_peca_auto',
+        modelo: DEFAULT_MODEL,
+        tokensInput: usage.input,
+        tokensOutput: usage.output,
+        latenciaMs: Date.now() - start,
+      })
+    } catch (e) {
+      console.error('[motor] revisão automática pós-stream falhou:', e instanceof Error ? e.message : e)
     }
   })
 }

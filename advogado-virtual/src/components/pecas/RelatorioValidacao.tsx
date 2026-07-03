@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react'
 
-interface ValidacaoData {
+export interface ValidacaoData {
   coerencia?: { status: string; itens: Array<{ item: string; status: string; sugestao?: string }> }
   itens_essenciais?: { status: string; itens: Array<{ item: string; status: string; observacao?: string }> }
   legislacao?: { status: string; citacoes: Array<{ referencia: string; status: string; sugestao?: string }> }
