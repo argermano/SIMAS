@@ -1,0 +1,89 @@
+# Status e Próximos Passos — SIMAS / Advogado Virtual
+
+> **Atualizado:** 2026-07-03 · **Objetivo imediato definido pelo dono do produto:** implantar o sistema **no próprio escritório** para validar na prática, **antes** de comercializar. Billing, cadastro self-serve e venda multi-tenant ficam **congelados** até essa validação.
+> **Documentos irmãos:** [ANALISE-COMPLETA-2026-07.md](ANALISE-COMPLETA-2026-07.md) (parecer) · [PLANO-DESENVOLVIMENTO-OPUS.md](PLANO-DESENVOLVIMENTO-OPUS.md) (backlog completo) · [REVISAO-ARQUITETURAL.md](REVISAO-ARQUITETURAL.md).
+
+---
+
+## 1. O que mudou nesta rodada (14 commits, todos no ar)
+
+Tudo com `tsc` limpo, build de produção ok e a suíte de testes passando (subiu de 73 para 108 testes). Migrations e backfill foram aplicados na produção com verificação.
+
+| Área | Commit | O que entrega |
+|---|---|---|
+| Gravação resiliente | `d4da958` | Relato por áudio no celular não se perde: servidor **acumula** a transcrição (antes sobrescrevia); trechos ficam guardados em IndexedDB e são reenviados quando a rede volta |
+| SSE robusto | `9aad5c9` | Parser com buffer — geração longa não aborta mais em rede móvel; aviso quando a peça é cortada por limite de tamanho |
+| PWA | `1837cf7` | App instalável no celular (manifest, service worker, tela offline, ícones) |
+| Mobile | `6f399cd` | Botão de menu não cobre o título; grids responsivos; lista de prazos no lugar do calendário em telas pequenas |
+| Curadoria de prompts | `01da1b2` | 10 novos prompts **RASCUNHO** (réplica ×5, apelação ×4, recurso ordinário trab.) — de 10 para 20 combinações área×peça; snapshot trava os antigos |
+| Motor B1 | `3fb4e01` | **Peça lê os documentos por inteiro** (fim do corte em 500 caracteres — antes a peça era redigida quase sem ver as provas) |
+| Segurança A2 | `4f607ee` | DELETE de cliente/caso exige admin/advogado + **soft-delete** + auditoria (antes qualquer papel apagava em cascata, sem trilha) |
+| Segurança A8 | `4f607ee` | Trigger anti-escalonamento de privilégio; validação de posse de FK por tenant; `maxDuration` nas rotas de IA |
+| Segurança A3 | `804db9d` | **Transcrições cifradas em repouso** (dado sensível de saúde, LGPD) — backfill de 73 registros aplicado |
+| Motor B3 | `47f8e3b` | Painel **"Revisar peça"** no editor (validação de coerência/citações/formatação) + **correção de um clique** — camada anti-alucinação que estava pronta e desligada |
+| Custo/cota A6 | `52bfc24` | Preço por modelo (Opus não é mais subestimado ~40%); refino e outras rotas passam a contar no dashboard; `gerar-documento` migrado ao wrapper (guardrail + log) |
+| Webhook A1 | `fbe5f5e` | D4Sign fail-closed + service_role (era inseguro **e** quebrado ao mesmo tempo) |
+
+**Onde a Segurança P0 está:** A2, A3 e A8 **completos**. É o que torna seguro colocar dados reais de cliente.
+
+---
+
+## 2. Ações do dono do produto (para o piloto no escritório)
+
+Estas dependem de você e do ambiente (Vercel/Supabase) — não são código.
+
+### Antes de cadastrar clientes reais
+- [ ] **Criptografia obrigatória:** confirmar que `ENCRYPTION_KEY` está no Vercel (produção) e então setar **`ENCRYPTION_REQUIRED=true`**. Isso impede que um deploy futuro grave CPF/RG/transcrições em texto-plano por acidente. *(Hoje já cifra; o flag torna obrigatório.)*
+- [ ] **Backup do banco:** confirmar no painel Supabase o plano e a política de backup (idealmente PITR / backups diários). Dados de cliente de escritório precisam ser recuperáveis. É a maior lacuna operacional em aberto.
+- [ ] **Chaves de feature:** `GROQ_API_KEY` (transcrição de áudio) e `RESEND_API_KEY` (e-mails de convite/revisão) no Vercel, se for usar essas funções no piloto.
+- [ ] **Tenant do escritório:** como é o seu próprio escritório (tenant único), o cadastro é manual — não precisa de self-serve. Preencher em **Configurações**: dados profissionais (OAB, responsável — necessários para contratos saírem completos), papel timbrado, formatação padrão e modelo de contrato.
+
+### Validações práticas (testar no uso real)
+- [ ] **Celular em campo:** instalar o app (Adicionar à tela de início), gravar um relato de teste e, no meio, ativar o modo avião para ver os trechos ficarem "aguardando conexão" e reenviarem sozinhos ao voltar a rede.
+- [ ] **Painel de revisão:** abrir uma peça no editor, clicar **"Revisar peça"**, conferir o score/avisos e testar uma **correção de um clique**.
+- [ ] **Curadoria jurídica dos 10 prompts rascunho:** revisar `src/lib/prompts/pecas/{area}/{replica,apelacao,recurso-ordinario}.ts` (template em `_shared/construtores.ts`). Estão marcados como `RASCUNHO` e **não devem ser considerados prontos** sem revisão de advogado. Bom momento para acionar o Fable (mais barato para análise) para uma leitura crítica área a área.
+
+---
+
+## 3. Recomendado ANTES de dados reais (posso executar quando quiser)
+
+Itens de "prontidão para piloto" que **não dependem de decisão comercial** e que valem para operar com dados reais com segurança/visibilidade. Ordem sugerida:
+
+1. **Observabilidade (D3) — mais importante para um piloto.** Hoje errar em produção é **invisível**: não há Sentry/analytics, e o `logger.ts` estruturado existe mas nenhuma rota o usa (usam `console.*`). Num piloto real você precisa saber o que quebra. Escopo: Sentry (client+server) + adotar o `logger.ts` nas rotas + alerta de custo de IA por tenant. Baixo risco.
+2. **E-mails transacionais (D4).** Completar com a identidade que já existe (`lib/email.ts`): boas-vindas, peça aprovada/rejeitada com motivo, prazo de tarefa. Hoje sem `RESEND_API_KEY` o convite "funciona" e o e-mail silenciosamente não sai.
+3. **Portabilidade/retenção LGPD (D7, versão mínima).** Endpoint de **exportação** dos dados de um cliente (JSON/ZIP) e política de retenção de áudios/transcrições. Menos urgente com um só escritório, mas é o que fecha o ciclo LGPD antes de escalar.
+4. **Fila para jobs longos (D5).** Só vira necessário quando for ligar o **pipeline multi-etapa do motor (B4/B5)** — ver seção 5. Não é pré-requisito do piloto básico.
+
+*Rate limiting real (D6) é baixa prioridade para um único escritório (pouca concorrência).*
+
+---
+
+## 4. Congelado até validar na prática (decisão do dono do produto)
+
+Não programar agora:
+- **Billing / planos / cobrança (D1)** e **cadastro self-serve / go-to-market (D2)** — o "item 1". Só fazem sentido depois de validar o produto no escritório. Os planos em `quota.ts` seguem existindo como limites técnicos, sem cobrança.
+- **D4Sign de produção** — assinatura manual é o caminho atual; o webhook está seguro (inerte até o secret ser provisionado). Arquivar o PDF assinado no Storage fica para quando a conta de produção existir.
+- **Consolidar o motor / apagar rotas órfãs** (dúvida #1 do inventário) — precisa da sua decisão sobre quais rotas mortas são lixo vs. feature planejada. Duas delas (`validar-peca`, `correcao-auto`) deixaram de ser órfãs no B3.
+
+---
+
+## 5. Backlog de evolução (pós-validação, quando fizer sentido)
+
+O diferencial competitivo real, para depois que o piloto provar o fluxo:
+- **B4/B5 — pipeline multi-etapa + verificação de citações.** Gerar a peça em etapas (plano → redação → revisão crítica → **verificação determinística de citações** contra DataJud/LexML) em vez de one-shot. É o que ataca de vez o risco de jurisprudência inventada — a régua competitiva de 2026. Requer a fila (D5).
+- **Fundamentação verificada + base de teses curadas por área** (o moat editorial).
+- **Consolidação do motor** (`gerarPeca({modo})`) e limpeza de código morto.
+- **Novas funcionalidades** (parecer §E): enriquecimento de capa via DataJud (grátis), agenda de prazos, intimações via API parceira como add-on, intake por WhatsApp — na ordem de valor da tabela do parecer.
+
+---
+
+## 6. Dúvidas que ainda importam (fora as de billing, congeladas)
+
+1. **Backup Supabase:** qual plano/política (PITR? diário?) e qual perda de dados aceitável para dossiês reais?
+2. **Rotas órfãs (dúvida #1):** `refinar-peca`, `comando`, `exportar`, `templates/[tipo]`, etc. — apagar ou são features planejadas? (Destrava a limpeza do motor.)
+3. **Curadoria contínua:** quem revisa os prompts jurídicos ao longo do tempo (você, advogado parceiro)? Quais áreas×peças priorizar depois desta primeira leva?
+4. **Retenção de áudio:** política para os chunks/áudios gravados (prazo, expurgo) — relevante assim que houver volume real.
+
+---
+
+*Resumo mantido para consulta offline. A execução técnica sem dependência de decisão sua está essencialmente esgotada; o próximo passo natural é o piloto no escritório + os itens de prontidão da seção 3 quando você quiser.*
