@@ -10,6 +10,7 @@ import { TRIBUNAIS_DEFAULT } from '@/lib/jurisprudencia/tribunais'
 import { selecionarPromptPeca, type QualificacaoPartes } from '@/lib/ia/pecas/registro-pecas'
 import { statusInicialPeca, anexarModeloEJurisprudencia, respostaStreamPeca, logUsagePosStream, salvarPecaPosStreamSeVazia, validarPecaPosStream } from '@/lib/ia/pecas/motor'
 import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
+import { blocoFundamentacaoParaPrompt } from '@/lib/fundamentacao'
 import { SYSTEM_PECA_GENERICA, buildPromptPecaGenerica } from '@/lib/prompts/pecas/generico/peca'
 
 // Geração de peça é a rota de IA mais pesada (streaming longo + jurisprudência +
@@ -210,7 +211,7 @@ export async function POST(req: NextRequest) {
         localizacao,
         qualificacao: qualificacaoFinal,
       })
-      const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto })
+      const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto }) + blocoFundamentacaoParaPrompt(area)
 
       // Cria a peça ANTES do stream para garantir um X-Peca-Id válido sempre.
       const { data: peca, error: pecaError } = await supabase
@@ -255,7 +256,7 @@ export async function POST(req: NextRequest) {
       localizacao,
       qualificacao: qualificacaoFinal,
     })
-    const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto })
+    const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto }) + blocoFundamentacaoParaPrompt(area)
 
     // Criar peça no banco (status rascunho) ANTES do stream → X-Peca-Id sempre válido
     const { data: peca, error: pecaError } = await supabase

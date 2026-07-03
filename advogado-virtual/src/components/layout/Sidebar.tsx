@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Users, Settings, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
-  KanbanSquare, ChevronLeft, ChevronRight,
+  KanbanSquare, ChevronLeft, ChevronRight, BookMarked,
 } from 'lucide-react'
 import { LogoMark } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils'
@@ -40,6 +40,12 @@ const MENU_ITEMS = [
     label:   'Contratos a assinar',
     icon:    FileSignature,
     ativoSe: (p: string) => p.startsWith('/contratos'),
+  },
+  {
+    href:    '/biblioteca',
+    label:   'Biblioteca',
+    icon:    BookMarked,
+    ativoSe: (p: string) => p.startsWith('/biblioteca'),
   },
 ]
 
