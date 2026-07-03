@@ -23,8 +23,14 @@ Tudo com `tsc` limpo, build de produção ok e a suíte de testes passando (subi
 | Motor B3 | `47f8e3b` | Painel **"Revisar peça"** no editor (validação de coerência/citações/formatação) + **correção de um clique** — camada anti-alucinação que estava pronta e desligada |
 | Custo/cota A6 | `52bfc24` | Preço por modelo (Opus não é mais subestimado ~40%); refino e outras rotas passam a contar no dashboard; `gerar-documento` migrado ao wrapper (guardrail + log) |
 | Webhook A1 | `fbe5f5e` | D4Sign fail-closed + service_role (era inseguro **e** quebrado ao mesmo tempo) |
+| Editor C1 | `e4c1cd1` | **Autosave + guarda de saída** — 'Voltar' salva o pendente; beforeunload avisa; um clique errado não descarta mais a peça/contrato |
+| Contrato C1 | `0c325fb` | Painel de **acompanhamento da assinatura** vira drawer sobre o editor (antes ficava atrás, invisível) |
+| Motor B2 | `00d23e6` | **Rede de segurança server-side**: fechar a aba no meio da geração não deixa mais a peça vazia (salva no servidor via `after()` se o cliente não salvar) |
+| UI C1 | `2 commits` | **Dark mode** legível (~55 cores fixas com variante dark em 11 telas) + labels de área centralizados (Revisão/Histórico mostravam slug cru para 5 áreas) |
 
 **Onde a Segurança P0 está:** A2, A3 e A8 **completos**. É o que torna seguro colocar dados reais de cliente.
+
+**Atualização (2026-07-03, 2ª leva):** também saíram **C1** (autosave, painel de assinatura, dark mode, labels) e **B2** (persistência server-side do stream) — os itens que evitam perda de trabalho no uso real. Ver seção 3.
 
 ---
 
@@ -48,6 +54,8 @@ Estas dependem de você e do ambiente (Vercel/Supabase) — não são código.
 ## 3. Recomendado ANTES de dados reais (posso executar quando quiser)
 
 Itens de "prontidão para piloto" que **não dependem de decisão comercial** e que valem para operar com dados reais com segurança/visibilidade. Ordem sugerida:
+
+> **Já feitos nesta 2ª leva:** ✅ **C1** (autosave + guarda de saída no editor, painel de assinatura acessível, dark mode legível, labels centralizados) e ✅ **B2** (rede de segurança server-side da geração). Eram os itens que evitavam perda de trabalho no uso real.
 
 1. **Observabilidade (D3) — mais importante para um piloto.** Hoje errar em produção é **invisível**: não há Sentry/analytics, e o `logger.ts` estruturado existe mas nenhuma rota o usa (usam `console.*`). Num piloto real você precisa saber o que quebra. Escopo: Sentry (client+server) + adotar o `logger.ts` nas rotas + alerta de custo de IA por tenant. Baixo risco.
 2. **E-mails transacionais (D4).** Completar com a identidade que já existe (`lib/email.ts`): boas-vindas, peça aprovada/rejeitada com motivo, prazo de tarefa. Hoje sem `RESEND_API_KEY` o convite "funciona" e o e-mail silenciosamente não sai.
