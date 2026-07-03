@@ -24,6 +24,11 @@ export interface MetaArea {
   persona: string
   /** Fundamentos legais de referência da área (ex.: 'Lei 8.213/91 e CF/88'). */
   fundamentos: string
+  /**
+   * Nuance processual da área (cabimento, rito, prazos divergentes), exibida
+   * junto aos fundamentos — ex.: alerta de JEF na apelação previdenciária.
+   */
+  observacoes?: string
 }
 
 const REGRAS_COMUNS = `## REGRAS
@@ -60,15 +65,15 @@ ${blocoContexto(d, 'Histórico e fatos (relato/transcrição)', 'Pontos da conte
 3. Da tempestividade da réplica (art. 350 do CPC/2015)
 4. Breve síntese da contestação apresentada
 5. Da impugnação às preliminares suscitadas, se houver (art. 351 do CPC/2015)
-6. Da impugnação especificada dos fatos — rebater ponto a ponto (impugnação específica, nunca genérica; art. 341 do CPC/2015)
+6. Da impugnação especificada dos fatos e fundamentos da defesa — rebater ponto a ponto, nunca genericamente (arts. 350 e 351 do CPC/2015; contraditório substancial)
 7. Da reafirmação da tese e dos fundamentos da petição inicial
 8. Das provas cuja produção se pretende
 9. Dos requerimentos (rejeição das preliminares, improcedência da defesa e procedência integral dos pedidos da inicial)
 10. Fechamento
 
 ## FUNDAMENTOS DE REFERÊNCIA (use apenas os pertinentes ao caso concreto)
-- Impugnação à contestação: arts. 341 e 350 a 353 do CPC/2015.
-- Direito material da área: ${meta.fundamentos}.
+- Manifestação sobre a contestação (réplica): arts. 350 a 353 do CPC/2015.
+- Direito material da área: ${meta.fundamentos}.${meta.observacoes ? `\n- ${meta.observacoes}` : ''}
 
 ${REGRAS_COMUNS}
 
@@ -94,19 +99,19 @@ ${blocoContexto(d, 'Histórico, sentença recorrida e fatos (relato/transcriçã
 1. Endereçamento ao Juízo da causa (ex.: "Ao Juízo da ... Vara ... da Comarca/Seção de [PREENCHER]")
 2. Referência ao processo, às partes e à sentença recorrida
 3. Da tempestividade (prazo de 15 dias úteis — art. 1.003, §5º, do CPC/2015) e do preparo (art. 1.007), ou pedido de justiça gratuita
-4. Requerimento de recebimento do recurso e de remessa ao Egrégio Tribunal, com as razões anexas
+4. Requerimento de recebimento do recurso e de remessa ao Egrégio Tribunal, com as razões anexas; se aplicável, pedido de concessão de efeito suspensivo (art. 1.012, §§ 3º e 4º, do CPC/2015)
 
 ### PARTE II — Razões de Apelação (dirigidas ao Tribunal)
 5. Endereçamento ao Egrégio Tribunal / Colenda Câmara
 6. Breve síntese da demanda e da sentença recorrida
-7. Das razões para a reforma — impugnação específica aos fundamentos de fato e de direito da sentença (art. 1.010, II e III, do CPC/2015)
+7. Das razões para a reforma — impugnação específica aos fundamentos de fato e de direito da sentença (art. 1.010, II e III, do CPC/2015); se a sentença for terminativa, pedido de julgamento imediato do mérito (teoria da causa madura — art. 1.013, § 3º, do CPC/2015)
 8. Do prequestionamento dos dispositivos, se aplicável
 9. Dos pedidos (conhecimento e provimento do recurso; reforma da sentença)
 10. Fechamento
 
 ## FUNDAMENTOS DE REFERÊNCIA (use apenas os pertinentes ao caso concreto)
 - Apelação: arts. 1.009 a 1.014 do CPC/2015; requisitos das razões no art. 1.010.
-- Direito material da área: ${meta.fundamentos}.
+- Direito material da área: ${meta.fundamentos}.${meta.observacoes ? `\n- ${meta.observacoes}` : ''}
 
 ${REGRAS_COMUNS}
 
@@ -144,7 +149,7 @@ ${blocoContexto(d, 'Histórico, sentença recorrida e fatos (relato/transcriçã
 
 ## FUNDAMENTOS DE REFERÊNCIA (use apenas os pertinentes ao caso concreto)
 - Recurso Ordinário: art. 895 da CLT; preparo/depósito recursal: art. 899 da CLT.
-- Direito material da área: ${meta.fundamentos}.
+- Direito material da área: ${meta.fundamentos}.${meta.observacoes ? `\n- ${meta.observacoes}` : ''}
 
 ${REGRAS_COMUNS}
 
