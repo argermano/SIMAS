@@ -27,6 +27,9 @@ Tudo com `tsc` limpo, build de produção ok e a suíte de testes passando (subi
 | Contrato C1 | `0c325fb` | Painel de **acompanhamento da assinatura** vira drawer sobre o editor (antes ficava atrás, invisível) |
 | Motor B2 | `00d23e6` | **Rede de segurança server-side**: fechar a aba no meio da geração não deixa mais a peça vazia (salva no servidor via `after()` se o cliente não salvar) |
 | UI C1 | `2 commits` | **Dark mode** legível (~55 cores fixas com variante dark em 11 telas) + labels de área centralizados (Revisão/Histórico mostravam slug cru para 5 áreas) |
+| Prontidão piloto | `85c88b7` | **maxDuration** nas 7 rotas de IA que faltavam (gerar-peca não é mais cortada no meio do stream); **OCR** deixa de truncar documentos longos (4.096→8.192); **custo de transcrição** Groq entra no painel; jargão dev fora de Configurações |
+| Anti-alucinação B5.1 | `3ed1764` | **DataJud vira estatística, não jurisprudência citável** — parou de induzir o modelo a citar número de processo (sem ementa/resultado) como precedente |
+| Anti-alucinação B5.2 | `124aa8e` | **Verificador determinístico de citações** no painel "Revisar peça": nº CNJ (dígito verificador), súmula (faixa por tribunal) e lei (base local) → verificada ✓ / a conferir ⚠ / suspeita ✗ |
 
 **Onde a Segurança P0 está:** A2, A3 e A8 **completos**. É o que torna seguro colocar dados reais de cliente.
 
@@ -78,7 +81,8 @@ Não programar agora:
 ## 5. Backlog de evolução (pós-validação, quando fizer sentido)
 
 O diferencial competitivo real, para depois que o piloto provar o fluxo:
-- **B4/B5 — pipeline multi-etapa + verificação de citações.** Gerar a peça em etapas (plano → redação → revisão crítica → **verificação determinística de citações** contra DataJud/LexML) em vez de one-shot. É o que ataca de vez o risco de jurisprudência inventada — a régua competitiva de 2026. Requer a fila (D5).
+- **B5 — fundamentação verificada (parcialmente feito).** ✅ B5.1 (DataJud como estatística) e ✅ B5.2 (verificador determinístico de citações: nº CNJ, súmula, lei) já entregues. **Próximo incremento:** verificação *online* — LexML para existência de lei/artigo, DataJud para existência de processo — e a **base curada de teses/ementas por área** (B5.3), que é o que efetivamente coloca jurisprudência real citável na peça (exige curadoria contínua). É a régua competitiva de 2026 contra jurisprudência inventada.
+- **B4 — pipeline multi-etapa.** Gerar a peça em etapas (plano → redação → revisão crítica) em vez de one-shot. Requer a fila (D5).
 - **Fundamentação verificada + base de teses curadas por área** (o moat editorial).
 - **Consolidação do motor** (`gerarPeca({modo})`) e limpeza de código morto.
 - **Novas funcionalidades** (parecer §E): enriquecimento de capa via DataJud (grátis), agenda de prazos, intimações via API parceira como add-on, intake por WhatsApp — na ordem de valor da tabela do parecer.
