@@ -30,6 +30,7 @@ Tudo com `tsc` limpo, build de produção ok e a suíte de testes passando (subi
 | Prontidão piloto | `85c88b7` | **maxDuration** nas 7 rotas de IA que faltavam (gerar-peca não é mais cortada no meio do stream); **OCR** deixa de truncar documentos longos (4.096→8.192); **custo de transcrição** Groq entra no painel; jargão dev fora de Configurações |
 | Anti-alucinação B5.1 | `3ed1764` | **DataJud vira estatística, não jurisprudência citável** — parou de induzir o modelo a citar número de processo (sem ementa/resultado) como precedente |
 | Anti-alucinação B5.2 | `124aa8e` | **Verificador determinístico de citações** no painel "Revisar peça": nº CNJ (dígito verificador), súmula (faixa por tribunal) e lei (base local) → verificada ✓ / a conferir ⚠ / suspeita ✗ |
+| Anti-alucinação B5.2 online | `16648de` | **Verificação online** eleva ⚠→✓/✗: **LexML** confirma existência de lei federal; **DataJud** confirma processo por nº exato. Roda em paralelo com o LLM. Limites: LexML só federal/nível de lei; DataJud lento (best-effort) |
 
 **Onde a Segurança P0 está:** A2, A3 e A8 **completos**. É o que torna seguro colocar dados reais de cliente.
 
