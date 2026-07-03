@@ -6,7 +6,7 @@ import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptRevisarValidar, SYSTEM_VALIDAR } from '@/lib/prompts/validacao/revisar-validar'
 import { validarFormatacaoPeca } from '@/lib/format/validar-peca'
-import { verificarCitacoes } from '@/lib/jurisprudencia/verificador-citacoes'
+import { verificarCitacoesOnline } from '@/lib/jurisprudencia/verificador-citacoes-online'
 
 export const maxDuration = 120
 
@@ -40,10 +40,13 @@ export async function POST(req: NextRequest) {
       tipo_peca: peca.tipo,
     })
 
-    const { result, usage } = await completionJSON<Record<string, unknown>>({
-      system: SYSTEM_VALIDAR,
-      prompt,
-    })
+    // Roda a verificação de citações (extração determinística + confirmação
+    // online no LexML/DataJud) EM PARALELO com a validação por IA — a latência
+    // das consultas externas fica escondida atrás da chamada do modelo.
+    const [{ result, usage }, citacoes] = await Promise.all([
+      completionJSON<Record<string, unknown>>({ system: SYSTEM_VALIDAR, prompt }),
+      verificarCitacoesOnline(peca.conteudo_markdown),
+    ])
 
     // Salvar validação na peça
     await supabase
@@ -74,10 +77,6 @@ export async function POST(req: NextRequest) {
 
     // Validação determinística de formatação (complementa a validação por IA)
     const formatacao = validarFormatacaoPeca(peca.conteudo_markdown)
-
-    // Verificação determinística de citações (processo/súmula/lei) — não depende
-    // do modelo, que é a fonte de alucinação que estamos justamente flagrando.
-    const citacoes = verificarCitacoes(peca.conteudo_markdown)
 
     return NextResponse.json({ ...result, formatacao, citacoes })
   } catch (err) {

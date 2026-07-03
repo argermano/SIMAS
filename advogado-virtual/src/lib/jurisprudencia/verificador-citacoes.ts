@@ -68,6 +68,34 @@ export function validarNumeroCNJ(numero: string): boolean {
 
 const RE_PROCESSO_CNJ = /\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/g
 
+// Código do tribunal estadual (TR do nº CNJ, segmento J=8) → alias DataJud.
+const TR_TJ_ALIAS: Record<string, string> = {
+  '01': 'tjac', '02': 'tjal', '03': 'tjap', '04': 'tjam', '05': 'tjba',
+  '06': 'tjce', '07': 'tjdft', '08': 'tjes', '09': 'tjgo', '10': 'tjma',
+  '11': 'tjmt', '12': 'tjms', '13': 'tjmg', '14': 'tjpa', '15': 'tjpb',
+  '16': 'tjpr', '17': 'tjpe', '18': 'tjpi', '19': 'tjrj', '20': 'tjrn',
+  '21': 'tjrs', '22': 'tjro', '23': 'tjrr', '24': 'tjsc', '25': 'tjse',
+  '26': 'tjsp', '27': 'tjto',
+}
+
+/**
+ * Deriva o alias do índice DataJud a partir do nº CNJ (segmento J na 14ª posição
+ * + código do tribunal TR nas 15ª–16ª). Null quando fora de cobertura (STF,
+ * eleitoral, militar não estão na API pública do DataJud).
+ */
+export function aliasDataJud(numero: string): string | null {
+  const d = numero.replace(/\D/g, '')
+  if (d.length !== 20) return null
+  const j = d[13]
+  const tr = d.slice(14, 16)
+  const trN = parseInt(tr, 10)
+  if (j === '3') return 'stj'                                        // STJ
+  if (j === '4') return trN >= 1 && trN <= 6 ? `trf${trN}` : null    // Justiça Federal
+  if (j === '5') return trN === 0 ? 'tst' : (trN >= 1 && trN <= 24 ? `trt${trN}` : null) // Trabalho
+  if (j === '8') return TR_TJ_ALIAS[tr] ?? null                      // Justiça Estadual
+  return null
+}
+
 // ── Súmula: faixa de numeração conhecida por tribunal ─────────────────────────
 
 // Último número conhecido (aprox., jul/2026). Acima disso + margem → provável
@@ -152,6 +180,32 @@ function verificarLei(tipoBruto: string, numeroBruto: string, anoBruto: string):
   const nome   = LEIS_CONHECIDAS[chave]
   if (nome) return { status: 'verificada', detalhe: `${nome} — diploma conhecido` }
   return { status: 'conferir', detalhe: 'não consta da base local — confira número/ano/vigência na íntegra' }
+}
+
+// Tipo do diploma normalizado → segmento de tipo na URN LexML.
+const TIPO_URN: Record<string, string> = {
+  lei:                  'lei',
+  leicomplementar:      'lei.complementar',
+  emendaconstitucional: 'emenda.constitucional',
+  decretolei:           'decreto.lei',
+  decreto:              'decreto',
+}
+
+/**
+ * Constrói a URN LexML (federal) de uma citação de lei/decreto/EC — ex.:
+ * "Lei 8.213/1991" → "urn:lex:br:federal:lei:1991;8213". O ano basta (o LexML
+ * resolve sem a data completa). Retorna null se o texto não for uma norma.
+ */
+export function urnLexmlDaLei(textoCitacao: string): string | null {
+  const m = textoCitacao.match(
+    /(Lei\s+Complementar|Lei|Decreto-Lei|Decreto|Emenda\s+Constitucional)\s+(?:n[º°.]?\s*)?([\d.]+)\s*\/\s*(\d{2,4})/i,
+  )
+  if (!m) return null
+  const tipoUrn = TIPO_URN[tipoLeiNormalizado(m[1])]
+  if (!tipoUrn) return null
+  const numero = m[2].replace(/\./g, '')
+  const ano = anoCompleto(m[3])
+  return `urn:lex:br:federal:${tipoUrn}:${ano};${numero}`
 }
 
 // ── Orquestração ──────────────────────────────────────────────────────────────

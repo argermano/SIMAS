@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validarNumeroCNJ, verificarCitacoes } from './verificador-citacoes'
+import { validarNumeroCNJ, verificarCitacoes, urnLexmlDaLei, aliasDataJud } from './verificador-citacoes'
 
 /** Resto mod 97 dígito-a-dígito (mesma técnica do módulo, sem BigInt). */
 function restoMod97(s: string): number {
@@ -111,5 +111,43 @@ describe('verificarCitacoes — agregação', () => {
   it('texto vazio retorna relatório zerado', () => {
     const r = verificarCitacoes('')
     expect(r).toEqual({ itens: [], total: 0, verificadas: 0, aConferir: 0, problemas: 0 })
+  })
+})
+
+describe('urnLexmlDaLei', () => {
+  it('constrói a URN federal por tipo de diploma', () => {
+    expect(urnLexmlDaLei('Lei 8.213/1991')).toBe('urn:lex:br:federal:lei:1991;8213')
+    expect(urnLexmlDaLei('Lei Complementar 123/2006')).toBe('urn:lex:br:federal:lei.complementar:2006;123')
+    expect(urnLexmlDaLei('Decreto-Lei 5.452/1943')).toBe('urn:lex:br:federal:decreto.lei:1943;5452')
+    expect(urnLexmlDaLei('Emenda Constitucional 103/2019')).toBe('urn:lex:br:federal:emenda.constitucional:2019;103')
+  })
+
+  it('completa ano de 2 dígitos', () => {
+    expect(urnLexmlDaLei('Lei nº 8.078/90')).toBe('urn:lex:br:federal:lei:1990;8078')
+  })
+
+  it('retorna null quando não é uma norma', () => {
+    expect(urnLexmlDaLei('Súmula 7 do STJ')).toBeNull()
+  })
+})
+
+describe('aliasDataJud', () => {
+  // Monta um nº CNJ (20 díg.) com segmento J e tribunal TR nas posições certas.
+  const mk = (j: string, tr: string) => `1234567` + `00` + `2023` + j + tr + `0000`
+
+  it('deriva o alias por segmento e tribunal', () => {
+    expect(aliasDataJud('50023017520234047210')).toBe('trf4') // J=4, TR=04
+    expect(aliasDataJud(mk('3', '00'))).toBe('stj')            // Superior
+    expect(aliasDataJud(mk('5', '00'))).toBe('tst')            // Trabalho superior
+    expect(aliasDataJud(mk('5', '02'))).toBe('trt2')           // TRT 2ª
+    expect(aliasDataJud(mk('4', '01'))).toBe('trf1')           // TRF 1ª
+    expect(aliasDataJud(mk('8', '26'))).toBe('tjsp')           // Estadual SP
+    expect(aliasDataJud(mk('8', '13'))).toBe('tjmg')           // Estadual MG
+  })
+
+  it('retorna null fora de cobertura (STF/eleitoral/militar) ou formato inválido', () => {
+    expect(aliasDataJud(mk('1', '00'))).toBeNull() // STF não está no DataJud público
+    expect(aliasDataJud(mk('6', '01'))).toBeNull() // eleitoral
+    expect(aliasDataJud('123')).toBeNull()
   })
 })

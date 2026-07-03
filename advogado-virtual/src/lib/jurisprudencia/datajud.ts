@@ -67,6 +67,46 @@ export async function buscarJurisprudencia({
 }
 
 /**
+ * Confirma a EXISTÊNCIA de um processo pelo número exato no índice DataJud do
+ * tribunal (alias derivado do próprio nº CNJ). Best-effort: retorna o total de
+ * ocorrências, ou null em erro/timeout (o DataJud é lento e limitado — nunca
+ * bloqueia a validação). Usa `size:0` (só a contagem) para ser leve.
+ *
+ * @returns nº de ocorrências (0 = não localizado), ou null (inconclusivo).
+ */
+export async function contarProcessoExato(
+  alias: string,
+  numeroLimpo: string,
+  timeoutMs = 12000,
+): Promise<number | null> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await fetch(`${DATAJUD_BASE}/api_publica_${alias}/_search`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `APIKey ${DATAJUD_API_KEY}`,
+      },
+      body: JSON.stringify({
+        size: 0,
+        track_total_hits: true,
+        query: { term: { numeroProcesso: numeroLimpo } },
+      }),
+      signal: ctrl.signal,
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const total = data?.hits?.total?.value
+    return typeof total === 'number' ? total : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
  * Consulta um tribunal específico na API DataJud
  */
 async function consultarTribunal(
