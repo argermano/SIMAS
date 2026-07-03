@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { d4signDownloadDocument } from '@/lib/d4sign/client'
 import type { D4SignWebhookPayload } from '@/lib/d4sign/types'
 
@@ -21,19 +21,21 @@ function timingSafeEqualStr(a: string, b: string): boolean {
 }
 
 /**
- * Valida a autenticidade do webhook via secret compartilhado.
+ * Valida a autenticidade do webhook via secret compartilhado (FAIL-CLOSED).
  * Configure D4SIGN_WEBHOOK_SECRET e aponte o webhook no painel D4Sign para
  * `https://SEU_APP/api/webhooks/d4sign?secret=SEU_SECRET` (ou envie no header
- * `x-webhook-secret`). Sem isso, qualquer um poderia forjar eventos de assinatura.
+ * `x-webhook-secret`).
+ *
+ * Sem o secret configurado, o webhook REJEITA todas as chamadas (antes aceitava
+ * sem validação — vetor de forja de eventos de assinatura). Enquanto a D4Sign de
+ * produção não estiver contratada (assinatura manual é o caminho atual), o
+ * webhook fica inerte e seguro; ao provisionar o secret, passa a processar.
  */
 function webhookAutorizado(req: NextRequest): boolean {
   const secret = process.env.D4SIGN_WEBHOOK_SECRET
   if (!secret) {
-    console.warn(
-      '[d4sign webhook] D4SIGN_WEBHOOK_SECRET não configurado — aceitando sem validação. ' +
-        'Configure o secret e atualize a URL no painel D4Sign para habilitar a verificação.'
-    )
-    return true // não bloquear produção até o secret ser provisionado
+    console.warn('[d4sign webhook] D4SIGN_WEBHOOK_SECRET não configurado — rejeitando (fail-closed).')
+    return false
   }
   const provided =
     req.nextUrl.searchParams.get('secret') ?? req.headers.get('x-webhook-secret') ?? ''
@@ -56,8 +58,13 @@ export async function POST(req: NextRequest) {
   const { uuid, status } = payload
   if (!uuid || !status) return NextResponse.json({ ok: true })
 
-  // Usar service role para acesso sem contexto de usuário
-  const supabase = await createClient()
+  // service_role: o webhook não tem sessão de usuário, então a RLS (baseada em
+  // auth.uid()) bloquearia todas as leituras/updates com o cliente anon. A
+  // checagem de tenant é feita pelo próprio d4sign_uuid (único por assinatura).
+  const supabase = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
 
   const { data: signature } = await supabase
     .from('contract_signatures')
