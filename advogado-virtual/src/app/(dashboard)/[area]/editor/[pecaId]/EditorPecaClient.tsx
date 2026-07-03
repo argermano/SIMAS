@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation'
 import { DocumentEditor } from '@/components/document-editor/DocumentEditor'
 import { RelatorioValidacao } from '@/components/pecas/RelatorioValidacao'
 import { SeloCitacoes } from '@/components/pecas/SeloCitacoes'
+import { ComparadorSecoes } from '@/components/pecas/ComparadorSecoes'
 import { useStreaming } from '@/components/shared/StreamingText'
 import { formatarPeca } from '@/lib/format/formatar-peca'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
-import { Send, CheckCircle, Clock, ClipboardCheck, X, Loader2 } from 'lucide-react'
+import { Send, CheckCircle, Clock, ClipboardCheck, X, Loader2, GitCompare } from 'lucide-react'
 
 type ValidacaoData = ComponentProps<typeof RelatorioValidacao>['data']
 
@@ -66,6 +67,35 @@ export function EditorPecaClient({
   const [validacao, setValidacao]       = useState<ValidacaoData | null>(validacaoInicial ?? null)
   const [corrigindo, setCorrigindo]     = useState<string | null>(null)
   const { startStream } = useStreaming()
+
+  // Comparador de versões (E9): base = versão anterior carregada sob demanda.
+  const [comparando, setComparando]     = useState<{ base: string; versao?: number } | null>(null)
+  const [carregandoComp, setCarregandoComp] = useState(false)
+
+  async function handleComparar() {
+    setCarregandoComp(true)
+    try {
+      const res = await fetch(`/api/pecas/${pecaId}/versao-anterior`)
+      const data = await res.json()
+      if (!res.ok || !data.temVersao) {
+        success('Sem versão anterior', 'Esta peça ainda não tem histórico para comparar (gere uma correção ou refino antes).')
+        return
+      }
+      setComparando({ base: data.conteudo, versao: data.versao })
+    } catch {
+      toastError('Erro', 'Falha ao carregar a versão anterior.')
+    } finally {
+      setCarregandoComp(false)
+    }
+  }
+
+  async function handleAplicarComparacao(markdown: string) {
+    setComparando(null)
+    await handleSalvar(markdown)
+    setConteudoAtual(markdown)
+    setEditorKey((k) => k + 1)
+    success('Alterações aplicadas', 'As escolhas por seção foram salvas na peça.')
+  }
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -257,6 +287,17 @@ export function EditorPecaClient({
       {badgeRevisao}
       <Button
         size="sm"
+        variant="ghost"
+        onClick={handleComparar}
+        disabled={carregandoComp || corrigindo !== null}
+        className="gap-1.5"
+        title="Comparar com a versão anterior, seção a seção"
+      >
+        {carregandoComp ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitCompare className="h-4 w-4" />}
+        Comparar
+      </Button>
+      <Button
+        size="sm"
         variant="secondary"
         onClick={handleRevisar}
         disabled={validando || corrigindo !== null}
@@ -325,6 +366,17 @@ export function EditorPecaClient({
             </div>
           </aside>
         </div>
+      )}
+
+      {/* Comparador de seções (E9) */}
+      {comparando && (
+        <ComparadorSecoes
+          base={comparando.base}
+          atual={conteudoAtual}
+          versaoBase={comparando.versao}
+          onAplicar={handleAplicarComparacao}
+          onFechar={() => setComparando(null)}
+        />
       )}
     </>
   )
