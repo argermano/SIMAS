@@ -91,7 +91,12 @@ export async function streamCompletion(params: {
   prompt: string
   model?: string
   maxTokens?: number
-}): Promise<{ stream: ReadableStream; getUsage: () => Promise<{ input: number; output: number }> }> {
+}): Promise<{
+  stream: ReadableStream
+  getUsage: () => Promise<{ input: number; output: number }>
+  /** Texto completo + uso após o término do stream (independe do cliente ter consumido). */
+  getFinal: () => Promise<{ text: string; usage: { input: number; output: number }; stopReason: string | null }>
+}> {
   const client = getAnthropicClient()
   assertPromptSize(params.system, params.prompt)
 
@@ -140,6 +145,18 @@ export async function streamCompletion(params: {
     getUsage: async () => {
       await anthropicStream.finalMessage()
       return { input: inputTokens, output: outputTokens }
+    },
+    getFinal: async () => {
+      const message = await anthropicStream.finalMessage()
+      const text = message.content
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join('')
+      return {
+        text,
+        usage: { input: message.usage.input_tokens, output: message.usage.output_tokens },
+        stopReason: message.stop_reason,
+      }
     },
   }
 }

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
-import { statusInicialPeca, respostaStreamPeca, logUsagePosStream } from '@/lib/ia/pecas/motor'
+import { statusInicialPeca, respostaStreamPeca, logUsagePosStream, salvarPecaPosStreamSeVazia } from '@/lib/ia/pecas/motor'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { SYSTEM_REGRAS_FORENSE } from '@/lib/prompts/pecas/regras-formatacao'
 
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
       .select('id')
       .single()
 
-    const { stream, getUsage } = await streamCompletion({
+    const { stream, getUsage, getFinal } = await streamCompletion({
       system: SYSTEM_REFINAMENTO,
       prompt,
       maxTokens: 32768,
@@ -145,6 +145,8 @@ export async function POST(req: NextRequest) {
 
     // Log assíncrono
     logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'refinar_peca', modelo: DEFAULT_MODEL, start })
+    // Rede de segurança: salva no servidor se o cliente não salvar.
+    if (peca?.id) salvarPecaPosStreamSeVazia({ getFinal, pecaId: peca.id, atendimentoId })
 
     return respostaStreamPeca(stream, peca?.id ?? '')
   } catch (err) {

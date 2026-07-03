@@ -6,10 +6,62 @@
 // versionamento. Cada endpoint é um adaptador fino (modo: criar | refinar |
 // corrigir) sobre estes helpers + o registro de prompts curados.
 
+import { after } from 'next/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { logUsage } from '@/lib/anthropic/usage'
+import { formatarPeca } from '@/lib/format/formatar-peca'
 import type { createClient } from '@/lib/supabase/server'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
+
+/**
+ * Rede de segurança pós-stream (B2): salva o conteúdo da peça NO SERVIDOR ao fim
+ * da geração, caso o cliente não tenha salvo (aba fechada/queda no meio do
+ * stream deixava a peça vazia no banco). É ADITIVA — o caminho feliz continua
+ * salvando pelo cliente; aqui só grava se a peça ainda estiver sem conteúdo.
+ *
+ * Roda em after() (após a resposta, mesmo se o cliente desconectar) e usa o
+ * service_role (o contexto de cookies do request já não está disponível).
+ */
+export function salvarPecaPosStreamSeVazia(params: {
+  getFinal: () => Promise<{ text: string }>
+  pecaId: string
+  atendimentoId: string
+}): void {
+  after(async () => {
+    try {
+      const { text } = await params.getFinal()
+      if (!text.trim()) return
+
+      const admin = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      )
+
+      const { data: atual } = await admin
+        .from('pecas')
+        .select('conteudo_markdown')
+        .eq('id', params.pecaId)
+        .single()
+
+      // Caminho feliz: o cliente já salvou — nada a fazer.
+      if (atual?.conteudo_markdown) return
+
+      await admin
+        .from('pecas')
+        .update({ conteudo_markdown: formatarPeca(text) })
+        .eq('id', params.pecaId)
+      await admin
+        .from('atendimentos')
+        .update({ status: 'peca_gerada' })
+        .eq('id', params.atendimentoId)
+
+      console.warn(`[motor] rede de segurança salvou peça ${params.pecaId} (cliente não salvou).`)
+    } catch (e) {
+      console.error('[motor] rede de segurança pós-stream falhou:', e instanceof Error ? e.message : e)
+    }
+  })
+}
 
 /** Status inicial da peça: colaborador cai na fila de revisão; demais, rascunho. */
 export function statusInicialPeca(role: string | undefined): 'aguardando_revisao' | 'rascunho' {

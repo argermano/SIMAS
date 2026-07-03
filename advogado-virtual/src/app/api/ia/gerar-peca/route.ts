@@ -8,7 +8,7 @@ import { decryptClienteFields, decryptField } from '@/lib/encryption'
 import { buscarJurisprudencia, formatarParaPrompt, type ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import { TRIBUNAIS_DEFAULT } from '@/lib/jurisprudencia/tribunais'
 import { selecionarPromptPeca, type QualificacaoPartes } from '@/lib/ia/pecas/registro-pecas'
-import { statusInicialPeca, anexarModeloEJurisprudencia, respostaStreamPeca, logUsagePosStream } from '@/lib/ia/pecas/motor'
+import { statusInicialPeca, anexarModeloEJurisprudencia, respostaStreamPeca, logUsagePosStream, salvarPecaPosStreamSeVazia } from '@/lib/ia/pecas/motor'
 import { buildPromptRelevancia, SYSTEM_RELEVANCIA } from '@/lib/prompts/analise/relevancia-documentos'
 import { SYSTEM_PECA_GENERICA, buildPromptPecaGenerica } from '@/lib/prompts/pecas/generico/peca'
 import { buscarModeloPadrao } from '@/lib/modelos/buscar-modelo'
@@ -227,10 +227,12 @@ export async function POST(req: NextRequest) {
         return jsonError('Erro ao criar registro da peça', 500)
       }
 
-      const { stream, getUsage } = await streamCompletion({ system: SYSTEM_PECA_GENERICA, prompt, maxTokens: 32768, model: modelo })
+      const { stream, getUsage, getFinal } = await streamCompletion({ system: SYSTEM_PECA_GENERICA, prompt, maxTokens: 32768, model: modelo })
 
       // Loga o uso também no caminho de fallback genérico (antes escapava do dashboard).
       logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'gerar_peca', modelo, start })
+      // Rede de segurança: salva no servidor se o cliente não salvar (aba fechada).
+      salvarPecaPosStreamSeVazia({ getFinal, pecaId: peca.id, atendimentoId })
 
       return respostaStreamPeca(stream, peca.id)
     }
@@ -269,7 +271,7 @@ export async function POST(req: NextRequest) {
       return jsonError('Erro ao criar registro da peça', 500)
     }
 
-    const { stream, getUsage } = await streamCompletion({
+    const { stream, getUsage, getFinal } = await streamCompletion({
       system: promptConfig.system,
       prompt,
       maxTokens: 32768,
@@ -278,6 +280,8 @@ export async function POST(req: NextRequest) {
 
     // Log assíncrono (não bloqueia o stream)
     logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'gerar_peca', modelo, start })
+    // Rede de segurança: salva no servidor se o cliente não salvar (aba fechada no meio do stream).
+    salvarPecaPosStreamSeVazia({ getFinal, pecaId: peca.id, atendimentoId })
 
     return respostaStreamPeca(stream, peca.id)
   } catch (err) {
