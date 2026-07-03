@@ -2,8 +2,10 @@ import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
-import { respostaStreamPeca, logUsagePosStream, salvarVersaoAnterior } from '@/lib/ia/pecas/motor'
+import { respostaStreamPeca, logUsagePosStream } from '@/lib/ia/pecas/motor'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
+
+export const maxDuration = 120
 
 const SYSTEM = `Você é um advogado revisor. Aplique a correção solicitada à peça e retorne a peça completa corrigida em Markdown. Não adicione explicações, apenas a peça corrigida.`
 
@@ -52,11 +54,10 @@ export async function POST(req: NextRequest) {
 
     const prompt = buildPromptCorrecao(peca.conteudo_markdown ?? '', tipo)
 
-    const { stream, getUsage } = await streamCompletion({ system: SYSTEM, prompt })
-
-    // Salvar versão antiga e incrementar
-    await salvarVersaoAnterior(supabase, { pecaId, versao: peca.versao, conteudoMarkdown: peca.conteudo_markdown, usuarioId: usuario.id })
-    await supabase.from('pecas').update({ versao: peca.versao + 1 }).eq('id', pecaId)
+    // maxTokens alto: a correção reescreve a peça COMPLETA (o default 8192
+    // truncaria peças longas). O versionamento fica a cargo do salvar-peca que
+    // o cliente chama ao persistir o resultado (evita versionar em dobro).
+    const { stream, getUsage } = await streamCompletion({ system: SYSTEM, prompt, maxTokens: 32768 })
 
     // Log assíncrono
     logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: `correcao_${tipo}`, modelo: DEFAULT_MODEL, start })
