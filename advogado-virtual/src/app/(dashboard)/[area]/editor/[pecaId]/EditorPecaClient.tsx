@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, type ComponentProps } from 'react'
 import { useRouter } from 'next/navigation'
 import { DocumentEditor } from '@/components/document-editor/DocumentEditor'
 import { RelatorioValidacao } from '@/components/pecas/RelatorioValidacao'
+import { SeloCitacoes } from '@/components/pecas/SeloCitacoes'
 import { useStreaming } from '@/components/shared/StreamingText'
 import { formatarPeca } from '@/lib/format/formatar-peca'
 import { Button } from '@/components/ui/button'
@@ -245,8 +246,14 @@ export function EditorPecaClient({
     </button>
   ) : null
 
+  // Selo de citações verificadas (E1): aparece quando a revisão trouxe citações.
+  const seloCitacoes = !validando && !painelAberto && validacao?.citacoes && validacao.citacoes.total > 0
+    ? <SeloCitacoes citacoes={validacao.citacoes} onClick={() => setPainelAberto(true)} />
+    : null
+
   const acoes = (
     <div className="flex items-center gap-2">
+      {seloCitacoes}
       {badgeRevisao}
       <Button
         size="sm"

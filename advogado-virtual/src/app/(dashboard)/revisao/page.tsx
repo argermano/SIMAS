@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { BotoesRevisao } from './BotoesRevisao'
+import { SeloCitacoes, type ResumoCitacoes } from '@/components/pecas/SeloCitacoes'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import { Calendar, ScrollText, User, ChevronRight } from 'lucide-react'
 import { formatarDataRelativa } from '@/lib/utils'
@@ -35,7 +36,7 @@ export default async function RevisaoPage() {
   const { data: pecas } = await supabase
     .from('pecas')
     .select(`
-      id, tipo, area, status, created_at,
+      id, tipo, area, status, created_at, validacao_fontes,
       atendimentos(
         id, area,
         clientes(id, nome)
@@ -76,6 +77,7 @@ export default async function RevisaoPage() {
                 } | null
                 const criador = peca.users as unknown as { id: string; nome: string; role: string } | null
                 const tipoPeca = TIPOS_PECA[peca.tipo]
+                const citacoes = (peca.validacao_fontes as { citacoes?: ResumoCitacoes } | null)?.citacoes ?? null
 
                 return (
                   <Card key={peca.id} className="overflow-hidden">
@@ -94,6 +96,7 @@ export default async function RevisaoPage() {
                             <Badge variant="warning" className="text-xs">
                               Aguardando Revisão
                             </Badge>
+                            {citacoes && citacoes.total > 0 && <SeloCitacoes citacoes={citacoes} />}
                           </div>
 
                           {/* Cliente */}
