@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { streamCompletion } from '@/lib/anthropic/client'
+import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { logUsagePosStream } from '@/lib/ia/pecas/motor'
 
 type Acao = 'reescrever' | 'gerar_topico' | 'comando_livre'
 
@@ -18,6 +19,7 @@ REGRAS:
 
 // POST /api/ia/editor-documento — gerar ou reescrever seção de documento com streaming
 export async function POST(req: NextRequest) {
+  const start = Date.now()
   try {
     const { acao, conteudo, descricao, contexto_documento, instrucao, documento_completo } = await req.json() as {
       acao: Acao
@@ -34,6 +36,7 @@ export async function POST(req: NextRequest) {
 
     const auth = await getAuthContext()
     if (!auth.ok) return auth.response
+    const { usuario } = auth
 
     let prompt: string
 
@@ -80,7 +83,9 @@ Gere o conteúdo completo da seção em Markdown. Inclua um heading (##) como t�
 Retorne APENAS o conteúdo Markdown da seção, sem explicações adicionais.`
     }
 
-    const { stream } = await streamCompletion({ system: SYSTEM_EDITOR, prompt })
+    const { stream, getUsage } = await streamCompletion({ system: SYSTEM_EDITOR, prompt })
+
+    logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'editor_documento', modelo: DEFAULT_MODEL, start })
 
     return new Response(stream, {
       headers: {

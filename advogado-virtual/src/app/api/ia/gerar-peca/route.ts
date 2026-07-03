@@ -227,7 +227,10 @@ export async function POST(req: NextRequest) {
         return jsonError('Erro ao criar registro da peça', 500)
       }
 
-      const { stream } = await streamCompletion({ system: SYSTEM_PECA_GENERICA, prompt, maxTokens: 32768, model: modelo })
+      const { stream, getUsage } = await streamCompletion({ system: SYSTEM_PECA_GENERICA, prompt, maxTokens: 32768, model: modelo })
+
+      // Loga o uso também no caminho de fallback genérico (antes escapava do dashboard).
+      logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'gerar_peca', modelo, start })
 
       return respostaStreamPeca(stream, peca.id)
     }

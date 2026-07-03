@@ -3,7 +3,10 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { statusInicialPeca, respostaStreamPeca, logUsagePosStream } from '@/lib/ia/pecas/motor'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { SYSTEM_REGRAS_FORENSE } from '@/lib/prompts/pecas/regras-formatacao'
+
+export const maxDuration = 120
 
 const LABELS_AREA: Record<string, string> = {
   previdenciario: 'Previdenciário',
@@ -61,6 +64,10 @@ export async function POST(req: NextRequest) {
     const auth = await getAuthContext()
     if (!auth.ok) return auth.response
     const { supabase, usuario } = auth
+
+    // Conta na cota de refino (antes não verificava e logava como "Outros").
+    const cota = await verificarCota(supabase, usuario.tenant_id, 'refinar_peca')
+    if (!cota.permitido) return jsonError(mensagemCotaExcedida(cota), 429)
 
     const statusInicial = statusInicialPeca(usuario.role)
 
@@ -137,7 +144,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Log assíncrono
-    logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'refinamento_peca', modelo: DEFAULT_MODEL, start })
+    logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'refinar_peca', modelo: DEFAULT_MODEL, start })
 
     return respostaStreamPeca(stream, peca?.id ?? '')
   } catch (err) {

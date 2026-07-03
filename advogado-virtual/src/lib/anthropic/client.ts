@@ -218,6 +218,38 @@ export async function extractTextFromPdf(params: {
 }
 
 /**
+ * Chamada de TEXTO sem streaming (documento pronto), com guardrail
+ * anti-injection e teto de tamanho — para rotas que geram texto e o devolvem
+ * em JSON (não SSE). Retorna o texto e o uso de tokens.
+ */
+export async function completionText(params: {
+  system: string
+  prompt: string
+  model?: string
+  maxTokens?: number
+}): Promise<{ text: string; usage: { input: number; output: number } }> {
+  const client = getAnthropicClient()
+  assertPromptSize(params.system, params.prompt)
+
+  const message = await client.messages.create({
+    model: params.model ?? DEFAULT_MODEL,
+    max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
+    system: comGuardrail(params.system),
+    messages: [{ role: 'user', content: params.prompt }],
+  })
+
+  const text = message.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+
+  return {
+    text,
+    usage: { input: message.usage.input_tokens, output: message.usage.output_tokens },
+  }
+}
+
+/**
  * Faz uma chamada sem streaming (para JSON responses)
  */
 export async function completionJSON<T = unknown>(params: {

@@ -1,8 +1,24 @@
 import { createClient } from '@/lib/supabase/server'
 
-// Custo estimado por 1K tokens (Claude Sonnet)
-const CUSTO_INPUT_1K = 0.003
-const CUSTO_OUTPUT_1K = 0.015
+// Preço estimado por 1K tokens (USD), por modelo. Fonte: docs.claude.com
+// (jul/2026). Antes o custo era fixo em Sonnet — o Opus 4.8 ($5/$25 MTok)
+// ficava ~40% subestimado e o Haiku de OCR superestimado.
+const PRECOS_1K: Record<string, { input: number; output: number }> = {
+  'claude-opus-4-8':   { input: 0.005, output: 0.025 },
+  'claude-opus-4-7':   { input: 0.005, output: 0.025 },
+  'claude-sonnet-5':   { input: 0.003, output: 0.015 },
+  'claude-sonnet-4-6': { input: 0.003, output: 0.015 },
+  'claude-haiku-4-5':  { input: 0.001, output: 0.005 },
+}
+const PRECO_PADRAO = { input: 0.003, output: 0.015 } // Sonnet — fallback
+
+/** Preço por 1K tokens do modelo (tolera sufixo de data, ex.: -20251001). */
+function precoDe(modelo: string): { input: number; output: number } {
+  for (const [id, preco] of Object.entries(PRECOS_1K)) {
+    if (modelo.startsWith(id)) return preco
+  }
+  return PRECO_PADRAO
+}
 
 export async function logUsage(params: {
   tenantId: string
@@ -13,9 +29,10 @@ export async function logUsage(params: {
   tokensOutput: number
   latenciaMs: number
 }) {
+  const preco = precoDe(params.modelo)
   const custoEstimado =
-    (params.tokensInput / 1000) * CUSTO_INPUT_1K +
-    (params.tokensOutput / 1000) * CUSTO_OUTPUT_1K
+    (params.tokensInput / 1000) * preco.input +
+    (params.tokensOutput / 1000) * preco.output
 
   const supabase = await createClient()
 

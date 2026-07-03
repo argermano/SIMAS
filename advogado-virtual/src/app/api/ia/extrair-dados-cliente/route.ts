@@ -1,17 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { completionJSON, extractTextFromImage, extractTextFromPdf } from '@/lib/anthropic/client'
+import { completionJSON, extractTextFromImage, extractTextFromPdf, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { safeLogUsage } from '@/lib/anthropic/usage'
 import {
   SYSTEM_EXTRACAO,
   buildPromptExtracao,
   type DadosExtraidos,
 } from '@/lib/prompts/extracao/dados-cliente'
 
+export const maxDuration = 120
+
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 
 // POST /api/ia/extrair-dados-cliente
 export async function POST(req: NextRequest) {
+  const start = Date.now()
   try {
     const { atendimentoId } = await req.json() as { atendimentoId: string }
 
@@ -21,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const auth = await getAuthContext()
     if (!auth.ok) return auth.response
-    const { supabase } = auth
+    const { supabase, usuario } = auth
 
     // Buscar TODOS os documentos do atendimento (incluindo sem texto)
     const { data: documentos } = await supabase
@@ -98,10 +102,22 @@ export async function POST(req: NextRequest) {
       }))
     )
 
-    const { result } = await completionJSON<DadosExtraidos>({
+    const { result, usage } = await completionJSON<DadosExtraidos>({
       system:    SYSTEM_EXTRACAO,
       prompt,
       maxTokens: 2048,
+    })
+
+    // Registra o uso no dashboard (a extração estruturada; o OCR Haiku por
+    // documento não é contabilizado aqui — só a chamada principal).
+    await safeLogUsage({
+      tenantId: usuario.tenant_id,
+      userId: usuario.id,
+      endpoint: 'extrair_dados',
+      modelo: DEFAULT_MODEL,
+      tokensInput: usage.input,
+      tokensOutput: usage.output,
+      latenciaMs: Date.now() - start,
     })
 
     return NextResponse.json(result)

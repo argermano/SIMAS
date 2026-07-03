@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { getAnthropicClient, DEFAULT_MODEL, DEFAULT_MAX_TOKENS } from '@/lib/anthropic/client'
+import { completionText, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
+import { safeLogUsage } from '@/lib/anthropic/usage'
 import { SYSTEM_PROCURACAO, buildPromptProcuracao } from '@/lib/prompts/documentos/procuracao'
 import { SYSTEM_DECLARACAO, buildPromptDeclaracao } from '@/lib/prompts/documentos/declaracao-hipossuficiencia'
 import { SYSTEM_SUBSTABELECIMENTO, buildPromptSubstabelecimento } from '@/lib/prompts/documentos/substabelecimento'
@@ -54,6 +56,7 @@ function dataExtenso(): string {
 // Se template existe → substitui variáveis → retorna conteudo (sem IA)
 // Se não existe   → gera com IA → salva template → retorna conteudo
 export async function POST(req: NextRequest) {
+  const start = Date.now()
   try {
     const { tipo, clienteId, camposExtras } = await req.json() as {
       tipo: TipoDoc
@@ -73,6 +76,21 @@ export async function POST(req: NextRequest) {
     const auth = await getAuthContext()
     if (!auth.ok) return auth.response
     const { supabase, usuario } = auth
+
+    const cota = await verificarCota(supabase, usuario.tenant_id, 'gerar_documento')
+    if (!cota.permitido) return jsonError(mensagemCotaExcedida(cota), 429)
+
+    // Log de uso da geração por IA (só quando a IA é chamada — não no caminho de template puro).
+    const logGeracao = (usage: { input: number; output: number }) =>
+      safeLogUsage({
+        tenantId: usuario.tenant_id,
+        userId: usuario.id,
+        endpoint: 'gerar_documento',
+        modelo: DEFAULT_MODEL,
+        tokensInput: usage.input,
+        tokensOutput: usage.output,
+        latenciaMs: Date.now() - start,
+      })
 
     // Buscar dados do cliente
     const { data: clienteRaw } = await supabase
@@ -102,22 +120,16 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       if (modeloEscritorio?.conteudo_markdown?.trim()) {
-        const anthropic = getAnthropicClient()
-        const message = await anthropic.messages.create({
-          model: DEFAULT_MODEL,
-          max_tokens: DEFAULT_MAX_TOKENS,
+        const { text: conteudo, usage } = await completionText({
           system: SYSTEM_PREENCHER_DOCUMENTO,
-          messages: [{
-            role: 'user',
-            content: buildPromptPreencherDocumento({
-              modelo: modeloEscritorio.conteudo_markdown,
-              cliente,
-              dataExtenso: dataExtenso(),
-              extras: camposExtras,
-            }),
-          }],
+          prompt: buildPromptPreencherDocumento({
+            modelo: modeloEscritorio.conteudo_markdown,
+            cliente,
+            dataExtenso: dataExtenso(),
+            extras: camposExtras,
+          }),
         })
-        const conteudo = message.content.filter(b => b.type === 'text').map(b => b.text).join('')
+        await logGeracao(usage)
         return NextResponse.json({ conteudo, templateExistia: false })
       }
     }
@@ -148,8 +160,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Sem template → gerar com IA
-    const anthropic = getAnthropicClient()
-
     let system: string
     let prompt: string
 
@@ -196,17 +206,8 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const message = await anthropic.messages.create({
-      model:      DEFAULT_MODEL,
-      max_tokens: DEFAULT_MAX_TOKENS,
-      system,
-      messages: [{ role: 'user', content: prompt }],
-    })
-
-    const templateGerado = message.content
-      .filter(b => b.type === 'text')
-      .map(b => b.text)
-      .join('')
+    const { text: templateGerado, usage } = await completionText({ system, prompt })
+    await logGeracao(usage)
 
     // Salvar template para uso futuro (UPSERT)
     await supabase

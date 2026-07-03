@@ -8,45 +8,57 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  * Endpoints dinâmicos (`comando_*`, `correcao_*`) são agrupados por prefixo.
  */
 export const CATEGORIAS: Record<string, { label: string; grupo: string; chave: string }> = {
-  gerar_peca:     { label: 'Geração de peças',         grupo: 'Documentos', chave: 'gerar_peca' },
-  refinar_peca:   { label: 'Refinamento de peças',     grupo: 'Documentos', chave: 'refinar_peca' },
-  validar_peca:   { label: 'Validação de peças',       grupo: 'Documentos', chave: 'validar_peca' },
-  analise:        { label: 'Análise de documentos',     grupo: 'Análise',   chave: 'analise' },
-  analise_geral:  { label: 'Análise geral do caso',    grupo: 'Análise',   chave: 'analise_geral' },
-  comando:        { label: 'Comandos IA no editor',    grupo: 'Editor',    chave: 'comando' },
-  correcao:       { label: 'Correção automática',      grupo: 'Editor',    chave: 'correcao' },
+  gerar_peca:      { label: 'Geração de peças',         grupo: 'Documentos', chave: 'gerar_peca' },
+  refinar_peca:    { label: 'Refinamento de peças',     grupo: 'Documentos', chave: 'refinar_peca' },
+  validar_peca:    { label: 'Validação de peças',       grupo: 'Documentos', chave: 'validar_peca' },
+  gerar_contrato:  { label: 'Geração de contratos',     grupo: 'Documentos', chave: 'gerar_contrato' },
+  gerar_documento: { label: 'Modelos e documentos',     grupo: 'Documentos', chave: 'gerar_documento' },
+  analise:         { label: 'Análise de documentos',    grupo: 'Análise',   chave: 'analise' },
+  analise_geral:   { label: 'Análise geral do caso',    grupo: 'Análise',   chave: 'analise_geral' },
+  extrair_dados:   { label: 'Extração de dados (OCR)',  grupo: 'Análise',   chave: 'extrair_dados' },
+  comando:         { label: 'Comandos IA no editor',    grupo: 'Editor',    chave: 'comando' },
+  correcao:        { label: 'Correção automática',      grupo: 'Editor',    chave: 'correcao' },
+  editor_documento:{ label: 'Edição por IA no editor',  grupo: 'Editor',    chave: 'editor_documento' },
 }
 
 /** Limites por plano (chamadas permitidas por categoria, por mês corrente). */
 export const LIMITES_PLANO: Record<string, Record<string, number>> = {
   trial: {
-    gerar_peca:    50,
-    refinar_peca:  50,
-    validar_peca:  30,
-    analise:       20,
-    analise_geral: 100,
-    comando:       200,
-    correcao:      200,
+    gerar_peca:     50,
+    refinar_peca:   50,
+    validar_peca:   30,
+    gerar_contrato: 50,
+    gerar_documento:100,
+    analise:        20,
+    analise_geral:  100,
+    comando:        200,
+    correcao:       200,
   },
   basico: {
-    gerar_peca:    200,
-    refinar_peca:  200,
-    validar_peca:  100,
-    analise:       100,
-    analise_geral: 500,
-    comando:       1000,
-    correcao:      1000,
+    gerar_peca:     200,
+    refinar_peca:   200,
+    validar_peca:   100,
+    gerar_contrato: 200,
+    gerar_documento:500,
+    analise:        100,
+    analise_geral:  500,
+    comando:        1000,
+    correcao:       1000,
   },
   profissional: {
-    gerar_peca:    1000,
-    refinar_peca:  1000,
-    validar_peca:  500,
-    analise:       500,
-    analise_geral: 2000,
-    comando:       5000,
-    correcao:      5000,
+    gerar_peca:     1000,
+    refinar_peca:   1000,
+    validar_peca:   500,
+    gerar_contrato: 1000,
+    gerar_documento:2000,
+    analise:        500,
+    analise_geral:  2000,
+    comando:        5000,
+    correcao:       5000,
   },
 }
+// editor_documento e extrair_dados ficam SEM limite (log-only, visíveis no
+// dashboard mas sem bloqueio — operações auxiliares de alta frequência).
 
 export function categorizar(endpoint: string): { label: string; grupo: string; chave: string } {
   if (CATEGORIAS[endpoint]) return CATEGORIAS[endpoint]

@@ -1,8 +1,12 @@
 import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { streamCompletion } from '@/lib/anthropic/client'
+import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
+import { logUsagePosStream } from '@/lib/ia/pecas/motor'
 import { decryptClienteFields, decryptField } from '@/lib/encryption'
+
+export const maxDuration = 120
 import {
   buildPromptContratoHonorarios,
   SYSTEM_CONTRATO_HONORARIOS,
@@ -13,6 +17,7 @@ const CAMPOS_TENANT_PROFISSIONAL = 'nome_responsavel, oab_numero, oab_estado, cp
 
 // POST /api/ia/gerar-contrato — geração de contrato de honorários com streaming SSE
 export async function POST(req: NextRequest) {
+  const start = Date.now()
   try {
     const {
       contratoId,
@@ -35,6 +40,9 @@ export async function POST(req: NextRequest) {
     const auth = await getAuthContext()
     if (!auth.ok) return auth.response
     const { supabase, usuario: usuarioLogado } = auth
+
+    const cota = await verificarCota(supabase, usuarioLogado.tenant_id, 'gerar_contrato')
+    if (!cota.permitido) return jsonError(mensagemCotaExcedida(cota), 429)
 
     // Buscar dados profissionais do escritório (tenant)
     const { data: tenant } = await supabase
@@ -187,11 +195,13 @@ Campos preenchidos por aproximação devem ser marcados com [⚠ preenchido por 
 Responda com o contrato COMPLETO em Markdown.
 `.trim()
 
-      const { stream } = await streamCompletion({
+      const { stream, getUsage } = await streamCompletion({
         system: SYSTEM_PREENCHER_MODELO,
         prompt: promptComModelo,
         maxTokens: 16000,
       })
+
+      logUsagePosStream({ getUsage, tenantId: usuarioLogado.tenant_id, userId: usuarioLogado.id, endpoint: 'gerar_contrato', modelo: DEFAULT_MODEL, start })
 
       return new Response(stream, { headers: sseHeaders })
     }
@@ -234,11 +244,13 @@ Responda com o contrato COMPLETO em Markdown.
       instrucoes,
     })
 
-    const { stream } = await streamCompletion({
+    const { stream, getUsage } = await streamCompletion({
       system: SYSTEM_CONTRATO_HONORARIOS,
       prompt,
       maxTokens: 6000,
     })
+
+    logUsagePosStream({ getUsage, tenantId: usuarioLogado.tenant_id, userId: usuarioLogado.id, endpoint: 'gerar_contrato', modelo: DEFAULT_MODEL, start })
 
     return new Response(stream, { headers: sseHeaders })
   } catch (err) {
