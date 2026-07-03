@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { calcularTaxaEdicao } from '@/lib/telemetria/taxa-edicao'
 
 export const maxDuration = 120
 
@@ -65,6 +66,27 @@ export async function POST(req: NextRequest) {
 
     if (error) {
       return jsonError('Erro ao salvar peça', 500)
+    }
+
+    // Telemetria de edição (B6-mínimo): compara o salvo com a geração original
+    // (1ª versão histórica). Best-effort — nunca derruba o save.
+    try {
+      const { data: base } = await supabase
+        .from('pecas_versoes')
+        .select('conteudo_markdown')
+        .eq('peca_id', pecaId)
+        .order('versao', { ascending: true })
+        .limit(1)
+        .single()
+      if (base?.conteudo_markdown) {
+        await supabase
+          .from('pecas')
+          .update({ taxa_edicao: calcularTaxaEdicao(base.conteudo_markdown, conteudo) })
+          .eq('id', pecaId)
+          .eq('tenant_id', usuario.tenant_id)
+      }
+    } catch {
+      // telemetria não pode quebrar o salvamento
     }
 
     return NextResponse.json({ ok: true, versao: (pecaAtual.versao ?? 1) + 1 })

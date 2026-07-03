@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { LABELS_AREA } from '@/types'
+import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import {
   Brain, Zap, FileText, Search, PenTool,
   Loader2, Hash, DollarSign, BarChart3, ScrollText,
@@ -33,11 +35,19 @@ interface DiaUsage {
   chamadas: number
 }
 
+interface EdicaoPeca {
+  area: string
+  tipo: string
+  pecas: number
+  taxaMediaPct: number
+}
+
 interface UsageData {
   resumo: Resumo
   plano: string
   grupos: Record<string, Categoria[]>
   historicoDiario: DiaUsage[]
+  edicaoPorPeca: EdicaoPeca[]
 }
 
 const ICONES_GRUPO: Record<string, React.ReactNode> = {
@@ -136,7 +146,7 @@ export function PainelConsumoIA() {
     )
   }
 
-  const { resumo, grupos, historicoDiario } = data
+  const { resumo, grupos, historicoDiario, edicaoPorPeca } = data
   const grupoOrdem = ['Documentos', 'Análise', 'Editor', 'Outros']
 
   return (
@@ -177,6 +187,41 @@ export function PainelConsumoIA() {
             </span>
           </div>
           <MiniBarChart dados={historicoDiario} />
+        </div>
+      )}
+
+      {/* Edição por tipo de peça (fila de curadoria) */}
+      {edicaoPorPeca && edicaoPorPeca.length > 0 && (
+        <div className="rounded-lg border bg-card p-3">
+          <div className="mb-2 flex items-center gap-1.5">
+            <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Quanto você edita a peça gerada (por tipo)
+            </span>
+          </div>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Quanto maior a barra, mais o texto da IA foi alterado — é a fila de curadoria (o prompt a melhorar primeiro).
+          </p>
+          <div className="space-y-1.5">
+            {edicaoPorPeca.map((e) => {
+              const nomeArea = LABELS_AREA[e.area as keyof typeof LABELS_AREA] ?? e.area
+              const nomeTipo = TIPOS_PECA[e.tipo]?.nome ?? e.tipo.replace(/_/g, ' ')
+              const cor = e.taxaMediaPct >= 50 ? 'bg-destructive' : e.taxaMediaPct >= 25 ? 'bg-warning' : 'bg-success'
+              return (
+                <div key={`${e.area}-${e.tipo}`} className="flex items-center gap-2 text-xs">
+                  <span className="w-40 shrink-0 truncate text-foreground" title={`${nomeTipo} — ${nomeArea}`}>
+                    {nomeTipo} <span className="text-muted-foreground">· {nomeArea}</span>
+                  </span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div className={`h-full rounded-full ${cor}`} style={{ width: `${Math.min(100, e.taxaMediaPct)}%` }} />
+                  </div>
+                  <span className="w-16 shrink-0 text-right tabular-nums text-muted-foreground">
+                    {e.taxaMediaPct}% · {e.pecas}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 

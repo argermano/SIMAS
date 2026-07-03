@@ -116,6 +116,25 @@ export async function GET() {
 
   const totalCustoBrl = Math.round(totalCusto * USD_BRL * 100) / 100
 
+  // Edição por tipo de peça (fila de curadoria): quanto o advogado edita o que a
+  // IA gera, por área × tipo. Maior taxa = prompt a melhorar primeiro.
+  const { data: pecasTelemetria } = await supabase
+    .from('pecas')
+    .select('area, tipo, taxa_edicao')
+    .eq('tenant_id', usuario.tenant_id)
+    .not('taxa_edicao', 'is', null)
+
+  const porPecaMap: Record<string, { area: string; tipo: string; n: number; soma: number }> = {}
+  for (const p of (pecasTelemetria ?? [])) {
+    const key = `${p.area}::${p.tipo}`
+    if (!porPecaMap[key]) porPecaMap[key] = { area: p.area as string, tipo: p.tipo as string, n: 0, soma: 0 }
+    porPecaMap[key].n++
+    porPecaMap[key].soma += Number(p.taxa_edicao ?? 0)
+  }
+  const edicaoPorPeca = Object.values(porPecaMap)
+    .map((x) => ({ area: x.area, tipo: x.tipo, pecas: x.n, taxaMediaPct: Math.round((x.soma / x.n) * 100) }))
+    .sort((a, b) => b.taxaMediaPct - a.taxaMediaPct)
+
   return NextResponse.json({
     resumo: {
       totalChamadas,
@@ -128,5 +147,6 @@ export async function GET() {
     plano,
     grupos,
     historicoDiario: diasArray,
+    edicaoPorPeca,
   })
 }
