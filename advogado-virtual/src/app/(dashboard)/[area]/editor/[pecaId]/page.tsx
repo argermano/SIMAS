@@ -49,8 +49,8 @@ export default async function EditorPecaPage({
 
   if (!peca) notFound()
 
-  // Reconstrói a revisão automática persistida (validarPecaPosStream) para o
-  // editor abrir com o badge/painel prontos, sem re-chamar a IA.
+  // Reconstrói a revisão persistida (auto ou manual) para o editor abrir com o
+  // badge/painel prontos, sem re-chamar a IA.
   const vf = peca.validacao_fontes as {
     legislacao?: ValidacaoData['legislacao']
     jurisprudencia?: ValidacaoData['jurisprudencia']

@@ -63,7 +63,7 @@ export function EditorPecaClient({
   // Painel de revisão automática (validar → corrigir)
   const [painelAberto, setPainelAberto] = useState(false)
   const [validando, setValidando]       = useState(false)
-  // Inicia com a revisão automática pós-geração, se já gravada (validarPecaPosStream).
+  // Inicia com a revisão já gravada (auto ou manual), se houver.
   const [validacao, setValidacao]       = useState<ValidacaoData | null>(validacaoInicial ?? null)
   const [corrigindo, setCorrigindo]     = useState<string | null>(null)
   const { startStream } = useStreaming()
@@ -134,31 +134,51 @@ export function EditorPecaClient({
   // Revisão automática por IA (coerência, citações, score) + checagem
   // determinística de formatação forense. Sob demanda para não gastar cota a
   // cada abertura do editor.
-  async function handleRevisar() {
-    setValidando(true)
-    setPainelAberto(true)
-    setValidacao(null)
+  async function handleRevisar(opts?: { auto?: boolean }) {
+    const auto = opts?.auto ?? false
+    if (!auto) {
+      setValidando(true)
+      setPainelAberto(true)
+      setValidacao(null)
+    }
     try {
       const res = await fetch('/api/ia/validar-peca', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ pecaId }),
+        body:    JSON.stringify({ pecaId, auto }),
       })
       const data = await res.json()
       if (!res.ok) {
-        toastError('Erro na revisão', data.error ?? 'Tente novamente')
-        setPainelAberto(false)
+        // No modo auto (background) falha em silêncio — não incomoda o usuário.
+        if (!auto) {
+          toastError('Erro na revisão', data.error ?? 'Tente novamente')
+          setPainelAberto(false)
+        }
         return
       }
       setValidacao(data as ValidacaoData)
-      setStatus((s) => (s === 'rascunho' ? 'revisada' : s))
+      if (!auto) setStatus((s) => (s === 'rascunho' ? 'revisada' : s))
     } catch {
-      toastError('Erro', 'Falha de rede na revisão')
-      setPainelAberto(false)
+      if (!auto) {
+        toastError('Erro', 'Falha de rede na revisão')
+        setPainelAberto(false)
+      }
     } finally {
-      setValidando(false)
+      if (!auto) setValidando(false)
     }
   }
+
+  // Revisão automática DESACOPLADA da geração: se a peça ainda não tem revisão,
+  // dispara uma vez em background (chamada separada, própria — não pesa no tempo
+  // da geração). Só com conteúdo relevante (não revisa peça vazia/truncada).
+  const autoRevisaoRef = useRef(false)
+  useEffect(() => {
+    if (!validacaoInicial && !autoRevisaoRef.current && (conteudoInicial?.trim().length ?? 0) > 200) {
+      autoRevisaoRef.current = true
+      handleRevisar({ auto: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Correção de um clique: reescreve a peça aplicando a correção sugerida,
   // persiste (salvar-peca versiona a anterior) e remonta o editor.
@@ -299,7 +319,7 @@ export function EditorPecaClient({
       <Button
         size="sm"
         variant="secondary"
-        onClick={handleRevisar}
+        onClick={() => handleRevisar()}
         disabled={validando || corrigindo !== null}
         className="gap-1.5"
       >

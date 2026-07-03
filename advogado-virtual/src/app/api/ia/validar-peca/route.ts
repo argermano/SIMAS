@@ -15,7 +15,9 @@ export async function POST(req: NextRequest) {
   const start = Date.now()
 
   try {
-    const { pecaId } = await req.json()
+    // `auto` = revisão automática disparada pelo editor (desacoplada da geração):
+    // não altera o status e loga em categoria própria.
+    const { pecaId, auto } = await req.json()
     if (!pecaId) return jsonError('pecaId é obrigatório', 400)
 
     const auth = await getAuthContext()
@@ -48,35 +50,37 @@ export async function POST(req: NextRequest) {
       verificarCitacoesOnline(peca.conteudo_markdown),
     ])
 
-    // Salvar validação na peça
-    await supabase
-      .from('pecas')
-      .update({
-        validacao_coerencia: result.coerencia ?? null,
-        validacao_fontes: {
-          legislacao: result.legislacao,
-          jurisprudencia: result.jurisprudencia,
-          doutrina: result.doutrina,
-          score: result.score_confianca,
-          correcoes: result.correcoes_sugeridas,
-        },
-        status: 'revisada',
-      })
-      .eq('id', pecaId)
+    // Validação determinística de formatação (complementa a validação por IA)
+    const formatacao = validarFormatacaoPeca(peca.conteudo_markdown)
+
+    // Salvar validação na peça — persiste formatacao + citacoes também, para o
+    // badge/selo aparecerem já ao reabrir o editor (sem re-chamar a IA).
+    const update: Record<string, unknown> = {
+      validacao_coerencia: result.coerencia ?? null,
+      validacao_fontes: {
+        legislacao: result.legislacao,
+        jurisprudencia: result.jurisprudencia,
+        doutrina: result.doutrina,
+        score: result.score_confianca,
+        correcoes: result.correcoes_sugeridas,
+        formatacao,
+        citacoes,
+      },
+    }
+    // A revisão automática (auto) NÃO promove o status — aprovar é ação humana.
+    if (!auto) update.status = 'revisada'
+    await supabase.from('pecas').update(update).eq('id', pecaId)
 
     // Log
     await logUsage({
       tenantId: usuario.tenant_id,
       userId: usuario.id,
-      endpoint: 'validar_peca',
+      endpoint: auto ? 'validar_peca_auto' : 'validar_peca',
       modelo: DEFAULT_MODEL,
       tokensInput: usage.input,
       tokensOutput: usage.output,
       latenciaMs: Date.now() - start,
     })
-
-    // Validação determinística de formatação (complementa a validação por IA)
-    const formatacao = validarFormatacaoPeca(peca.conteudo_markdown)
 
     return NextResponse.json({ ...result, formatacao, citacoes })
   } catch (err) {
