@@ -55,7 +55,7 @@ Estas dependem de você e do ambiente (Vercel/Supabase) — não são código.
 ### Validações práticas (testar no uso real)
 - [ ] **Celular em campo:** instalar o app (Adicionar à tela de início), gravar um relato de teste e, no meio, ativar o modo avião para ver os trechos ficarem "aguardando conexão" e reenviarem sozinhos ao voltar a rede.
 - [ ] **Painel de revisão:** abrir uma peça no editor, clicar **"Revisar peça"**, conferir o score/avisos e testar uma **correção de um clique**.
-- [ ] **Curadoria jurídica dos 10 prompts rascunho:** revisar `src/lib/prompts/pecas/{area}/{replica,apelacao,recurso-ordinario}.ts` (template em `_shared/construtores.ts`). Estão marcados como `RASCUNHO` e **não devem ser considerados prontos** sem revisão de advogado. Bom momento para acionar o Fable (mais barato para análise) para uma leitura crítica área a área.
+- [x] **Curadoria jurídica dos 10 prompts:** ✅ revisão Fable feita em 2026-07-03 (docs/PARECER-FABLE-2026-07-03.md) — todas as citações verificadas (nenhuma inventada); edições E1–E6 aplicadas (art. 341, alerta JEF, rito trabalhista, enriquecimentos); promovidos de RASCUNHO a Curado. **Resta a aprovação final do advogado: ler 1 peça gerada de cada tipo (réplica, apelação, recurso ordinário).**
 
 ---
 
