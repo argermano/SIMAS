@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next'
+import { withSentryConfig } from '@sentry/nextjs'
 
 // Headers de segurança aplicados a todas as respostas.
 // Obs.: 'microphone=(self)' é necessário porque o app grava áudio (GravadorAudio).
@@ -50,4 +51,9 @@ const nextConfig: NextConfig = {
   },
 }
 
-export default nextConfig
+// Envolve com o Sentry. Sem SENTRY_AUTH_TOKEN, o upload de source maps é
+// simplesmente pulado — os erros continuam sendo reportados (stack trace do
+// servidor legível; do cliente minificado até adicionar o token, opcional).
+export default withSentryConfig(nextConfig, {
+  silent: !process.env.CI, // silencioso local; verboso no CI
+})

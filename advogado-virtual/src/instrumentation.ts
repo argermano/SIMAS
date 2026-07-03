@@ -42,13 +42,21 @@ export async function register() {
     }
     console.warn(`⚠️  [env] ${msg} Defina ENCRYPTION_KEY (e ENCRYPTION_REQUIRED=true para exigir).`)
   }
+
+  // Inicializa o Sentry no runtime correto. Os arquivos de config só chamam
+  // Sentry.init() se houver SENTRY_DSN — sem a variável, isto é um no-op.
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    await import('../sentry.server.config')
+  } else if (process.env.NEXT_RUNTIME === 'edge') {
+    await import('../sentry.edge.config')
+  }
 }
 
 /**
  * Captura app-wide de erros não tratados (rotas, server components, actions) —
  * hook nativo do Next 15. Registra de forma estruturada via logger (visível nos
- * logs da Vercel, pesquisável). É o ponto único onde um APM/Sentry pode ser
- * plugado no futuro (basta encaminhar `err` aqui), sem tocar em cada rota.
+ * logs da Vercel, pesquisável) E encaminha ao Sentry quando configurado
+ * (alerta + agrupamento). Sem SENTRY_DSN, o encaminhamento é um no-op.
  */
 export async function onRequestError(
   err: unknown,
@@ -66,5 +74,18 @@ export async function onRequestError(
   } catch {
     // Nunca deixar o próprio handler de erro derrubar a request.
     console.error('[onRequestError] falha ao registrar:', err)
+  }
+
+  if (process.env.SENTRY_DSN) {
+    try {
+      const Sentry = await import('@sentry/nextjs')
+      Sentry.captureRequestError(
+        err,
+        request as Parameters<typeof Sentry.captureRequestError>[1],
+        context as Parameters<typeof Sentry.captureRequestError>[2],
+      )
+    } catch {
+      // idem — falha no encaminhamento não pode derrubar a request.
+    }
   }
 }
