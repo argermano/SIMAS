@@ -43,3 +43,28 @@ export async function register() {
     console.warn(`⚠️  [env] ${msg} Defina ENCRYPTION_KEY (e ENCRYPTION_REQUIRED=true para exigir).`)
   }
 }
+
+/**
+ * Captura app-wide de erros não tratados (rotas, server components, actions) —
+ * hook nativo do Next 15. Registra de forma estruturada via logger (visível nos
+ * logs da Vercel, pesquisável). É o ponto único onde um APM/Sentry pode ser
+ * plugado no futuro (basta encaminhar `err` aqui), sem tocar em cada rota.
+ */
+export async function onRequestError(
+  err: unknown,
+  request: { path?: string; method?: string },
+  context: { routePath?: string; routeType?: string },
+) {
+  try {
+    const { logger } = await import('@/lib/logger')
+    logger.error('request.erro_nao_tratado', {
+      path: request?.path,
+      method: request?.method,
+      routePath: context?.routePath,
+      routeType: context?.routeType,
+    }, err)
+  } catch {
+    // Nunca deixar o próprio handler de erro derrubar a request.
+    console.error('[onRequestError] falha ao registrar:', err)
+  }
+}

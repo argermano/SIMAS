@@ -7,6 +7,7 @@ import { modeloDaVersao } from '@/lib/anthropic/versoes'
 import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptAnaliseGeral, SYSTEM_ANALISE_GERAL } from '@/lib/prompts/analise/geral'
+import { logger } from '@/lib/logger'
 
 export const maxDuration = 120
 
@@ -144,7 +145,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result, analise_id })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    console.error('[analise-geral]', message)
+    logger.error('ia.analise_geral.falha', {}, err)
     return jsonError(message, 500)
   }
 }

@@ -7,6 +7,7 @@ import { logUsagePosStream } from '@/lib/ia/pecas/motor'
 import { decryptClienteFields, decryptField } from '@/lib/encryption'
 
 export const maxDuration = 120
+import { logger } from '@/lib/logger'
 import {
   buildPromptContratoHonorarios,
   SYSTEM_CONTRATO_HONORARIOS,
@@ -255,7 +256,7 @@ Responda com o contrato COMPLETO em Markdown.
     return new Response(stream, { headers: sseHeaders })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    console.error('[gerar-contrato]', message)
+    logger.error('ia.gerar_contrato.falha', {}, err)
     return jsonError(message, 500)
   }
 }

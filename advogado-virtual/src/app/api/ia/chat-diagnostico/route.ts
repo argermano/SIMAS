@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsage } from '@/lib/anthropic/usage'
+import { logger } from '@/lib/logger'
 
 export const maxDuration = 120
 
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    console.error('[chat-diagnostico] Erro:', message, err)
+    logger.error('ia.chat_diagnostico.falha', {}, err)
     return jsonError(message, 500)
   }
 }

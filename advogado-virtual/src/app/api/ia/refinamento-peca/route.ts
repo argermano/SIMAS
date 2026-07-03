@@ -5,6 +5,7 @@ import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { statusInicialPeca, respostaStreamPeca, logUsagePosStream, salvarPecaPosStreamSeVazia } from '@/lib/ia/pecas/motor'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { SYSTEM_REGRAS_FORENSE } from '@/lib/prompts/pecas/regras-formatacao'
+import { logger } from '@/lib/logger'
 
 export const maxDuration = 120
 
@@ -151,7 +152,7 @@ export async function POST(req: NextRequest) {
     return respostaStreamPeca(stream, peca?.id ?? '')
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    console.error('[refinamento-peca] Erro:', message, err)
+    logger.error('ia.refinamento_peca.falha', {}, err)
     return jsonError(message, 500)
   }
 }

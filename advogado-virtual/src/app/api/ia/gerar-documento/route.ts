@@ -11,6 +11,7 @@ import { SYSTEM_NOTIFICACAO, buildPromptNotificacao } from '@/lib/prompts/docume
 import { SYSTEM_CONTRATO_HONORARIOS, buildPromptContratoHonorarios } from '@/lib/prompts/documentos/contrato-honorarios-modelo'
 import { SYSTEM_PREENCHER_DOCUMENTO, buildPromptPreencherDocumento } from '@/lib/prompts/documentos/preencher-modelo'
 import { decryptClienteFields } from '@/lib/encryption'
+import { logger } from '@/lib/logger'
 
 export const maxDuration = 120
 
@@ -229,7 +230,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ conteudo, templateExistia: false })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    console.error('[gerar-documento]', message)
+    logger.error('ia.gerar_documento.falha', {}, err)
     return jsonError(message, 500)
   }
 }

@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { completionJSON, extractTextFromImage, extractTextFromPdf, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { safeLogUsage } from '@/lib/anthropic/usage'
+import { logger } from '@/lib/logger'
 import {
   SYSTEM_EXTRACAO,
   buildPromptExtracao,
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    console.error('[extrair-dados-cliente]', message)
+    logger.error('ia.extrair_dados_cliente.falha', {}, err)
     return jsonError(message, 500)
   }
 }

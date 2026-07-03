@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { logUsagePosStream } from '@/lib/ia/pecas/motor'
+import { logger } from '@/lib/logger'
 
 export const maxDuration = 120
 
@@ -98,7 +99,7 @@ Retorne APENAS o conteúdo Markdown da seção, sem explicações adicionais.`
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    console.error('[editor-documento]', message)
+    logger.error('ia.editor_documento.falha', {}, err)
     return jsonError(message, 500)
   }
 }

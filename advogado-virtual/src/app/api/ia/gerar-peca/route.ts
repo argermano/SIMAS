@@ -19,6 +19,7 @@ export const maxDuration = 120
 import { buscarModeloPadrao } from '@/lib/modelos/buscar-modelo'
 import { AREAS, type AreaId } from '@/lib/constants/areas'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
+import { logger } from '@/lib/logger'
 
 // Tipos (QualificacaoPartes) e o registro de prompts curados (PROMPT_MAP +
 // selecionarPromptPeca) ficam em @/lib/ia/pecas/registro-pecas.
@@ -291,7 +292,7 @@ export async function POST(req: NextRequest) {
     return respostaStreamPeca(stream, peca.id)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
-    console.error('[gerar-peca] Erro:', message, err)
+    logger.error('ia.gerar_peca.falha', {}, err)
     return jsonError(message, 500)
   }
 }
