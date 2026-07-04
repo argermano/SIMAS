@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
         localizacao,
         qualificacao: qualificacaoFinal,
       })
-      const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto }) + blocoFundamentacaoParaPrompt(area)
+      const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto }) + await blocoFundamentacaoParaPrompt(supabase, usuario.tenant_id, area)
 
       // Cria a peça ANTES do stream para garantir um X-Peca-Id válido sempre.
       const { data: peca, error: pecaError } = await supabase
@@ -255,7 +255,7 @@ export async function POST(req: NextRequest) {
       localizacao,
       qualificacao: qualificacaoFinal,
     })
-    const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto }) + blocoFundamentacaoParaPrompt(area)
+    const prompt = anexarModeloEJurisprudencia(promptBase, { modeloPadrao, jurisprudenciaTexto }) + await blocoFundamentacaoParaPrompt(supabase, usuario.tenant_id, area)
 
     // Criar peça no banco (status rascunho) ANTES do stream → X-Peca-Id sempre válido
     const { data: peca, error: pecaError } = await supabase

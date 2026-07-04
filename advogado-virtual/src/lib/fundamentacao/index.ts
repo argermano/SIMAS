@@ -1,3 +1,4 @@
+import type { createClient } from '@/lib/supabase/server'
 import type { TeseCurada } from './tipos'
 import { TESES_PREVIDENCIARIO } from './previdenciario'
 import { TESES_TRABALHISTA } from './trabalhista'
@@ -8,8 +9,14 @@ import { TESES_CONSUMIDOR } from './consumidor'
 
 export type { TeseCurada, EmentaCurada } from './tipos'
 
-/** Registro da base curada por área. */
-export const TESES_POR_AREA: Record<string, TeseCurada[]> = {
+type SupabaseServer = Awaited<ReturnType<typeof createClient>>
+
+// Teto de teses injetadas por área (proteção do tamanho do prompt).
+const MAX_TESES_INJETADAS = 15
+
+// ─── Template no repositório (apenas EXEMPLO de formato; a base real vive no
+//     banco, tabela teses_escritorio — ver Fase 3). Mantido para referência. ───
+export const TEMPLATE_POR_AREA: Record<string, TeseCurada[]> = {
   previdenciario: TESES_PREVIDENCIARIO,
   trabalhista:    TESES_TRABALHISTA,
   civel:          TESES_CIVEL,
@@ -18,52 +25,59 @@ export const TESES_POR_AREA: Record<string, TeseCurada[]> = {
   consumidor:     TESES_CONSUMIDOR,
 }
 
-/** Teses REAIS de uma área (exclui os registros de exemplo/template). */
-export function tesesDaArea(area: string): TeseCurada[] {
-  return (TESES_POR_AREA[area] ?? []).filter((t) => !t.exemplo)
+// ─── Base real (banco, por tenant) ───────────────────────────────────────────
+
+export interface TeseDB {
+  id: string
+  area: string
+  tese: string
+  dispositivos: string[]
+  sumulas: string[]
+  ementas: Array<{ tribunal?: string; processo?: string; relator?: string; julgamento?: string; ementa?: string; fonteUrl?: string }>
+  quando_usar?: string | null
 }
 
-/** Todas as teses (inclui exemplos) — para a biblioteca. */
-export function tesesDaAreaComExemplos(area: string): TeseCurada[] {
-  return TESES_POR_AREA[area] ?? []
+/** Teses APROVADAS de uma área do tenant (para injeção e biblioteca). */
+export async function tesesAprovadas(supabase: SupabaseServer, tenantId: string, area: string): Promise<TeseDB[]> {
+  const { data } = await supabase
+    .from('teses_escritorio')
+    .select('id, area, tese, dispositivos, sumulas, ementas, quando_usar')
+    .eq('tenant_id', tenantId)
+    .eq('area', area)
+    .eq('status', 'aprovada')
+    .order('aprovada_em', { ascending: false })
+    .limit(MAX_TESES_INJETADAS)
+  return (data ?? []) as TeseDB[]
 }
 
 /**
  * Bloco de FUNDAMENTAÇÃO VERIFICADA para injetar no prompt de geração. Vazio se
- * a área não tem teses reais curadas. As citações aqui foram conferidas por
- * humano → o modelo pode usá-las literalmente, SEM [VERIFICAR].
+ * a área do tenant não tem tese aprovada. As citações aqui foram conferidas por
+ * humano → o modelo pode usá-las literalmente, SEM [VERIFICAR]. Best-effort:
+ * qualquer falha de leitura devolve '' (nunca derruba a geração).
  */
-export function blocoFundamentacaoParaPrompt(area: string): string {
-  const teses = tesesDaArea(area)
+export async function blocoFundamentacaoParaPrompt(supabase: SupabaseServer, tenantId: string, area: string): Promise<string> {
+  let teses: TeseDB[] = []
+  try {
+    teses = await tesesAprovadas(supabase, tenantId, area)
+  } catch {
+    return ''
+  }
   if (teses.length === 0) return ''
 
   const linhas = teses.map((t) => {
-    const cits = [...t.dispositivos, ...t.sumulas].filter(Boolean).join('; ')
-    const ementas = t.ementas
-      .map((e) => `  > "${e.ementa}" (${e.tribunal}, ${e.processo}, ${e.relator}, j. ${e.julgamento})`)
+    const cits = [...(t.dispositivos ?? []), ...(t.sumulas ?? [])].filter(Boolean).join('; ')
+    const ementas = (t.ementas ?? [])
+      .filter((e) => e.ementa)
+      .map((e) => `  > "${e.ementa}" (${[e.tribunal, e.processo, e.relator, e.julgamento && `j. ${e.julgamento}`].filter(Boolean).join(', ')})`)
       .join('\n')
     return [
       `- TESE: ${t.tese}`,
       cits ? `  Fundamentos: ${cits}` : '',
-      t.quandoUsar ? `  Quando usar: ${t.quandoUsar}` : '',
+      t.quando_usar ? `  Quando usar: ${t.quando_usar}` : '',
       ementas,
     ].filter(Boolean).join('\n')
   }).join('\n')
 
   return `\n\n## FUNDAMENTAÇÃO VERIFICADA PELO ESCRITÓRIO\nAs teses, dispositivos e ementas abaixo foram CONFERIDOS por advogado do escritório — você PODE usá-los literalmente na fundamentação, SEM marcar [VERIFICAR]. Use apenas os pertinentes ao caso concreto. Qualquer OUTRA jurisprudência mencionada de conhecimento próprio continua exigindo [VERIFICAR].\n\n${linhas}`
-}
-
-/**
- * Conjunto normalizado das citações da base de uma área (dispositivos, súmulas,
- * nº de processo das ementas) — para o verificador marcar como "base curada".
- */
-export function citacoesDaBase(area: string): Set<string> {
-  const norm = (s: string) => s.toLowerCase().replace(/n[º°.]\s*/g, '').replace(/\s+/g, ' ').trim()
-  const set = new Set<string>()
-  for (const t of tesesDaArea(area)) {
-    for (const d of t.dispositivos) set.add(norm(d))
-    for (const s of t.sumulas) set.add(norm(s))
-    for (const e of t.ementas) set.add(norm(e.processo))
-  }
-  return set
 }

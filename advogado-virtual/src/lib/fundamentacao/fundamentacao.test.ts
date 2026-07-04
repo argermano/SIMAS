@@ -1,17 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { tesesDaArea, tesesDaAreaComExemplos, blocoFundamentacaoParaPrompt } from './index'
+import { TEMPLATE_POR_AREA } from './index'
 
-describe('base curada de fundamentação', () => {
-  it('exclui registros de EXEMPLO das teses reais', () => {
-    // previdenciario tem 1 exemplo (template) — não deve entrar nas reais.
-    expect(tesesDaArea('previdenciario')).toHaveLength(0)
-    expect(tesesDaAreaComExemplos('previdenciario').some((t) => t.exemplo)).toBe(true)
-  })
-
-  it('NÃO injeta bloco de fundamentação quando a área não tem tese real', () => {
-    // Garante que o template/exemplo nunca vaza para o prompt de geração.
-    expect(blocoFundamentacaoParaPrompt('previdenciario')).toBe('')
-    expect(blocoFundamentacaoParaPrompt('civel')).toBe('')
-    expect(blocoFundamentacaoParaPrompt('area_inexistente')).toBe('')
+// A base REAL de teses vive no banco (teses_escritorio, por tenant) e é testada
+// via rota. Aqui só garantimos que os arquivos do repo são apenas TEMPLATE de
+// formato — o item de exemplo do previdenciário existe e está marcado `exemplo`.
+describe('template de teses no repositório', () => {
+  it('previdenciário traz um exemplo/template marcado', () => {
+    const exemplos = TEMPLATE_POR_AREA.previdenciario
+    expect(exemplos.length).toBeGreaterThan(0)
+    expect(exemplos.every((t) => t.exemplo === true)).toBe(true)
   })
 })
