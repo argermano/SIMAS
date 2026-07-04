@@ -19,6 +19,7 @@ export const CATEGORIAS: Record<string, { label: string; grupo: string; chave: s
   comando:         { label: 'Comandos IA no editor',    grupo: 'Editor',    chave: 'comando' },
   correcao:        { label: 'Correção automática',      grupo: 'Editor',    chave: 'correcao' },
   editor_documento:{ label: 'Edição por IA no editor',  grupo: 'Editor',    chave: 'editor_documento' },
+  extrair_teses:   { label: 'Extração de teses',        grupo: 'Análise',   chave: 'extrair_teses' },
 }
 
 /** Limites por plano (chamadas permitidas por categoria, por mês corrente). */
@@ -57,8 +58,8 @@ export const LIMITES_PLANO: Record<string, Record<string, number>> = {
     correcao:       5000,
   },
 }
-// editor_documento e extrair_dados ficam SEM limite (log-only, visíveis no
-// dashboard mas sem bloqueio — operações auxiliares de alta frequência).
+// editor_documento, extrair_dados e extrair_teses ficam SEM limite (log-only,
+// visíveis no dashboard mas sem bloqueio — operações auxiliares/de curadoria).
 
 export function categorizar(endpoint: string): { label: string; grupo: string; chave: string } {
   if (CATEGORIAS[endpoint]) return CATEGORIAS[endpoint]
