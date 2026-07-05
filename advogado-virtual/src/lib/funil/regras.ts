@@ -55,3 +55,14 @@ export function podeMover(ator: AtorMovimentacao, de: EtapaFunil, para: EtapaFun
   if (iDe === -1 || iPara === -1) return false
   return iPara > iDe
 }
+
+/**
+ * O cadastro do cliente está completo o bastante para promover pré-cadastro →
+ * ativo ao fechar contrato (spec §5)? Exige nome + CPF + endereço preenchidos.
+ * Se false, a UI leva a "Completar cadastro". (Não inspeciona o CPF — só presença.)
+ */
+export function cadastroCompleto(
+  c: { nome?: string | null; cpf?: string | null; endereco?: string | null } | null | undefined,
+): boolean {
+  return !!(c?.nome?.trim() && c?.cpf?.trim() && c?.endereco?.trim())
+}

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { logAudit } from '@/lib/audit'
 import { registrarEvento } from '@/lib/funil/leads'
-import { LABELS_ETAPA, type EtapaFunil, type MotivoPerda } from '@/lib/funil/regras'
+import { cadastroCompleto, LABELS_ETAPA, type EtapaFunil, type MotivoPerda } from '@/lib/funil/regras'
 
 const ETAPAS_VALIDAS = new Set(Object.keys(LABELS_ETAPA))
 
@@ -23,7 +24,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const { data: lead } = await supabase
     .from('funil_leads')
-    .select('id, etapa')
+    .select('id, etapa, cliente_id')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -55,5 +56,35 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     para === 'perdido' ? `Perdido: ${body.motivoPerda}` : null,
   )
 
-  return NextResponse.json({ ok: true, lead: atualizado })
+  // Promoção do cliente ao fechar contrato: pré-cadastro → ativo, apenas se o
+  // cadastro estiver completo (nome + CPF + endereço). Se incompleto, a UI leva
+  // o usuário a "Completar cadastro" em /clientes/{id}. logAudit para trilha.
+  let clientePromovido = false
+  if (para === 'contrato_fechado') {
+    const { data: cliente } = await supabase
+      .from('clientes')
+      .select('id, nome, cpf, endereco, status_cadastro')
+      .eq('id', lead.cliente_id)
+      .single()
+    if (cliente && cliente.status_cadastro !== 'ativo' && cadastroCompleto(cliente)) {
+      const { error: promErr } = await supabase
+        .from('clientes')
+        .update({ status_cadastro: 'ativo' })
+        .eq('id', cliente.id)
+        .eq('tenant_id', usuario.tenant_id)
+      if (!promErr) {
+        clientePromovido = true
+        await logAudit({
+          tenantId: usuario.tenant_id,
+          userId: usuario.id,
+          action: 'cliente.promover',
+          resourceType: 'cliente',
+          resourceId: cliente.id,
+          metadata: { origem: 'funil', lead_id: id, de_status: cliente.status_cadastro },
+        })
+      }
+    }
+  }
+
+  return NextResponse.json({ ok: true, lead: atualizado, clientePromovido })
 }

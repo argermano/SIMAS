@@ -1,15 +1,29 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { LABELS_AREA } from '@/types'
-import { LABELS_ETAPA } from '@/lib/funil/regras'
+import { LABELS_ETAPA, ORDEM_ETAPAS, type EtapaFunil } from '@/lib/funil/regras'
 import type { LeadData } from './tipos'
-import { X, MessageCircle, Calendar, Video } from 'lucide-react'
+import {
+  X, MessageCircle, Calendar, Video, User, UserCheck, AlertCircle,
+  FileSignature, FileText, ScrollText, ExternalLink,
+} from 'lucide-react'
 
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })
+const dataCurta = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit' })
 
-// Drawer do lead. Base (Lote 3): contato, consulta, valor. O Lote 4 acrescenta
-// os blocos Cliente, Documentos, timeline e as ações de geração/promoção.
+interface Detalhes {
+  cliente: { id: string; nome: string; status_cadastro: string; cadastroCompleto: boolean } | null
+  contratos: { id: string; titulo: string; status: string; created_at: string }[]
+  pecas: { id: string; tipo: string; area: string; status: string; created_at: string }[]
+  eventos: { id: string; de_etapa: string | null; para_etapa: string; ator: string; ator_nome: string | null; observacao: string | null; created_at: string }[]
+}
+
+// ≥ proposta_enviada → pode gerar contrato de honorários.
+const IDX_PROPOSTA = ORDEM_ETAPAS.indexOf('proposta_enviada')
+
 export function DrawerLead({
   lead, chatwootUrl, onFechar,
 }: {
@@ -19,8 +33,29 @@ export function DrawerLead({
   onFechar: () => void
   onMudou: () => void
 }) {
+  const [det, setDet] = useState<Detalhes | null>(null)
+  const [carregando, setCarregando] = useState(true)
+
+  useEffect(() => {
+    let vivo = true
+    setCarregando(true)
+    fetch(`/api/funil/leads/${lead.id}/detalhes`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo) setDet(d) })
+      .catch(() => {})
+      .finally(() => { if (vivo) setCarregando(false) })
+    return () => { vivo = false }
+  }, [lead.id])
+
   const nome = lead.nome_informado?.trim() || lead.clientes?.nome?.trim() || lead.telefone
   const area = lead.area ? (LABELS_AREA[lead.area as keyof typeof LABELS_AREA] ?? lead.area) : null
+  const clienteId = lead.clientes?.id ?? det?.cliente?.id ?? null
+  const cadastroCompleto = det?.cliente?.cadastroCompleto ?? false
+  const statusCadastro = det?.cliente?.status_cadastro ?? lead.clientes?.status_cadastro ?? null
+
+  const podeGerarContrato = ORDEM_ETAPAS.indexOf(lead.etapa) >= IDX_PROPOSTA
+  const podeGerarProcuracao = lead.etapa === 'contrato_fechado'
+  const areaSlug = lead.area || 'civel'
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -48,6 +83,29 @@ export function DrawerLead({
             </div>
           </section>
 
+          {/* Cliente */}
+          {clienteId && (
+            <section className="space-y-1.5 border-t border-border/60 pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Cliente</p>
+              <div className="flex items-center gap-2">
+                {statusCadastro === 'ativo' ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success"><UserCheck className="h-3 w-3" /> Cadastro ativo</span>
+                ) : statusCadastro === 'pre_cadastro' ? (
+                  <span className="inline-flex items-center gap-1 rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning"><AlertCircle className="h-3 w-3" /> Pré-cadastro</span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"><User className="h-3 w-3" /> {statusCadastro ?? '—'}</span>
+                )}
+                {!cadastroCompleto && statusCadastro !== 'ativo' && (
+                  <span className="text-[10px] text-muted-foreground">falta nome/CPF/endereço</span>
+                )}
+              </div>
+              <Link href={`/clientes/${clienteId}`}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                <ExternalLink className="h-3.5 w-3.5" /> {cadastroCompleto ? 'Abrir cadastro' : 'Completar cadastro'}
+              </Link>
+            </section>
+          )}
+
           {/* Consulta */}
           {(lead.consulta_data || lead.meet_url) && (
             <section className="space-y-1 border-t border-border/60 pt-3">
@@ -71,6 +129,84 @@ export function DrawerLead({
               <p className="text-base font-semibold text-foreground">{brl(lead.valor_estimado)}</p>
             </section>
           )}
+
+          {/* Ações de geração */}
+          {clienteId && (podeGerarContrato || podeGerarProcuracao) && (
+            <section className="space-y-2 border-t border-border/60 pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Gerar documento</p>
+              {podeGerarContrato && (
+                <Link href={`/contratos/novo?cliente_id=${clienteId}`}
+                  className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
+                  <FileSignature className="h-4 w-4 text-primary" /> Gerar contrato de honorários
+                </Link>
+              )}
+              {podeGerarProcuracao && (
+                <Link href={`/${areaSlug}/modelos/procuracao?clienteId=${clienteId}`}
+                  className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
+                  <ScrollText className="h-4 w-4 text-primary" /> Gerar procuração
+                </Link>
+              )}
+            </section>
+          )}
+
+          {/* Documentos */}
+          <section className="space-y-2 border-t border-border/60 pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Documentos</p>
+            {carregando ? (
+              <p className="text-xs text-muted-foreground/60">Carregando…</p>
+            ) : (det && (det.contratos.length > 0 || det.pecas.length > 0)) ? (
+              <ul className="space-y-1.5">
+                {det.contratos.map((c) => (
+                  <li key={c.id}>
+                    <Link href={`/contratos/${c.id}`} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted">
+                      <FileSignature className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate text-xs text-foreground">{c.titulo}</span>
+                      <span className="text-[10px] text-muted-foreground">{c.status} · {dataCurta(c.created_at)}</span>
+                    </Link>
+                  </li>
+                ))}
+                {det.pecas.map((p) => (
+                  <li key={p.id}>
+                    <Link href={`/${p.area}/editor/${p.id}`} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-muted">
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate text-xs text-foreground">{p.tipo.replace(/_/g, ' ')}</span>
+                      <span className="text-[10px] text-muted-foreground">{p.status} · {dataCurta(p.created_at)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-muted-foreground/60">Nenhum documento ainda.</p>
+            )}
+          </section>
+
+          {/* Timeline */}
+          <section className="space-y-2 border-t border-border/60 pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Histórico</p>
+            {carregando ? (
+              <p className="text-xs text-muted-foreground/60">Carregando…</p>
+            ) : det && det.eventos.length > 0 ? (
+              <ol className="space-y-2">
+                {det.eventos.map((e) => (
+                  <li key={e.id} className="flex gap-2 text-xs">
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-border" />
+                    <div className="min-w-0">
+                      <p className="text-foreground">
+                        {e.de_etapa ? `${LABELS_ETAPA[e.de_etapa as EtapaFunil] ?? e.de_etapa} → ` : ''}
+                        <span className="font-medium">{LABELS_ETAPA[e.para_etapa as EtapaFunil] ?? e.para_etapa}</span>
+                      </p>
+                      <p className="text-muted-foreground">
+                        {dataHora(e.created_at)} · {e.ator === 'humano' ? (e.ator_nome ?? 'humano') : e.ator}
+                        {e.observacao ? ` · ${e.observacao}` : ''}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-xs text-muted-foreground/60">Sem eventos.</p>
+            )}
+          </section>
         </div>
       </aside>
     </div>

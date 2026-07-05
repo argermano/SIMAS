@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { normalizarE164, chaveTelefone, mesmoTelefone, apenasDigitos } from './telefone'
-import { podeMover } from './regras'
+import { podeMover, cadastroCompleto } from './regras'
 
 describe('telefone — normalização e matching', () => {
   it('normaliza para E.164 assumindo Brasil', () => {
@@ -59,5 +59,22 @@ describe('podeMover — regras do funil (spec §5)', () => {
 
   it('mesma etapa nunca é movimento (IA/sistema)', () => {
     expect(podeMover('ia', 'novo_lead', 'novo_lead')).toBe(false)
+  })
+})
+
+describe('cadastroCompleto — critério de promoção no contrato_fechado', () => {
+  it('completo quando nome + CPF + endereço estão preenchidos', () => {
+    expect(cadastroCompleto({ nome: 'Maria', cpf: '000.000.000-00', endereco: 'Rua X, 1' })).toBe(true)
+  })
+
+  it('incompleto quando falta CPF ou endereço', () => {
+    expect(cadastroCompleto({ nome: 'Maria', cpf: null, endereco: 'Rua X, 1' })).toBe(false)
+    expect(cadastroCompleto({ nome: 'Maria', cpf: '000', endereco: '' })).toBe(false)
+    expect(cadastroCompleto({ nome: 'Maria', cpf: '   ', endereco: 'Rua X' })).toBe(false)
+  })
+
+  it('incompleto para cliente nulo/indefinido', () => {
+    expect(cadastroCompleto(null)).toBe(false)
+    expect(cadastroCompleto(undefined)).toBe(false)
   })
 })
