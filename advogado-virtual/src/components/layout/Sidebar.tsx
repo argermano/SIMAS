@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Users, Settings, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
-  KanbanSquare, ChevronLeft, ChevronRight, BookMarked,
+  KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter,
 } from 'lucide-react'
 import { LogoMark } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils'
@@ -28,6 +28,12 @@ const MENU_ITEMS = [
     label:   'Clientes',
     icon:    Users,
     ativoSe: (p: string) => p.startsWith('/clientes'),
+  },
+  {
+    href:    '/funil',
+    label:   'Funil',
+    icon:    Filter,
+    ativoSe: (p: string) => p.startsWith('/funil'),
   },
   {
     href:    '/tarefas',

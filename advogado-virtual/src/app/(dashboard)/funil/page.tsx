@@ -1,0 +1,48 @@
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { Header } from '@/components/layout/Header'
+import { KanbanFunil, type LeadData } from '@/components/funil/KanbanFunil'
+
+export const metadata = { title: 'Funil comercial' }
+export const dynamic = 'force-dynamic'
+
+export default async function FunilPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  const { data: usuario } = await supabase
+    .from('users').select('id, nome, role, tenant_id').eq('auth_user_id', user.id).single()
+  if (!usuario) redirect('/login')
+
+  const { data: leads } = await supabase
+    .from('funil_leads')
+    .select(`
+      id, nome_informado, telefone, email, area, unidade, etapa, valor_estimado,
+      consulta_data, consulta_formato, meet_url, aguardando_confirmacao, sugerir_perda,
+      consulta_cancelada, ultimo_contato_em, chatwoot_conversation_id, created_at, updated_at,
+      clientes ( id, nome, status_cadastro )
+    `)
+    .eq('tenant_id', usuario.tenant_id)
+    .order('updated_at', { ascending: false })
+
+  const chatwootBase = process.env.CHATWOOT_PUBLIC_URL ?? ''
+  const chatwootAccount = process.env.CHATWOOT_ACCOUNT_ID ?? '1'
+
+  return (
+    <>
+      <Header
+        titulo="Funil comercial"
+        subtitulo="Leads do primeiro contato ao contrato fechado"
+        nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
+      />
+      <main className="flex-1 overflow-hidden">
+        <KanbanFunil
+          leadsIniciais={(leads ?? []) as unknown as LeadData[]}
+          nomeUsuario={usuario.nome ?? 'Usuário'}
+          chatwootBase={chatwootBase}
+          chatwootAccount={chatwootAccount}
+        />
+      </main>
+    </>
+  )
+}
