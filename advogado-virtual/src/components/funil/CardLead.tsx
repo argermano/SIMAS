@@ -102,21 +102,21 @@ export function CardLead({
         )}
       </div>
 
-      {/* Ações rápidas (não arrastam) */}
-      <div className="mt-2.5 flex items-center gap-2 border-t border-border/50 pt-2">
+      {/* Ações rápidas (não arrastam) — só ícone, tooltip no hover */}
+      <div className="mt-2.5 flex items-center gap-1 border-t border-border/50 pt-2">
         <a
           href={chatwootUrl ?? `https://wa.me/${lead.telefone.replace(/\D/g, '')}`}
           target="_blank" rel="noopener noreferrer" title={chatwootUrl ? 'Abrir no Chatwoot' : 'Abrir no WhatsApp'}
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
           onClick={(e) => e.stopPropagation()}
         >
-          <MessageCircle className="h-3.5 w-3.5" /> {chatwootUrl ? 'Chatwoot' : 'WhatsApp'}
+          <MessageCircle className="h-4 w-4" />
         </a>
         {lead.clientes && (
           <a href={`/clientes/${lead.clientes.id}`} title="Abrir cadastro do cliente"
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
             onClick={(e) => e.stopPropagation()}>
-            <User className="h-3.5 w-3.5" /> Cliente
+            <User className="h-4 w-4" />
           </a>
         )}
       </div>
