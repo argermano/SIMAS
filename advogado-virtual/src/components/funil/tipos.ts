@@ -7,6 +7,7 @@ export interface LeadData {
   email: string | null
   area: string | null
   unidade: string
+  origem: string | null
   etapa: EtapaFunil
   valor_estimado: number | null
   consulta_data: string | null

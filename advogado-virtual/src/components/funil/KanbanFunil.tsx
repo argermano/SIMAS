@@ -15,10 +15,8 @@ import { ColunaFunil } from './ColunaFunil'
 import { CardLead } from './CardLead'
 import { DrawerLead } from './DrawerLead'
 import type { LeadData } from './tipos'
-import { ChevronDown, ChevronRight } from 'lucide-react'
 
 const COLUNAS_VISIVEIS: EtapaFunil[] = [...ORDEM_ETAPAS]  // 5 etapas ativas
-const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 
 export type { LeadData } from './tipos'
 
@@ -147,19 +145,16 @@ export function KanbanFunil({
       </div>
 
       <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setAtivo(leads.find((l) => l.id === e.active.id) ?? null)} onDragEnd={handleDragEnd}>
-        <div className="flex flex-1 gap-3 overflow-x-auto p-6">
+        <div className="flex flex-1 gap-4 overflow-x-auto p-6">
           {COLUNAS_VISIVEIS.map((etapa) => (
             <ColunaFunil key={etapa} etapa={etapa} label={LABELS_ETAPA[etapa]} leads={leadsDe(etapa)} onAbrir={setSelecionado} chatwootUrlDe={chatwootUrlDe} />
           ))}
           {/* Perdido — recolhida por padrão */}
-          <div className="flex w-72 shrink-0 flex-col">
-            <button onClick={() => setPerdidoAberto((v) => !v)} className="mb-2 flex items-center gap-1.5 px-1 text-sm font-semibold text-muted-foreground">
-              {perdidoAberto ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              {LABELS_ETAPA.perdido}
-              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{leadsDe('perdido').length}</span>
-            </button>
-            {perdidoAberto && <ColunaFunil etapa="perdido" label={LABELS_ETAPA.perdido} leads={leadsDe('perdido')} onAbrir={setSelecionado} chatwootUrlDe={chatwootUrlDe} />}
-          </div>
+          <ColunaFunil
+            etapa="perdido" label={LABELS_ETAPA.perdido} leads={leadsDe('perdido')}
+            onAbrir={setSelecionado} chatwootUrlDe={chatwootUrlDe}
+            colapsavel aberto={perdidoAberto} onToggle={() => setPerdidoAberto((v) => !v)}
+          />
         </div>
         <DragOverlay>{ativo ? <CardLead lead={ativo} onAbrir={() => {}} chatwootUrl={null} /> : null}</DragOverlay>
       </DndContext>
