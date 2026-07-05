@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
+import { BarChart3 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { KanbanFunil, type LeadData } from '@/components/funil/KanbanFunil'
 
@@ -34,6 +36,12 @@ export default async function FunilPage() {
         titulo="Funil comercial"
         subtitulo="Leads do primeiro contato ao contrato fechado"
         nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
+        acoes={
+          <Link href="/funil/metricas"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
+            <BarChart3 className="h-4 w-4" /> Métricas
+          </Link>
+        }
       />
       <main className="flex-1 overflow-hidden">
         <KanbanFunil
