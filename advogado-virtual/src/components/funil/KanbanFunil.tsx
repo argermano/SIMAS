@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   DndContext, DragOverlay, PointerSensor, KeyboardSensor, useSensor, useSensors,
@@ -52,6 +52,36 @@ export function KanbanFunil({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
+  // Atualização automática do quadro (novos leads / movimentações do atendimento).
+  // Pausa a sincronização durante um arraste, um modal aberto ou um movimento em
+  // andamento — evita "piscar"/reverter o estado otimista. O ref é atualizado a
+  // cada render para o intervalo sempre ler o estado atual (sem closure velho).
+  const estadoRef = useRef({ movendo: false, arrastando: false, modalAberto: false })
+  estadoRef.current.arrastando = ativo !== null
+  estadoRef.current.modalAberto = modal !== null
+  const [atualizadoEm, setAtualizadoEm] = useState<number>(() => 0)
+
+  const sincronizar = useCallback(async () => {
+    const s = estadoRef.current
+    if (s.movendo || s.arrastando || s.modalAberto || (typeof document !== 'undefined' && document.hidden)) return
+    try {
+      const res = await fetch('/api/funil/board', { cache: 'no-store' })
+      if (!res.ok) return
+      const { leads: frescos } = await res.json()
+      const a = estadoRef.current
+      if (a.movendo || a.arrastando || a.modalAberto) return   // estado mudou durante o fetch
+      setLeads(frescos as LeadData[])
+      setAtualizadoEm(Date.now())
+    } catch { /* silencioso — próximo tick tenta de novo */ }
+  }, [])
+
+  useEffect(() => {
+    const id = setInterval(sincronizar, 15000)
+    window.addEventListener('focus', sincronizar)
+    document.addEventListener('visibilitychange', sincronizar)
+    return () => { clearInterval(id); window.removeEventListener('focus', sincronizar); document.removeEventListener('visibilitychange', sincronizar) }
+  }, [sincronizar])
+
   const areasPresentes = useMemo(
     () => [...new Set(leads.map((l) => l.area).filter(Boolean))] as string[],
     [leads],
@@ -89,18 +119,22 @@ export function KanbanFunil({
     const lead = leads.find((l) => l.id === leadId)
     if (!lead || lead.etapa === para) return
     const de = lead.etapa
+    estadoRef.current.movendo = true  // pausa o polling até o PATCH concluir
     setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, etapa: para } : l)))  // otimista
-    const res = await fetch(`/api/funil/leads/${leadId}/etapa`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paraEtapa: para, ...extra }),
-    })
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({}))
-      toastError('Não foi possível mover', d.error ?? 'Tente novamente')
-      setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, etapa: de } : l)))  // rollback
-    } else {
-      success('Card movido', `→ ${LABELS_ETAPA[para]}`)
-      router.refresh()
+    try {
+      const res = await fetch(`/api/funil/leads/${leadId}/etapa`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paraEtapa: para, ...extra }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        toastError('Não foi possível mover', d.error ?? 'Tente novamente')
+        setLeads((prev) => prev.map((l) => (l.id === leadId ? { ...l, etapa: de } : l)))  // rollback
+      } else {
+        success('Card movido', `→ ${LABELS_ETAPA[para]}`)
+      }
+    } finally {
+      estadoRef.current.movendo = false
     }
   }
 
@@ -146,6 +180,14 @@ export function KanbanFunil({
         <label className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <input type="checkbox" checked={fParados} onChange={(e) => setFParados(e.target.checked)} /> parados +3 dias
         </label>
+        <button type="button" onClick={sincronizar} title={atualizadoEm ? `Atualizado ${new Date(atualizadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · clique para atualizar` : 'Atualização automática ativa'}
+          className="ml-auto flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success/70" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+          </span>
+          ao vivo
+        </button>
       </div>
 
       <DndContext sensors={sensors} onDragStart={(e: DragStartEvent) => setAtivo(leads.find((l) => l.id === e.active.id) ?? null)} onDragEnd={handleDragEnd}>
