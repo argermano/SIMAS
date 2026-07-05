@@ -78,7 +78,7 @@ export function DrawerLead({
             <div className="flex gap-3 pt-1">
               <a href={chatwootUrl ?? `https://wa.me/${lead.telefone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                <MessageCircle className="h-3.5 w-3.5" /> {chatwootUrl ? 'Abrir conversa' : 'WhatsApp'}
+                <MessageCircle className="h-3.5 w-3.5" /> {chatwootUrl ? 'Abrir no Chatwoot' : 'WhatsApp'}
               </a>
             </div>
           </section>

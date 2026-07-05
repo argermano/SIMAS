@@ -16,12 +16,15 @@ qualquer formato — o SIMAS normaliza para E.164.
 
 | Momento | Método + rota | Corpo |
 |---|---|---|
-| Lead novo | `POST /api/funil/leads` | `{ telefone, nomeInformado?, chatwootConversationId?, unidade? }` |
-| Dados do lead | `PATCH /api/funil/leads/by-phone/{telefone}` | `{ nomeInformado?, area?, email?, ultimoContatoEm? }` |
+| Lead novo | `POST /api/funil/leads` | `{ telefone, nomeInformado?, chatwootConversationId?, unidade?, ultimaMensagem?, ultimaMensagemAutor? }` |
+| Dados do lead / nova mensagem | `PATCH /api/funil/leads/by-phone/{telefone}` | `{ nomeInformado?, area?, email?, ultimoContatoEm?, ultimaMensagem?, ultimaMensagemAutor? }` |
 | Agendou | `POST /api/funil/leads/by-phone/{telefone}/agendamento` | `{ calBookingUid, quando, formato, meetUrl?, area?, nome?, email? }` |
 
 `area` deve ser um slug do SIMAS (ex.: `previdenciario`, `civel`, `trabalhista`).
 `quando` é ISO-8601 (aceita também `consultaDataISO`). `formato`: `online`/`presencial`.
+`ultimaMensagem` é a última interação do WhatsApp mostrada no card (truncada em 300
+no SIMAS); `ultimaMensagemAutor` ∈ `cliente` | `atendente` | `ia` (default `cliente`).
+Enviar `chatwootConversationId` faz o card **abrir a conversa exata no Chatwoot**.
 
 ## 1. Envs novas no VPS (`/opt/omnichannel/ai.env`)
 
@@ -127,6 +130,32 @@ O SIMAS grava o booking e move o card para **Consulta Agendada** (idempotente po
 `BOOKING_CREATED` do Cal.com chega **também** por webhook direto ao SIMAS; os dois
 caminhos convergem no mesmo `uid` sem criar leads duplicados.
 
+## 4b. Gancho (c) — última mensagem no card + link do Chatwoot
+
+O card do funil mostra a **última interação do WhatsApp** (sistema fechado,
+cliente↔escritório). Envie o texto a cada mensagem (fire-and-forget). Autor:
+`cliente` para mensagens recebidas; `atendente`/`ia` para as enviadas.
+
+```js
+// mensagem RECEBIDA do cliente (no handler do POST /webhook, ao processar o texto):
+notifySimas("/api/funil/leads/by-phone/" + encodeURIComponent(jid), {
+  ultimaMensagem: texto,
+  ultimaMensagemAutor: "cliente",
+  ultimoContatoEm: new Date().toISOString(),
+}, "PATCH");
+
+// resposta ENVIADA pelo assistente (logo após mandar a resposta ao cliente):
+notifySimas("/api/funil/leads/by-phone/" + encodeURIComponent(jid), {
+  ultimaMensagem: resposta,
+  ultimaMensagemAutor: "ia",          // ou "atendente" se for um humano no Chatwoot
+}, "PATCH");
+```
+
+**Chatwoot:** o card abre o Chatwoot ao clicar em "Chatwoot". Se o lead tiver
+`chatwoot_conversation_id`, abre **a conversa exata**; por isso, envie
+`chatwootConversationId` no gancho (a) (lead novo) assim que a conversa existir no
+Chatwoot. Sem o id, o card abre o painel do Chatwoot (fallback).
+
 ## 5. Deploy no VPS
 
 ```bash
@@ -144,7 +173,8 @@ no-op e o atendimento segue normal.
 ## 6. Checklist de ativação
 
 - [ ] `SIMAS_URL` e `SIMAS_TOKEN` em `/opt/omnichannel/ai.env` (token = o da Vercel).
-- [ ] Helper `notifySimas` + ganchos (a) e (b) aplicados no `server.js`.
+- [ ] Helper `notifySimas` + ganchos (a), (b) e (c) aplicados no `server.js`.
+- [ ] Gancho (a) envia `chatwootConversationId` (card abre a conversa no Chatwoot).
 - [ ] `node --check` ok → `redeploy.sh`.
 - [ ] Webhooks Cal.com (2 contas) apontando para `https://simas.app/api/funil/webhooks/calcom` com `CALCOM_WEBHOOK_SECRET`.
 - [ ] Teste real: uma conversa nova no WhatsApp aparece em **Novo Lead**; um

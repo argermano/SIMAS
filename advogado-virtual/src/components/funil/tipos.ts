@@ -16,6 +16,9 @@ export interface LeadData {
   aguardando_confirmacao: boolean
   sugerir_perda: boolean
   consulta_cancelada: boolean
+  ultima_mensagem: string | null
+  ultima_mensagem_em: string | null
+  ultima_mensagem_autor: string | null
   ultimo_contato_em: string | null
   chatwoot_conversation_id: number | null
   created_at: string

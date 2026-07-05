@@ -23,6 +23,29 @@ export interface DadosLead {
   chatwootConversationId?: number | null
   ator?: AtorMovimentacao
   etapaInicial?: EtapaFunil
+  ultimaMensagem?: string | null
+  ultimaMensagemAutor?: string | null
+  ultimaMensagemEm?: string | null
+}
+
+const AUTORES_MSG = new Set(['cliente', 'atendente', 'ia'])
+
+/**
+ * Campos do patch para a última interação do WhatsApp (sistema fechado,
+ * cliente↔escritório). Trunca em 300 chars e valida o autor. Retorna {} se não
+ * houver texto — nunca guarda dossiê do caso, só a última mensagem trocada.
+ */
+export function patchUltimaMensagem(
+  body: { ultimaMensagem?: string | null; ultimaMensagemAutor?: string | null; ultimaMensagemEm?: string | null },
+): Record<string, unknown> {
+  const texto = body.ultimaMensagem?.trim()
+  if (!texto) return {}
+  const autor = body.ultimaMensagemAutor && AUTORES_MSG.has(body.ultimaMensagemAutor) ? body.ultimaMensagemAutor : 'cliente'
+  return {
+    ultima_mensagem: texto.length > 300 ? texto.slice(0, 299) + '…' : texto,
+    ultima_mensagem_autor: autor,
+    ultima_mensagem_em: body.ultimaMensagemEm || new Date().toISOString(),
+  }
 }
 
 export interface ResultadoUpsert {
@@ -52,7 +75,7 @@ export async function upsertLeadComPreCadastro(
     .not('etapa', 'in', '(contrato_fechado,perdido)')
   const leadAtivo = (leadsAtivos ?? []).find((l) => mesmoTelefone(l.telefone as string, e164))
   if (leadAtivo) {
-    const patch: Record<string, unknown> = { ultimo_contato_em: agora, updated_at: agora }
+    const patch: Record<string, unknown> = { ultimo_contato_em: agora, updated_at: agora, ...patchUltimaMensagem(dados) }
     if (dados.nomeInformado) patch.nome_informado = dados.nomeInformado
     if (dados.email) patch.email = dados.email
     await admin.from('funil_leads').update(patch).eq('id', leadAtivo.id)
@@ -99,6 +122,7 @@ export async function upsertLeadComPreCadastro(
       etapa,
       ultimo_contato_em: agora,
       chatwoot_conversation_id: dados.chatwootConversationId ?? null,
+      ...patchUltimaMensagem(dados),
     })
     .select('id')
     .single()

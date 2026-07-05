@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/api'
 import { autorizadoIntegracao } from '@/lib/funil/auth-integracao'
-import { adminFunil, tenantFunil } from '@/lib/funil/leads'
+import { adminFunil, tenantFunil, patchUltimaMensagem } from '@/lib/funil/leads'
 import { mesmoTelefone } from '@/lib/funil/telefone'
 
 // PATCH /api/funil/leads/by-phone/:telefone — ai-attendant: atualiza área/nome/
@@ -16,6 +16,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ telefo
   const { telefone } = await params
   const body = (await req.json().catch(() => ({}))) as {
     nomeInformado?: string; area?: string; email?: string; ultimoContatoEm?: string
+    ultimaMensagem?: string; ultimaMensagemAutor?: string; ultimaMensagemEm?: string
   }
   const admin = adminFunil()
 
@@ -28,7 +29,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ telefo
   if (!lead) return NextResponse.json({ ok: false })
 
   const agora = new Date().toISOString()
-  const patch: Record<string, unknown> = { ultimo_contato_em: body.ultimoContatoEm || agora, updated_at: agora }
+  const patch: Record<string, unknown> = {
+    ultimo_contato_em: body.ultimoContatoEm || body.ultimaMensagemEm || agora,
+    updated_at: agora,
+    ...patchUltimaMensagem(body),
+  }
   if (body.nomeInformado) patch.nome_informado = body.nomeInformado
   if (body.area) patch.area = body.area
   if (body.email) patch.email = body.email

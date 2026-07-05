@@ -75,11 +75,15 @@ export function KanbanFunil({
   }, [leads, fUnidade, fArea, fBusca, fParados])
 
   const leadsDe = useCallback((etapa: EtapaFunil) => filtrados.filter((l) => l.etapa === etapa), [filtrados])
-  const chatwootUrlDe = useCallback((l: LeadData) =>
-    l.chatwoot_conversation_id && chatwootBase
+  // O escritório atende pelo Chatwoot. Com o id da conversa, abre a conversa
+  // exata; sem o id (mas com base configurada), abre o painel do Chatwoot; sem
+  // Chatwoot, cai no wa.me (tratado no card).
+  const chatwootUrlDe = useCallback((l: LeadData) => {
+    if (!chatwootBase) return null
+    return l.chatwoot_conversation_id
       ? `${chatwootBase}/app/accounts/${chatwootAccount}/conversations/${l.chatwoot_conversation_id}`
-      : null,
-    [chatwootBase, chatwootAccount])
+      : `${chatwootBase}/app/accounts/${chatwootAccount}/dashboard`
+  }, [chatwootBase, chatwootAccount])
 
   async function mover(leadId: string, para: EtapaFunil, extra: Record<string, unknown> = {}) {
     const lead = leads.find((l) => l.id === leadId)

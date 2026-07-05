@@ -18,8 +18,12 @@ WhatsApp → ai-attendant (VPS) ──HTTPS + x-simas-token──▶ /api/funil/
                               Kanban /funil (equipe arrasta os cards)
 ```
 
-- **Leads não guardam detalhes do caso** (LGPD): só nome, telefone, área, unidade,
-  valor estimado e dados da consulta. O conteúdo jurídico fica no atendimento/cliente.
+- **Leads não guardam o dossiê do caso** (LGPD): só nome, telefone, área, unidade,
+  valor estimado, dados da consulta e a **última mensagem** trocada no WhatsApp
+  (sistema fechado, cliente↔escritório, visível só para usuários autenticados sob
+  RLS). O conteúdo jurídico do caso fica no atendimento/cliente.
+- **Atendimento pelo Chatwoot**: o botão do card abre o Chatwoot — a conversa exata
+  quando o lead tem `chatwoot_conversation_id`, ou o painel como fallback.
 - Cada lead vincula-se a um **cliente** — se o telefone casar com um cliente
   existente, reusa (badge "cliente existente"); senão cria um **pré-cadastro**
   (`clientes.status_cadastro = 'pre_cadastro'`).

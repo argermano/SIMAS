@@ -5,7 +5,7 @@ import { LABELS_AREA } from '@/types'
 import { iniciais } from '@/lib/utils'
 import type { LeadData } from './tipos'
 import { CORES_ETAPA, corArea, corAvatar, estiloOrigem, tempoRelativo, brl } from './estilos'
-import { MessageCircle, User, AlertTriangle, Clock, XCircle, TrendingDown, UserCheck, CalendarDays } from 'lucide-react'
+import { MessageCircle, User, AlertTriangle, Clock, XCircle, TrendingDown, UserCheck, CalendarDays, CornerDownRight } from 'lucide-react'
 
 const nomeArea = (a: string | null) => (a ? (LABELS_AREA[a as keyof typeof LABELS_AREA] ?? a) : null)
 const consultaCurta = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -32,6 +32,9 @@ export function CardLead({
   const clienteAtivo = lead.clientes?.status_cadastro === 'ativo'
   const origem = estiloOrigem(lead.origem)
   const tint = CORES_ETAPA[lead.etapa]?.cardTint ?? ''
+  const ehResposta = lead.ultima_mensagem_autor === 'atendente' || lead.ultima_mensagem_autor === 'ia'
+  const autorMensagem = lead.ultima_mensagem_autor === 'atendente' ? 'Escritório'
+    : lead.ultima_mensagem_autor === 'ia' ? 'Assistente' : 'Cliente'
 
   return (
     <div
@@ -49,12 +52,18 @@ export function CardLead({
             <p className="truncate text-sm font-semibold leading-tight text-foreground">{nome}</p>
             <p className="text-[11px] text-muted-foreground">{tempoRelativo(lead.updated_at)}</p>
           </div>
-          {lead.valor_estimado != null && (
-            <span className="shrink-0 rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-              {brl(lead.valor_estimado)}
-            </span>
-          )}
         </div>
+
+        {/* Última interação do WhatsApp (sistema fechado, cliente↔escritório) */}
+        {lead.ultima_mensagem && (
+          <div className={`mt-2 rounded-lg px-2.5 py-1.5 ${ehResposta ? 'bg-primary/10' : 'bg-muted/70'}`}>
+            <p className="line-clamp-2 text-[11px] leading-snug text-foreground/85">{lead.ultima_mensagem}</p>
+            <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+              {ehResposta ? <CornerDownRight className="h-3 w-3" /> : <MessageCircle className="h-3 w-3" />}
+              {autorMensagem}{lead.ultima_mensagem_em ? ` · ${tempoRelativo(lead.ultima_mensagem_em)}` : ''}
+            </p>
+          </div>
+        )}
 
         {/* Linha de contexto: consulta agendada, se houver */}
         {lead.consulta_data && (
@@ -63,7 +72,7 @@ export function CardLead({
           </p>
         )}
 
-        {/* Tags: área · unidade · origem */}
+        {/* Tags: área · unidade · origem · valor */}
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {nomeArea(lead.area) && (
             <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${corArea(lead.area)}`}>{nomeArea(lead.area)}</span>
@@ -72,6 +81,11 @@ export function CardLead({
           {origem && (
             <span className="inline-flex items-center gap-1 rounded-md bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
               <span className={`h-1.5 w-1.5 rounded-full ${origem.dot}`} /> {origem.label}
+            </span>
+          )}
+          {lead.valor_estimado != null && (
+            <span className="ml-auto rounded-md bg-emerald-100 px-1.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              {brl(lead.valor_estimado)}
             </span>
           )}
         </div>
@@ -92,11 +106,11 @@ export function CardLead({
       <div className="mt-2.5 flex items-center gap-2 border-t border-border/50 pt-2">
         <a
           href={chatwootUrl ?? `https://wa.me/${lead.telefone.replace(/\D/g, '')}`}
-          target="_blank" rel="noopener noreferrer" title={chatwootUrl ? 'Abrir conversa' : 'WhatsApp'}
+          target="_blank" rel="noopener noreferrer" title={chatwootUrl ? 'Abrir no Chatwoot' : 'Abrir no WhatsApp'}
           className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
           onClick={(e) => e.stopPropagation()}
         >
-          <MessageCircle className="h-3.5 w-3.5" /> {chatwootUrl ? 'Conversa' : 'WhatsApp'}
+          <MessageCircle className="h-3.5 w-3.5" /> {chatwootUrl ? 'Chatwoot' : 'WhatsApp'}
         </a>
         {lead.clientes && (
           <a href={`/clientes/${lead.clientes.id}`} title="Abrir cadastro do cliente"

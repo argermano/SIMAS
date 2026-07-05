@@ -14,6 +14,7 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => ({}))) as {
     telefone?: string; nomeInformado?: string; unidade?: string; chatwootConversationId?: number
+    ultimaMensagem?: string; ultimaMensagemAutor?: string; ultimaMensagemEm?: string
   }
   if (!body.telefone) return jsonError('telefone é obrigatório', 400)
 
@@ -23,6 +24,9 @@ export async function POST(req: Request) {
       nomeInformado: body.nomeInformado,
       unidade: body.unidade,
       chatwootConversationId: body.chatwootConversationId,
+      ultimaMensagem: body.ultimaMensagem,
+      ultimaMensagemAutor: body.ultimaMensagemAutor,
+      ultimaMensagemEm: body.ultimaMensagemEm,
       ator: 'ia',
     })
     return NextResponse.json({ leadId: r.leadId, novo: r.novo, clienteExistente: r.clienteExistente })
