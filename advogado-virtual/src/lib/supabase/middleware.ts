@@ -32,6 +32,15 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  // Rotas de API que se autenticam sozinhas (token x-simas-token / HMAC de webhook /
+  // Bearer CRON_SECRET / getAuthContext interno). O middleware NÃO deve redirecioná-las
+  // para /login — um redirect 307 para HTML não faz sentido para um cliente de API, e
+  // quebra webhooks/crons. Cada rota devolve seu próprio 401 JSON quando não autorizada.
+  const rotasApiAutonomas = ['/api/funil', '/api/cron', '/api/webhooks']
+  if (rotasApiAutonomas.some(r => pathname.startsWith(r))) {
+    return supabaseResponse
+  }
+
   // Rotas públicas (não precisam de auth)
   const rotasPublicas = ['/login', '/registro', '/esqueci-senha', '/definir-senha', '/auth/callback', '/api/contato', '/api/version']
   const isRotaPublica = rotasPublicas.some(r => pathname.startsWith(r))
