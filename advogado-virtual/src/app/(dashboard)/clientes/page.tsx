@@ -36,6 +36,7 @@ export default async function ClientesPage({
     .from('clientes')
     .select('nome')
     .eq('tenant_id', usuario.tenant_id)
+    .neq('status_cadastro', 'pre_cadastro') // pré-cadastros do funil não poluem o cadastro
 
   const letrasDisponiveis = [...new Set(
     (todosNomes ?? [])
@@ -52,6 +53,7 @@ export default async function ClientesPage({
     .select('*', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
     .is('deleted_at', null)
+    .neq('status_cadastro', 'pre_cadastro') // esconde pré-cadastros do funil
     .order('nome', { ascending: true })
     .range(offset, offset + limit - 1)
 

@@ -46,6 +46,7 @@ export async function GET(req: Request) {
     .select('*', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
     .is('deleted_at', null)
+    .neq('status_cadastro', 'pre_cadastro') // pré-cadastros do funil não aparecem no cadastro/busca
     .order('nome', { ascending: true })
     .range(offset, offset + limit - 1)
 

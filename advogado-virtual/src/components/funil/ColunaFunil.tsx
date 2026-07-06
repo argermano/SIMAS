@@ -44,7 +44,7 @@ export function ColunaFunil({
       {(!colapsavel || aberto) && (
         <div
           ref={setNodeRef}
-          className={`flex-1 space-y-2.5 p-2.5 transition-colors ${isOver ? 'bg-black/[0.03] dark:bg-white/[0.04]' : ''}`}
+          className={`min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5 transition-colors ${isOver ? 'bg-black/[0.03] dark:bg-white/[0.04]' : ''}`}
         >
           {leads.length === 0 ? (
             <p className="px-1 py-8 text-center text-xs text-muted-foreground/50">Nada por aqui</p>
