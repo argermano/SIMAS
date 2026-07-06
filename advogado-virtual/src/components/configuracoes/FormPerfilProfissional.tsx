@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -55,6 +56,7 @@ function formatarCPFInput(valor: string): string {
 
 export function FormPerfilProfissional({ escritorio }: FormPerfilProfissionalProps) {
   const { success, error: toastError } = useToast()
+  const router = useRouter()
 
   const [form, setForm] = useState({
     nome_responsavel:   escritorio.nome_responsavel   ?? '',
@@ -104,6 +106,7 @@ export function FormPerfilProfissional({ escritorio }: FormPerfilProfissionalPro
         return
       }
       success('Dados atualizados!', 'Os dados profissionais do escritório foram salvos.')
+      router.refresh()  // invalida o cache de navegação para não mostrar dados antigos ao voltar
     } finally {
       setLoading(false)
     }
