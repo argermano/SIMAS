@@ -104,8 +104,17 @@ export async function upsertLeadComPreCadastro(
       })
       .select('id')
       .single()
-    if (error || !novoCliente) throw new Error(`falha ao criar pré-cadastro: ${error?.message}`)
-    clienteId = novoCliente.id as string
+    if (error) {
+      // Corrida (índice único uniq_cliente_precadastro_tel): outro request criou o
+      // pré-cadastro ao mesmo tempo → reusa em vez de duplicar/quebrar.
+      if (error.code === '23505') {
+        const { data: cs } = await admin.from('clientes').select('id, telefone').eq('tenant_id', tenantId).is('deleted_at', null).not('telefone', 'is', null)
+        clienteId = (cs ?? []).find((c) => mesmoTelefone(c.telefone as string, e164))?.id as string | undefined
+      }
+      if (!clienteId) throw new Error(`falha ao criar pré-cadastro: ${error.message}`)
+    } else {
+      clienteId = novoCliente!.id as string
+    }
   }
 
   // 3. Cria o lead vinculado ao cliente.
@@ -126,7 +135,20 @@ export async function upsertLeadComPreCadastro(
     })
     .select('id')
     .single()
-  if (leadErr || !lead) throw new Error(`falha ao criar lead: ${leadErr?.message}`)
+  if (leadErr) {
+    // Corrida (índice único uniq_funil_lead_ativo_tel): outro request criou o lead
+    // ativo ao mesmo tempo → reusa e atualiza (não duplica o card).
+    if (leadErr.code === '23505') {
+      const { data: ativos } = await admin.from('funil_leads').select('id, telefone').eq('tenant_id', tenantId).not('etapa', 'in', '(contrato_fechado,perdido)')
+      const existente = (ativos ?? []).find((l) => mesmoTelefone(l.telefone as string, e164))
+      if (existente) {
+        await admin.from('funil_leads').update({ ultimo_contato_em: agora, updated_at: agora, ...patchUltimaMensagem(dados) }).eq('id', existente.id)
+        return { leadId: existente.id as string, novo: false, clienteExistente }
+      }
+    }
+    throw new Error(`falha ao criar lead: ${leadErr.message}`)
+  }
+  if (!lead) throw new Error('falha ao criar lead')
 
   await registrarEvento(admin, lead.id as string, null, etapa, dados.ator ?? 'ia', null, 'Lead criado')
   return { leadId: lead.id as string, novo: true, clienteExistente }
