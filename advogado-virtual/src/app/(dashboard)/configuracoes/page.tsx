@@ -17,6 +17,7 @@ import { PapelTimbrado } from '@/components/configuracoes/PapelTimbrado'
 import { ConfiguracoesTabs } from '@/components/configuracoes/ConfiguracoesTabs'
 
 export const metadata = { title: 'Configurações' }
+export const dynamic = 'force-dynamic'
 
 const LABELS_PLANO: Record<string, string> = {
   trial:         'Trial (gratuito)',
@@ -110,8 +111,8 @@ export default async function ConfiguracoesPage() {
         </CardContent>
       </Card>
 
-      {/* Dados profissionais do escritório */}
-      {usuario.role === 'admin' && (
+      {/* Dados profissionais do escritório — admin ou advogado responsável */}
+      {['admin', 'advogado'].includes(usuario.role) && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

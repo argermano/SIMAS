@@ -38,8 +38,10 @@ export async function PATCH(req: NextRequest) {
   if (!auth.ok) return auth.response
   const { usuario } = auth
 
-  if (usuario.role !== 'admin') {
-    return jsonError('Apenas administradores podem alterar dados do escritório', 403)
+  // Dados profissionais do escritório = dados do advogado responsável. Admin e
+  // advogado podem editar (colaborador não).
+  if (!['admin', 'advogado'].includes(usuario.role)) {
+    return jsonError('Sem permissão para alterar os dados do escritório', 403)
   }
 
   const parsed = await validateBody(req, schemaPerfil)
