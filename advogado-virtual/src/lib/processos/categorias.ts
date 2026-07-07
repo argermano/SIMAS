@@ -19,6 +19,7 @@ export type CategoriaMovimento =
   | 'arquivamento'
   | 'recurso'
   | 'movimentacao_comum'
+  | 'publicacao'
 
 /** Todas as categorias, com rótulo humano — usado na UI de Configurações (Lote 2). */
 export const CATEGORIAS: Array<{ slug: CategoriaMovimento; rotulo: string; notificavelDefault: boolean }> = [
@@ -28,6 +29,7 @@ export const CATEGORIAS: Array<{ slug: CategoriaMovimento; rotulo: string; notif
   { slug: 'expedicao_alvara', rotulo: 'Expedição de alvará', notificavelDefault: true },
   { slug: 'recurso', rotulo: 'Recurso', notificavelDefault: true },
   { slug: 'arquivamento', rotulo: 'Arquivamento definitivo', notificavelDefault: true },
+  { slug: 'publicacao', rotulo: 'Publicação no Diário (DJEN)', notificavelDefault: true },
   { slug: 'decisao_despacho', rotulo: 'Decisão / despacho', notificavelDefault: false },
   { slug: 'redistribuicao', rotulo: 'Redistribuição / remessa', notificavelDefault: false },
   { slug: 'movimentacao_comum', rotulo: 'Movimentação comum', notificavelDefault: false },

@@ -47,6 +47,7 @@ const CATEGORIA_BADGE: Record<string, { label: string; variant: 'success' | 'war
   decisao_despacho:  { label: 'Decisão/Despacho', variant: 'default' },
   redistribuicao:    { label: 'Redistribuição',  variant: 'secondary' },
   movimentacao_comum: { label: 'Movimentação',   variant: 'secondary' },
+  publicacao:        { label: 'Publicação (DJEN)', variant: 'accent' },
 }
 
 /** Formata 20 dígitos → NNNNNNN-DD.AAAA.J.TR.OOOO */
