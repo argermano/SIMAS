@@ -103,9 +103,14 @@ interface SyncResultado {
 async function syncUmProcesso(
   admin: Admin,
   proc: ProcessoRow,
-  opts?: { notificar?: boolean },
+  opts?: { notificar?: boolean; datajud?: { timeoutMs?: number; tentativas?: number } },
 ): Promise<SyncResultado | null> {
-  const dados = await buscarProcessoCompletoPorNumero(proc.tribunal_alias, proc.numero_cnj)
+  const dados = await buscarProcessoCompletoPorNumero(
+    proc.tribunal_alias,
+    proc.numero_cnj,
+    opts?.datajud?.timeoutMs,
+    opts?.datajud?.tentativas,
+  )
   if (!dados) return null
 
   const comHash = dados.movimentos.map((m) => ({ m, hash: hashMovimento(m.raw) }))
@@ -270,11 +275,48 @@ const COLS = 'id, tenant_id, cliente_id, numero_cnj, tribunal_alias, situacao, a
 export async function sincronizarProcessoPorId(
   admin: Admin,
   processoId: string,
-  opts?: { notificar?: boolean },
+  opts?: { notificar?: boolean; datajud?: { timeoutMs?: number; tentativas?: number } },
 ): Promise<SyncResultado | null> {
   const { data: proc } = await admin.from('processos').select(COLS).eq('id', processoId).single()
   if (!proc) return null
   return syncUmProcesso(admin, proc as ProcessoRow, opts)
+}
+
+/** Sync SOB DEMANDA dos processos de um cliente (chamado quando o próprio cliente
+ * pergunta o andamento pelo WhatsApp). Só re-sincroniza os que estão "velhos"
+ * (ultima_sincronizacao > maxIdadeMs), com budget CURTO no DataJud para não travar
+ * o bot, e SEM notificar (o cliente já recebe a resposta na conversa). Best-effort:
+ * se o DataJud não responder a tempo, a consulta segue com o dado armazenado. */
+export async function sincronizarProcessosDoClienteSeVelho(
+  admin: Admin,
+  clienteId: string,
+  opts?: { maxIdadeMs?: number; maxProcessos?: number; timeoutMs?: number },
+): Promise<void> {
+  const maxIdade = opts?.maxIdadeMs ?? 6 * 60 * 60 * 1000 // 6h
+  const corte = Date.now() - maxIdade
+  const { data: procs } = await admin
+    .from('processos')
+    .select('id, ultima_sincronizacao')
+    .eq('cliente_id', clienteId)
+    .eq('situacao', 'ativo')
+    .limit(20)
+
+  const velhos = (procs ?? [])
+    .filter((p: { ultima_sincronizacao: string | null }) =>
+      !p.ultima_sincronizacao || new Date(p.ultima_sincronizacao).getTime() < corte)
+    .slice(0, opts?.maxProcessos ?? 5)
+    .map((p: { id: string }) => p.id)
+  if (velhos.length === 0) return
+
+  // Paralelo com budget curto (timeout ~5s, 1 tentativa) → cabe na janela do bot.
+  await Promise.all(
+    velhos.map((id) =>
+      sincronizarProcessoPorId(admin, id, {
+        notificar: false,
+        datajud: { timeoutMs: opts?.timeoutMs ?? 5000, tentativas: 1 },
+      }).catch(() => null),
+    ),
+  )
 }
 
 /** Insere um movimento SIMULADO e roda o fluxo de aviso (teste on-demand do dono).
@@ -362,10 +404,25 @@ export async function sincronizarProcessos(
   const deadline = Date.now() + (opts?.deadlineMs ?? 45_000)
   const max = opts?.max ?? 60
 
+  // Arquitetura on-demand: o cron só sincroniza processos de clientes VIP (com
+  // aviso proativo ligado, aviso_movimentacao != 'desligado'). Os demais só são
+  // sincronizados no cadastro, no botão de refresh, ou quando o próprio cliente
+  // pergunta pelo WhatsApp. Isso limita o polling no DataJud público (teto VIP_MAX).
+  const { data: vips } = await admin
+    .from('clientes')
+    .select('id')
+    .neq('aviso_movimentacao', 'desligado')
+    .is('deleted_at', null)
+  const vipIds = (vips ?? []).map((c: { id: string }) => c.id)
+  if (vipIds.length === 0) {
+    return { processos: 0, novosMovimentos: 0, consultados: 0, pendentes: 0, enviados: 0 }
+  }
+
   const { data: pend, error } = await admin
     .from('processos')
     .select(COLS)
     .eq('situacao', 'ativo')
+    .in('cliente_id', vipIds)
     .order('ultima_sincronizacao', { ascending: true, nullsFirst: true })
     .limit(max)
   if (error) {

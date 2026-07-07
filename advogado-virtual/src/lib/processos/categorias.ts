@@ -4,6 +4,11 @@
 // sempre devolve, então o regex é o verdadeiro cavalo de batalha; os códigos são
 // só reforço para os poucos casos que temos certeza. Ver docs/PLANO-FASE-5-OPUS.md §5.
 
+/** Teto de clientes VIP (que recebem aviso proativo/automático) por tenant.
+ * Limita o polling do cron no DataJud público e o volume de WhatsApp. Ajustável
+ * por env sem redeploy de código. Ver docs/PLANO-FASE-5-OPUS.md (arquitetura on-demand). */
+export const VIP_MAX = Number(process.env.PROCESSOS_VIP_MAX ?? 30)
+
 export type CategoriaMovimento =
   | 'sentenca'
   | 'transito_julgado'

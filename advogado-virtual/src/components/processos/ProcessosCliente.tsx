@@ -264,7 +264,7 @@ export function ProcessosCliente({
               </select>
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Quando houver movimento importante, o aviso vai ao WhatsApp do cadastro do cliente (LGPD: interação cliente/escritório).
+              Ligado, o cliente é monitorado proativamente e recebe o aviso no WhatsApp do cadastro (vagas limitadas). Desligado, ele ainda pode consultar o andamento pelo WhatsApp quando quiser.
             </p>
           </div>
         )}

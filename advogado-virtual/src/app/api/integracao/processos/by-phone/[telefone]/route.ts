@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { autorizadoIntegracao } from '@/lib/funil/auth-integracao'
 import { mesmoTelefone } from '@/lib/funil/telefone'
+import { sincronizarProcessosDoClienteSeVelho } from '@/lib/processos/sync'
 import { logger } from '@/lib/logger'
 
 export const maxDuration = 20
@@ -44,6 +45,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ telefone
 
   const cliente = (clientes ?? []).find((c) => mesmoTelefone(c.telefone, alvo))
   if (!cliente) return NextResponse.json({ ok: false })
+
+  // Arquitetura on-demand: a consulta do próprio cliente motiva uma atualização
+  // rápida no DataJud (só dos processos "velhos", budget curto). Se o DataJud não
+  // responder a tempo, segue com o último dado armazenado (best-effort).
+  await sincronizarProcessosDoClienteSeVelho(admin, cliente.id).catch(() => {})
 
   const { data: processos } = await admin
     .from('processos')
