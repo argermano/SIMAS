@@ -692,14 +692,13 @@ export default function LandingPage() {
           <Reveal>
             <div className="text-center">
               <span className="eyebrow-cinzel inline-block rounded-full bg-accent/15 px-4 py-1.5 text-xs font-semibold uppercase text-primary">
-                Piloto
+                Contato
               </span>
               <h2 className="mt-5 font-serif text-3xl font-semibold text-foreground md:text-4xl lg:text-5xl">
-                SIMAS em piloto
+                Quer mais informações?
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-                Estamos validando o SIMAS dentro do nosso próprio escritório (SC/DF) antes de abrir para
-                outros. Tem interesse em acompanhar? Deixe seu contato — a gente conversa.
+                Entre em contato conosco — deixe seus dados abaixo que a gente responde.
               </p>
             </div>
           </Reveal>
