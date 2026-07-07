@@ -72,17 +72,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   let novosMovimentos: number | undefined
+  let sincronizado: boolean | undefined
   if (ressincronizar) {
     try {
       const r = await sincronizarProcessoPorId(adminClient(), id)
+      sincronizado = !!r // null = DataJud indisponível/oscilando
       novosMovimentos = r?.novos ?? 0
     } catch {
-      // best-effort
+      sincronizado = false
     }
   }
 
   const { data: atual } = await supabase.from('processos').select('*').eq('id', id).single()
-  return NextResponse.json({ processo: atual, novosMovimentos })
+  return NextResponse.json({ processo: atual, novosMovimentos, sincronizado })
 }
 
 // DELETE /api/processos/[id] — desvincula/exclui o processo (cascade nos movimentos)

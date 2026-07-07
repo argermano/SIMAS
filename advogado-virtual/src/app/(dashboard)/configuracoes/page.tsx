@@ -10,6 +10,7 @@ import { formatarData } from '@/lib/utils'
 import { isEncryptionConfigured } from '@/lib/encryption'
 import { LABELS_ROLE } from '@/types'
 import { FormPerfilProfissional } from '@/components/configuracoes/FormPerfilProfissional'
+import { ConfigMovimentacoes } from '@/components/configuracoes/ConfigMovimentacoes'
 import { PainelConsumoIA } from '@/components/configuracoes/PainelConsumoIA'
 import { PadroesDocumentos } from '@/components/configuracoes/PadroesDocumentos'
 import { FormatacaoEscritorio } from '@/components/configuracoes/FormatacaoEscritorio'
@@ -141,6 +142,21 @@ export default async function ConfiguracoesPage() {
             estado:             tenant?.estado             ?? undefined,
             cep:                tenant?.cep                ?? undefined,
           }} />
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Avisos de movimentação — admin/advogado (Fase 5) */}
+      {['admin', 'advogado'].includes(usuario.role) && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="h-5 w-5 text-muted-foreground" />
+            Avisos de Movimentação ao Cliente
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ConfigMovimentacoes />
         </CardContent>
       </Card>
       )}

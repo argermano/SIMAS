@@ -101,7 +101,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   let sincronizado = false
   let novosMovimentos = 0
   try {
-    const r = await sincronizarProcessoPorId(adminClient(), processo.id)
+    const r = await sincronizarProcessoPorId(adminClient(), processo.id, { notificar: false })
     if (r) {
       sincronizado = true
       novosMovimentos = r.novos

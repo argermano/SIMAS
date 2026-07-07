@@ -27,7 +27,10 @@ export function normalizarE164(tel: string): string {
  */
 export function chaveTelefone(tel: string | null | undefined): string {
   const d = apenasDigitos(tel)
-  const semDDI = d.startsWith('55') && d.length > 10 ? d.slice(2) : d
+  // Só remove o "55" como DDI quando o tamanho indica DDI+DDD+número (12/13
+  // dígitos). Um número de 11 dígitos começando com 55 é o DDD 55 (RS), não DDI —
+  // remover ali derrubava o DDD e causava cross-match no by-phone.
+  const semDDI = d.startsWith('55') && (d.length === 12 || d.length === 13) ? d.slice(2) : d
   return semDDI.length > 10 ? semDDI.slice(-11) : semDDI.slice(-10)
 }
 

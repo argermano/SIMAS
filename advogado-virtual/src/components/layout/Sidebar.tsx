@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Users, Settings, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
-  KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter,
+  KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter, BellRing,
 } from 'lucide-react'
 import { LogoMark } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils'
@@ -94,6 +94,12 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
 
   const allItems = [
     ...MENU_ITEMS,
+    ...(roleRaw === 'admin' || roleRaw === 'advogado' ? [{
+      href:    '/processos/notificacoes',
+      label:   'Movimentações',
+      icon:    BellRing,
+      ativoSe: (p: string) => p.startsWith('/processos'),
+    }] : []),
     ...(roleRaw && ROLES_COM_REVISAO.includes(roleRaw) ? [{
       href:    '/revisao',
       label:   'Revisão',

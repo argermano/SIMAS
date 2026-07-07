@@ -10,8 +10,10 @@ import { useToast } from '@/components/ui/toast'
 import { formatarData, formatarDataRelativa, cn } from '@/lib/utils'
 import {
   Scale, Plus, RefreshCw, Trash2, ChevronDown, ChevronRight,
-  Archive, RotateCcw, Landmark,
+  Archive, RotateCcw, Landmark, FlaskConical, BellRing,
 } from 'lucide-react'
+
+type ModoAviso = 'desligado' | 'fila' | 'automatico'
 
 interface Processo {
   id: string
@@ -54,7 +56,15 @@ function formatarCNJ(d: string): string {
   return `${s.slice(0, 7)}-${s.slice(7, 9)}.${s.slice(9, 13)}.${s.slice(13, 14)}.${s.slice(14, 16)}.${s.slice(16, 20)}`
 }
 
-export function ProcessosCliente({ clienteId }: { clienteId: string }) {
+export function ProcessosCliente({
+  clienteId,
+  avisoInicial = 'desligado',
+  podeGerenciar = false,
+}: {
+  clienteId: string
+  avisoInicial?: ModoAviso
+  podeGerenciar?: boolean
+}) {
   const { success, error: toastError } = useToast()
   const [processos, setProcessos] = useState<Processo[]>([])
   const [loading, setLoading] = useState(true)
@@ -66,6 +76,47 @@ export function ProcessosCliente({ clienteId }: { clienteId: string }) {
   const [timeline, setTimeline] = useState<Record<string, Movimento[]>>({})
   const [carregandoTl, setCarregandoTl] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
+  const [aviso, setAviso] = useState<ModoAviso>(avisoInicial)
+
+  async function salvarAviso(novo: ModoAviso) {
+    const anterior = aviso
+    setAviso(novo)
+    const r = await fetch(`/api/clientes/${clienteId}/aviso-movimentacao`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aviso_movimentacao: novo }),
+    })
+    if (!r.ok) {
+      setAviso(anterior)
+      const d = await r.json().catch(() => ({}))
+      toastError('Não foi possível salvar', d.error ?? 'Tente novamente.')
+      return
+    }
+    success('Avisos ao cliente atualizados',
+      novo === 'desligado' ? 'Nenhum aviso será enviado.'
+      : novo === 'fila' ? 'Movimentos importantes entram na fila de aprovação.'
+      : 'Movimentos importantes serão enviados automaticamente.')
+  }
+
+  async function simular(processoId: string) {
+    if (aviso === 'automatico' && !confirm('Este cliente está em modo AUTOMÁTICO: simular vai ENVIAR uma mensagem real de teste ao WhatsApp dele. Deseja continuar?')) return
+    setOcupado(processoId)
+    try {
+      const r = await fetch(`/api/processos/${processoId}/simular-movimento`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const d = await r.json()
+      if (!r.ok) { toastError('Falha ao simular', d.error ?? 'Tente novamente.'); return }
+      if (d.enviado) success('Aviso de teste enviado ✅', 'A mensagem foi para o WhatsApp do cliente.')
+      else if (d.notif_status === 'pendente') success('Movimento de teste criado', 'Entrou na fila de aprovação (Movimentações).')
+      else toastError('Movimento criado, sem envio', d.motivo ?? 'Verifique a configuração de avisos.')
+      await recarregarTimeline(processoId)
+    } finally {
+      setOcupado(null)
+    }
+  }
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -108,19 +159,29 @@ export function ProcessosCliente({ clienteId }: { clienteId: string }) {
     }
   }
 
+  async function fetchTimeline(id: string) {
+    setCarregandoTl(id)
+    try {
+      const r = await fetch(`/api/processos/${id}`)
+      const d = await r.json()
+      if (r.ok) setTimeline((t) => ({ ...t, [id]: d.movimentos ?? [] }))
+    } finally {
+      setCarregandoTl(null)
+    }
+  }
+
   async function abrirTimeline(id: string) {
     if (expandido === id) { setExpandido(null); return }
     setExpandido(id)
-    if (!timeline[id]) {
-      setCarregandoTl(id)
-      try {
-        const r = await fetch(`/api/processos/${id}`)
-        const d = await r.json()
-        if (r.ok) setTimeline((t) => ({ ...t, [id]: d.movimentos ?? [] }))
-      } finally {
-        setCarregandoTl(null)
-      }
-    }
+    if (!timeline[id]) await fetchTimeline(id)
+  }
+
+  // Reabre e RECARREGA a timeline (após simular/ressincronizar), sem depender do
+  // valor stale de `expandido` — abrirTimeline faria toggle e colapsaria.
+  async function recarregarTimeline(id: string) {
+    setTimeline((t) => { const n = { ...t }; delete n[id]; return n })
+    setExpandido(id)
+    await fetchTimeline(id)
   }
 
   async function ressincronizar(id: string) {
@@ -133,9 +194,13 @@ export function ProcessosCliente({ clienteId }: { clienteId: string }) {
       })
       const d = await r.json()
       if (!r.ok) { toastError('Falha ao sincronizar', d.error ?? 'Tente novamente.'); return }
+      if (d.sincronizado === false) {
+        toastError('DataJud indisponível', 'A consulta pública oscilou. Tente novamente em alguns instantes.')
+        return
+      }
       success('Sincronizado', `${d.novosMovimentos ?? 0} nova(s) movimentação(ões).`)
-      setTimeline((t) => { const n = { ...t }; delete n[id]; return n })
-      if (expandido === id) { setExpandido(null); void abrirTimeline(id) }
+      if (expandido === id) await recarregarTimeline(id)
+      else setTimeline((t) => { const n = { ...t }; delete n[id]; return n })
       await carregar()
     } finally {
       setOcupado(null)
@@ -183,6 +248,27 @@ export function ProcessosCliente({ clienteId }: { clienteId: string }) {
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
+        {podeGerenciar && (
+          <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <BellRing className="h-4 w-4 text-primary shrink-0" />
+              <span className="text-sm text-foreground">Avisos de movimentação ao cliente</span>
+              <select
+                value={aviso}
+                onChange={(e) => salvarAviso(e.target.value as ModoAviso)}
+                className="ml-auto rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+              >
+                <option value="desligado">Desligado</option>
+                <option value="fila">Fila de aprovação</option>
+                <option value="automatico">Automático</option>
+              </select>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Quando houver movimento importante, o aviso vai ao WhatsApp do cadastro do cliente (LGPD: interação cliente/escritório).
+            </p>
+          </div>
+        )}
+
         {mostrarForm && (
           <form onSubmit={adicionar} className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
@@ -252,6 +338,11 @@ export function ProcessosCliente({ clienteId }: { clienteId: string }) {
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
+                      {podeGerenciar && (
+                        <Button variant="ghost" size="sm" title="Simular movimentação (teste de aviso)" disabled={ocupado === p.id} onClick={() => simular(p.id)}>
+                          <FlaskConical className="h-4 w-4 text-primary" />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" title="Sincronizar agora" disabled={ocupado === p.id} onClick={() => ressincronizar(p.id)}>
                         <RefreshCw className={cn('h-4 w-4', ocupado === p.id && 'animate-spin')} />
                       </Button>

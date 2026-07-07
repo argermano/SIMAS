@@ -202,11 +202,14 @@ export interface ProcessoCompleto {
  * (para armazenar a íntegra — Fase 5). Best-effort: null em erro/timeout ou não
  * localizado. Separada de buscarProcessoPorNumero (E2) para não alterar aquele contrato.
  */
-export async function buscarProcessoCompletoPorNumero(
+/** Uma tentativa de fetch. `retry:true` = falha transitória (rejeição do ES,
+ * timeout, rede, 5xx/429) → vale re-tentar. `retry:false` sem src = 0 hits
+ * (definitivo). */
+async function fetchProcessoRaw(
   alias: string,
   numeroLimpo: string,
-  timeoutMs = 12000,
-): Promise<ProcessoCompleto | null> {
+  timeoutMs: number,
+): Promise<{ retry: boolean; src?: Record<string, unknown> }> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
@@ -216,44 +219,74 @@ export async function buscarProcessoCompletoPorNumero(
       body: JSON.stringify({ size: 1, query: { term: { numeroProcesso: numeroLimpo } } }),
       signal: ctrl.signal,
     })
-    if (!res.ok) return null
+    if (!res.ok) return { retry: true } // 429/503/5xx: sobrecarga → re-tenta
     const data = await res.json()
+    // O DataJud às vezes responde 200 com { error: es_rejected_execution_exception }.
+    if (data && data.error) return { retry: true }
     const hit = data.hits?.hits?.[0]
-    if (!hit) return null
-    const src = hit._source as Record<string, unknown>
-    const rawMovs = (src.movimentos as Array<Record<string, unknown>>) ?? []
-    const assuntos = (src.assuntos as Array<{ nome?: string }>) ?? []
-    const orgao = (src.orgaoJulgador as { nome?: string }) ?? {}
-    const classe = (src.classe as { nome?: string }) ?? {}
-    const { movimentos: _omit, ...capaSemMovs } = src
-
-    const movimentos: MovimentoBruto[] = rawMovs
-      .map((m) => ({
-        codigo: typeof m.codigo === 'number' ? (m.codigo as number) : Number(m.codigo) || null,
-        nome: (m.nome as string) ?? '',
-        dataHora: datajudDataParaISO(m.dataHora),
-        complementos: (m.complementosTabelados as Array<Record<string, unknown>>) ?? [],
-        raw: m,
-      }))
-      .filter((m) => m.nome)
-      .sort((a, b) => (a.dataHora ?? '').localeCompare(b.dataHora ?? ''))
-
-    return {
-      tribunal: alias.toUpperCase(),
-      numeroProcesso: (src.numeroProcesso as string) ?? numeroLimpo,
-      classe: classe.nome ?? '',
-      orgaoJulgador: orgao.nome ?? '',
-      assuntos: assuntos.map((a) => a.nome ?? '').filter(Boolean),
-      grau: (src.grau as string) ?? '',
-      dataAjuizamento: datajudDataParaISO(src.dataAjuizamento),
-      dataHoraUltimaAtualizacao: datajudDataParaISO(src.dataHoraUltimaAtualizacao),
-      dadosCapa: capaSemMovs,
-      movimentos,
-    }
+    if (!hit) return { retry: false } // 0 hits: número não está neste índice (definitivo)
+    return { retry: false, src: hit._source as Record<string, unknown> }
   } catch {
-    return null
+    return { retry: true } // timeout/rede
   } finally {
     clearTimeout(timer)
+  }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Busca UM processo pelo número e devolve a capa + TODOS os movimentos brutos
+ * (para armazenar a íntegra — Fase 5). A API pública do DataJud oscila (rejeita
+ * consultas por sobrecarga), então re-tenta com backoff nas falhas transitórias.
+ * Best-effort: null se não localizado ou se as tentativas se esgotarem.
+ * Separada de buscarProcessoPorNumero (E2) para não alterar aquele contrato.
+ */
+export async function buscarProcessoCompletoPorNumero(
+  alias: string,
+  numeroLimpo: string,
+  timeoutMs = 12000,
+  tentativas = 3,
+): Promise<ProcessoCompleto | null> {
+  let src: Record<string, unknown> | undefined
+  for (let i = 0; i < tentativas; i++) {
+    const r = await fetchProcessoRaw(alias, numeroLimpo, timeoutMs)
+    if (!r.retry) {
+      src = r.src
+      break // resposta autoritativa (achou ou 0 hits)
+    }
+    if (i < tentativas - 1) await sleep(700 * (i + 1)) // backoff 0.7s, 1.4s
+  }
+  if (!src) return null
+
+  const rawMovs = (src.movimentos as Array<Record<string, unknown>>) ?? []
+  const assuntos = (src.assuntos as Array<{ nome?: string }>) ?? []
+  const orgao = (src.orgaoJulgador as { nome?: string }) ?? {}
+  const classe = (src.classe as { nome?: string }) ?? {}
+  const { movimentos: _omit, ...capaSemMovs } = src
+
+  const movimentos: MovimentoBruto[] = rawMovs
+    .map((m) => ({
+      codigo: typeof m.codigo === 'number' ? (m.codigo as number) : Number(m.codigo) || null,
+      nome: (m.nome as string) ?? '',
+      dataHora: datajudDataParaISO(m.dataHora),
+      complementos: (m.complementosTabelados as Array<Record<string, unknown>>) ?? [],
+      raw: m,
+    }))
+    .filter((m) => m.nome)
+    .sort((a, b) => (a.dataHora ?? '').localeCompare(b.dataHora ?? ''))
+
+  return {
+    tribunal: alias.toUpperCase(),
+    numeroProcesso: (src.numeroProcesso as string) ?? numeroLimpo,
+    classe: classe.nome ?? '',
+    orgaoJulgador: orgao.nome ?? '',
+    assuntos: assuntos.map((a) => a.nome ?? '').filter(Boolean),
+    grau: (src.grau as string) ?? '',
+    dataAjuizamento: datajudDataParaISO(src.dataAjuizamento),
+    dataHoraUltimaAtualizacao: datajudDataParaISO(src.dataHoraUltimaAtualizacao),
+    dadosCapa: capaSemMovs,
+    movimentos,
   }
 }
 

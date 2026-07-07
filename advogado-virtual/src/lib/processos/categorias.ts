@@ -33,6 +33,18 @@ export const CATEGORIAS_NOTIFICAVEIS_DEFAULT: CategoriaMovimento[] = CATEGORIAS
   .filter((c) => c.notificavelDefault)
   .map((c) => c.slug)
 
+const SLUGS_VALIDOS = new Set<string>(CATEGORIAS.map((c) => c.slug))
+
+/** Lê o conjunto de categorias que o escritório quer notificar a partir de
+ * `tenants.config.processos_notificar`. Sem config salva → usa os defaults. */
+export function categoriasNotificaveis(config: unknown): Set<CategoriaMovimento> {
+  const arr = (config as { processos_notificar?: unknown } | null)?.processos_notificar
+  if (Array.isArray(arr)) {
+    return new Set(arr.filter((x): x is CategoriaMovimento => typeof x === 'string' && SLUGS_VALIDOS.has(x)))
+  }
+  return new Set(CATEGORIAS_NOTIFICAVEIS_DEFAULT)
+}
+
 /** Códigos TPU inequívocos (reforço; o nome cobre o resto por regex). */
 const CODIGO_CATEGORIA: Record<number, CategoriaMovimento> = {
   848: 'transito_julgado', // Trânsito em Julgado

@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { classificarMovimento, sugereEncerramento, CATEGORIAS_NOTIFICAVEIS_DEFAULT } from './categorias'
+import { classificarMovimento, sugereEncerramento, CATEGORIAS_NOTIFICAVEIS_DEFAULT, categoriasNotificaveis } from './categorias'
 import { hashMovimento } from './sync'
+import { montarTextoAviso } from './notificar'
 import { datajudDataParaISO } from '@/lib/jurisprudencia/datajud'
 import { validarNumeroCNJ, aliasDataJud } from '@/lib/jurisprudencia/verificador-citacoes'
+import { chaveTelefone, mesmoTelefone } from '@/lib/funil/telefone'
 
 describe('categorias — classificação de movimentos (TPU + nome)', () => {
   it('classifica trânsito em julgado (por código e por nome)', () => {
@@ -53,6 +55,44 @@ describe('categorias — classificação de movimentos (TPU + nome)', () => {
   })
 })
 
+describe('categorias — config notificável por tenant', () => {
+  it('sem config salva usa os defaults', () => {
+    const s = categoriasNotificaveis(null)
+    expect(s.has('sentenca')).toBe(true)
+    expect(s.has('movimentacao_comum')).toBe(false)
+  })
+  it('respeita a lista salva no tenant.config e ignora slugs inválidos', () => {
+    const s = categoriasNotificaveis({ processos_notificar: ['audiencia', 'xxx-invalido'] })
+    expect(s.has('audiencia')).toBe(true)
+    expect(s.has('sentenca')).toBe(false) // não estava na lista
+    expect(s.size).toBe(1)
+  })
+  it('lista vazia = nada notifica (não cai no default)', () => {
+    expect(categoriasNotificaveis({ processos_notificar: [] }).size).toBe(0)
+  })
+})
+
+describe('notificar — template do aviso', () => {
+  it('monta saudação com primeiro nome capitalizado e inclui o resumo', () => {
+    const txt = montarTextoAviso({
+      clienteNome: 'marta de almeida suenar',
+      resumo: 'A decisão se tornou definitiva.',
+      nomeTecnico: 'Trânsito em Julgado',
+      rotuloProcesso: '0009008-28.2025.8.16.0026',
+      escritorioNome: 'Katlen Nardes Germano Advogados',
+    })
+    expect(txt).toContain('Olá, Marta!')
+    expect(txt).toContain('A decisão se tornou definitiva.')
+    expect(txt).toContain('0009008-28.2025.8.16.0026')
+    expect(txt).toContain('Katlen Nardes Germano Advogados')
+  })
+  it('usa o nome técnico quando não há resumo, e saudação neutra sem nome', () => {
+    const txt = montarTextoAviso({ clienteNome: null, resumo: null, nomeTecnico: 'Audiência Designada', rotuloProcesso: null, escritorioNome: null })
+    expect(txt).toContain('Olá!')
+    expect(txt).toContain('Audiência Designada')
+  })
+})
+
 describe('sync — hash de movimento (dedup)', () => {
   it('mesmo registro → mesmo hash; registro diferente → hash diferente', () => {
     const a = { codigo: 60, nome: 'Expedição de documento', dataHora: '2026-03-11T10:00:00' }
@@ -72,6 +112,22 @@ describe('datajud — normalização de datas', () => {
     expect(datajudDataParaISO(null)).toBeNull()
     expect(datajudDataParaISO('')).toBeNull()
     expect(datajudDataParaISO(12345)).toBeNull()
+  })
+})
+
+describe('by-phone — match de telefone (isolamento de dados)', () => {
+  it('DDD 55 (Santa Maria/RS) não é confundido com DDI +55 e não colide com outro número', () => {
+    // "(55) 99118-6787" (11 dígitos, DDD 55) preserva o DDD na chave
+    expect(chaveTelefone('(55) 99118-6787')).toBe('55991186787')
+    // NÃO casa com um número de DDD 99 + final igual (o cross-match do bug antigo)
+    expect(mesmoTelefone('(55) 99118-6787', '(99) 91186-787')).toBe(false)
+  })
+  it('mesma linha casa com/sem DDI e com/sem 9º dígito', () => {
+    expect(mesmoTelefone('+55 47 99118-6787', '47 99118-6787')).toBe(true)
+    expect(mesmoTelefone('5547991186787', '(47) 9118-6787')).toBe(true)
+  })
+  it('números de pessoas diferentes não casam', () => {
+    expect(mesmoTelefone('(47) 99118-6787', '(47) 98888-1234')).toBe(false)
   })
 })
 

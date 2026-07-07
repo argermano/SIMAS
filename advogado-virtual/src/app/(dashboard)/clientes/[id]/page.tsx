@@ -116,7 +116,7 @@ export default async function DossieClientePage({
 
   const { data: usuario } = await supabase
     .from('users')
-    .select('id, nome, tenant_id')
+    .select('id, nome, tenant_id, role')
     .eq('auth_user_id', user.id)
     .single()
 
@@ -292,7 +292,11 @@ export default async function DossieClientePage({
           </div>
 
           {/* ── Processos (acompanhamento processual — Fase 5) ── */}
-          <ProcessosCliente clienteId={id} />
+          <ProcessosCliente
+            clienteId={id}
+            avisoInicial={(cliente.aviso_movimentacao as 'desligado' | 'fila' | 'automatico') ?? 'desligado'}
+            podeGerenciar={['admin', 'advogado'].includes(usuario.role)}
+          />
 
           {/* ── Barra de resumo + filtros ── */}
           {totalAtendimentos > 0 && (

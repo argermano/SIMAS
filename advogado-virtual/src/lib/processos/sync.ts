@@ -7,18 +7,30 @@
 import { createHash } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buscarProcessoCompletoPorNumero, type MovimentoBruto } from '@/lib/jurisprudencia/datajud'
-import { classificarMovimento, sugereEncerramento } from './categorias'
+import { classificarMovimento, sugereEncerramento, categoriasNotificaveis } from './categorias'
+import { montarTextoAviso, enviarAvisoWhatsApp } from './notificar'
 import { completionJSON } from '@/lib/anthropic/client'
 import { logger } from '@/lib/logger'
+import { logAudit } from '@/lib/audit'
 
 type Admin = SupabaseClient
 
 interface ProcessoRow {
   id: string
   tenant_id: string
+  cliente_id: string
   numero_cnj: string
   tribunal_alias: string
   situacao: string
+  apelido: string | null
+  ultima_sincronizacao: string | null
+}
+
+/** Formata 20 dígitos → NNNNNNN-DD.AAAA.J.TR.OOOO (rótulo do processo no aviso). */
+function formatarCNJProc(d: string): string {
+  const s = (d ?? '').replace(/\D/g, '')
+  if (s.length !== 20) return d
+  return `${s.slice(0, 7)}-${s.slice(7, 9)}.${s.slice(9, 13)}.${s.slice(13, 14)}.${s.slice(14, 16)}.${s.slice(16, 20)}`
 }
 
 /** Hash estável do registro bruto do movimento (dedup no sync). O índice único
@@ -73,10 +85,26 @@ async function gerarResumos(movs: MovimentoBruto[]): Promise<(string | null)[]> 
   return out
 }
 
+interface SyncResultado {
+  novos: number
+  encerrou: boolean
+  pendentes: number // avisos enfileirados p/ aprovação (modo fila)
+  enviados: number // avisos enviados na hora (modo automático)
+}
+
 /** Sincroniza UM processo: busca no DataJud, insere movimentos novos (delta por
- * hash), classifica, resume e atualiza a capa. Retorna nº de novos ou null se a
- * consulta falhou (best-effort: fica para a próxima execução). */
-async function syncUmProcesso(admin: Admin, proc: ProcessoRow): Promise<{ novos: number; encerrou: boolean } | null> {
+ * hash), classifica, resume, atualiza a capa e — quando NÃO é o snapshot inicial —
+ * dispara/enfileira avisos ao cliente conforme a config. Retorna null se a
+ * consulta falhou (best-effort: fica para a próxima execução).
+ *
+ * `notificar` default true; o cadastro passa false. A trava real contra aviso
+ * retroativo é o `baseline` (processo sem nenhum movimento ainda ⇒ 1º snapshot ⇒
+ * nunca notifica), que protege mesmo se o cron pegar um cadastro cujo sync imediato falhou. */
+async function syncUmProcesso(
+  admin: Admin,
+  proc: ProcessoRow,
+  opts?: { notificar?: boolean },
+): Promise<SyncResultado | null> {
   const dados = await buscarProcessoCompletoPorNumero(proc.tribunal_alias, proc.numero_cnj)
   if (!dados) return null
 
@@ -87,6 +115,11 @@ async function syncUmProcesso(admin: Admin, proc: ProcessoRow): Promise<{ novos:
     .select('raw_hash')
     .eq('processo_id', proc.id)
   const jaTem = new Set((existentes ?? []).map((r: { raw_hash: string }) => r.raw_hash))
+  // Baseline = processo nunca sincronizado com sucesso (ultima_sincronizacao null).
+  // NÃO usar a contagem de movimentos: um movimento SIMULADO (teste) inseriria uma
+  // linha e faria o 1º sync real achar que já havia histórico, notificando tudo
+  // retroativo. ultima_sincronizacao só é setada por um sync real bem-sucedido.
+  const baseline = !proc.ultima_sincronizacao // 1º snapshot → nunca notifica
 
   // Novos, deduplicados também localmente (o DataJud às vezes repete um registro).
   const vistos = new Set<string>()
@@ -98,10 +131,55 @@ async function syncUmProcesso(admin: Admin, proc: ProcessoRow): Promise<{ novos:
 
   const resumos = novos.length ? await gerarResumos(novos.map((x) => x.m)) : []
 
+  // Contexto de notificação — só carrega se pode notificar (evita I/O à toa).
+  const podeNotificar = novos.length > 0 && !baseline && opts?.notificar !== false
+  let notif: {
+    aviso: 'fila' | 'automatico'
+    telefone: string | null
+    clienteNome: string | null
+    escritorioNome: string | null
+    notificaveis: Set<string>
+  } | null = null
+  if (podeNotificar) {
+    const [{ data: cli }, { data: ten }] = await Promise.all([
+      admin.from('clientes').select('nome, telefone, aviso_movimentacao').eq('id', proc.cliente_id).single(),
+      admin.from('tenants').select('nome, config').eq('id', proc.tenant_id).single(),
+    ])
+    const aviso = cli?.aviso_movimentacao
+    if (aviso === 'fila' || aviso === 'automatico') {
+      notif = {
+        aviso,
+        telefone: (cli?.telefone as string) ?? null,
+        clienteNome: (cli?.nome as string) ?? null,
+        escritorioNome: (ten?.nome as string) ?? null,
+        notificaveis: categoriasNotificaveis(ten?.config) as Set<string>,
+      }
+    }
+  }
+
+  const rotulo = proc.apelido || formatarCNJProc(proc.numero_cnj)
+
   let encerrou = false
   const linhas = novos.map((x, i) => {
     const categoria = classificarMovimento({ codigo: x.m.codigo, nome: x.m.nome, complementos: x.m.complementos })
     if (sugereEncerramento(categoria)) encerrou = true
+
+    // Notificáveis entram como 'pendente' (fila E automático). O automático é
+    // enviado logo abaixo via CLAIM atômico (pendente→aprovada). Se o envio
+    // morrer no meio, o movimento permanece 'pendente' → recuperável na fila
+    // (nunca fica órfão preso em 'aprovada').
+    let notif_status = 'nao_aplicavel'
+    let notif_texto: string | null = null
+    if (notif && categoria && notif.notificaveis.has(categoria)) {
+      notif_texto = montarTextoAviso({
+        clienteNome: notif.clienteNome,
+        resumo: resumos[i] ?? null,
+        nomeTecnico: x.m.nome,
+        rotuloProcesso: rotulo,
+        escritorioNome: notif.escritorioNome,
+      })
+      notif_status = 'pendente'
+    }
     return {
       processo_id: proc.id,
       codigo: x.m.codigo,
@@ -112,19 +190,61 @@ async function syncUmProcesso(admin: Admin, proc: ProcessoRow): Promise<{ novos:
       raw_hash: x.hash,
       resumo_ia: resumos[i] ?? null,
       categoria,
-      notif_status: 'nao_aplicavel', // Lote 1 nunca notifica; Lote 2 acende a fila
+      notif_status,
+      notif_texto,
     }
   })
 
+  let inseridos: Array<{ id: string; notif_status: string; notif_texto: string | null }> = []
   if (linhas.length) {
-    const { error } = await admin
+    const { data, error } = await admin
       .from('processo_movimentos')
       .upsert(linhas, { onConflict: 'processo_id,raw_hash', ignoreDuplicates: true })
+      .select('id, notif_status, notif_texto')
     if (error) {
       logger.error('processos.sync.insert', { processo: proc.id }, error)
       return null
     }
+    inseridos = data ?? []
   }
+
+  // Envio automático: para cada 'pendente' recém-inserido, faz um CLAIM atômico
+  // (só envia quem conseguir mudar de 'pendente'→'aprovada') e então envia. Isso
+  // impede envio duplicado sob concorrência (unique index + claim) e evita órfãos.
+  let enviados = 0
+  if (notif?.aviso === 'automatico' && notif.telefone) {
+    for (const r of inseridos.filter((r) => r.notif_status === 'pendente' && r.notif_texto)) {
+      const { data: claim } = await admin
+        .from('processo_movimentos')
+        .update({ notif_status: 'aprovada' })
+        .eq('id', r.id)
+        .eq('notif_status', 'pendente')
+        .select('id')
+      if (!claim || claim.length === 0) continue // outro processo já pegou
+      const res = await enviarAvisoWhatsApp(notif.telefone, r.notif_texto as string)
+      if (res.ok) {
+        enviados++
+        await admin
+          .from('processo_movimentos')
+          .update({ notif_status: 'enviada', notif_enviada_em: new Date().toISOString() })
+          .eq('id', r.id)
+        await logAudit({
+          tenantId: proc.tenant_id,
+          action: 'processo.notificacao_enviada',
+          resourceType: 'processo',
+          resourceId: proc.id,
+          metadata: { movimento_id: r.id, cliente_id: proc.cliente_id },
+        })
+      } else {
+        await admin.from('processo_movimentos').update({ notif_status: 'erro' }).eq('id', r.id)
+      }
+    }
+  }
+  // Telemetria: notificáveis inseridos (todos entram 'pendente') menos os que o
+  // automático enviou = os que ficaram na fila. (Objetos locais não refletem o
+  // UPDATE no banco, então derivamos do contador de enviados.)
+  const notificaveis = inseridos.filter((r) => r.notif_status === 'pendente').length
+  const pendentes = Math.max(0, notificaveis - enviados)
 
   const patch: Record<string, unknown> = {
     classe: dados.classe || null,
@@ -140,20 +260,97 @@ async function syncUmProcesso(admin: Admin, proc: ProcessoRow): Promise<{ novos:
   const { error: upErr } = await admin.from('processos').update(patch).eq('id', proc.id)
   if (upErr) logger.error('processos.sync.capa', { processo: proc.id }, upErr)
 
-  return { novos: linhas.length, encerrou }
+  return { novos: linhas.length, encerrou, pendentes, enviados }
 }
 
-const COLS = 'id, tenant_id, numero_cnj, tribunal_alias, situacao'
+const COLS = 'id, tenant_id, cliente_id, numero_cnj, tribunal_alias, situacao, apelido, ultima_sincronizacao'
 
-/** Sync imediato de UM processo (ao cadastrar): snapshot histórico completo.
- * Os movimentos históricos entram como 'nao_aplicavel' — nunca notifica retroativo. */
+/** Sync de UM processo por id. No cadastro passe `notificar:false` (snapshot
+ * histórico — nunca notifica retroativo); numa ressincronização manual, `true`. */
 export async function sincronizarProcessoPorId(
   admin: Admin,
   processoId: string,
-): Promise<{ novos: number; encerrou: boolean } | null> {
+  opts?: { notificar?: boolean },
+): Promise<SyncResultado | null> {
   const { data: proc } = await admin.from('processos').select(COLS).eq('id', processoId).single()
   if (!proc) return null
-  return syncUmProcesso(admin, proc as ProcessoRow)
+  return syncUmProcesso(admin, proc as ProcessoRow, opts)
+}
+
+/** Insere um movimento SIMULADO e roda o fluxo de aviso (teste on-demand do dono).
+ * Não altera a capa nem encerra o processo. Usa exatamente o mesmo template/decisão
+ * de notificação do sync real, para o teste refletir o comportamento de produção. */
+export async function simularMovimento(
+  admin: Admin,
+  processoId: string,
+  input?: { nome?: string; categoria?: string; resumo?: string },
+): Promise<{ ok: boolean; notif_status: string; enviado: boolean; motivo?: string }> {
+  const { data: proc } = await admin.from('processos').select(COLS).eq('id', processoId).single()
+  if (!proc) return { ok: false, notif_status: 'nao_aplicavel', enviado: false, motivo: 'Processo não encontrado' }
+  const p = proc as ProcessoRow
+
+  const nome = input?.nome?.trim() || 'Sentença (movimento de TESTE)'
+  const categoria = input?.categoria || classificarMovimento({ nome }) || 'sentenca'
+  const resumo = input?.resumo?.trim() || 'Foi proferida uma decisão no seu processo (este é um movimento de teste).'
+  const nowIso = new Date().toISOString()
+  const raw = { _simulado: true, nome, dataHora: nowIso }
+  const raw_hash = hashMovimento(raw) // baseado em "agora" → sempre único
+
+  const [{ data: cli }, { data: ten }] = await Promise.all([
+    admin.from('clientes').select('nome, telefone, aviso_movimentacao').eq('id', p.cliente_id).single(),
+    admin.from('tenants').select('nome, config').eq('id', p.tenant_id).single(),
+  ])
+  const aviso = cli?.aviso_movimentacao as string | undefined
+  const notificaveis = categoriasNotificaveis(ten?.config) as Set<string>
+  const rotulo = p.apelido || formatarCNJProc(p.numero_cnj)
+
+  let notif_status = 'nao_aplicavel'
+  let notif_texto: string | null = null
+  let motivo: string | undefined
+  if (aviso !== 'fila' && aviso !== 'automatico') {
+    motivo = 'Avisos desligados para este cliente — ative "Fila" ou "Automático" para testar.'
+  } else if (!notificaveis.has(categoria)) {
+    motivo = `A categoria "${categoria}" não está marcada como notificável nas Configurações.`
+  } else {
+    notif_texto = montarTextoAviso({
+      clienteNome: cli?.nome ?? null,
+      resumo,
+      nomeTecnico: nome,
+      rotuloProcesso: rotulo,
+      escritorioNome: (ten?.nome as string) ?? null,
+    })
+    notif_status = aviso === 'automatico' && cli?.telefone ? 'aprovada' : 'pendente'
+    if (aviso === 'automatico' && !cli?.telefone) motivo = 'Cliente sem telefone no cadastro — caiu na fila em vez de enviar.'
+  }
+
+  const { data: ins, error } = await admin
+    .from('processo_movimentos')
+    .insert({
+      processo_id: p.id, codigo: null, nome, data_hora: nowIso,
+      complementos: [], raw, raw_hash, resumo_ia: resumo, categoria, notif_status, notif_texto,
+    })
+    .select('id')
+    .single()
+  if (error || !ins) return { ok: false, notif_status, enviado: false, motivo: error?.message }
+
+  let enviado = false
+  if (notif_status === 'aprovada' && notif_texto && cli?.telefone) {
+    const res = await enviarAvisoWhatsApp(cli.telefone as string, notif_texto)
+    if (res.ok) {
+      enviado = true
+      notif_status = 'enviada'
+      await admin.from('processo_movimentos').update({ notif_status, notif_enviada_em: new Date().toISOString() }).eq('id', ins.id)
+      await logAudit({
+        tenantId: p.tenant_id, action: 'processo.notificacao_enviada',
+        resourceType: 'processo', resourceId: p.id, metadata: { movimento_id: ins.id, simulado: true },
+      })
+    } else {
+      notif_status = 'erro'
+      motivo = 'Falha ao enviar pelo WhatsApp (confira PROCESSOS_NOTIFY_URL/TOKEN e o ai-attendant).'
+      await admin.from('processo_movimentos').update({ notif_status }).eq('id', ins.id)
+    }
+  }
+  return { ok: true, notif_status, enviado, motivo }
 }
 
 /** Sync em lote (cron): processos ativos, mais desatualizados primeiro,
@@ -161,7 +358,7 @@ export async function sincronizarProcessoPorId(
 export async function sincronizarProcessos(
   admin: Admin,
   opts?: { deadlineMs?: number; max?: number },
-): Promise<{ processos: number; novosMovimentos: number; consultados: number }> {
+): Promise<{ processos: number; novosMovimentos: number; consultados: number; pendentes: number; enviados: number }> {
   const deadline = Date.now() + (opts?.deadlineMs ?? 45_000)
   const max = opts?.max ?? 60
 
@@ -173,28 +370,32 @@ export async function sincronizarProcessos(
     .limit(max)
   if (error) {
     logger.error('processos.sync.listar', {}, error)
-    return { processos: 0, novosMovimentos: 0, consultados: 0 }
+    return { processos: 0, novosMovimentos: 0, consultados: 0, pendentes: 0, enviados: 0 }
   }
 
   const fila = (pend ?? []) as ProcessoRow[]
   let processos = 0
   let novosMovimentos = 0
   let consultados = 0
+  let pendentes = 0
+  let enviados = 0
   let idx = 0
 
   const worker = async () => {
     while (idx < fila.length && Date.now() < deadline) {
       const proc = fila[idx++]
       consultados++
-      const r = await syncUmProcesso(admin, proc)
+      const r = await syncUmProcesso(admin, proc, { notificar: true })
       if (r) {
         processos++
         novosMovimentos += r.novos
+        pendentes += r.pendentes
+        enviados += r.enviados
       }
     }
   }
   await Promise.all(Array.from({ length: Math.min(3, fila.length) }, worker))
 
-  logger.info('processos.sync', { processos, consultados, novosMovimentos })
-  return { processos, novosMovimentos, consultados }
+  logger.info('processos.sync', { processos, consultados, novosMovimentos, pendentes, enviados })
+  return { processos, novosMovimentos, consultados, pendentes, enviados }
 }
