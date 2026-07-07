@@ -1,4 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lora:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+/* Landing pública — fontes editoriais da marca "café + cobre" (apoiojuridicodf.adv.br) */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -135,6 +137,74 @@
     --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.3), 0 4px 12px hsl(0 0% 0% / 0.25);
     --shadow-card-hover: 0 8px 30px hsl(0 0% 0% / 0.35);
   }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Landing pública — identidade "café + cobre" (escopo isolado)
+   Redefine tokens SOMENTE dentro de .landing-brand para NÃO
+   rebrandar o app (dashboard/funil/editor mantêm ardósia+dourado).
+   Acessibilidade: cobre claro (#BE835E) só decorativo / display grande;
+   cobre profundo (#8A5A3E = --primary) para preenchimento e text-primary.
+   ───────────────────────────────────────────────────────────── */
+.landing-brand {
+  /* Fontes editoriais da marca */
+  --font-heading: 'Cormorant Garamond', Georgia, serif;
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-body: 'Jost', system-ui, sans-serif;
+
+  /* Paleta café + cobre (tema claro) */
+  --background: 33 45% 96%;      /* Paper #FBF7F2 */
+  --foreground: 20 26% 11%;      /* Ink #241A15 */
+  --card: 0 0% 100%;
+  --card-foreground: 20 26% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 20 26% 11%;
+  --muted: 33 40% 89%;           /* Cream #EFE5D9 */
+  --muted-foreground: 21 15% 38%;/* #6E5C52 */
+  --secondary: 33 40% 91%;
+  --secondary-foreground: 22 38% 30%;
+  --border: 17 20% 86%;
+  --input: 17 20% 86%;
+  --primary: 22 38% 39%;         /* Copper deep #8A5A3E */
+  --primary-foreground: 0 0% 100%;
+  --primary-glow: 24 43% 56%;    /* Copper #BE835E */
+  --accent: 24 43% 56%;          /* Copper #BE835E */
+  --accent-foreground: 20 26% 11%;
+  --ring: 22 38% 42%;
+
+  --radius: 0.5rem;
+
+  --gradient-primary: linear-gradient(135deg, #E9B792 0%, #BE835E 46%, #8A5A3E 100%);
+  --gradient-card-hover: linear-gradient(135deg, #BE835E 0%, #8A5A3E 100%);
+
+  /* Sombras retintadas de navy para café quente */
+  --shadow-sm: 0 1px 3px hsl(20 30% 15% / 0.06);
+  --shadow-md: 0 4px 12px hsl(20 30% 15% / 0.08);
+  --shadow-lg: 0 8px 30px hsl(20 30% 15% / 0.12);
+  --shadow-card: 0 1px 3px hsl(20 30% 15% / 0.05), 0 4px 12px hsl(20 30% 15% / 0.05);
+  --shadow-card-hover: 0 8px 30px hsl(20 30% 15% / 0.10);
+
+  font-family: var(--font-body);
+}
+
+/* As utilitárias font-heading/font-serif do Tailwind são hardcoded
+   (Plus Jakarta / Lora). Dentro da landing, reencaminhe-as para as fontes
+   da marca via maior especificidade. Cormorant é leve: reservada a títulos. */
+.landing-brand .font-serif,
+.landing-brand .font-heading,
+.landing-brand h1,
+.landing-brand h2,
+.landing-brand h3,
+.landing-brand h4,
+.landing-brand h5,
+.landing-brand h6 {
+  font-family: var(--font-heading);
+}
+
+/* Rótulos / eyebrows / numerais em versalete (Cinzel) */
+.eyebrow-cinzel {
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.12em;
 }
 
 /* ─────────────────────────────────────────────────────────────

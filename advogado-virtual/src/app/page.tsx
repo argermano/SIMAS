@@ -8,19 +8,19 @@ import {
   FileText,
   Users,
   Mic,
-  LayoutDashboard,
   ShieldCheck,
-  Sparkles,
-  Check,
   ArrowRight,
   Lock,
-  Headphones,
   Zap,
   ChevronRight,
   PenTool,
   BookOpen,
   Gavel,
   FileSignature,
+  BadgeCheck,
+  ScrollText,
+  ClipboardCheck,
+  Building2,
   Menu,
   X,
 } from 'lucide-react'
@@ -109,22 +109,23 @@ function Reveal({
 
 /* ─── Data ─────────────────────────────────────────────── */
 
+// Cobre coeso (sem arco-íris): todos os pontos usam o mesmo gradiente café.
 const AREAS = [
-  { name: 'Previdenciário', color: 'from-primary to-primary-glow' },
-  { name: 'Trabalhista', color: 'from-emerald-500 to-emerald-400' },
-  { name: 'Família', color: 'from-pink-500 to-rose-400' },
-  { name: 'Empresarial', color: 'from-cyan-500 to-sky-400' },
-  { name: 'Médico', color: 'from-violet-500 to-purple-400' },
-  { name: 'Cível', color: 'from-blue-500 to-blue-400' },
-  { name: 'Criminal', color: 'from-red-500 to-red-400' },
-  { name: 'Tributário', color: 'from-amber-500 to-orange-400' },
+  'Previdenciário',
+  'Trabalhista',
+  'Família',
+  'Empresarial',
+  'Médico',
+  'Cível',
+  'Criminal',
+  'Tributário',
 ]
 
 const WORKFLOW_STEPS = [
   {
     icon: Mic,
     title: 'Grave a consulta',
-    description: 'Registre o atendimento com áudio. A IA transcreve automaticamente em segundos via Whisper.',
+    description: 'Registre o atendimento com áudio. A IA transcreve automaticamente em segundos via Groq — rápido e resiliente.',
   },
   {
     icon: Brain,
@@ -145,133 +146,206 @@ const WORKFLOW_STEPS = [
 
 const FEATURES = [
   {
-    icon: Brain,
-    title: 'IA Jurídica com Claude',
-    description: 'Análise de casos, geração de peças e consulta inteligente — IA treinada para o direito brasileiro.',
-    accent: 'bg-primary/10 text-primary',
+    icon: BadgeCheck,
+    title: 'Fundamentação verificada',
+    description:
+      'Citações conferidas automaticamente — números de processo (CNJ), súmulas e leis — com verificação online (LexML/DataJud). Menos alucinação, mais confiança.',
+  },
+  {
+    icon: ScrollText,
+    title: 'Teses do seu escritório',
+    description:
+      'Envie peças do escritório: a IA extrai as teses, o advogado aprova e só a tese aprovada entra na fundamentação.',
+  },
+  {
+    icon: ClipboardCheck,
+    title: 'Revisão anti-alucinação',
+    description:
+      'Painel “Revisar peça” com diferença e aceite por seção e autosave — você confere cada trecho antes de assinar.',
   },
   {
     icon: FileText,
-    title: 'Geração de Documentos',
-    description: 'Petições, contratos, procurações e pareceres em minutos com modelos personalizáveis por área.',
-    accent: 'bg-emerald-500/10 text-emerald-600',
-  },
-  {
-    icon: Mic,
-    title: 'Transcrição de Áudio',
-    description: 'Grave consultas e receba a transcrição editável automaticamente. O relato do cliente sempre preservado.',
-    accent: 'bg-violet-500/10 text-violet-600',
+    title: 'Da consulta à peça',
+    description:
+      'Petições, contestações e recursos gerados a partir da transcrição, dos documentos e da jurisprudência — no editor jurídico ABNT.',
   },
   {
     icon: Users,
-    title: 'Dossiê do Cliente',
-    description: 'Centralize atendimentos, documentos, análises e peças de cada cliente em um único lugar.',
-    accent: 'bg-sky-500/10 text-sky-600',
-  },
-  {
-    icon: LayoutDashboard,
-    title: 'Kanban & Tarefas',
-    description: 'Organize o fluxo do escritório com quadros visuais, prazos e acompanhamento de andamentos.',
-    accent: 'bg-amber-500/10 text-amber-600',
+    title: 'Dossiê do cliente',
+    description:
+      'Atendimentos, documentos, análises e peças de cada cliente centralizados em um único lugar.',
   },
   {
     icon: ShieldCheck,
-    title: 'Segurança & Multi-tenancy',
-    description: 'Dados isolados por escritório com RLS, criptografia, LGPD e controle de acesso por perfil.',
-    accent: 'bg-rose-500/10 text-rose-600',
-  },
-]
-
-const PLANS = [
-  {
-    name: 'Essencial',
-    description: 'Para advogados autônomos',
-    highlighted: false,
-    features: [
-      '1 usuário',
-      'Até 100 clientes',
-      'IA para análise de casos',
-      'Geração de documentos',
-      'Transcrição de áudio',
-      'Suporte por e-mail',
-    ],
-  },
-  {
-    name: 'Profissional',
-    description: 'Para escritórios em crescimento',
-    highlighted: true,
-    features: [
-      'Até 5 usuários',
-      'Clientes ilimitados',
-      'IA avançada + jurisprudência',
-      'Modelos premium por área',
-      'Kanban e gestão de tarefas',
-      'Suporte prioritário',
-      'Assinatura digital D4Sign',
-    ],
-  },
-  {
-    name: 'Escritório',
-    description: 'Para escritórios consolidados',
-    highlighted: false,
-    features: [
-      'Usuários ilimitados',
-      'Todas as funcionalidades',
-      'API personalizada',
-      'Treinamento da equipe',
-      'Gerente de conta dedicado',
-      'SLA garantido',
-      'Personalização da marca',
-    ],
+    title: 'Segurança & multi-tenancy',
+    description:
+      'Dados isolados por escritório com RLS, criptografia, LGPD e controle de acesso por perfil.',
   },
 ]
 
 const DIFERENCIAIS = [
   {
+    icon: Building2,
+    title: 'Proximidade',
+    content:
+      'Feito dentro de um escritório real, em piloto — nascido da rotina da advocacia, não de um laboratório.',
+  },
+  {
     icon: Gavel,
-    title: 'Feito para o direito brasileiro',
+    title: 'Técnica',
     content:
-      'Peças, prazos e linguagem no padrão forense — não um chatbot genérico adaptado às pressas.',
+      'Para o direito brasileiro, no padrão forense — peças, prazos e linguagem que o foro reconhece.',
   },
   {
-    icon: Sparkles,
-    title: 'Da consulta à peça, sem retrabalho',
+    icon: BadgeCheck,
+    title: 'Transparência',
     content:
-      'O relato do cliente vira transcrição, análise e minuta — tudo conectado no dossiê do cliente.',
-  },
-  {
-    icon: FileSignature,
-    title: 'Seu padrão, sua marca',
-    content:
-      'Modelos .docx do escritório preenchidos com fidelidade — no seu timbre e na sua formatação.',
+      'Fundamentação que você confere — citações verificadas e teses aprovadas pelo escritório.',
   },
 ]
 
-const STATS = [
-  { value: 8, suffix: '', label: 'Áreas jurídicas' },
-  { value: 6, suffix: '', label: 'Tipos de documento automatizados' },
-  { value: 100, suffix: '%', label: 'Peças no padrão ABNT' },
-  { value: 4, suffix: '', label: 'Passos: da consulta à peça' },
+const STATS: { value?: number; suffix?: string; text?: string; label: string }[] = [
+  { value: 8, label: 'áreas do direito' },
+  { value: 20, label: 'combinações de prompts curados (área × tipo de peça)' },
+  { text: 'Citações', label: 'conferidas automaticamente: nº CNJ, súmulas e leis' },
+  { text: 'Teses', label: 'do escritório usadas na fundamentação' },
 ]
 
 const TRUST = [
-  { icon: Lock, title: 'LGPD & Criptografia', desc: 'Dados criptografados com isolamento por escritório' },
-  { icon: Headphones, title: 'Suporte Especializado', desc: 'Equipe jurídica-tech pronta para ajudar' },
-  { icon: Zap, title: 'Atualizações Semanais', desc: 'Novas áreas e funcionalidades toda semana' },
+  { icon: Lock, title: 'LGPD & isolamento por escritório', desc: 'Dados isolados por RLS e criptografados' },
+  { icon: BadgeCheck, title: 'Fundamentação verificada', desc: 'Citações conferidas: nº CNJ, súmulas e leis' },
+  { icon: Building2, title: 'Feito em escritório real', desc: 'Desenvolvido na rotina da advocacia (SC/DF)' },
 ]
 
 /* ─── Stat Card with animated counter ───────────────────── */
 
-function StatCard({ value, suffix, label }: { value: number; suffix: string; label: string }) {
-  const { count, ref } = useCountUp(value, 2200)
+function StatCard({ value, suffix = '', text, label }: { value?: number; suffix?: string; text?: string; label: string }) {
+  const { count, ref } = useCountUp(value ?? 0, 2200)
   return (
     <div ref={ref} className="text-center">
-      <p className="font-heading text-3xl font-extrabold text-white md:text-4xl lg:text-5xl">
-        {count}
-        <span className="text-white/70">{suffix}</span>
+      <p className="font-heading text-3xl font-bold text-white md:text-4xl lg:text-5xl">
+        {value !== undefined ? (
+          <>
+            {count}
+            <span className="text-white/70">{suffix}</span>
+          </>
+        ) : (
+          text
+        )}
       </p>
       <p className="mt-2 text-sm font-medium text-white/60">{label}</p>
     </div>
+  )
+}
+
+/* ─── Contact form (piloto) — posta em /api/contato ─────── */
+
+function ContatoForm() {
+  const [dados, setDados] = useState({ nome: '', email: '', telefone: '', website: '' })
+  const [enviando, setEnviando] = useState(false)
+  const [enviado, setEnviado] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!dados.nome.trim() || !dados.email.trim()) return
+    setEnviando(true)
+    setErro(null)
+    try {
+      const res = await fetch('/api/contato', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados),
+      })
+      if (res.ok) {
+        setEnviado(true)
+      } else {
+        setErro('Não foi possível enviar agora. Tente novamente ou escreva para atendimento@apoiojuridicodf.adv.br.')
+      }
+    } catch {
+      setErro('Falha de rede. Tente novamente em instantes.')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  if (enviado) {
+    return (
+      <div className="rounded-xl border border-border/60 bg-card p-8 text-center shadow-card">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/15 text-primary">
+          <BadgeCheck className="h-6 w-6" />
+        </div>
+        <h3 className="font-heading text-2xl font-bold text-foreground">Recebemos seu contato</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Obrigado pelo interesse. Respondemos no e-mail informado assim que possível.
+        </p>
+      </div>
+    )
+  }
+
+  const inputClass =
+    'w-full rounded-lg border border-input bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:border-primary/60 focus:ring-2 focus:ring-ring/20 transition-colors disabled:opacity-50'
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-xl border border-border/60 bg-card p-6 shadow-card sm:p-8" noValidate>
+      {/* Honeypot anti-bot — deve permanecer vazio */}
+      <input
+        type="text"
+        name="website"
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+        value={dados.website}
+        onChange={(e) => setDados((p) => ({ ...p, website: e.target.value }))}
+        className="hidden"
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <input
+          type="text"
+          required
+          placeholder="Seu nome"
+          value={dados.nome}
+          onChange={(e) => setDados((p) => ({ ...p, nome: e.target.value }))}
+          disabled={enviando}
+          className={inputClass}
+        />
+        <input
+          type="email"
+          required
+          placeholder="Seu e-mail"
+          value={dados.email}
+          onChange={(e) => setDados((p) => ({ ...p, email: e.target.value }))}
+          disabled={enviando}
+          className={inputClass}
+        />
+      </div>
+      <input
+        type="tel"
+        placeholder="Telefone (opcional)"
+        value={dados.telefone}
+        onChange={(e) => setDados((p) => ({ ...p, telefone: e.target.value }))}
+        disabled={enviando}
+        className={`${inputClass} mt-4`}
+      />
+      {erro && <p className="mt-4 text-sm text-destructive">{erro}</p>}
+      <button
+        type="submit"
+        disabled={enviando || !dados.nome.trim() || !dados.email.trim()}
+        className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-primary-glow px-6 py-3 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+      >
+        {enviando ? 'Enviando…' : 'Fale com a gente'}
+        {!enviando && <ArrowRight className="h-4 w-4" />}
+      </button>
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        Prefere e-mail? Escreva para{' '}
+        <a
+          href="mailto:atendimento@apoiojuridicodf.adv.br"
+          className="font-semibold text-primary underline underline-offset-2"
+        >
+          atendimento@apoiojuridicodf.adv.br
+        </a>
+      </p>
+    </form>
   )
 }
 
@@ -280,8 +354,15 @@ function StatCard({ value, suffix, label }: { value: number; suffix: string; lab
 export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
+  const NAV_LINKS: [string, string][] = [
+    ['#workflow', 'Como funciona'],
+    ['#features', 'Funcionalidades'],
+    ['#contato', 'Contato'],
+    ['#diferenciais', 'Diferenciais'],
+  ]
+
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
+    <div className="landing-brand min-h-screen bg-background text-foreground overflow-x-hidden">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -293,7 +374,8 @@ export default function LandingPage() {
             operatingSystem: 'Web',
             inLanguage: 'pt-BR',
             url: 'https://simas.app',
-            description: 'Sistema jurídico inteligente com IA para a advocacia brasileira.',
+            description:
+              'Sistema jurídico com IA para a advocacia brasileira — peças com fundamentação verificada.',
           }),
         }}
       />
@@ -304,18 +386,13 @@ export default function LandingPage() {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-glow shadow-md shadow-primary/25 transition-shadow group-hover:shadow-lg group-hover:shadow-primary/30">
               <LogoMark className="h-5 w-5 text-white" />
             </div>
-            <span className="font-heading text-xl font-extrabold tracking-tight">
+            <span className="font-heading text-xl font-semibold tracking-tight">
               SIMAS
             </span>
           </Link>
 
           <div className="hidden items-center gap-8 md:flex">
-            {[
-              ['#workflow', 'Como funciona'],
-              ['#features', 'Funcionalidades'],
-              ['#pricing', 'Preços'],
-              ['#testimonials', 'Depoimentos'],
-            ].map(([href, label]) => (
+            {NAV_LINKS.map(([href, label]) => (
               <a
                 key={href}
                 href={href}
@@ -329,23 +406,24 @@ export default function LandingPage() {
           <div className="hidden items-center gap-3 md:flex">
             <Link
               href="/login"
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-muted-foreground transition-all hover:text-foreground hover:bg-muted"
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-muted-foreground transition-all hover:text-foreground hover:bg-muted"
             >
               Entrar
             </Link>
-            <Link
-              href="/registro"
-              className="group relative rounded-xl bg-gradient-to-r from-primary to-primary-glow px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
+            <a
+              href="#contato"
+              className="group relative rounded-lg bg-gradient-to-r from-primary to-primary-glow px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
             >
-              Começar grátis
+              Fale com a gente
               <ArrowRight className="ml-1.5 inline-block h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Link>
+            </a>
           </div>
 
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border bg-card md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border bg-card md:hidden"
+            aria-label="Menu"
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -355,12 +433,7 @@ export default function LandingPage() {
         {mobileMenuOpen && (
           <div className="border-t bg-card px-5 py-4 md:hidden">
             <div className="flex flex-col gap-3">
-              {[
-                ['#workflow', 'Como funciona'],
-                ['#features', 'Funcionalidades'],
-                ['#pricing', 'Preços'],
-                ['#testimonials', 'Depoimentos'],
-              ].map(([href, label]) => (
+              {NAV_LINKS.map(([href, label]) => (
                 <a
                   key={href}
                   href={href}
@@ -372,7 +445,7 @@ export default function LandingPage() {
               ))}
               <div className="mt-2 flex gap-3 border-t pt-3">
                 <Link href="/login" className="text-sm font-semibold text-muted-foreground">Entrar</Link>
-                <Link href="/registro" className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Começar grátis</Link>
+                <a href="#contato" onClick={() => setMobileMenuOpen(false)} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white">Fale com a gente</a>
               </div>
             </div>
           </div>
@@ -388,7 +461,7 @@ export default function LandingPage() {
         <div className="absolute inset-0">
           <div className="absolute inset-0 bg-gradient-to-b from-primary/[0.04] via-transparent to-transparent" />
           <div className="absolute left-1/2 top-0 -translate-x-1/2 h-[600px] w-[900px] rounded-full bg-primary/[0.06] blur-[120px]" />
-          <div className="absolute right-0 top-20 h-[300px] w-[300px] rounded-full bg-primary-glow/[0.04] blur-[80px]" />
+          <div className="absolute right-0 top-20 h-[300px] w-[300px] rounded-full bg-accent/[0.05] blur-[80px]" />
           {/* Subtle grid */}
           <div
             className="absolute inset-0 opacity-[0.03]"
@@ -404,18 +477,18 @@ export default function LandingPage() {
           <Reveal>
             <div className="mx-auto max-w-4xl text-center">
               {/* Badge */}
-              <div className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] px-4 py-2 text-sm font-semibold text-primary backdrop-blur-sm">
-                <Sparkles className="h-4 w-4" />
-                Potencializado por Inteligência Artificial
+              <div className="eyebrow-cinzel mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-accent/10 px-4 py-2 text-xs font-semibold uppercase text-primary backdrop-blur-sm">
+                <BadgeCheck className="h-4 w-4" />
+                IA com fundamentação verificada
                 <ChevronRight className="h-3.5 w-3.5 opacity-60" />
               </div>
 
               {/* Headline */}
-              <h1 className="font-serif text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
-                A advocacia do futuro,{' '}
+              <h1 className="font-serif text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
+                Peças jurídicas com fundamentação{' '}
                 <span className="relative">
                   <span className="bg-gradient-to-r from-primary via-primary-glow to-primary bg-clip-text text-transparent">
-                    agora no seu escritório
+                    que você pode conferir
                   </span>
                   <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 300 12" fill="none">
                     <path
@@ -423,29 +496,30 @@ export default function LandingPage() {
                       stroke="hsl(var(--primary))"
                       strokeWidth="3"
                       strokeLinecap="round"
-                      strokeOpacity="0.3"
+                      strokeOpacity="0.35"
                     />
                   </svg>
                 </span>
               </h1>
 
               <p className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl">
-                Grave consultas, analise casos com IA e gere peças processuais em minutos.
-                O SIMAS automatiza o trabalho repetitivo para que você foque nos seus clientes.
+                Grave a consulta, analise o caso e gere a peça — com{' '}
+                <span className="font-semibold text-primary">citações verificadas</span> e as{' '}
+                <span className="font-semibold text-primary">teses do seu escritório</span>.
               </p>
 
               {/* CTA buttons */}
               <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-                <Link
-                  href="/registro"
-                  className="group relative inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-primary-glow px-8 py-4 text-base font-bold text-white shadow-xl shadow-primary/25 transition-all hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-0.5"
+                <a
+                  href="#contato"
+                  className="group relative inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-glow px-8 py-4 text-base font-bold text-white shadow-xl shadow-primary/25 transition-all hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-0.5"
                 >
-                  Começar teste gratuito
+                  Fale com a gente
                   <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-                </Link>
+                </a>
                 <a
                   href="#workflow"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-border bg-card/80 px-8 py-4 text-base font-semibold text-foreground shadow-sm backdrop-blur-sm transition-all hover:bg-card hover:shadow-md"
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-card/80 px-8 py-4 text-base font-semibold text-foreground shadow-sm backdrop-blur-sm transition-all hover:bg-card hover:shadow-md"
                 >
                   <BookOpen className="h-5 w-5 text-muted-foreground" />
                   Como funciona
@@ -459,11 +533,11 @@ export default function LandingPage() {
             <div className="mx-auto mt-16 flex max-w-3xl flex-wrap items-center justify-center gap-2.5">
               {AREAS.map((area) => (
                 <span
-                  key={area.name}
+                  key={area}
                   className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/80 px-4 py-1.5 text-sm font-medium text-foreground shadow-sm backdrop-blur-sm"
                 >
-                  <span className={`h-2 w-2 rounded-full bg-gradient-to-r ${area.color}`} />
-                  {area.name}
+                  <span className="h-2 w-2 rounded-full bg-gradient-to-r from-primary to-primary-glow" />
+                  {area}
                 </span>
               ))}
             </div>
@@ -472,7 +546,7 @@ export default function LandingPage() {
       </section>
 
       {/* ═══════════ Stats bar ═══════════ */}
-      <section className="relative overflow-hidden border-y border-white/10 bg-gradient-to-r from-[hsl(216,44%,15%)] via-[hsl(216,44%,20%)] to-[hsl(217,39%,28%)]">
+      <section className="relative overflow-hidden border-y border-white/10 bg-gradient-to-r from-[#2A1D18] via-[#241A15] to-[#1E1411]">
         <div className="absolute inset-0 opacity-10" style={{
           backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
           backgroundSize: '32px 32px',
@@ -480,7 +554,7 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-5xl px-5 py-14 sm:px-8">
           <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
             {STATS.map((s) => (
-              <StatCard key={s.label} value={s.value} suffix={s.suffix} label={s.label} />
+              <StatCard key={s.label} value={s.value} suffix={s.suffix} text={s.text} label={s.label} />
             ))}
           </div>
         </div>
@@ -491,15 +565,15 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <Reveal>
             <div className="text-center">
-              <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary">
+              <span className="eyebrow-cinzel inline-block rounded-full bg-accent/15 px-4 py-1.5 text-xs font-semibold uppercase text-primary">
                 Como funciona
               </span>
-              <h2 className="mt-5 font-serif text-3xl font-bold text-foreground md:text-4xl lg:text-5xl">
-                Da consulta à peça processual{' '}
-                <span className="bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">em minutos</span>
+              <h2 className="mt-5 font-serif text-3xl font-semibold text-foreground md:text-4xl lg:text-5xl">
+                Da consulta à peça,{' '}
+                <span className="bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">com fundamentação</span>
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-                Quatro passos simples. Sem burocracia. Sem horas perdidas.
+                Quatro passos conectados — o relato do cliente vira transcrição, análise e minuta, tudo no dossiê.
               </p>
             </div>
           </Reveal>
@@ -509,17 +583,17 @@ export default function LandingPage() {
               const Icon = step.icon
               return (
                 <Reveal key={step.title} delay={i * 100}>
-                  <div className="group relative flex flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1 hover:border-primary/20">
+                  <div className="group relative flex flex-col rounded-xl border border-border/60 bg-card p-7 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1 hover:border-primary/20">
                     {/* Step number */}
-                    <div className="absolute -top-3.5 left-6 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-xs font-bold text-white shadow-md shadow-primary/25">
+                    <div className="eyebrow-cinzel absolute -top-3.5 left-6 flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-glow text-xs font-bold text-white shadow-md shadow-primary/25">
                       {i + 1}
                     </div>
 
-                    <div className="mb-5 mt-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/[0.07] transition-colors group-hover:bg-primary/[0.12]">
+                    <div className="mb-5 mt-2 flex h-14 w-14 items-center justify-center rounded-xl bg-accent/10 transition-colors group-hover:bg-accent/20">
                       <Icon className="h-7 w-7 text-primary" />
                     </div>
 
-                    <h3 className="font-heading text-lg font-bold text-foreground">{step.title}</h3>
+                    <h3 className="font-heading text-xl font-semibold text-foreground">{step.title}</h3>
                     <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.description}</p>
 
                     {/* Connector line (not on last) */}
@@ -537,19 +611,19 @@ export default function LandingPage() {
       {/* ═══════════ Features ═══════════ */}
       <section id="features" className="relative border-t bg-muted/20 py-24 md:py-32">
         {/* Subtle background glow */}
-        <div className="absolute left-0 top-1/2 h-[400px] w-[400px] -translate-y-1/2 rounded-full bg-primary/[0.03] blur-[100px]" />
+        <div className="absolute left-0 top-1/2 h-[400px] w-[400px] -translate-y-1/2 rounded-full bg-accent/[0.04] blur-[100px]" />
 
         <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
           <Reveal>
             <div className="text-center">
-              <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary">
+              <span className="eyebrow-cinzel inline-block rounded-full bg-accent/15 px-4 py-1.5 text-xs font-semibold uppercase text-primary">
                 Funcionalidades
               </span>
-              <h2 className="mt-5 font-serif text-3xl font-bold text-foreground md:text-4xl lg:text-5xl">
-                Tudo que seu escritório precisa
+              <h2 className="mt-5 font-serif text-3xl font-semibold text-foreground md:text-4xl lg:text-5xl">
+                O que o SIMAS faz pelo seu escritório
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-                IA, automação e organização — projetados por quem entende a rotina jurídica.
+                Fundamentação verificada, teses do escritório e revisão — pensados para a rotina jurídica.
               </p>
             </div>
           </Reveal>
@@ -559,11 +633,11 @@ export default function LandingPage() {
               const Icon = f.icon
               return (
                 <Reveal key={f.title} delay={i * 80}>
-                  <div className="group relative flex flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1 hover:border-primary/20 h-full">
-                    <div className={`mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl ${f.accent} transition-transform group-hover:scale-110`}>
+                  <div className="group relative flex flex-col rounded-xl border border-border/60 bg-card p-7 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1 hover:border-primary/20 h-full">
+                    <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-accent/15 text-primary transition-transform group-hover:scale-110">
                       <Icon className="h-6 w-6" />
                     </div>
-                    <h3 className="font-heading text-lg font-bold text-foreground">{f.title}</h3>
+                    <h3 className="font-heading text-xl font-semibold text-foreground">{f.title}</h3>
                     <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{f.description}</p>
                   </div>
                 </Reveal>
@@ -573,119 +647,81 @@ export default function LandingPage() {
 
           {/* Three pillars */}
           <Reveal delay={200}>
-            <div className="mt-16 rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/[0.04] to-transparent p-8 md:p-12">
-              <h3 className="text-center font-heading text-xl font-bold text-foreground md:text-2xl">
-                Três pilares por área jurídica
+            <div className="mt-16 rounded-xl border border-primary/10 bg-gradient-to-br from-accent/[0.06] to-transparent p-8 md:p-12">
+              <h3 className="text-center font-heading text-2xl font-semibold text-foreground">
+                Três frentes, por área jurídica
               </h3>
               <div className="mt-8 grid gap-6 md:grid-cols-3">
                 {[
                   {
                     icon: Zap,
-                    emoji: '⚡',
                     title: 'Peças com IA',
                     desc: 'Petição, Contestação, Réplica, Apelação, Agravo, Embargos — geradas e refinadas com inteligência artificial.',
                   },
                   {
                     icon: FileText,
-                    emoji: '📄',
-                    title: 'Modelos Prontos',
+                    title: 'Modelos prontos',
                     desc: 'Procuração, Contrato de Honorários, Substabelecimento, Declarações — templates do escritório sempre à mão.',
                   },
                   {
                     icon: Brain,
-                    emoji: '🧠',
                     title: 'Consultoria IA',
-                    desc: 'Análise de caso, parecer jurídico, estratégia processual e plano de provas — tudo em linguagem acessível.',
+                    desc: 'Análise de caso, parecer jurídico, estratégia processual e plano de provas — em linguagem acessível.',
                   },
-                ].map((pillar) => (
-                  <div key={pillar.title} className="flex flex-col items-center text-center">
-                    <span className="mb-3 text-3xl">{pillar.emoji}</span>
-                    <h4 className="font-heading text-base font-bold text-foreground">{pillar.title}</h4>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{pillar.desc}</p>
-                  </div>
-                ))}
+                ].map((pillar) => {
+                  const Icon = pillar.icon
+                  return (
+                    <div key={pillar.title} className="flex flex-col items-center text-center">
+                      <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-primary">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <h4 className="font-heading text-lg font-semibold text-foreground">{pillar.title}</h4>
+                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{pillar.desc}</p>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </Reveal>
         </div>
       </section>
 
-      {/* ═══════════ Pricing ═══════════ */}
-      <section id="pricing" className="relative border-t py-24 md:py-32">
-        <div className="mx-auto max-w-7xl px-5 sm:px-8">
+      {/* ═══════════ Contato / Piloto ═══════════ */}
+      <section id="contato" className="relative border-t py-24 md:py-32">
+        <div className="mx-auto max-w-3xl px-5 sm:px-8">
           <Reveal>
             <div className="text-center">
-              <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary">
-                Preços
+              <span className="eyebrow-cinzel inline-block rounded-full bg-accent/15 px-4 py-1.5 text-xs font-semibold uppercase text-primary">
+                Piloto
               </span>
-              <h2 className="mt-5 font-serif text-3xl font-bold text-foreground md:text-4xl lg:text-5xl">
-                Planos que crescem com você
+              <h2 className="mt-5 font-serif text-3xl font-semibold text-foreground md:text-4xl lg:text-5xl">
+                SIMAS em piloto
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-                Comece com teste gratuito. Sem cartão. Sem compromisso.
+                Estamos validando o SIMAS dentro do nosso próprio escritório (SC/DF) antes de abrir para
+                outros. Tem interesse em acompanhar? Deixe seu contato — a gente conversa.
               </p>
             </div>
           </Reveal>
 
-          <div className="mt-16 grid gap-6 md:grid-cols-3">
-            {PLANS.map((plan, i) => (
-              <Reveal key={plan.name} delay={i * 100}>
-                <div
-                  className={`relative flex h-full flex-col rounded-2xl border p-8 transition-all hover:-translate-y-1 ${
-                    plan.highlighted
-                      ? 'border-primary bg-card shadow-xl shadow-primary/10 ring-1 ring-primary/20'
-                      : 'border-border/60 bg-card shadow-card hover:shadow-card-hover'
-                  }`}
-                >
-                  {plan.highlighted && (
-                    <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-primary to-primary-glow px-4 py-1 text-xs font-bold text-white shadow-md shadow-primary/25">
-                      Mais popular
-                    </span>
-                  )}
-
-                  <h3 className="font-heading text-xl font-bold text-foreground">{plan.name}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
-
-                  <ul className="mt-8 flex-1 space-y-3.5">
-                    {plan.features.map((feat) => (
-                      <li key={feat} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                        <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                          plan.highlighted ? 'bg-primary/10' : 'bg-muted'
-                        }`}>
-                          <Check className={`h-3 w-3 ${plan.highlighted ? 'text-primary' : 'text-muted-foreground'}`} />
-                        </div>
-                        {feat}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link
-                    href="/registro"
-                    className={`mt-8 block rounded-xl px-5 py-3 text-center text-sm font-bold transition-all ${
-                      plan.highlighted
-                        ? 'bg-gradient-to-r from-primary to-primary-glow text-white shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5'
-                        : 'border border-border bg-card text-foreground hover:bg-muted hover:border-primary/20'
-                    }`}
-                  >
-                    Começar teste grátis
-                  </Link>
-                </div>
-              </Reveal>
-            ))}
-          </div>
+          <Reveal delay={120}>
+            <div className="mx-auto mt-12 max-w-xl">
+              <ContatoForm />
+            </div>
+          </Reveal>
         </div>
       </section>
 
       {/* ═══════════ Diferenciais ═══════════ */}
-      <section id="testimonials" className="relative border-t bg-muted/20 py-24 md:py-32">
+      <section id="diferenciais" className="relative border-t bg-muted/20 py-24 md:py-32">
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <Reveal>
             <div className="text-center">
-              <span className="inline-block rounded-full bg-primary/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.15em] text-primary">
+              <span className="eyebrow-cinzel inline-block rounded-full bg-accent/15 px-4 py-1.5 text-xs font-semibold uppercase text-primary">
                 Diferenciais
               </span>
-              <h2 className="mt-5 font-serif text-3xl font-bold text-foreground md:text-4xl lg:text-5xl">
-                Pensado para a rotina jurídica
+              <h2 className="mt-5 font-serif text-3xl font-semibold text-foreground md:text-4xl lg:text-5xl">
+                Três compromissos com o seu escritório
               </h2>
             </div>
           </Reveal>
@@ -695,11 +731,11 @@ export default function LandingPage() {
               const Icon = d.icon
               return (
                 <Reveal key={d.title} delay={i * 100}>
-                  <div className="flex h-full flex-col rounded-2xl border border-border/60 bg-card p-7 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1">
-                    <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-accent/15 text-accent">
+                  <div className="flex h-full flex-col rounded-xl border border-border/60 bg-card p-7 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1">
+                    <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-accent/15 text-primary">
                       <Icon className="h-6 w-6" />
                     </div>
-                    <h3 className="font-heading text-lg font-bold text-foreground">{d.title}</h3>
+                    <h3 className="font-heading text-xl font-semibold text-foreground">{d.title}</h3>
                     <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{d.content}</p>
                   </div>
                 </Reveal>
@@ -711,40 +747,41 @@ export default function LandingPage() {
 
       {/* ═══════════ CTA ═══════════ */}
       <section className="relative overflow-hidden border-t">
-        <div className="absolute inset-0 bg-gradient-to-br from-[hsl(216,44%,14%)] via-[hsl(216,44%,19%)] to-[hsl(217,39%,27%)]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#241A15] via-[#2A1D18] to-[#1E1411]" />
         <div className="absolute inset-0 opacity-5" style={{
           backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
           backgroundSize: '24px 24px',
         }} />
         {/* Glow */}
-        <div className="absolute left-1/2 top-0 h-[300px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-glow/20 blur-[100px]" />
+        <div className="absolute left-1/2 top-0 h-[300px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/20 blur-[100px]" />
 
         <div className="relative mx-auto max-w-3xl px-5 py-20 text-center sm:px-8 md:py-28">
           <Reveal>
-            <div className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-semibold text-white/80 backdrop-blur-sm">
+            <div className="eyebrow-cinzel mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold uppercase text-white/80 backdrop-blur-sm">
               <Gavel className="h-4 w-4" />
-              Comece hoje mesmo
+              Piloto aberto a conversas
             </div>
 
-            <h2 className="font-serif text-3xl font-bold text-white md:text-4xl lg:text-5xl">
-              Pronto para transformar{' '}
+            <h2 className="font-serif text-3xl font-semibold text-white md:text-4xl lg:text-5xl">
+              Vamos conversar sobre{' '}
               <span className="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">
-                seu escritório?
+                o seu escritório
               </span>
             </h2>
 
             <p className="mx-auto mt-6 max-w-xl text-lg text-white/60">
-              Comece agora e transforme a rotina do seu escritório com IA jurídica — da consulta à peça.
+              O SIMAS está em piloto, feito dentro de um escritório real. Se faz sentido para a sua
+              advocacia, escreva para a gente.
             </p>
 
             <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-              <Link
-                href="/registro"
-                className="group inline-flex items-center gap-2 rounded-2xl bg-white px-8 py-4 text-base font-bold text-[hsl(216,44%,22%)] shadow-xl transition-all hover:shadow-2xl hover:-translate-y-0.5"
+              <a
+                href="#contato"
+                className="group inline-flex items-center gap-2 rounded-xl bg-white px-8 py-4 text-base font-bold text-primary shadow-xl transition-all hover:shadow-2xl hover:-translate-y-0.5"
               >
-                Começar agora — é grátis
+                Fale com a gente
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </Link>
+              </a>
             </div>
           </Reveal>
         </div>
@@ -759,7 +796,7 @@ export default function LandingPage() {
               return (
                 <Reveal key={t.title} delay={i * 80}>
                   <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/[0.07]">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent/10">
                       <Icon className="h-5 w-5 text-primary" />
                     </div>
                     <div>
@@ -782,10 +819,10 @@ export default function LandingPage() {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-glow">
                 <LogoMark className="h-4 w-4 text-white" />
               </div>
-              <span className="font-heading text-sm font-bold">SIMAS</span>
+              <span className="font-heading text-base font-semibold">SIMAS</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              &copy; {new Date().getFullYear()} SIMAS — Sistema Jurídico. Todos os direitos reservados.
+              &copy; {new Date().getFullYear()} SIMAS — Sistema Jurídico · Em piloto (SC/DF). Todos os direitos reservados.
             </p>
           </div>
         </div>
