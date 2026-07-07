@@ -162,6 +162,101 @@ export async function buscarProcessoPorNumero(
   }
 }
 
+/* ── Fase 5: consulta completa (capa + TODOS os movimentos brutos) ───────── */
+
+/** DataJud usa dois formatos de data: ISO ("2026-03-11T…") e compacto
+ * ("20250730161039" = AAAAMMDDHHmmss). Normaliza ambos para ISO (ou null). */
+export function datajudDataParaISO(v: unknown): string | null {
+  if (typeof v !== 'string' || !v) return null
+  if (v.includes('-') || v.includes('T')) return v
+  const d = v.replace(/\D/g, '')
+  if (d.length < 8) return null
+  const iso = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` +
+    (d.length >= 14 ? `T${d.slice(8, 10)}:${d.slice(10, 12)}:${d.slice(12, 14)}` : '')
+  return iso
+}
+
+export interface MovimentoBruto {
+  codigo: number | null
+  nome: string
+  dataHora: string | null // ISO original do DataJud
+  complementos: Array<Record<string, unknown>>
+  raw: Record<string, unknown> // íntegra do registro do movimento
+}
+
+export interface ProcessoCompleto {
+  tribunal: string
+  numeroProcesso: string
+  classe: string
+  orgaoJulgador: string
+  assuntos: string[]
+  grau: string
+  dataAjuizamento: string | null // ISO
+  dataHoraUltimaAtualizacao: string | null // ISO
+  dadosCapa: Record<string, unknown> // _source bruto (sem o array de movimentos)
+  movimentos: MovimentoBruto[] // todos, ordenados por dataHora asc
+}
+
+/**
+ * Busca UM processo pelo número e devolve a capa + TODOS os movimentos brutos
+ * (para armazenar a íntegra — Fase 5). Best-effort: null em erro/timeout ou não
+ * localizado. Separada de buscarProcessoPorNumero (E2) para não alterar aquele contrato.
+ */
+export async function buscarProcessoCompletoPorNumero(
+  alias: string,
+  numeroLimpo: string,
+  timeoutMs = 12000,
+): Promise<ProcessoCompleto | null> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  try {
+    const res = await fetch(`${DATAJUD_BASE}/api_publica_${alias}/_search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `APIKey ${DATAJUD_API_KEY}` },
+      body: JSON.stringify({ size: 1, query: { term: { numeroProcesso: numeroLimpo } } }),
+      signal: ctrl.signal,
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const hit = data.hits?.hits?.[0]
+    if (!hit) return null
+    const src = hit._source as Record<string, unknown>
+    const rawMovs = (src.movimentos as Array<Record<string, unknown>>) ?? []
+    const assuntos = (src.assuntos as Array<{ nome?: string }>) ?? []
+    const orgao = (src.orgaoJulgador as { nome?: string }) ?? {}
+    const classe = (src.classe as { nome?: string }) ?? {}
+    const { movimentos: _omit, ...capaSemMovs } = src
+
+    const movimentos: MovimentoBruto[] = rawMovs
+      .map((m) => ({
+        codigo: typeof m.codigo === 'number' ? (m.codigo as number) : Number(m.codigo) || null,
+        nome: (m.nome as string) ?? '',
+        dataHora: datajudDataParaISO(m.dataHora),
+        complementos: (m.complementosTabelados as Array<Record<string, unknown>>) ?? [],
+        raw: m,
+      }))
+      .filter((m) => m.nome)
+      .sort((a, b) => (a.dataHora ?? '').localeCompare(b.dataHora ?? ''))
+
+    return {
+      tribunal: alias.toUpperCase(),
+      numeroProcesso: (src.numeroProcesso as string) ?? numeroLimpo,
+      classe: classe.nome ?? '',
+      orgaoJulgador: orgao.nome ?? '',
+      assuntos: assuntos.map((a) => a.nome ?? '').filter(Boolean),
+      grau: (src.grau as string) ?? '',
+      dataAjuizamento: datajudDataParaISO(src.dataAjuizamento),
+      dataHoraUltimaAtualizacao: datajudDataParaISO(src.dataHoraUltimaAtualizacao),
+      dadosCapa: capaSemMovs,
+      movimentos,
+    }
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 /**
  * Consulta um tribunal específico na API DataJud
  */

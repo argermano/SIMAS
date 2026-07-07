@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ClienteAcoesClient } from './ClienteAcoesClient'
+import { ProcessosCliente } from '@/components/processos/ProcessosCliente'
 import { BotaoExcluirAtendimento } from '@/components/atendimento/BotaoExcluirAtendimento'
 import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
 import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
@@ -289,6 +290,9 @@ export default async function DossieClientePage({
               </CardContent>
             </Card>
           </div>
+
+          {/* ── Processos (acompanhamento processual — Fase 5) ── */}
+          <ProcessosCliente clienteId={id} />
 
           {/* ── Barra de resumo + filtros ── */}
           {totalAtendimentos > 0 && (

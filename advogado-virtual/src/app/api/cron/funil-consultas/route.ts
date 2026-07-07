@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
+import { sincronizarProcessos } from '@/lib/processos/sync'
 
 export const maxDuration = 60
 
@@ -37,5 +38,15 @@ export async function GET(req: Request) {
 
   const n = data?.length ?? 0
   logger.info('cron.funil_consultas', { aguardandoConfirmacao: n })
-  return NextResponse.json({ ok: true, marcados: n })
+
+  // Fase 5 — sincroniza processos ativos com o DataJud (isolado: uma falha aqui
+  // não derruba o job do funil). Teto de tempo folgado dentro do maxDuration=60.
+  let processos: { processos: number; novosMovimentos: number; consultados: number } | null = null
+  try {
+    processos = await sincronizarProcessos(admin, { deadlineMs: 45_000 })
+  } catch (e) {
+    logger.error('cron.processos_sync.falha', {}, e as Error)
+  }
+
+  return NextResponse.json({ ok: true, marcados: n, processos })
 }
