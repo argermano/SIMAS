@@ -8,8 +8,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatarData } from '@/lib/utils'
-import { X, ExternalLink, ClipboardList, CheckCheck, Ban } from 'lucide-react'
-import { CriarTarefaModal } from './CriarTarefaModal'
+import { X, ExternalLink } from 'lucide-react'
+import { PainelTratamento, type TratamentoPayload } from './PainelTratamento'
 import {
   STATUS_META,
   type DestinatarioAdvogado,
@@ -21,8 +21,9 @@ interface Props {
   id: string
   teamMembers: TeamMember[]
   onClose: () => void
-  /** Chamado quando o status muda (triar/descartar/tarefa) para o pai recarregar a lista. */
-  onAlterada: () => void
+  /** Chamado após tratar/descartar com sucesso. O pai avança para a próxima
+   * publicação não tratada da fila (ou fecha) e recarrega lista + contadores. */
+  onConcluido: (id: string) => void
 }
 
 function normalizarDestinatarios(raw: unknown): DestinatarioAdvogado[] {
@@ -37,16 +38,18 @@ function normalizarDestinatarios(raw: unknown): DestinatarioAdvogado[] {
   return out
 }
 
-export function PublicacaoDrawer({ id, teamMembers, onClose, onAlterada }: Props) {
+export function PublicacaoDrawer({ id, teamMembers, onClose, onConcluido }: Props) {
   const { success, error: toastError } = useToast()
   const [pub, setPub] = useState<PublicacaoDetalhe | null>(null)
   const [loading, setLoading] = useState(true)
   const [ocupado, setOcupado] = useState(false)
-  const [modalTarefa, setModalTarefa] = useState(false)
   const [modalDescarte, setModalDescarte] = useState(false)
   const [motivo, setMotivo] = useState('')
 
   useEffect(() => {
+    // Ao trocar de publicação (fila), zera o estado de descarte.
+    setModalDescarte(false)
+    setMotivo('')
     let vivo = true
     ;(async () => {
       setLoading(true)
@@ -65,37 +68,65 @@ export function PublicacaoDrawer({ id, teamMembers, onClose, onAlterada }: Props
   }, [id])
 
   useEffect(() => {
-    // Não fechar o drawer com Escape enquanto um sub-modal estiver aberto
+    // Não fechar o drawer com Escape enquanto o modal de descarte estiver aberto
     // (o próprio Dialog trata o Escape dele).
-    if (modalTarefa || modalDescarte) return
+    if (modalDescarte) return
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [onClose, modalTarefa, modalDescarte])
+  }, [onClose, modalDescarte])
 
-  async function triar(acao: 'triada' | 'descartar', extra?: { motivo?: string }) {
+  /** Conclui o tratamento: nota opcional + 0..10 tarefas (acao 'tratar'). */
+  async function tratar(payload: TratamentoPayload) {
     setOcupado(true)
     try {
       const r = await fetch(`/api/publicacoes/${id}/triar`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acao, ...extra }),
+        body: JSON.stringify({ acao: 'tratar', ...payload }),
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
-        toastError('Não foi possível concluir', d.error ?? 'Tente novamente.')
+        toastError('Não foi possível concluir o tratamento', d.error ?? 'Tente novamente.')
         return
       }
-      success(acao === 'triada' ? 'Marcada como triada' : 'Publicação descartada', '')
-      onAlterada()
-      onClose()
+      const n = Array.isArray(d.taskIds) ? d.taskIds.length : 0
+      if (n > 0) {
+        success(`Publicação tratada — ${n} tarefa${n > 1 ? 's' : ''} criada${n > 1 ? 's' : ''}`, 'Acompanhe em Tarefas (/tarefas).')
+      } else {
+        success('Publicação tratada', 'Marcada como tratada, sem tarefa.')
+      }
+      onConcluido(id)
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  async function descartar() {
+    const motivoLimpo = motivo.trim()
+    if (!motivoLimpo) return
+    setOcupado(true)
+    try {
+      const r = await fetch(`/api/publicacoes/${id}/triar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'descartar', motivo: motivoLimpo }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        toastError('Não foi possível descartar', d.error ?? 'Tente novamente.')
+        return
+      }
+      success('Publicação descartada', '')
+      setModalDescarte(false)
+      onConcluido(id)
     } finally {
       setOcupado(false)
     }
   }
 
   const destinatarios = pub ? normalizarDestinatarios(pub.destinatarios) : []
-  const podeTriar = pub?.status === 'nova'
+  const podeTratar = pub?.status === 'nova'
   const meta = pub ? STATUS_META[pub.status] : null
 
   return (
@@ -152,6 +183,18 @@ export function PublicacaoDrawer({ id, teamMembers, onClose, onAlterada }: Props
                 )}
               </div>
 
+              {/* Painel de TRATAMENTO — ação principal quando ainda não tratada. */}
+              {podeTratar && (
+                <PainelTratamento
+                  key={pub.id}
+                  publicacao={pub}
+                  teamMembers={teamMembers}
+                  ocupado={ocupado}
+                  onConcluir={tratar}
+                  onDescartar={() => { setMotivo(''); setModalDescarte(true) }}
+                />
+              )}
+
               {/* Metadados */}
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <Campo rotulo="Disponibilizada em" valor={formatarData(pub.data_disponibilizacao)} />
@@ -195,47 +238,21 @@ export function PublicacaoDrawer({ id, teamMembers, onClose, onAlterada }: Props
                 <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Inteiro teor
                 </p>
-                <pre className="max-h-none whitespace-pre-wrap break-words rounded-md bg-muted/30 p-3 text-sm leading-relaxed text-foreground font-sans">
+                <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted/30 p-3 text-sm leading-relaxed text-foreground font-sans">
                   {pub.textoPlano || 'Sem texto disponível.'}
                 </pre>
               </div>
             </div>
           )}
         </div>
-
-        {/* Ações */}
-        {pub && podeTriar && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-border p-4">
-            <Button size="sm" onClick={() => setModalTarefa(true)} disabled={ocupado}>
-              <ClipboardList className="h-4 w-4" /> Criar tarefa
-            </Button>
-            <Button size="sm" variant="secondary" onClick={() => triar('triada')} disabled={ocupado}>
-              <CheckCheck className="h-4 w-4" /> Marcar como triada
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setMotivo(''); setModalDescarte(true) }} disabled={ocupado}>
-              <Ban className="h-4 w-4" /> Descartar
-            </Button>
-          </div>
-        )}
       </aside>
-
-      {/* Modal criar tarefa */}
-      {pub && modalTarefa && (
-        <CriarTarefaModal
-          open={modalTarefa}
-          onClose={() => setModalTarefa(false)}
-          publicacao={pub}
-          teamMembers={teamMembers}
-          onCriada={() => { setModalTarefa(false); onAlterada(); onClose() }}
-        />
-      )}
 
       {/* Modal descartar (motivo obrigatório) */}
       <Dialog
         open={modalDescarte}
         onClose={ocupado ? () => {} : () => setModalDescarte(false)}
         title="Descartar publicação"
-        description="A publicação some da fila de triagem, mas permanece na trilha de auditoria."
+        description="A publicação some da fila de tratamento, mas permanece na trilha de auditoria."
         size="md"
         footer={
           <>
@@ -246,7 +263,7 @@ export function PublicacaoDrawer({ id, teamMembers, onClose, onAlterada }: Props
               variant="danger"
               loading={ocupado}
               disabled={!motivo.trim()}
-              onClick={() => triar('descartar', { motivo: motivo.trim() })}
+              onClick={descartar}
             >
               Descartar
             </Button>

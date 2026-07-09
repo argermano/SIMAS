@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validarTransicao, montarDescricaoTarefa } from './triagem'
+import { validarTransicao, montarDescricaoTarefa, statusAposTratamento } from './triagem'
 
 describe('validarTransicao — toda ação de triagem parte de "nova"', () => {
   it('nova + triada → ok, alvo "triada"', () => {
@@ -71,5 +71,17 @@ describe('montarDescricaoTarefa — "Publicação {tipo} — proc. {nº} ({tribu
     expect(
       montarDescricaoTarefa({ tipo_documento: null, tipo_comunicacao: null, numero_mascara: '123', sigla_tribunal: null }),
     ).toBe('Publicação sem tipo — proc. 123')
+  })
+})
+
+describe('statusAposTratamento — 0 tarefas → "triada"; ≥1 → "tarefa_criada"', () => {
+  it('nenhuma tarefa criada (só nota/marcação) → "triada"', () => {
+    expect(statusAposTratamento(0)).toBe('triada')
+  })
+  it('uma tarefa criada → "tarefa_criada"', () => {
+    expect(statusAposTratamento(1)).toBe('tarefa_criada')
+  })
+  it('várias tarefas criadas → "tarefa_criada"', () => {
+    expect(statusAposTratamento(5)).toBe('tarefa_criada')
   })
 })

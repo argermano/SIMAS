@@ -1,57 +1,22 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { cn, formatarDataHora, formatarDataRelativa } from '@/lib/utils'
 import { Activity, AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
-
-interface UltimaCaptura {
-  oab: string
-  uf: string
-  status: 'sucesso' | 'falha' | 'parcial'
-  qtd_encontradas: number
-  qtd_novas: number
-  finalizada_em: string | null
-}
-
-interface Saude {
-  novas: number
-  ultimas: UltimaCaptura[]
-  ultimaSucessoEm: string | null
-}
+import type { SaudePublicacoes, UltimaCaptura } from './tipos'
 
 const LIMITE_HORAS = 26
 
 /** Widget de saúde da captura DJEN. Fica VERMELHO quando não houve captura
- * bem-sucedida nas últimas 26h (ou nunca houve). */
-export function SaudeWidget({ onNovas }: { onNovas?: (n: number) => void }) {
-  const [dados, setDados] = useState<Saude | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let vivo = true
-    ;(async () => {
-      setLoading(true)
-      try {
-        const r = await fetch('/api/publicacoes/saude')
-        if (!vivo) return
-        if (r.ok) {
-          const d: Saude = await r.json()
-          setDados(d)
-          onNovas?.(d.novas ?? 0)
-        }
-      } finally {
-        if (vivo) setLoading(false)
-      }
-    })()
-    return () => { vivo = false }
-    // onNovas é estável (useCallback no pai); rodar 1x no mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  if (loading) {
+ * bem-sucedida nas últimas 26h (ou nunca houve).
+ *
+ * Não faz fetch próprio: o dado de /saude é carregado pela CaixaPublicacoes
+ * (fonte única) para que os contadores e a saúde recarreguem juntos após um
+ * tratamento. */
+export function SaudeWidget({ dados, loading }: { dados: SaudePublicacoes | null; loading: boolean }) {
+  if (loading && !dados) {
     return (
       <Card>
         <CardContent className="flex items-center gap-2 py-4 text-sm text-muted-foreground">

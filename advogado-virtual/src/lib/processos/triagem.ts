@@ -61,3 +61,14 @@ export function montarDescricaoTarefa(pub: PublicacaoDescricao): string {
 
   return `Publicação ${tipo} — ${proc}${trib}`
 }
+
+/**
+ * Status final de uma publicação após o TRATAMENTO (estação de tratamento):
+ * criou ≥1 tarefa → 'tarefa_criada' (Tratada com tarefa); nenhuma tarefa —
+ * apenas nota/marcação — → 'triada' (Tratada sem tarefa). O descarte tem fluxo
+ * próprio (status 'descartada') e NÃO passa por aqui. Helper puro para a rota
+ * decidir o alvo do UPDATE de confirmação sem espalhar a regra pelo código.
+ */
+export function statusAposTratamento(tarefasCriadas: number): StatusPublicacao {
+  return tarefasCriadas > 0 ? 'tarefa_criada' : 'triada'
+}

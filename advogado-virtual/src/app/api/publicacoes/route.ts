@@ -11,15 +11,26 @@ import { extrairTextoPlano } from '@/lib/processos/djen'
 // ─────────────────────────────────────────────────────────────
 
 // Filtros de query (todos opcionais; validados com zod). `page` default 1.
+// `statusIn` (lista de status separados por vírgula) e `triadaEm` (recorte por
+// `triada_em` num dia SP) existem para que o clique nos tiles do topo abra
+// EXATAMENTE os itens contados por /saude — tratadas de hoje é a UNIÃO de
+// 'triada'+'tarefa_criada' recortada por `triada_em`, e não cabe num `status`
+// único nem no recorte de `data_disponibilizacao` (de/ate).
 const schemaQuery = z.object({
   status:   z.enum(['nova', 'triada', 'tarefa_criada', 'descartada']).optional(),
+  statusIn: z.string().max(80).optional(),
   tribunal: z.string().max(20).optional(),
   oab:      z.string().max(20).optional(),
   q:        z.string().max(200).optional(),
   de:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (use YYYY-MM-DD)').optional(),
   ate:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (use YYYY-MM-DD)').optional(),
+  triadaEm: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (use YYYY-MM-DD)').optional(),
   page:     z.coerce.number().int().positive().default(1),
 })
+
+// Conjunto de status válidos p/ higienizar o `statusIn` (evita valor arbitrário
+// vazar no `.in(...)`).
+const STATUS_VALIDOS = new Set(['nova', 'triada', 'tarefa_criada', 'descartada'])
 
 const PAGE_SIZE = 20
 
@@ -57,15 +68,17 @@ export async function GET(req: Request) {
   // valida valores presentes de fato.
   const parsed = schemaQuery.safeParse({
     status:   searchParams.get('status')   || undefined,
+    statusIn: searchParams.get('statusIn') || undefined,
     tribunal: searchParams.get('tribunal') || undefined,
     oab:      searchParams.get('oab')      || undefined,
     q:        searchParams.get('q')        || undefined,
     de:       searchParams.get('de')       || undefined,
     ate:      searchParams.get('ate')      || undefined,
+    triadaEm: searchParams.get('triadaEm') || undefined,
     page:     searchParams.get('page')     || undefined,
   })
   if (!parsed.success) return jsonError('Filtros inválidos', 400, parsed.error.flatten())
-  const { status, tribunal, oab, q, de, ate, page } = parsed.data
+  const { status, statusIn, tribunal, oab, q, de, ate, triadaEm, page } = parsed.data
 
   const offset = (page - 1) * PAGE_SIZE
 
@@ -77,11 +90,26 @@ export async function GET(req: Request) {
     .order('created_at', { ascending: false }) // tie-break estável p/ paginação
     .range(offset, offset + PAGE_SIZE - 1)
 
-  if (status)   query = query.eq('status', status)
+  // Status: `statusIn` (união higienizada) tem precedência sobre `status` único.
+  const statusList = statusIn
+    ? statusIn.split(',').map((s) => s.trim()).filter((s) => STATUS_VALIDOS.has(s))
+    : []
+  if (statusList.length) query = query.in('status', statusList)
+  else if (status)       query = query.eq('status', status)
+
   if (tribunal) query = query.eq('sigla_tribunal', tribunal)
   if (oab)      query = query.eq('oab_consultada', oab)
   if (de)       query = query.gte('data_disponibilizacao', de)
   if (ate)      query = query.lte('data_disponibilizacao', ate)
+  // Recorte por `triada_em` num dia (janela SP [00:00, +1d 00:00) em -03:00).
+  // Espelha o cálculo de /saude; o Brasil não observa horário de verão (offset fixo).
+  if (triadaEm) {
+    const [ano, mes, dia] = triadaEm.split('-').map(Number)
+    const amanha = new Date(Date.UTC(ano, mes - 1, dia + 1)).toISOString().slice(0, 10)
+    query = query
+      .gte('triada_em', `${triadaEm}T00:00:00-03:00`)
+      .lt('triada_em', `${amanha}T00:00:00-03:00`)
+  }
   if (q) {
     // ilike em `texto` E `numero_processo`. Remove os chars ESTRUTURAIS do filtro
     // `or` do PostgREST ( , ( ) ) para o termo do usuário não quebrar/injetar a

@@ -43,15 +43,55 @@ export interface TeamMember {
   nome: string | null
 }
 
+/** Uma rodada de captura DJEN (shape de GET /api/publicacoes/saude → ultimas[]). */
+export interface UltimaCaptura {
+  oab: string
+  uf: string
+  status: 'sucesso' | 'falha' | 'parcial'
+  qtd_encontradas: number
+  qtd_novas: number
+  finalizada_em: string | null
+}
+
+/** Contadores estilo Astrea do topo da caixa (recorte "hoje" em America/Sao_Paulo).
+ * Fonte única e correta é o servidor (usa data_disponibilizacao e triada_em). */
+export interface ContadoresPublicacoes {
+  naoTratadasHoje: number
+  tratadasHoje: number
+  descartadasHoje: number
+  naoTratadasTotal: number
+}
+
+/** Payload de GET /api/publicacoes/saude. `contadores` chega junto neste incremento. */
+export interface SaudePublicacoes {
+  novas: number
+  ultimas: UltimaCaptura[]
+  ultimaSucessoEm: string | null
+  contadores?: ContadoresPublicacoes
+}
+
+/** Hoje em America/Sao_Paulo no formato YYYY-MM-DD — espelha `hojeSaoPauloISO`
+ * do servidor para que o filtro de data do tile case com o contador. */
+export function hojeSaoPaulo(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
 type BadgeVariant = NonNullable<BadgeProps['variant']>
 
-/** Rótulo + variante de badge por status (Nova=warning, Triada=secondary,
- * Tarefa criada=success, Descartada=default). */
+/** Rótulo + variante de badge por status, na SEMÂNTICA DE TRATAMENTO
+ * (nova=Não tratada/warning, triada=Tratada/secondary,
+ * tarefa_criada=Tratada c/ tarefa/success, descartada=Descartada/default).
+ * Os `value`s internos permanecem inalterados. */
 export const STATUS_META: Record<PublicacaoStatus, { label: string; variant: BadgeVariant }> = {
-  nova:          { label: 'Nova',          variant: 'warning' },
-  triada:        { label: 'Triada',        variant: 'secondary' },
-  tarefa_criada: { label: 'Tarefa criada', variant: 'success' },
-  descartada:    { label: 'Descartada',    variant: 'default' },
+  nova:          { label: 'Não tratada',       variant: 'warning' },
+  triada:        { label: 'Tratada',           variant: 'secondary' },
+  tarefa_criada: { label: 'Tratada c/ tarefa', variant: 'success' },
+  descartada:    { label: 'Descartada',        variant: 'default' },
 }
 
 export const PRIORIDADE_OPCOES = [

@@ -8,17 +8,24 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
-import { formatarData } from '@/lib/utils'
+import { cn, formatarData } from '@/lib/utils'
 import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText } from 'lucide-react'
 import { SaudeWidget } from './SaudeWidget'
 import { PublicacaoDrawer } from './PublicacaoDrawer'
-import { STATUS_META, type PublicacaoListItem, type PublicacaoStatus, type TeamMember } from './tipos'
+import {
+  STATUS_META,
+  hojeSaoPaulo,
+  type PublicacaoListItem,
+  type PublicacaoStatus,
+  type SaudePublicacoes,
+  type TeamMember,
+} from './tipos'
 
 const STATUS_OPCOES = [
-  { value: '', label: 'Todos os status' },
-  { value: 'nova', label: 'Novas' },
-  { value: 'triada', label: 'Triadas' },
-  { value: 'tarefa_criada', label: 'Com tarefa' },
+  { value: '', label: 'Todas' },
+  { value: 'nova', label: 'Não tratadas' },
+  { value: 'triada', label: 'Tratadas (sem tarefa)' },
+  { value: 'tarefa_criada', label: 'Tratadas (com tarefa)' },
   { value: 'descartada', label: 'Descartadas' },
 ]
 
@@ -29,10 +36,25 @@ interface Resposta {
   totalPaginas: number
 }
 
+/** Um filtro aplicável por um tile de contador. `statusIn` (união de status,
+ * CSV) e `triadaEm` (recorte por `triada_em` num dia) permitem que o clique
+ * abra EXATAMENTE os itens contados; string vazia = dimensão não aplicada. */
+interface FiltroTile {
+  status: string
+  statusIn: string
+  de: string
+  ate: string
+  triadaEm: string
+}
+
 export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] }) {
   const [status, setStatus] = useState('nova')
+  const [statusIn, setStatusIn] = useState('')
   const [tribunal, setTribunal] = useState('')
   const [oab, setOab] = useState('')
+  const [de, setDe] = useState('')
+  const [ate, setAte] = useState('')
+  const [triadaEm, setTriadaEm] = useState('')
   const [q, setQ] = useState('')
   const [qDebounced, setQDebounced] = useState('')
   const [page, setPage] = useState(1)
@@ -42,9 +64,14 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
   const [tribunais, setTribunais] = useState<string[]>([]) // acumula siglas vistas
   const [oabs, setOabs] = useState<{ num: string; uf: string }[]>([]) // acumula OABs vistas
   const [selecionada, setSelecionada] = useState<string | null>(null)
-  const [novas, setNovas] = useState(0)
+
+  const [saude, setSaude] = useState<SaudePublicacoes | null>(null)
+  const [loadingSaude, setLoadingSaude] = useState(true)
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // Snapshot mais recente da lista, para a fila "próxima não tratada" avançar
+  // sem depender do fechamento (closure) do callback.
+  const listaRef = useRef<PublicacaoListItem[]>([])
 
   // Debounce da busca
   useEffect(() => {
@@ -60,15 +87,21 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
     setLoading(true)
     try {
       const params = new URLSearchParams()
-      if (status) params.set('status', status)
+      // `statusIn` (união) tem precedência sobre `status` único no servidor.
+      if (statusIn) params.set('statusIn', statusIn)
+      else if (status) params.set('status', status)
       if (tribunal) params.set('tribunal', tribunal)
       if (oab) params.set('oab', oab)
+      if (de) params.set('de', de)
+      if (ate) params.set('ate', ate)
+      if (triadaEm) params.set('triadaEm', triadaEm)
       if (qDebounced) params.set('q', qDebounced)
       params.set('page', String(page))
       const r = await fetch(`/api/publicacoes?${params.toString()}`)
       if (r.ok) {
         const d: Resposta = await r.json()
         setDados(d)
+        listaRef.current = d.publicacoes
         // Acumula tribunais conhecidos (união crescente) para o filtro
         setTribunais((prev) => {
           const set = new Set(prev)
@@ -88,26 +121,118 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
     } finally {
       setLoading(false)
     }
-  }, [status, tribunal, oab, qDebounced, page])
+  }, [status, statusIn, tribunal, oab, de, ate, triadaEm, qDebounced, page])
+
+  const carregarSaude = useCallback(async () => {
+    setLoadingSaude(true)
+    try {
+      const r = await fetch('/api/publicacoes/saude')
+      if (r.ok) setSaude((await r.json()) as SaudePublicacoes)
+    } finally {
+      setLoadingSaude(false)
+    }
+  }, [])
 
   useEffect(() => { void carregar() }, [carregar])
+  useEffect(() => { void carregarSaude() }, [carregarSaude])
 
   function limpar() {
     setStatus('')
+    setStatusIn('')
     setTribunal('')
     setOab('')
+    setDe('')
+    setAte('')
+    setTriadaEm('')
     setQ('')
     setQDebounced('')
     setPage(1)
   }
 
-  const temFiltro = status !== '' || tribunal !== '' || oab !== '' || qDebounced !== ''
+  /** Aplica um filtro de tile de forma atômica (status/união + recortes de data). */
+  function aplicarFiltro(f: FiltroTile) {
+    setStatus(f.status)
+    setStatusIn(f.statusIn)
+    setDe(f.de)
+    setAte(f.ate)
+    setTriadaEm(f.triadaEm)
+    setPage(1)
+  }
+
+  /** Da fila atual (snapshot), a próxima publicação 'nova' após `atualId`. */
+  function proximaNova(atualId: string): string | null {
+    const lst = listaRef.current
+    const idx = lst.findIndex((p) => p.id === atualId)
+    const inicio = idx >= 0 ? idx + 1 : 0
+    for (let i = inicio; i < lst.length; i++) {
+      if (lst[i].status === 'nova' && lst[i].id !== atualId) return lst[i].id
+    }
+    return null
+  }
+
+  /** Após tratar/descartar: avança para a próxima não tratada (ou fecha) e
+   * recarrega lista + contadores. */
+  function aoConcluir(atualId: string) {
+    setSelecionada(proximaNova(atualId))
+    void carregar()
+    void carregarSaude()
+  }
+
+  const hoje = hojeSaoPaulo()
+  const contadores = saude?.contadores
+  const temFiltro =
+    status !== '' || statusIn !== '' || tribunal !== '' || oab !== '' ||
+    de !== '' || ate !== '' || triadaEm !== '' || qDebounced !== ''
   const lista = dados?.publicacoes ?? []
   const totalPaginas = dados?.totalPaginas ?? 1
 
+  // Estado ativo de cada tile face aos filtros correntes. Cada tile aplica
+  // EXATAMENTE o mesmo recorte que /saude usa para o número, então o clique abre
+  // os itens contados: "não tratadas" por status 'nova' (+ data_disponibilizacao
+  // = hoje no tile do dia); "tratadas hoje" pela UNIÃO 'triada'+'tarefa_criada'
+  // (statusIn) recortada por `triada_em` = hoje; "descartadas hoje" por status
+  // 'descartada' recortado por `triada_em` = hoje.
+  const semData = de === '' && ate === ''
+  const semRecorteTratada = statusIn === '' && triadaEm === ''
+  const ativoNaoTratadasHoje =
+    status === 'nova' && de === hoje && ate === hoje && semRecorteTratada
+  const ativoTratadasHoje = statusIn === 'triada,tarefa_criada' && triadaEm === hoje
+  const ativoDescartadasHoje =
+    status === 'descartada' && triadaEm === hoje && statusIn === ''
+  const ativoNaoTratadasTotal = status === 'nova' && semData && semRecorteTratada
+
   return (
     <div className="space-y-4">
-      <SaudeWidget onNovas={setNovas} />
+      {/* Barra de contadores (estilo Astrea) — clique aplica o filtro. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Tile
+          rotulo="Não tratadas de hoje"
+          valor={contadores?.naoTratadasHoje}
+          destaque
+          ativo={ativoNaoTratadasHoje}
+          onClick={() => aplicarFiltro({ status: 'nova', statusIn: '', de: hoje, ate: hoje, triadaEm: '' })}
+        />
+        <Tile
+          rotulo="Tratadas hoje"
+          valor={contadores?.tratadasHoje}
+          ativo={ativoTratadasHoje}
+          onClick={() => aplicarFiltro({ status: '', statusIn: 'triada,tarefa_criada', de: '', ate: '', triadaEm: hoje })}
+        />
+        <Tile
+          rotulo="Descartadas hoje"
+          valor={contadores?.descartadasHoje}
+          ativo={ativoDescartadasHoje}
+          onClick={() => aplicarFiltro({ status: 'descartada', statusIn: '', de: '', ate: '', triadaEm: hoje })}
+        />
+        <Tile
+          rotulo="Não tratadas"
+          valor={contadores?.naoTratadasTotal}
+          ativo={ativoNaoTratadasTotal}
+          onClick={() => aplicarFiltro({ status: 'nova', statusIn: '', de: '', ate: '', triadaEm: '' })}
+        />
+      </div>
+
+      <SaudeWidget dados={saude} loading={loadingSaude} />
 
       {/* Filtros */}
       <Card>
@@ -120,10 +245,17 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
               leftIcon={<Search className="h-4 w-4" />}
             />
           </div>
-          <div className="w-44">
+          <div className="w-48">
             <Select
               value={status}
-              onChange={(e) => { setStatus(e.target.value); setPage(1) }}
+              onChange={(e) => {
+                // Escolher um status único descarta os recortes só-de-tile
+                // (união e `triada_em`) para não misturar filtros conflitantes.
+                setStatus(e.target.value)
+                setStatusIn('')
+                setTriadaEm('')
+                setPage(1)
+              }}
               options={STATUS_OPCOES}
             />
           </div>
@@ -168,7 +300,7 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
             description={
               temFiltro
                 ? 'Ajuste os filtros ou limpe a busca para ver mais resultados.'
-                : 'As publicações capturadas do DJEN por OAB aparecem aqui para triagem.'
+                : 'As publicações capturadas do DJEN por OAB aparecem aqui para tratamento.'
             }
           />
         </Card>
@@ -184,7 +316,6 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
           <div className="flex items-center justify-between pt-1">
             <p className="text-sm text-muted-foreground">
               {dados ? `${dados.total} publicaç${dados.total === 1 ? 'ão' : 'ões'}` : ''}
-              {novas > 0 && <span className="ml-2 text-warning">· {novas} nova{novas > 1 ? 's' : ''}</span>}
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -216,10 +347,51 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
           id={selecionada}
           teamMembers={teamMembers}
           onClose={() => setSelecionada(null)}
-          onAlterada={carregar}
+          onConcluido={aoConcluir}
         />
       )}
     </div>
+  )
+}
+
+/** Tile de contador clicável (número grande + rótulo pequeno em maiúsculas). */
+function Tile({
+  rotulo,
+  valor,
+  destaque,
+  ativo,
+  onClick,
+}: {
+  rotulo: string
+  valor: number | undefined
+  destaque?: boolean
+  ativo?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={ativo}
+      className={cn(
+        'flex flex-col items-start rounded-lg border bg-card px-4 py-3 text-left transition-colors',
+        'hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        destaque && 'border-warning/40 bg-warning/5',
+        ativo && 'ring-2 ring-ring',
+      )}
+    >
+      <span
+        className={cn(
+          'text-2xl font-bold tabular-nums leading-none',
+          destaque ? 'text-warning' : 'text-foreground',
+        )}
+      >
+        {valor ?? '—'}
+      </span>
+      <span className="mt-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {rotulo}
+      </span>
+    </button>
   )
 }
 
