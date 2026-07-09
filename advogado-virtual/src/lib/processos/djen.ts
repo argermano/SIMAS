@@ -42,19 +42,48 @@ const CAP = 40 // teto de movimentos com resumo IA por execução/tenant (não c
 
 /* ── helpers puros (testáveis) ─────────────────────────────────────────── */
 
-/** Remove tags/entidades HTML do texto da comunicação (para resumo/classificação). */
+// Entidades HTML nomeadas comuns no texto do DJEN (Latin-1/pt-BR + pontuação).
+// Numéricas (&#231; / &#xE7;) são resolvidas por código na decodeEntidades.
+const ENTIDADES_NOMEADAS: Record<string, string> = {
+  nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  ordm: 'º', ordf: 'ª', deg: '°', sect: '§', middot: '·', bull: '•',
+  laquo: '«', raquo: '»', hellip: '…', ndash: '–', mdash: '—',
+  lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”',
+  reg: '®', copy: '©', trade: '™', euro: '€', pound: '£',
+  aacute: 'á', eacute: 'é', iacute: 'í', oacute: 'ó', uacute: 'ú',
+  Aacute: 'Á', Eacute: 'É', Iacute: 'Í', Oacute: 'Ó', Uacute: 'Ú',
+  agrave: 'à', egrave: 'è', igrave: 'ì', ograve: 'ò', ugrave: 'ù',
+  Agrave: 'À', Egrave: 'È', Igrave: 'Ì', Ograve: 'Ò', Ugrave: 'Ù',
+  acirc: 'â', ecirc: 'ê', icirc: 'î', ocirc: 'ô', ucirc: 'û',
+  Acirc: 'Â', Ecirc: 'Ê', Icirc: 'Î', Ocirc: 'Ô', Ucirc: 'Û',
+  atilde: 'ã', otilde: 'õ', ntilde: 'ñ',
+  Atilde: 'Ã', Otilde: 'Õ', Ntilde: 'Ñ',
+  ccedil: 'ç', Ccedil: 'Ç',
+  auml: 'ä', euml: 'ë', iuml: 'ï', ouml: 'ö', uuml: 'ü',
+  Auml: 'Ä', Euml: 'Ë', Iuml: 'Ï', Ouml: 'Ö', Uuml: 'Ü',
+}
+
+/** Decodifica entidades HTML nomeadas e numéricas (decimais e hexadecimais). */
+export function decodeEntidades(s: string): string {
+  return s.replace(/&(#x?[0-9a-f]+|[a-z0-9]+);/gi, (m, code: string) => {
+    if (code[0] === '#') {
+      const hex = code[1] === 'x' || code[1] === 'X'
+      const cp = parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10)
+      return Number.isFinite(cp) && cp > 0 ? String.fromCodePoint(cp) : m
+    }
+    return Object.prototype.hasOwnProperty.call(ENTIDADES_NOMEADAS, code) ? ENTIDADES_NOMEADAS[code] : m
+  })
+}
+
+/** Converte o HTML da comunicação em texto plano legível (trecho/detalhe/resumo):
+ * tira tags, DECODIFICA entidades (&Ccedil; → Ç, &#231; → ç) e normaliza espaços. */
 export function extrairTextoPlano(html: string | null | undefined): string {
   if (!html) return ''
-  return html
+  const semTags = html
     .replace(/<br\s*\/?>(\s)*/gi, '\n')
     .replace(/<\/(p|div|li|tr)>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#\d+;/g, ' ')
+  return decodeEntidades(semTags)
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
