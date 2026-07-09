@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { getAuthContext, requireRole } from '@/lib/auth'
+import { jsonError, validateBody } from '@/lib/api'
+import { relayFetch } from '@/lib/conversas/relay'
+
+const schemaMensagem = z.object({
+  content: z.string().min(1),
+  private: z.boolean().optional(),
+})
+
+// GET /api/conversas/[id]/mensagens?before= -> relay GET /conversations/:id/messages
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const gate = requireRole(auth.usuario, ['admin', 'advogado'])
+  if (gate) return gate
+
+  const email = auth.user.email
+  if (!email) return jsonError('E-mail do usuário ausente na sessão', 400)
+
+  const { id } = await params
+  const { searchParams } = new URL(req.url)
+  const { status, data } = await relayFetch(`/conversations/${id}/messages`, {
+    method: 'GET',
+    email,
+    query: { before: searchParams.get('before') ?? undefined },
+  })
+
+  return NextResponse.json(data, { status })
+}
+
+// POST /api/conversas/[id]/mensagens {content, private?} -> relay POST /conversations/:id/messages
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const gate = requireRole(auth.usuario, ['admin', 'advogado'])
+  if (gate) return gate
+
+  const email = auth.user.email
+  if (!email) return jsonError('E-mail do usuário ausente na sessão', 400)
+
+  const parsed = await validateBody(req, schemaMensagem)
+  if (!parsed.ok) return parsed.response
+
+  const { id } = await params
+  const { status, data } = await relayFetch(`/conversations/${id}/messages`, {
+    method: 'POST',
+    email,
+    body: parsed.data,
+  })
+
+  return NextResponse.json(data, { status })
+}

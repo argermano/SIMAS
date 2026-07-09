@@ -31,6 +31,8 @@ const serverSchema = z.object({
   D4SIGN_CRYPT_KEY: z.string().optional(),
   D4SIGN_BASE_URL: z.string().optional(),
   D4SIGN_WEBHOOK_SECRET: z.string().optional(),
+  RELAY_URL: z.string().optional(),
+  RELAY_TOKEN: z.string().optional(),
   CONTACT_REPLY_EMAIL: z.string().optional(),
   NEXT_PUBLIC_SITE_URL: z.string().optional(),
   NEXTAUTH_URL: z.string().optional(),
