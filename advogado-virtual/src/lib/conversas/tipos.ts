@@ -10,6 +10,8 @@ export type StatusConversa = 'open' | 'resolved'
 export interface Contato {
   nome: string | null
   telefone: string | null
+  /** Foto do contato (thumbnail do Chatwoot / foto de perfil do WhatsApp), se houver. */
+  avatarUrl?: string | null
 }
 
 export interface Assignee {

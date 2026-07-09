@@ -3,9 +3,10 @@
 import { MessageSquare } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
-import { cn, iniciais } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { horaCurta } from '@/lib/conversas/formato'
 import type { Conversa } from '@/lib/conversas/tipos'
+import { AvatarContato } from './AvatarContato'
 
 export function ListaConversas({
   conversas,
@@ -86,13 +87,8 @@ function ItemConversa({
         selecionado ? 'border-primary bg-primary/[0.04] ring-1 ring-primary/40' : 'border-border hover:border-ring',
       )}
     >
-      {/* Avatar por iniciais */}
-      <span
-        aria-hidden
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary"
-      >
-        {iniciais(nome)}
-      </span>
+      {/* Avatar: foto do contato (WhatsApp/Chatwoot) com fallback pras iniciais */}
+      <AvatarContato nome={nome} avatarUrl={conversa.contato.avatarUrl} className="h-10 w-10" />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">

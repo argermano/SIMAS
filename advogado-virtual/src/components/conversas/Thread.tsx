@@ -15,7 +15,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { useToast } from '@/components/ui/toast'
-import { cn, iniciais } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { AvatarContato } from './AvatarContato'
 import { agrupadorDia } from '@/lib/conversas/formato'
 import type { Conversa, Mensagem, RespostaMensagens } from '@/lib/conversas/tipos'
 import { MensagemBolha } from './MensagemBolha'
@@ -191,12 +192,7 @@ export function Thread({
     >
       {/* Cabeçalho do contato */}
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-        <span
-          aria-hidden
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary"
-        >
-          {iniciais(nome)}
-        </span>
+        <AvatarContato nome={nome} avatarUrl={conversa.contato.avatarUrl} className="h-9 w-9" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="min-w-0 truncate font-semibold text-foreground">{nome}</h2>
