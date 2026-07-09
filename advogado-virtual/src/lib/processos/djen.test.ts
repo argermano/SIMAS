@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { extrairTextoPlano, parseItemDjen, classificarPublicacao, janelaConsultaDjen } from './djen'
+import {
+  extrairTextoPlano,
+  parseItemDjen,
+  classificarPublicacao,
+  janelaConsultaDjen,
+  montarLinhaPublicacao,
+  oabsDoTenant,
+} from './djen'
+import { proximoDiaUtil } from './util'
 
 // Shape real verificado em produção (comunicaapi.pje.jus.br, processo da Marta)
 const ITEM_REAL: Record<string, unknown> = {
@@ -67,13 +75,89 @@ describe('djen — janela de consulta (anti-retroativo)', () => {
     expect(j.inicio).toBe('2026-06-07')
     expect(j.fim).toBe('2026-07-07')
   })
-  it('com marca dágua → incremental com overlap de 1 dia', () => {
+  it('com marca dágua → incremental com overlap de 2 dias', () => {
     const j = janelaConsultaDjen({ djen_ultima_consulta: '2026-07-05' }, '2026-07-07')
     expect(j.backfill).toBe(false)
-    expect(j.inicio).toBe('2026-07-04')
+    expect(j.inicio).toBe('2026-07-03') // marca (05) menos 2 dias de overlap
     expect(j.fim).toBe('2026-07-07')
+  })
+  it('overlap de 2 dias não escorrega em borda de mês', () => {
+    const j = janelaConsultaDjen({ djen_ultima_consulta: '2026-08-01' }, '2026-08-03')
+    expect(j.inicio).toBe('2026-07-30')
   })
   it('marca inválida → trata como backfill', () => {
     expect(janelaConsultaDjen({ djen_ultima_consulta: 'ontem' }, '2026-07-07').backfill).toBe(true)
+  })
+})
+
+describe('djen — mapeamento ItemDjen → linha de publicacoes', () => {
+  it('mapeia todos os campos do item para a linha da caixa de entrada', () => {
+    const item = parseItemDjen(ITEM_REAL)!
+    const linha = montarLinhaPublicacao(item, 'tenant-1', '75503A', 'SC')
+
+    expect(linha.tenant_id).toBe('tenant-1')
+    expect(linha.fonte).toBe('djen')
+    expect(linha.chave_fonte).toBe('484814173') // id da comunicação, como string
+    expect(linha.numero_processo).toBe('00090082820258160026')
+    expect(linha.numero_mascara).toBe('0009008-28.2025.8.16.0026')
+    expect(linha.sigla_tribunal).toBe('TJPR')
+    expect(linha.orgao_julgador).toBe('Vara Cível de Pitanga')
+    expect(linha.tipo_comunicacao).toBe('Intimação')
+    expect(linha.tipo_documento).toBe('Intimação')
+    expect(linha.nome_classe).toBe('Alvará Judicial - Lei 6858/80')
+    expect(linha.texto).toBe(ITEM_REAL.texto) // HTML/íntegra crua, não o texto plano
+    expect(linha.data_disponibilizacao).toBe('2025-12-19')
+    // 2025-12-19 é sexta → próximo dia útil = segunda 2025-12-22 (sem feriados)
+    expect(linha.data_publicacao_sugerida).toBe('2025-12-22')
+    expect(linha.data_publicacao_sugerida).toBe(proximoDiaUtil('2025-12-19'))
+    expect(linha.oab_consultada).toBe('75503A')
+    expect(linha.uf_oab).toBe('SC')
+    expect(linha.status).toBe('nova')
+    expect(linha.meta).toBe(item.raw) // item bruto da API
+  })
+
+  it('destinatarios: mapeia raw.destinatarioadvogados (e cai em [] quando ausente)', () => {
+    const item = parseItemDjen(ITEM_REAL)!
+    expect(montarLinhaPublicacao(item, 'tenant-1', '75503A', 'SC').destinatarios).toEqual([])
+
+    const comDest = parseItemDjen({
+      ...ITEM_REAL,
+      destinatarioadvogados: [{ advogado: { nome: 'KATLEN', numero_oab: '75503A', uf_oab: 'SC' } }],
+    })!
+    const linha = montarLinhaPublicacao(comDest, 'tenant-1', '75503A', 'SC')
+    expect(linha.destinatarios).toEqual([{ advogado: { nome: 'KATLEN', numero_oab: '75503A', uf_oab: 'SC' } }])
+  })
+})
+
+describe('djen — OABs monitoradas (fix crítico do sufixo + flag ativa)', () => {
+  it('normaliza a OAB do responsável PRESERVANDO o sufixo suplementar', () => {
+    const oabs = oabsDoTenant({ oab_numero: '75.503-A', oab_estado: 'sc', config: null })
+    expect(oabs).toEqual([{ numero: '75503A', uf: 'SC' }])
+  })
+  it('inclui extras de config.djen_oabs e ignora as inativas (ativa === false)', () => {
+    const oabs = oabsDoTenant({
+      oab_numero: '31637',
+      oab_estado: 'DF',
+      config: {
+        djen_oabs: [
+          { numero: '75.503-A', uf: 'SC', ativa: true },
+          { numero: '99999', uf: 'RS', ativa: false }, // desativada → fora
+          { numero: '12345', uf: 'PR' }, // sem flag → ativa por padrão
+        ],
+      },
+    })
+    expect(oabs).toEqual([
+      { numero: '31637', uf: 'DF' },
+      { numero: '75503A', uf: 'SC' },
+      { numero: '12345', uf: 'PR' },
+    ])
+  })
+  it('dedup por (numero, uf) — não consulta a mesma inscrição duas vezes', () => {
+    const oabs = oabsDoTenant({
+      oab_numero: '75503A',
+      oab_estado: 'SC',
+      config: { djen_oabs: [{ numero: '75.503-A', uf: 'SC' }] },
+    })
+    expect(oabs).toEqual([{ numero: '75503A', uf: 'SC' }])
   })
 })

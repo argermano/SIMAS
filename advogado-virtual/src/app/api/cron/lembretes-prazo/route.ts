@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { enviarEmail, emailTemplate, urlBaseApp } from '@/lib/email'
 import { logger } from '@/lib/logger'
+import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
 
 export const maxDuration = 60
 
@@ -91,6 +92,48 @@ export async function GET(req: Request) {
   }
 
   logger.info('cron.lembretes', { pessoas: porPessoa.size, emailsEnviados: enviados, tarefas: idsLembrados.length })
+
+  // Vigia cruzado das publicações (isolado: nunca derruba os lembretes acima).
+  // Este cron roda às 10:00 UTC, ANTES do funil-consultas (11:00) que executa a
+  // captura DJEN. Se não houver nenhuma captura com sucesso nas últimas 26h E
+  // existir ao menos um tenant com OAB configurada, a captura de ontem não rodou
+  // (falha silenciosa) — alerta a operação. Janela de 26h (>24h) dá folga para
+  // atraso do cron sem gerar falso positivo dentro do mesmo ciclo diário.
+  try {
+    const { data: tenantsComOab, error: errOab } = await admin
+      .from('tenants')
+      .select('id')
+      .not('oab_numero', 'is', null)
+      .limit(1)
+    if (errOab) throw errOab
+
+    if ((tenantsComOab?.length ?? 0) > 0) {
+      const limite26h = new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString()
+      const { data: sucessos, error: errCap } = await admin
+        .from('capturas_publicacoes')
+        .select('id')
+        .eq('status', 'sucesso')
+        .gte('created_at', limite26h)
+        .limit(1)
+      if (errCap) throw errCap
+
+      if ((sucessos?.length ?? 0) === 0) {
+        await alertarFalhaPublicacoes({
+          assunto: 'captura de publicações não rodou nas últimas 26h',
+          detalhes:
+            'O vigia cruzado (cron lembretes-prazo, 10:00 UTC) não encontrou ' +
+            'nenhuma captura de publicações com status "sucesso" nas últimas 26 ' +
+            'horas, apesar de existir tenant com OAB configurada. A rodada diária ' +
+            'de captura do DJEN (funil-consultas) provavelmente não executou ou ' +
+            'falhou. Verifique os crons da Vercel e a tabela capturas_publicacoes.',
+        })
+        logger.warn('cron.publicacoes_vigia.sem_sucesso_26h', {})
+      }
+    }
+  } catch (e) {
+    logger.error('cron.publicacoes_vigia.falha', {}, e as Error)
+  }
+
   return NextResponse.json({ ok: true, pessoas: porPessoa.size, enviados, tarefas: idsLembrados.length })
 }
 

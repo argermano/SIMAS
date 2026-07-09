@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 import { sincronizarProcessos } from '@/lib/processos/sync'
 import { sincronizarPublicacoesDjen } from '@/lib/processos/djen'
+import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
 
 export const maxDuration = 60
 
@@ -72,6 +73,11 @@ export async function GET(req: Request) {
     djen = await sincronizarPublicacoesDjen(admin, { deadlineMs: 18_000 })
   } catch (e) {
     logger.error('cron.djen_sync.falha', {}, e as Error)
+    // Alerta a operação (e-mail + Sentry). alertarFalhaPublicacoes nunca lança.
+    await alertarFalhaPublicacoes({
+      assunto: 'exceção na sincronização de publicações (DJEN)',
+      detalhes: `A rodada de captura do DJEN no cron funil-consultas lançou uma exceção:\n\n${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`,
+    })
   }
 
   return NextResponse.json({ ok: true, marcados: n, processos, djen })
