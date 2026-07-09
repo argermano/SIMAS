@@ -58,6 +58,13 @@ interface LinhaLista {
   texto: string | null
 }
 
+// Resumo do processo vinculado exposto na LISTA (link p/ o cliente na tabela).
+interface ProcessoVinculadoLista {
+  id: string
+  clienteId: string
+  clienteNome: string | null
+}
+
 export async function GET(req: Request) {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
@@ -121,9 +128,48 @@ export async function GET(req: Request) {
   const { data, error, count } = await query
   if (error) return jsonError(error.message, 500)
 
-  const publicacoes = ((data ?? []) as unknown as LinhaLista[]).map((p) => {
+  const linhas = (data ?? []) as unknown as LinhaLista[]
+
+  // Processo vinculado (id/cliente) resolvido em LOTE p/ os itens da página —
+  // 1 query em `processos` + 1 em `clientes` (sem N+1). `clientes.nome` é plaintext.
+  const processoIds = [...new Set(linhas.map((p) => p.processo_id).filter((v): v is string => !!v))]
+  const vinculadoPorProcesso = new Map<string, ProcessoVinculadoLista>()
+  if (processoIds.length) {
+    const { data: procs } = await supabase
+      .from('processos')
+      .select('id, cliente_id')
+      .eq('tenant_id', usuario.tenant_id) // defesa em profundidade (RLS já isola)
+      .in('id', processoIds)
+    const procsList = (procs ?? []) as { id: string; cliente_id: string }[]
+
+    const clienteIds = [...new Set(procsList.map((p) => p.cliente_id).filter(Boolean))]
+    const nomePorCliente = new Map<string, string | null>()
+    if (clienteIds.length) {
+      const { data: clis } = await supabase
+        .from('clientes')
+        .select('id, nome')
+        .eq('tenant_id', usuario.tenant_id)
+        .in('id', clienteIds)
+      for (const c of (clis ?? []) as { id: string; nome: string | null }[]) {
+        nomePorCliente.set(c.id, c.nome ?? null)
+      }
+    }
+    for (const p of procsList) {
+      vinculadoPorProcesso.set(p.id, {
+        id: p.id,
+        clienteId: p.cliente_id,
+        clienteNome: nomePorCliente.get(p.cliente_id) ?? null,
+      })
+    }
+  }
+
+  const publicacoes = linhas.map((p) => {
     const { texto, ...rest } = p
-    return { ...rest, trecho: extrairTextoPlano(texto).slice(0, 220) }
+    return {
+      ...rest,
+      trecho: extrairTextoPlano(texto).slice(0, 220),
+      processoVinculado: p.processo_id ? vinculadoPorProcesso.get(p.processo_id) ?? null : null,
+    }
   })
 
   return NextResponse.json({

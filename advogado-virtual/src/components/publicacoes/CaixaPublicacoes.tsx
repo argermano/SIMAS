@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn, formatarData } from '@/lib/utils'
-import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText } from 'lucide-react'
+import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText, ArrowRight } from 'lucide-react'
 import { SaudeWidget } from './SaudeWidget'
 import { PublicacaoDrawer } from './PublicacaoDrawer'
 import {
@@ -306,9 +307,32 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
         </Card>
       ) : (
         <>
-          <div className="space-y-2">
+          {/* Desktop: tabela estilo Astrea */}
+          <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th scope="col" className="px-3 py-2.5 font-medium">Divulgado em</th>
+                  <th scope="col" className="px-3 py-2.5 font-medium">Tipo</th>
+                  <th scope="col" className="px-3 py-2.5 font-medium">Processo</th>
+                  <th scope="col" className="px-3 py-2.5 font-medium">Diário</th>
+                  <th scope="col" className="px-3 py-2.5 font-medium">Nome pesquisado</th>
+                  <th scope="col" className="px-3 py-2.5 font-medium">Status</th>
+                  <th scope="col" className="px-3 py-2.5 text-right font-medium">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lista.map((p) => (
+                  <LinhaTabela key={p.id} pub={p} onAbrir={() => setSelecionada(p.id)} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile: cards empilhados */}
+          <div className="space-y-2 md:hidden">
             {lista.map((p) => (
-              <LinhaPublicacao key={p.id} pub={p} onClick={() => setSelecionada(p.id)} />
+              <CardPublicacao key={p.id} pub={p} onAbrir={() => setSelecionada(p.id)} />
             ))}
           </div>
 
@@ -395,37 +419,136 @@ function Tile({
   )
 }
 
-function LinhaPublicacao({ pub, onClick }: { pub: PublicacaoListItem; onClick: () => void }) {
+/** OAB pesquisada, no formato "OAB {num}/{uf}". */
+function nomePesquisado(pub: PublicacaoListItem): string {
+  if (!pub.oab_consultada) return '—'
+  return `OAB ${pub.oab_consultada}${pub.uf_oab ? '/' + pub.uf_oab : ''}`
+}
+
+/** Célula/bloco PROCESSO: nº mascarado + nome do cliente vinculado (link para
+ * /clientes/{clienteId}) quando há `processoVinculado`; senão só o nº ("—" sem número). */
+function ProcessoCelula({ pub }: { pub: PublicacaoListItem }) {
+  const numero = pub.numero_mascara || pub.numero_processo
+  const pv = pub.processoVinculado
+  return (
+    <div className="min-w-0">
+      <span className="font-medium text-foreground">{numero || '—'}</span>
+      {pv?.clienteId && pv.clienteNome ? (
+        <Link
+          href={`/clientes/${pv.clienteId}`}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-0.5 block truncate text-xs font-medium text-primary hover:underline"
+        >
+          {pv.clienteNome}
+        </Link>
+      ) : pv?.clienteNome ? (
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{pv.clienteNome}</span>
+      ) : null}
+    </div>
+  )
+}
+
+/** Duas linhas de tabela por publicação: a linha de colunas + a de trecho.
+ * A linha inteira é clicável (conveniência de mouse); o controle acessível de
+ * teclado/AT é o botão explícito "Acessar" (evita interativo aninhado no <tr>). */
+function LinhaTabela({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: () => void }) {
   const meta = STATUS_META[pub.status as PublicacaoStatus] ?? STATUS_META.nova
+  const tipo = pub.tipo_documento || pub.tipo_comunicacao
+  return (
+    <>
+      <tr
+        className="cursor-pointer border-t border-border align-top transition-colors hover:bg-muted/40"
+        onClick={onAbrir}
+      >
+        <td className="px-3 py-2.5">
+          <div className="whitespace-nowrap text-foreground">{formatarData(pub.data_disponibilizacao)}</div>
+          {pub.data_publicacao_sugerida && (
+            <div className="whitespace-nowrap text-xs text-muted-foreground">
+              Publicado em: {formatarData(pub.data_publicacao_sugerida)}
+            </div>
+          )}
+        </td>
+        <td className="px-3 py-2.5">
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+            <FileText className="h-4 w-4 shrink-0" aria-hidden />
+            <span className="text-foreground">{tipo || '—'}</span>
+          </span>
+        </td>
+        <td className="px-3 py-2.5">
+          <ProcessoCelula pub={pub} />
+        </td>
+        <td className="px-3 py-2.5">
+          {pub.sigla_tribunal && (
+            <span className="inline-block rounded bg-muted/60 px-1.5 py-0.5 text-xs font-medium text-foreground">
+              {pub.sigla_tribunal}
+            </span>
+          )}
+          {pub.orgao_julgador && (
+            <div className="mt-0.5 max-w-[16rem] truncate text-xs text-muted-foreground" title={pub.orgao_julgador}>
+              {pub.orgao_julgador}
+            </div>
+          )}
+          {!pub.sigla_tribunal && !pub.orgao_julgador && <span className="text-muted-foreground">—</span>}
+        </td>
+        <td className="whitespace-nowrap px-3 py-2.5 text-foreground">{nomePesquisado(pub)}</td>
+        <td className="px-3 py-2.5">
+          <Badge variant={meta.variant}>{meta.label}</Badge>
+        </td>
+        <td className="px-3 py-2.5 text-right">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onAbrir() }}
+            className="whitespace-nowrap"
+            aria-label={`Acessar publicação ${pub.numero_mascara || pub.numero_processo || ''}`.trim()}
+          >
+            Acessar <ArrowRight className="h-4 w-4" />
+          </Button>
+        </td>
+      </tr>
+      {pub.trecho && (
+        <tr className="cursor-pointer transition-colors hover:bg-muted/40" onClick={onAbrir}>
+          <td colSpan={7} className="px-3 pb-3">
+            <p className="line-clamp-2 text-sm text-muted-foreground">{pub.trecho}</p>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+/** Card empilhado (mobile) — mesma informação da linha da tabela. */
+function CardPublicacao({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: () => void }) {
+  const meta = STATUS_META[pub.status as PublicacaoStatus] ?? STATUS_META.nova
+  const tipo = pub.tipo_documento || pub.tipo_comunicacao
   return (
     <Card
       className="cursor-pointer transition-colors hover:border-ring"
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
+      onClick={onAbrir}
     >
-      <CardContent className="py-3">
+      <CardContent className="space-y-2 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={meta.variant}>{meta.label}</Badge>
           <span className="text-xs text-muted-foreground">{formatarData(pub.data_disponibilizacao)}</span>
           {pub.sigla_tribunal && (
-            <span className="rounded bg-muted/50 px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+            <span className="rounded bg-muted/60 px-1.5 py-0.5 text-xs font-medium text-foreground">
               {pub.sigla_tribunal}
             </span>
           )}
-          {pub.tipo_documento && (
+          {tipo && (
             <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <FileText className="h-3 w-3" /> {pub.tipo_documento}
+              <FileText className="h-3 w-3" aria-hidden /> {tipo}
             </span>
           )}
-          <span className="ml-auto text-xs font-medium text-foreground">
-            {pub.numero_mascara || pub.numero_processo || 'Sem número'}
-          </span>
         </div>
+        <ProcessoCelula pub={pub} />
+        <p className="text-xs text-muted-foreground">{nomePesquisado(pub)}</p>
         {pub.trecho && (
-          <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">{pub.trecho}</p>
+          <p className="line-clamp-2 text-sm text-muted-foreground">{pub.trecho}</p>
         )}
+        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onAbrir() }}>
+          Acessar publicação <ArrowRight className="h-4 w-4" />
+        </Button>
       </CardContent>
     </Card>
   )

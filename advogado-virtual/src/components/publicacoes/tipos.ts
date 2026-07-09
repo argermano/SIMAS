@@ -1,6 +1,24 @@
 import type { BadgeProps } from '@/components/ui/badge'
 
-/** Item da lista paginada — shape de GET /api/publicacoes. */
+/** Processo cadastrado no SIMAS (Fase 5) ao qual a publicação está vinculada.
+ * DTO derivado do join publicacoes.processo_id → processos → clientes. Todos os
+ * campos são anuláveis; a UI degrada por `processo_id` quando este objeto não
+ * vier no payload (ex.: antes do enriquecimento server-side). */
+export interface ProcessoVinculado {
+  id: string | null
+  /** CNJ mascarado do processo (fallback: `numero_mascara` da própria publicação). */
+  numeroMascara: string | null
+  /** Rótulo amigável: apelido || classe (o "título/partes" do estilo Astrea). */
+  titulo: string | null
+  /** 'ativo' | 'encerrado' (situacao do processo). */
+  situacao: string | null
+  clienteId: string | null
+  clienteNome: string | null
+}
+
+/** Item da lista paginada — shape de GET /api/publicacoes.
+ * `processoVinculado` é opcional: quando ausente, a coluna PROCESSO usa apenas o
+ * número (grau de vínculo inferido por `processo_id`). */
 export interface PublicacaoListItem {
   id: string
   data_disponibilizacao: string
@@ -17,6 +35,7 @@ export interface PublicacaoListItem {
   processo_id: string | null
   task_id: string | null
   trecho: string
+  processoVinculado?: ProcessoVinculado | null
 }
 
 /** Advogado destinatário (shape derivado de destinatarioadvogados[].advogado). */
@@ -34,6 +53,9 @@ export interface PublicacaoDetalhe extends PublicacaoListItem {
   link: string | null
   triada_em: string | null
   descarte_motivo: string | null
+  /** Movimento da Fase 5 gerado a partir desta publicação (se casou com processo
+   * cadastrado). Presente ⇒ aviso ao cliente já foi gerado pela Fase 5. */
+  movimento_id: string | null
 }
 
 export type PublicacaoStatus = 'nova' | 'triada' | 'tarefa_criada' | 'descartada'
