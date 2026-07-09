@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Users, Settings, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
-  KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter, BellRing,
+  KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter, BellRing, Newspaper,
 } from 'lucide-react'
 import { LogoMark } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils'
@@ -73,11 +73,23 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
   const router   = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed,  setCollapsed]  = useState(false)
+  const [novasPub,   setNovasPub]   = useState(0)
 
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed')
     if (saved === 'true') setCollapsed(true)
   }, [])
+
+  // Badge de publicações novas — 1 fetch leve no mount (sem polling)
+  useEffect(() => {
+    if (roleRaw !== 'admin' && roleRaw !== 'advogado') return
+    let vivo = true
+    fetch('/api/publicacoes/saude')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo && d) setNovasPub(d.novas ?? 0) })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [roleRaw])
 
   function toggleCollapse() {
     const next = !collapsed
@@ -94,6 +106,12 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
 
   const allItems = [
     ...MENU_ITEMS,
+    ...(roleRaw === 'admin' || roleRaw === 'advogado' ? [{
+      href:    '/publicacoes',
+      label:   'Publicações',
+      icon:    Newspaper,
+      ativoSe: (p: string) => p.startsWith('/publicacoes'),
+    }] : []),
     ...(roleRaw === 'admin' || roleRaw === 'advogado' ? [{
       href:    '/processos/notificacoes',
       label:   'Movimentações',
@@ -170,9 +188,20 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
                     <div className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-card animate-in fade-in-0 duration-200" />
                   )}
                   <item.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  {item.href === '/publicacoes' && novasPub > 0 && isCollapsed && (
+                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-warning" aria-hidden="true" />
+                  )}
                   {!isCollapsed && (
                     <span className="overflow-hidden whitespace-nowrap animate-in fade-in-0 duration-300">
                       {item.label}
+                    </span>
+                  )}
+                  {item.href === '/publicacoes' && novasPub > 0 && !isCollapsed && (
+                    <span
+                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-warning px-1.5 text-[11px] font-semibold text-white"
+                      aria-label={`${novasPub} publicações novas`}
+                    >
+                      {novasPub > 99 ? '99+' : novasPub}
                     </span>
                   )}
                 </Link>
