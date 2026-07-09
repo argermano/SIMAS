@@ -9,7 +9,7 @@ import { Select } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn, formatarData } from '@/lib/utils'
-import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText, ArrowRight, User, CheckCircle2 } from 'lucide-react'
+import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText, ArrowRight, User, CheckCircle2, RotateCcw } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
 import { SaudeWidget } from './SaudeWidget'
 import { PublicacaoDrawer } from './PublicacaoDrawer'
@@ -183,6 +183,7 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
 
   /** Concluir direto da listagem: marca como tratada (sem tarefa) e recarrega. */
   async function concluirNaLista(id: string) {
+    if (!confirm('Concluir esta publicação? Ela será marcada como TRATADA e sai da fila de não tratadas.')) return
     setConcluindo(id)
     try {
       const r = await fetch(`/api/publicacoes/${id}/triar`, {
@@ -193,6 +194,26 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { toastError('Não foi possível concluir', d.error ?? 'Tente novamente.'); return }
       success('Publicação concluída', 'Marcada como tratada.')
+      await carregar()
+      await carregarSaude()
+    } finally {
+      setConcluindo(null)
+    }
+  }
+
+  /** Reabrir da listagem: volta para 'não tratada' (mantém a tarefa criada, se houver). */
+  async function reabrirNaLista(id: string) {
+    if (!confirm('Reabrir esta publicação? Ela volta para NÃO TRATADA. Uma tarefa já criada no Kanban permanece.')) return
+    setConcluindo(id)
+    try {
+      const r = await fetch(`/api/publicacoes/${id}/triar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'reabrir' }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { toastError('Não foi possível reabrir', d.error ?? 'Tente novamente.'); return }
+      success('Publicação reaberta', 'Voltou para não tratada.')
       await carregar()
       await carregarSaude()
     } finally {
@@ -337,7 +358,7 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
                   <th scope="col" className="px-3 py-2.5 font-medium">Tipo</th>
                   <th scope="col" className="px-3 py-2.5 font-medium">Processo</th>
                   <th scope="col" className="px-3 py-2.5 font-medium">Diário</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Nome pesquisado</th>
+                  <th scope="col" className="hidden px-3 py-2.5 font-medium xl:table-cell">Nome pesquisado</th>
                   <th scope="col" className="px-3 py-2.5 font-medium">Status</th>
                   <th scope="col" className="px-3 py-2.5 text-right font-medium">Ações</th>
                 </tr>
@@ -349,7 +370,8 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
                     pub={p}
                     onAbrir={() => setSelecionada(p.id)}
                     onConcluir={() => concluirNaLista(p.id)}
-                    concluindo={concluindo === p.id}
+                    onReabrir={() => reabrirNaLista(p.id)}
+                    ocupada={concluindo === p.id}
                   />
                 ))}
               </tbody>
@@ -364,7 +386,8 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
                 pub={p}
                 onAbrir={() => setSelecionada(p.id)}
                 onConcluir={() => concluirNaLista(p.id)}
-                concluindo={concluindo === p.id}
+                onReabrir={() => reabrirNaLista(p.id)}
+                ocupada={concluindo === p.id}
               />
             ))}
           </div>
@@ -491,8 +514,8 @@ function ProcessoCelula({ pub }: { pub: PublicacaoListItem }) {
 /** Duas linhas de tabela por publicação: a linha de colunas + a de trecho.
  * A linha inteira é clicável (conveniência de mouse); o controle acessível de
  * teclado/AT é o botão explícito "Acessar" (evita interativo aninhado no <tr>). */
-function LinhaTabela({ pub, onAbrir, onConcluir, concluindo }: {
-  pub: PublicacaoListItem; onAbrir: () => void; onConcluir: () => void; concluindo: boolean
+function LinhaTabela({ pub, onAbrir, onConcluir, onReabrir, ocupada }: {
+  pub: PublicacaoListItem; onAbrir: () => void; onConcluir: () => void; onReabrir: () => void; ocupada: boolean
 }) {
   const meta = STATUS_META[pub.status as PublicacaoStatus] ?? STATUS_META.nova
   const tipo = pub.tipo_documento || pub.tipo_comunicacao
@@ -533,23 +556,35 @@ function LinhaTabela({ pub, onAbrir, onConcluir, concluindo }: {
           )}
           {!pub.sigla_tribunal && !pub.orgao_julgador && <span className="text-muted-foreground">—</span>}
         </td>
-        <td className="whitespace-nowrap px-3 py-2.5 text-foreground">{nomePesquisado(pub)}</td>
+        <td className="hidden whitespace-nowrap px-3 py-2.5 text-foreground xl:table-cell">{nomePesquisado(pub)}</td>
         <td className="px-3 py-2.5">
           <StatusPill status={pub.status} label={meta.label} />
         </td>
         <td className="px-3 py-2.5">
           <div className="flex items-center justify-end gap-2">
-            {naoTratada && (
+            {naoTratada ? (
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={concluindo}
+                disabled={ocupada}
                 onClick={(e) => { e.stopPropagation(); onConcluir() }}
                 className="whitespace-nowrap"
                 aria-label="Concluir publicação (marcar como tratada)"
               >
-                {concluindo ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                {ocupada ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                 Concluir
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={ocupada}
+                onClick={(e) => { e.stopPropagation(); onReabrir() }}
+                className="whitespace-nowrap"
+                aria-label="Reabrir publicação (voltar para não tratada)"
+              >
+                {ocupada ? <Spinner className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                Reabrir
               </Button>
             )}
             <Button
@@ -591,8 +626,8 @@ function StatusPill({ status, label }: { status: PublicacaoStatus; label: string
 }
 
 /** Card empilhado (mobile) — mesma informação da linha da tabela. */
-function CardPublicacao({ pub, onAbrir, onConcluir, concluindo }: {
-  pub: PublicacaoListItem; onAbrir: () => void; onConcluir: () => void; concluindo: boolean
+function CardPublicacao({ pub, onAbrir, onConcluir, onReabrir, ocupada }: {
+  pub: PublicacaoListItem; onAbrir: () => void; onConcluir: () => void; onReabrir: () => void; ocupada: boolean
 }) {
   const meta = STATUS_META[pub.status as PublicacaoStatus] ?? STATUS_META.nova
   const tipo = pub.tipo_documento || pub.tipo_comunicacao
@@ -623,9 +658,13 @@ function CardPublicacao({ pub, onAbrir, onConcluir, concluindo }: {
           <p className="line-clamp-1 text-xs text-muted-foreground/80">{pub.trecho}</p>
         )}
         <div className="flex items-center gap-2">
-          {naoTratada && (
-            <Button variant="secondary" size="sm" disabled={concluindo} onClick={(e) => { e.stopPropagation(); onConcluir() }}>
-              {concluindo ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />} Concluir
+          {naoTratada ? (
+            <Button variant="secondary" size="sm" disabled={ocupada} onClick={(e) => { e.stopPropagation(); onConcluir() }}>
+              {ocupada ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />} Concluir
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" disabled={ocupada} onClick={(e) => { e.stopPropagation(); onReabrir() }}>
+              {ocupada ? <Spinner className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />} Reabrir
             </Button>
           )}
           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onAbrir() }}>

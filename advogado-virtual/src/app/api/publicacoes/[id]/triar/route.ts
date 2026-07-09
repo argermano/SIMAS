@@ -20,7 +20,7 @@ const tarefaSchema = z.object({
 })
 
 const schema = z.object({
-  acao: z.enum(['triada', 'descartar', 'tarefa', 'tratar']),
+  acao: z.enum(['triada', 'descartar', 'tarefa', 'tratar', 'reabrir']),
   motivo: z.string().max(2000).optional(),
   tarefa: tarefaSchema.optional(),
   // Ação 'tratar' (estação de tratamento): nota livre + N tarefas de uma vez.
@@ -77,6 +77,31 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   if (acao === 'tarefa' && !tarefa) {
     return jsonError('Dados da tarefa (responsável) são obrigatórios.', 400)
+  }
+
+  // ── Reabrir: volta uma publicação já tratada/descartada para 'nova' (fila) ──
+  // Claim atômico a partir de qualquer estado não-'nova'. NÃO apaga a tarefa já
+  // criada (trabalho real no Kanban) — só limpa a marca de triagem e o motivo.
+  if (acao === 'reabrir') {
+    const { data: claim, error } = await supabase
+      .from('publicacoes')
+      .update({ status: 'nova', triada_por: null, triada_em: null, descarte_motivo: null })
+      .eq('id', id)
+      .eq('tenant_id', usuario.tenant_id)
+      .in('status', ['triada', 'tarefa_criada', 'descartada'])
+      .select('id')
+    if (error) {
+      logger.error('publicacao.reabrir.falha', { publicacaoId: id }, error)
+      return jsonError('Falha ao reabrir a publicação.', 500)
+    }
+    if (!claim || claim.length === 0) {
+      return jsonError('Esta publicação já está como não tratada.', 409)
+    }
+    await logAudit({
+      tenantId: usuario.tenant_id, userId: usuario.id, action: 'publicacao.reaberta',
+      resourceType: 'publicacao', resourceId: id,
+    })
+    return NextResponse.json({ ok: true, status: 'nova' })
   }
 
   // ── Ações que mudam status diretamente ('triada' e 'descartar') ────────────
