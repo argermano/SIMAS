@@ -147,12 +147,13 @@ export function ProcessosCliente({
         toastError('Não foi possível cadastrar', d.error ?? 'Tente novamente.')
         return
       }
-      success(
-        'Processo vinculado',
-        d.sincronizado
-          ? `${d.novosMovimentos} movimentação(ões) importada(s).`
-          : 'Cadastrado. A sincronização automática ocorrerá em breve.',
-      )
+      const parteMov = d.sincronizado
+        ? `${d.novosMovimentos} movimentação(ões) importada(s).`
+        : 'A sincronização automática ocorrerá em breve.'
+      const parteReligadas = d.publicacoesReligadas > 0
+        ? ` ${d.publicacoesReligadas} publicação(ões) vinculada(s) ao cliente.`
+        : ''
+      success('Processo vinculado', parteMov + parteReligadas)
       setNumero(''); setApelido(''); setMostrarForm(false)
       await carregar()
     } finally {

@@ -6,6 +6,7 @@ import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { validarNumeroCNJ, aliasDataJud } from '@/lib/jurisprudencia/verificador-citacoes'
 import { sincronizarProcessoPorId } from '@/lib/processos/sync'
+import { religarPublicacoes } from '@/lib/processos/djen'
 
 export const maxDuration = 60 // sync imediato no cadastro (DataJud ~7s + resumos IA)
 
@@ -110,11 +111,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // ignora — cron retenta
   }
 
+  // Religa publicações já capturadas deste número (entraram antes do cadastro) ao
+  // processo/cliente recém-criados — senão ficariam órfãs na caixa de Publicações.
+  const publicacoesReligadas = await religarPublicacoes(adminClient(), usuario.tenant_id, numeroLimpo, processo.id)
+
   // Relê para devolver a capa já preenchida pelo sync
   const { data: atual } = await supabase.from('processos').select('*').eq('id', processo.id).single()
 
   return NextResponse.json(
-    { processo: atual ?? processo, sincronizado, novosMovimentos },
+    { processo: atual ?? processo, sincronizado, novosMovimentos, publicacoesReligadas },
     { status: 201 },
   )
 }

@@ -307,11 +307,11 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
         </Card>
       ) : (
         <>
-          {/* Desktop: tabela estilo Astrea */}
-          <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
+          {/* Desktop: tabela estilo Astrea (fundo branco no claro; card no escuro) */}
+          <div className="hidden overflow-x-auto rounded-lg border border-border bg-white md:block dark:bg-card">
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground dark:bg-muted/40">
                   <th scope="col" className="px-3 py-2.5 font-medium">Divulgado em</th>
                   <th scope="col" className="px-3 py-2.5 font-medium">Tipo</th>
                   <th scope="col" className="px-3 py-2.5 font-medium">Processo</th>

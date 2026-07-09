@@ -9,6 +9,7 @@ import {
   decodeEntidades,
   partesDoMeta,
   advogadoMonitorado,
+  religarPublicacoes,
 } from './djen'
 import { proximoDiaUtil } from './util'
 
@@ -200,5 +201,30 @@ describe('djen — entidades, partes e advogado (UI estilo Astrea)', () => {
     ] }
     expect(advogadoMonitorado(meta, '31637')).toBe('KATLEN SUZAN NARDES GERMANO')
     expect(advogadoMonitorado(meta, '75503A')).toBe('VANIA PANSIERI') // sem match → 1º
+  })
+})
+
+describe('djen — religamento de publicações no cadastro de processo', () => {
+  it('atualiza só as do mesmo número/tenant SEM vínculo e conta as afetadas', async () => {
+    const capturado: Record<string, unknown> = {}
+    const chain = {
+      update(v: unknown) { capturado.update = v; return chain },
+      eq(col: string, val: unknown) { capturado[`eq_${col}`] = val; return chain },
+      is(col: string, val: unknown) { capturado[`is_${col}`] = val; return chain },
+      select() { return Promise.resolve({ data: [{ id: 'a' }, { id: 'b' }], error: null }) },
+    }
+    const admin = { from(t: string) { capturado.from = t; return chain } } as never
+    const n = await religarPublicacoes(admin, 'tenant-1', '50252272920268240008', 'proc-9')
+    expect(n).toBe(2)
+    expect(capturado.from).toBe('publicacoes')
+    expect(capturado.update).toEqual({ processo_id: 'proc-9' })
+    expect(capturado.eq_tenant_id).toBe('tenant-1')
+    expect(capturado.eq_numero_processo).toBe('50252272920268240008')
+    expect(capturado.is_processo_id).toBe(null) // só as órfãs
+  })
+  it('erro do banco → 0 (best-effort, nunca lança)', async () => {
+    const chain = { update() { return chain }, eq() { return chain }, is() { return chain }, select() { return Promise.resolve({ data: null, error: { message: 'x' } }) } }
+    const admin = { from() { return chain } } as never
+    expect(await religarPublicacoes(admin, 't', 'n', 'p')).toBe(0)
   })
 })

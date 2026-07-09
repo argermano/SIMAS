@@ -89,6 +89,35 @@ export function extrairTextoPlano(html: string | null | undefined): string {
     .trim()
 }
 
+/** Religa ao processo recém-cadastrado as publicações do mesmo número que já
+ * estavam na caixa SEM vínculo (capturadas ANTES do cadastro). Chamado no cadastro
+ * de processo — o sync corrente já vincula as novas; esta fecha o gap das antigas.
+ * Retorna quantas religou. Best-effort (nunca lança). */
+export async function religarPublicacoes(
+  admin: Admin,
+  tenantId: string,
+  numeroCnj: string,
+  processoId: string,
+): Promise<number> {
+  try {
+    const { data, error } = await admin
+      .from('publicacoes')
+      .update({ processo_id: processoId })
+      .eq('tenant_id', tenantId)
+      .eq('numero_processo', numeroCnj)
+      .is('processo_id', null)
+      .select('id')
+    if (error) {
+      logger.error('publicacoes.religar', { processo: processoId }, error)
+      return 0
+    }
+    return (data ?? []).length
+  } catch (err) {
+    logger.error('publicacoes.religar.excecao', { processo: processoId }, err as Error)
+    return 0
+  }
+}
+
 /** Monta "Autor(es) × Réu(s)" a partir de meta.destinatarios (polo A=ativo/autor,
  * P=passivo/réu). É a identidade do caso que o advogado reconhece de relance. */
 export function partesDoMeta(meta: unknown): string | null {
