@@ -349,18 +349,19 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
         </Card>
       ) : (
         <>
-          {/* Desktop: tabela estilo Astrea (fundo branco no claro; card no escuro) */}
-          <div className="hidden overflow-x-auto rounded-lg border border-border bg-white md:block dark:bg-card">
-            <table className="w-full border-collapse text-sm">
+          {/* Desktop: tabela estilo Astrea — SEM scroll horizontal (table-fixed +
+              truncamento); fundo branco no claro, card no escuro. */}
+          <div className="hidden overflow-hidden rounded-lg border border-border bg-white md:block dark:bg-card">
+            <table className="w-full table-fixed border-collapse text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground dark:bg-muted/40">
-                  <th scope="col" className="px-3 py-2.5 font-medium">Divulgado em</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Tipo</th>
+                  <th scope="col" className="w-[8rem] px-3 py-2.5 font-medium">Divulgado em</th>
+                  <th scope="col" className="w-[8rem] px-3 py-2.5 font-medium">Tipo</th>
                   <th scope="col" className="px-3 py-2.5 font-medium">Processo</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Diário</th>
-                  <th scope="col" className="hidden px-3 py-2.5 font-medium xl:table-cell">Nome pesquisado</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Status</th>
-                  <th scope="col" className="px-3 py-2.5 text-right font-medium">Ações</th>
+                  <th scope="col" className="hidden w-[7rem] px-3 py-2.5 font-medium lg:table-cell">Diário</th>
+                  <th scope="col" className="hidden w-[10rem] px-3 py-2.5 font-medium xl:table-cell">Nome pesquisado</th>
+                  <th scope="col" className="w-[9rem] px-3 py-2.5 font-medium">Status</th>
+                  <th scope="col" className="w-[6rem] px-3 py-2.5 text-right font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -529,50 +530,50 @@ function LinhaTabela({ pub, onAbrir, onConcluir, onReabrir, ocupada }: {
         <td className="px-3 py-2.5">
           <div className="whitespace-nowrap text-foreground">{formatarData(pub.data_disponibilizacao)}</div>
           {pub.data_publicacao_sugerida && (
-            <div className="whitespace-nowrap text-xs text-muted-foreground">
-              Publicado em: {formatarData(pub.data_publicacao_sugerida)}
+            <div className="text-xs text-muted-foreground">
+              Publicado: {formatarData(pub.data_publicacao_sugerida)}
             </div>
           )}
         </td>
         <td className="px-3 py-2.5">
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-            <FileText className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="text-foreground">{tipo || '—'}</span>
+          <span className="flex items-start gap-1.5 text-foreground">
+            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 break-words">{tipo || '—'}</span>
           </span>
         </td>
         <td className="px-3 py-2.5">
           <ProcessoCelula pub={pub} />
         </td>
-        <td className="px-3 py-2.5">
+        <td className="hidden px-3 py-2.5 lg:table-cell">
           {pub.sigla_tribunal && (
             <span className="inline-block rounded bg-muted/60 px-1.5 py-0.5 text-xs font-medium text-foreground">
               {pub.sigla_tribunal}
             </span>
           )}
           {pub.orgao_julgador && (
-            <div className="mt-0.5 max-w-[16rem] truncate text-xs text-muted-foreground" title={pub.orgao_julgador}>
+            <div className="mt-0.5 truncate text-xs text-muted-foreground" title={pub.orgao_julgador}>
               {pub.orgao_julgador}
             </div>
           )}
           {!pub.sigla_tribunal && !pub.orgao_julgador && <span className="text-muted-foreground">—</span>}
         </td>
-        <td className="hidden whitespace-nowrap px-3 py-2.5 text-foreground xl:table-cell">{nomePesquisado(pub)}</td>
+        <td className="hidden truncate px-3 py-2.5 text-foreground xl:table-cell" title={nomePesquisado(pub)}>{nomePesquisado(pub)}</td>
         <td className="px-3 py-2.5">
           <StatusPill status={pub.status} label={meta.label} />
         </td>
         <td className="px-3 py-2.5">
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-1">
             {naoTratada ? (
               <Button
-                variant="secondary"
+                variant="ghost"
                 size="sm"
                 disabled={ocupada}
                 onClick={(e) => { e.stopPropagation(); onConcluir() }}
-                className="whitespace-nowrap"
+                className="h-8 w-8 p-0 text-success"
+                title="Concluir (marcar como tratada)"
                 aria-label="Concluir publicação (marcar como tratada)"
               >
                 {ocupada ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-                Concluir
               </Button>
             ) : (
               <Button
@@ -580,21 +581,22 @@ function LinhaTabela({ pub, onAbrir, onConcluir, onReabrir, ocupada }: {
                 size="sm"
                 disabled={ocupada}
                 onClick={(e) => { e.stopPropagation(); onReabrir() }}
-                className="whitespace-nowrap"
+                className="h-8 w-8 p-0"
+                title="Reabrir (voltar para não tratada)"
                 aria-label="Reabrir publicação (voltar para não tratada)"
               >
                 {ocupada ? <Spinner className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
-                Reabrir
               </Button>
             )}
             <Button
               variant="ghost"
               size="sm"
               onClick={(e) => { e.stopPropagation(); onAbrir() }}
-              className="whitespace-nowrap"
+              className="h-8 w-8 p-0"
+              title="Acessar publicação"
               aria-label={`Acessar publicação ${pub.numero_mascara || pub.numero_processo || ''}`.trim()}
             >
-              Acessar <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         </td>
