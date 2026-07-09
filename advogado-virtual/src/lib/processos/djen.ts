@@ -89,6 +89,30 @@ export function extrairTextoPlano(html: string | null | undefined): string {
     .trim()
 }
 
+/** Monta "Autor(es) × Réu(s)" a partir de meta.destinatarios (polo A=ativo/autor,
+ * P=passivo/réu). É a identidade do caso que o advogado reconhece de relance. */
+export function partesDoMeta(meta: unknown): string | null {
+  const dest = (meta as { destinatarios?: Array<{ nome?: string; polo?: string }> } | null)?.destinatarios
+  if (!Array.isArray(dest) || dest.length === 0) return null
+  const nomes = (polo: string) =>
+    dest.filter((d) => (d?.polo || '').toUpperCase() === polo).map((d) => (d?.nome || '').trim()).filter(Boolean)
+  const lado = (arr: string[]) => (arr.length > 2 ? `${arr[0]} e outros` : arr.join(', '))
+  const ativos = nomes('A')
+  const passivos = nomes('P')
+  if (ativos.length && passivos.length) return `${lado(ativos)} × ${lado(passivos)}`
+  const todos = dest.map((d) => (d?.nome || '').trim()).filter(Boolean)
+  return todos.length ? lado(todos) : null
+}
+
+/** Nome do advogado monitorado (destinatário cuja OAB bate com a consultada). */
+export function advogadoMonitorado(meta: unknown, oabConsultada: string): string | null {
+  const advs = (meta as { destinatarioadvogados?: Array<{ advogado?: { nome?: string; numero_oab?: string } }> } | null)?.destinatarioadvogados
+  if (!Array.isArray(advs) || advs.length === 0) return null
+  const alvo = (oabConsultada || '').replace(/\D/g, '')
+  const match = advs.find((a) => (a?.advogado?.numero_oab || '').replace(/\D/g, '') === alvo)
+  return (match?.advogado?.nome || advs[0]?.advogado?.nome || '').trim() || null
+}
+
 export interface ItemDjen {
   id: number
   numero: string // só dígitos (20)

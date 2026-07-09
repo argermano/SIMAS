@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { extrairTextoPlano } from '@/lib/processos/djen'
+import { extrairTextoPlano, partesDoMeta, advogadoMonitorado } from '@/lib/processos/djen'
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/publicacoes — caixa de entrada paginada (Lote 2)
@@ -38,7 +38,7 @@ const PAGE_SIZE = 20
 const COLUNAS_LISTA =
   'id, data_disponibilizacao, data_publicacao_sugerida, sigla_tribunal, tipo_documento, ' +
   'tipo_comunicacao, numero_processo, numero_mascara, orgao_julgador, status, ' +
-  'oab_consultada, uf_oab, processo_id, task_id, texto'
+  'oab_consultada, uf_oab, processo_id, task_id, texto, meta'
 
 interface LinhaLista {
   id: string
@@ -56,6 +56,7 @@ interface LinhaLista {
   processo_id: string | null
   task_id: string | null
   texto: string | null
+  meta: unknown
 }
 
 // Resumo do processo vinculado exposto na LISTA (link p/ o cliente na tabela).
@@ -164,10 +165,14 @@ export async function GET(req: Request) {
   }
 
   const publicacoes = linhas.map((p) => {
-    const { texto, ...rest } = p
+    const { texto, meta, ...rest } = p
     return {
       ...rest,
-      trecho: extrairTextoPlano(texto).slice(0, 220),
+      // Identidade do caso (partes) e advogado monitorado derivados server-side —
+      // meta/texto NUNCA saem no payload (enxuto + seguro).
+      partes: partesDoMeta(meta),
+      advogado: advogadoMonitorado(meta, p.oab_consultada),
+      trecho: extrairTextoPlano(texto).slice(0, 160),
       processoVinculado: p.processo_id ? vinculadoPorProcesso.get(p.processo_id) ?? null : null,
     }
   })

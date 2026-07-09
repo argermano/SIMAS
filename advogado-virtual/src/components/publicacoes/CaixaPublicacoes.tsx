@@ -10,7 +10,7 @@ import { Select } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn, formatarData } from '@/lib/utils'
-import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText, ArrowRight } from 'lucide-react'
+import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText, ArrowRight, User } from 'lucide-react'
 import { SaudeWidget } from './SaudeWidget'
 import { PublicacaoDrawer } from './PublicacaoDrawer'
 import {
@@ -419,27 +419,34 @@ function Tile({
   )
 }
 
-/** OAB pesquisada, no formato "OAB {num}/{uf}". */
+/** Nome pesquisado: advogado monitorado que casou; fallback p/ a OAB. */
 function nomePesquisado(pub: PublicacaoListItem): string {
+  if (pub.advogado) return pub.advogado
   if (!pub.oab_consultada) return '—'
   return `OAB ${pub.oab_consultada}${pub.uf_oab ? '/' + pub.uf_oab : ''}`
 }
 
-/** Célula/bloco PROCESSO: nº mascarado + nome do cliente vinculado (link para
- * /clientes/{clienteId}) quando há `processoVinculado`; senão só o nº ("—" sem número). */
+/** Célula/bloco PROCESSO (estilo Astrea): nº mascarado + as PARTES ("Autor × Réu")
+ * em destaque (identidade do caso) + nome do cliente vinculado quando há processo
+ * cadastrado no SIMAS. */
 function ProcessoCelula({ pub }: { pub: PublicacaoListItem }) {
   const numero = pub.numero_mascara || pub.numero_processo
   const pv = pub.processoVinculado
   return (
     <div className="min-w-0">
-      <span className="font-medium text-foreground">{numero || '—'}</span>
+      <span className="text-xs text-muted-foreground">{numero || '—'}</span>
+      {pub.partes && (
+        <span className="mt-0.5 block truncate font-medium text-foreground" title={pub.partes}>
+          {pub.partes}
+        </span>
+      )}
       {pv?.clienteId && pv.clienteNome ? (
         <Link
           href={`/clientes/${pv.clienteId}`}
           onClick={(e) => e.stopPropagation()}
-          className="mt-0.5 block truncate text-xs font-medium text-primary hover:underline"
+          className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
         >
-          {pv.clienteNome}
+          <User className="h-3 w-3" /> {pv.clienteNome}
         </Link>
       ) : pv?.clienteNome ? (
         <span className="mt-0.5 block truncate text-xs text-muted-foreground">{pv.clienteNome}</span>
@@ -509,7 +516,7 @@ function LinhaTabela({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: () =>
       {pub.trecho && (
         <tr className="cursor-pointer transition-colors hover:bg-muted/40" onClick={onAbrir}>
           <td colSpan={7} className="px-3 pb-3">
-            <p className="line-clamp-2 text-sm text-muted-foreground">{pub.trecho}</p>
+            <p className="line-clamp-1 text-xs text-muted-foreground/80">{pub.trecho}</p>
           </td>
         </tr>
       )}
@@ -544,7 +551,7 @@ function CardPublicacao({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: ()
         <ProcessoCelula pub={pub} />
         <p className="text-xs text-muted-foreground">{nomePesquisado(pub)}</p>
         {pub.trecho && (
-          <p className="line-clamp-2 text-sm text-muted-foreground">{pub.trecho}</p>
+          <p className="line-clamp-1 text-xs text-muted-foreground/80">{pub.trecho}</p>
         )}
         <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onAbrir() }}>
           Acessar publicação <ArrowRight className="h-4 w-4" />

@@ -35,6 +35,10 @@ export interface PublicacaoListItem {
   processo_id: string | null
   task_id: string | null
   trecho: string
+  /** "Autor × Réu" (de meta.destinatarios) — identidade do caso, estilo Astrea. */
+  partes?: string | null
+  /** Nome do advogado monitorado (destinatário cuja OAB casou). */
+  advogado?: string | null
   processoVinculado?: ProcessoVinculado | null
 }
 

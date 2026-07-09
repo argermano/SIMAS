@@ -6,6 +6,9 @@ import {
   janelaConsultaDjen,
   montarLinhaPublicacao,
   oabsDoTenant,
+  decodeEntidades,
+  partesDoMeta,
+  advogadoMonitorado,
 } from './djen'
 import { proximoDiaUtil } from './util'
 
@@ -159,5 +162,43 @@ describe('djen — OABs monitoradas (fix crítico do sufixo + flag ativa)', () =
       config: { djen_oabs: [{ numero: '75.503-A', uf: 'SC' }] },
     })
     expect(oabs).toEqual([{ numero: '75503A', uf: 'SC' }])
+  })
+})
+
+describe('djen — entidades, partes e advogado (UI estilo Astrea)', () => {
+  it('decodifica entidades nomeadas e numéricas', () => {
+    expect(decodeEntidades('SENTEN&Ccedil;A N&ordm; &#231;&#227;o')).toBe('SENTENÇA Nº ção')
+    expect(decodeEntidades('a&eacute;&iacute;o&otilde;es')).toBe('aéíoões')
+    expect(decodeEntidades('&#x41;&#x42;')).toBe('AB')
+    expect(decodeEntidades('&naoexiste; fica')).toBe('&naoexiste; fica')
+  })
+  it('extrairTextoPlano tira tags E decodifica', () => {
+    expect(extrairTextoPlano('<b>ATO ORDINAT&Oacute;RIO</b>')).toBe('ATO ORDINATÓRIO')
+  })
+  it('monta "Autor × Réu" a partir dos polos', () => {
+    const meta = { destinatarios: [
+      { nome: 'GENI DA SILVA', polo: 'A' },
+      { nome: 'BANCO PAN S.A.', polo: 'P' },
+    ] }
+    expect(partesDoMeta(meta)).toBe('GENI DA SILVA × BANCO PAN S.A.')
+  })
+  it('agrupa "e outros" quando há mais de 2 no mesmo polo', () => {
+    const meta = { destinatarios: [
+      { nome: 'ALZIDO SIEBERT', polo: 'P' }, { nome: 'EDSON RINGENBERG', polo: 'P' }, { nome: 'HDI SEGUROS', polo: 'P' },
+      { nome: 'GUTCHERO ADRIANO DA COSTA', polo: 'A' },
+    ] }
+    expect(partesDoMeta(meta)).toBe('GUTCHERO ADRIANO DA COSTA × ALZIDO SIEBERT e outros')
+  })
+  it('partes: sem destinatarios → null', () => {
+    expect(partesDoMeta({})).toBeNull()
+    expect(partesDoMeta(null)).toBeNull()
+  })
+  it('acha o advogado monitorado pela OAB (ignora sufixo/pontuação)', () => {
+    const meta = { destinatarioadvogados: [
+      { advogado: { nome: 'VANIA PANSIERI', numero_oab: '99999', uf_oab: 'SC' } },
+      { advogado: { nome: 'KATLEN SUZAN NARDES GERMANO', numero_oab: '31637', uf_oab: 'DF' } },
+    ] }
+    expect(advogadoMonitorado(meta, '31637')).toBe('KATLEN SUZAN NARDES GERMANO')
+    expect(advogadoMonitorado(meta, '75503A')).toBe('VANIA PANSIERI') // sem match → 1º
   })
 })
