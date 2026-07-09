@@ -1,34 +1,57 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { EmptyState } from '@/components/ui/empty-state'
 import { cn, formatarData } from '@/lib/utils'
-import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText, ArrowRight, User, CheckCircle2, RotateCcw } from 'lucide-react'
+import {
+  AlignJustify,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Inbox,
+  LayoutList,
+  Newspaper,
+  RotateCcw,
+  Search,
+  User,
+  X,
+} from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
 import { SaudeWidget } from './SaudeWidget'
-import { PublicacaoDrawer } from './PublicacaoDrawer'
+import { PainelDetalhe } from './PainelDetalhe'
+import { PrioridadeBadge, StatusPill } from './Pills'
 import {
-  STATUS_META,
   hojeSaoPaulo,
+  prioridadeDaPublicacao,
+  type PrioridadeHint,
   type PublicacaoListItem,
-  type PublicacaoStatus,
   type SaudePublicacoes,
   type TeamMember,
 } from './tipos'
 
 const STATUS_OPCOES = [
-  { value: '', label: 'Todas' },
+  { value: '', label: 'Todos os status' },
   { value: 'nova', label: 'Não tratadas' },
   { value: 'triada', label: 'Tratadas (sem tarefa)' },
   { value: 'tarefa_criada', label: 'Tratadas (com tarefa)' },
   { value: 'descartada', label: 'Descartadas' },
 ]
+
+// Ordenação atendida pelo servidor (o banco pagina por data; prioridade é
+// ordenada em memória lá). Valores casam com o enum da rota (`data`|`prioridade`).
+const ORDENAR_OPCOES = [
+  { value: 'data', label: 'Mais recentes' },
+  { value: 'prioridade', label: 'Prioridade' },
+]
+
+const DENSIDADE_KEY = 'publicacoes:densidade'
+type Densidade = 'confortavel' | 'compacto'
 
 interface Resposta {
   publicacoes: PublicacaoListItem[]
@@ -62,11 +85,21 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
   const [qDebounced, setQDebounced] = useState('')
   const [page, setPage] = useState(1)
 
+  // Filtro de tipo e ordenação são atendidos pelo SERVIDOR (paginação correta).
+  const [tipo, setTipo] = useState('')
+  const [ordenar, setOrdenar] = useState('data')
+  const [densidade, setDensidade] = useState<Densidade>('confortavel')
+
   const [dados, setDados] = useState<Resposta | null>(null)
   const [loading, setLoading] = useState(true)
   const [tribunais, setTribunais] = useState<string[]>([]) // acumula siglas vistas
   const [oabs, setOabs] = useState<{ num: string; uf: string }[]>([]) // acumula OABs vistas
+  const [tipos, setTipos] = useState<string[]>([]) // acumula tipos de documento vistos
   const [selecionada, setSelecionada] = useState<string | null>(null)
+  const [mobileAberto, setMobileAberto] = useState(false) // overlay de detalhe (< lg)
+  // lg+ mostra o detalhe inline; < lg mostra overlay ao tocar. Só UM painel monta
+  // por vez (evita fetch duplicado). Default desktop-first (casa com o SSR).
+  const [desktop, setDesktop] = useState(true)
 
   const [saude, setSaude] = useState<SaudePublicacoes | null>(null)
   const [loadingSaude, setLoadingSaude] = useState(true)
@@ -75,6 +108,29 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
   // Snapshot mais recente da lista, para a fila "próxima não tratada" avançar
   // sem depender do fechamento (closure) do callback.
   const listaRef = useRef<PublicacaoListItem[]>([])
+  // Seleciona o 1º item no próximo carregamento disparado por FILTRO (não após ações).
+  const autoSelecionar = useRef(true)
+
+  // Rastreia o breakpoint lg (1024px) para montar só um painel de detalhe.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const upd = () => setDesktop(mq.matches)
+    upd()
+    mq.addEventListener('change', upd)
+    return () => mq.removeEventListener('change', upd)
+  }, [])
+
+  // Densidade persistida em localStorage.
+  useEffect(() => {
+    try {
+      const salvo = localStorage.getItem(DENSIDADE_KEY)
+      if (salvo === 'compacto' || salvo === 'confortavel') setDensidade(salvo)
+    } catch { /* ignore */ }
+  }, [])
+  function mudarDensidade(d: Densidade) {
+    setDensidade(d)
+    try { localStorage.setItem(DENSIDADE_KEY, d) } catch { /* ignore */ }
+  }
 
   // Debounce da busca
   useEffect(() => {
@@ -95,10 +151,12 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
       else if (status) params.set('status', status)
       if (tribunal) params.set('tribunal', tribunal)
       if (oab) params.set('oab', oab)
+      if (tipo) params.set('tipo', tipo)
       if (de) params.set('de', de)
       if (ate) params.set('ate', ate)
       if (triadaEm) params.set('triadaEm', triadaEm)
       if (qDebounced) params.set('q', qDebounced)
+      if (ordenar) params.set('ordenar', ordenar)
       params.set('page', String(page))
       const r = await fetch(`/api/publicacoes?${params.toString()}`)
       if (r.ok) {
@@ -120,11 +178,20 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
           }
           return Array.from(map, ([num, uf]) => ({ num, uf })).sort((a, b) => a.num.localeCompare(b.num))
         })
+        // Acumula tipos de documento vistos (refino de página do lado do cliente).
+        setTipos((prev) => {
+          const set = new Set(prev)
+          for (const p of d.publicacoes) {
+            const t = p.tipo_documento || p.tipo_comunicacao
+            if (t) set.add(t)
+          }
+          return Array.from(set).sort()
+        })
       }
     } finally {
       setLoading(false)
     }
-  }, [status, statusIn, tribunal, oab, de, ate, triadaEm, qDebounced, page])
+  }, [status, statusIn, tribunal, oab, tipo, de, ate, triadaEm, qDebounced, ordenar, page])
 
   const carregarSaude = useCallback(async () => {
     setLoadingSaude(true)
@@ -136,8 +203,22 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
     }
   }, [])
 
-  useEffect(() => { void carregar() }, [carregar])
+  // Carregamento disparado por FILTRO → arma a auto-seleção do 1º item.
+  useEffect(() => {
+    autoSelecionar.current = true
+    void carregar()
+  }, [carregar])
   useEffect(() => { void carregarSaude() }, [carregarSaude])
+
+  // Seleciona a 1ª publicação ao carregar por filtro (nunca sobrescreve o avanço
+  // pós-ação, que recarrega direto sem rearmar a flag).
+  useEffect(() => {
+    if (!dados) return
+    if (autoSelecionar.current) {
+      autoSelecionar.current = false
+      setSelecionada(dados.publicacoes[0]?.id ?? null)
+    }
+  }, [dados])
 
   function limpar() {
     setStatus('')
@@ -147,6 +228,7 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
     setDe('')
     setAte('')
     setTriadaEm('')
+    setTipo('')
     setQ('')
     setQDebounced('')
     setPage(1)
@@ -176,9 +258,23 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
   /** Após tratar/descartar: avança para a próxima não tratada (ou fecha) e
    * recarrega lista + contadores. */
   function aoConcluir(atualId: string) {
-    setSelecionada(proximaNova(atualId))
+    const prox = proximaNova(atualId)
+    setSelecionada(prox)
+    if (!prox) setMobileAberto(false)
     void carregar()
     void carregarSaude()
+  }
+
+  /** Após reabrir no detalhe: recarrega lista + contadores, mantém a seleção. */
+  function aoReabrir() {
+    void carregar()
+    void carregarSaude()
+  }
+
+  /** Abre o detalhe: seleciona (painel inline no desktop) e, no mobile, o overlay. */
+  function abrir(id: string) {
+    setSelecionada(id)
+    setMobileAberto(true)
   }
 
   /** Concluir direto da listagem: marca como tratada (sem tarefa) e recarrega. */
@@ -194,6 +290,8 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) { toastError('Não foi possível concluir', d.error ?? 'Tente novamente.'); return }
       success('Publicação concluída', 'Marcada como tratada.')
+      // Se a concluída estava selecionada, avança para a próxima não tratada.
+      setSelecionada((prev) => (prev === id ? proximaNova(id) : prev))
       await carregar()
       await carregarSaude()
     } finally {
@@ -225,16 +323,9 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
   const contadores = saude?.contadores
   const temFiltro =
     status !== '' || statusIn !== '' || tribunal !== '' || oab !== '' ||
-    de !== '' || ate !== '' || triadaEm !== '' || qDebounced !== ''
-  const lista = dados?.publicacoes ?? []
-  const totalPaginas = dados?.totalPaginas ?? 1
+    de !== '' || ate !== '' || triadaEm !== '' || tipo !== '' || qDebounced !== ''
 
-  // Estado ativo de cada tile face aos filtros correntes. Cada tile aplica
-  // EXATAMENTE o mesmo recorte que /saude usa para o número, então o clique abre
-  // os itens contados: "não tratadas" por status 'nova' (+ data_disponibilizacao
-  // = hoje no tile do dia); "tratadas hoje" pela UNIÃO 'triada'+'tarefa_criada'
-  // (statusIn) recortada por `triada_em` = hoje; "descartadas hoje" por status
-  // 'descartada' recortado por `triada_em` = hoje.
+  // Estado ativo de cada tile face aos filtros correntes (LÓGICA PRESERVADA).
   const semData = de === '' && ate === ''
   const semRecorteTratada = statusIn === '' && triadaEm === ''
   const ativoNaoTratadasHoje =
@@ -244,9 +335,30 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
     status === 'descartada' && triadaEm === hoje && statusIn === ''
   const ativoNaoTratadasTotal = status === 'nova' && semData && semRecorteTratada
 
+  // Lista da página (servidor já filtrou por tipo e ordenou). A prioridade vem
+  // pronta do payload; se faltar (payload antigo), deriva no cliente.
+  const listaBruta = dados?.publicacoes ?? []
+  const itens = listaBruta.map((p) => ({
+    p,
+    prioridade:
+      p.prioridade ??
+      prioridadeDaPublicacao({
+        tipo_documento: p.tipo_documento,
+        tipo_comunicacao: p.tipo_comunicacao,
+        texto: p.trecho,
+      }),
+  }))
+  const totalPaginas = dados?.totalPaginas ?? 1
+  const totalGeral = dados?.total ?? 0
+  // Partes do item selecionado (o detalhe não devolve `partes`; passamos como fallback).
+  const partesSelecionada = listaBruta.find((p) => p.id === selecionada)?.partes ?? null
+
   return (
     <div className="space-y-4">
-      {/* Barra de contadores (estilo Astrea) — clique aplica o filtro. */}
+      {/* Barra de SAÚDE (health + chips por OAB) */}
+      <SaudeWidget dados={saude} loading={loadingSaude} />
+
+      {/* 4 TILES de contadores — clique aplica o filtro (LÓGICA PRESERVADA). */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile
           rotulo="Não tratadas de hoje"
@@ -268,28 +380,44 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
           onClick={() => aplicarFiltro({ status: 'descartada', statusIn: '', de: '', ate: '', triadaEm: hoje })}
         />
         <Tile
-          rotulo="Não tratadas"
+          rotulo="Não tratadas (total)"
           valor={contadores?.naoTratadasTotal}
           ativo={ativoNaoTratadasTotal}
           onClick={() => aplicarFiltro({ status: 'nova', statusIn: '', de: '', ate: '', triadaEm: '' })}
         />
       </div>
 
-      <SaudeWidget dados={saude} loading={loadingSaude} />
-
-      {/* Filtros */}
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-3 py-4">
-          <div className="min-w-[180px] flex-1">
+      {/* FILTROS */}
+      <div className="rounded-xl border border-border bg-card p-4 shadow-card">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[200px] flex-1">
             <Input
-              placeholder="Buscar por texto ou nº do processo…"
+              placeholder="Buscar por processo, parte, cliente ou palavra…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               leftIcon={<Search className="h-4 w-4" />}
+              aria-label="Buscar publicações"
             />
           </div>
-          <div className="w-48">
+          <div className="w-40">
+            <Input
+              type="date"
+              aria-label="Período — de"
+              value={de}
+              onChange={(e) => { setDe(e.target.value); setTriadaEm(''); setStatusIn(''); setPage(1) }}
+            />
+          </div>
+          <div className="w-40">
+            <Input
+              type="date"
+              aria-label="Período — até"
+              value={ate}
+              onChange={(e) => { setAte(e.target.value); setTriadaEm(''); setStatusIn(''); setPage(1) }}
+            />
+          </div>
+          <div className="w-44">
             <Select
+              aria-label="Status"
               value={status}
               onChange={(e) => {
                 // Escolher um status único descarta os recortes só-de-tile
@@ -304,6 +432,7 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
           </div>
           <div className="w-40">
             <Select
+              aria-label="Tribunal"
               value={tribunal}
               onChange={(e) => { setTribunal(e.target.value); setPage(1) }}
               options={[
@@ -314,6 +443,7 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
           </div>
           <div className="w-40">
             <Select
+              aria-label="OAB"
               value={oab}
               onChange={(e) => { setOab(e.target.value); setPage(1) }}
               options={[
@@ -322,113 +452,165 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
               ]}
             />
           </div>
+          <div className="w-48">
+            <Select
+              aria-label="Tipo"
+              value={tipo}
+              onChange={(e) => { setTipo(e.target.value); setPage(1) }}
+              options={[
+                { value: '', label: 'Todos os tipos' },
+                ...tipos.map((t) => ({ value: t, label: t })),
+              ]}
+            />
+          </div>
+
+          {/* Toggle de densidade */}
+          <div className="inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label="Densidade da lista">
+            <DensidadeBtn
+              ativo={densidade === 'confortavel'}
+              onClick={() => mudarDensidade('confortavel')}
+              icon={<LayoutList className="h-4 w-4" />}
+              rotulo="Confortável"
+            />
+            <DensidadeBtn
+              ativo={densidade === 'compacto'}
+              onClick={() => mudarDensidade('compacto')}
+              icon={<AlignJustify className="h-4 w-4" />}
+              rotulo="Compacto"
+            />
+          </div>
+
           {temFiltro && (
             <Button variant="ghost" size="sm" onClick={limpar}>
               <X className="h-4 w-4" /> Limpar
             </Button>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Lista */}
-      {loading && !dados ? (
-        <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
-          <Spinner className="h-4 w-4" /> Carregando publicações…
         </div>
-      ) : lista.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon={<Newspaper className="h-8 w-8" />}
-            title={temFiltro ? 'Nenhuma publicação encontrada' : 'Nenhuma publicação na caixa'}
-            description={
-              temFiltro
-                ? 'Ajuste os filtros ou limpe a busca para ver mais resultados.'
-                : 'As publicações capturadas do DJEN por OAB aparecem aqui para tratamento.'
-            }
-          />
-        </Card>
-      ) : (
-        <>
-          {/* Desktop: tabela estilo Astrea — SEM scroll horizontal (table-fixed +
-              truncamento); fundo branco no claro, card no escuro. */}
-          <div className="hidden overflow-hidden rounded-lg border border-border bg-white md:block dark:bg-card">
-            <table className="w-full table-fixed border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground dark:bg-muted/40">
-                  <th scope="col" className="w-[8rem] px-3 py-2.5 font-medium">Divulgado em</th>
-                  <th scope="col" className="w-[8rem] px-3 py-2.5 font-medium">Tipo</th>
-                  <th scope="col" className="px-3 py-2.5 font-medium">Processo</th>
-                  <th scope="col" className="hidden w-[7rem] px-3 py-2.5 font-medium lg:table-cell">Diário</th>
-                  <th scope="col" className="hidden w-[10rem] px-3 py-2.5 font-medium xl:table-cell">Nome pesquisado</th>
-                  <th scope="col" className="w-[9rem] px-3 py-2.5 font-medium">Status</th>
-                  <th scope="col" className="w-[6rem] px-3 py-2.5 text-right font-medium">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lista.map((p) => (
-                  <LinhaTabela
-                    key={p.id}
-                    pub={p}
-                    onAbrir={() => setSelecionada(p.id)}
-                    onConcluir={() => concluirNaLista(p.id)}
-                    onReabrir={() => reabrirNaLista(p.id)}
-                    ocupada={concluindo === p.id}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+      </div>
 
-          {/* Mobile: cards empilhados */}
-          <div className="space-y-2 md:hidden">
-            {lista.map((p) => (
-              <CardPublicacao
-                key={p.id}
-                pub={p}
-                onAbrir={() => setSelecionada(p.id)}
-                onConcluir={() => concluirNaLista(p.id)}
-                onReabrir={() => reabrirNaLista(p.id)}
-                ocupada={concluindo === p.id}
-              />
-            ))}
-          </div>
-
-          {/* Paginação */}
-          <div className="flex items-center justify-between pt-1">
-            <p className="text-sm text-muted-foreground">
-              {dados ? `${dados.total} publicaç${dados.total === 1 ? 'ão' : 'ões'}` : ''}
+      {/* CORPO — master-detail */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+        {/* ESQUERDA — lista de cards */}
+        <div className="min-w-0 space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {loading && !dados ? 'Carregando…' : `${totalGeral} publicaç${totalGeral === 1 ? 'ão' : 'ões'}`}
             </p>
             <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page <= 1 || loading}
-                onClick={() => setPage((n) => Math.max(1, n - 1))}
+              <span className="text-xs text-muted-foreground">Ordenar por</span>
+              <select
+                aria-label="Ordenar por"
+                value={ordenar}
+                onChange={(e) => { setOrdenar(e.target.value); setPage(1) }}
+                className="h-8 cursor-pointer rounded-md border border-input bg-background px-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <ChevronLeft className="h-4 w-4" /> Anterior
-              </Button>
-              <span className="text-sm text-muted-foreground">
-                {dados?.pagina ?? page} / {totalPaginas}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={page >= totalPaginas || loading}
-                onClick={() => setPage((n) => n + 1)}
-              >
-                Próxima <ChevronRight className="h-4 w-4" />
-              </Button>
+                {ORDENAR_OPCOES.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
             </div>
           </div>
-        </>
-      )}
 
-      {selecionada && (
-        <PublicacaoDrawer
+          {loading && !dados ? (
+            <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" /> Carregando publicações…
+            </div>
+          ) : itens.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 py-14 text-center">
+              <Newspaper className="h-8 w-8 text-muted-foreground" aria-hidden />
+              <p className="mt-3 text-sm font-medium text-foreground">
+                {temFiltro ? 'Nenhuma publicação encontrada' : 'Nenhuma publicação na caixa'}
+              </p>
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                {temFiltro
+                  ? 'Ajuste os filtros ou limpe a busca para ver mais resultados.'
+                  : 'As publicações capturadas do DJEN por OAB aparecem aqui para tratamento.'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <ul className="space-y-2.5">
+                {itens.map(({ p, prioridade }) => (
+                  <li key={p.id}>
+                    <CardPublicacao
+                      pub={p}
+                      prioridade={prioridade}
+                      densidade={densidade}
+                      selecionado={selecionada === p.id}
+                      ocupada={concluindo === p.id}
+                      onAbrir={() => abrir(p.id)}
+                      onConcluir={() => concluirNaLista(p.id)}
+                      onReabrir={() => reabrirNaLista(p.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+
+              {/* Paginação */}
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-xs text-muted-foreground">
+                  Página {dados?.pagina ?? page} de {totalPaginas}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((n) => Math.max(1, n - 1))}
+                  >
+                    <ChevronLeft className="h-4 w-4" /> Anterior
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={page >= totalPaginas || loading}
+                    onClick={() => setPage((n) => n + 1)}
+                  >
+                    Próxima <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* DIREITA — detalhe sempre visível (lg+); no mobile vira overlay. */}
+        <div className="hidden lg:block">
+          <div className="lg:sticky lg:top-0 lg:h-[calc(100vh-7rem)]">
+            {selecionada && desktop ? (
+              <PainelDetalhe
+                key={selecionada}
+                id={selecionada}
+                teamMembers={teamMembers}
+                partesFallback={partesSelecionada}
+                modo="inline"
+                onConcluido={aoConcluir}
+                onReaberto={aoReabrir}
+              />
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 text-center">
+                <Inbox className="h-9 w-9 text-muted-foreground" aria-hidden />
+                <p className="mt-3 text-sm font-medium text-foreground">Selecione uma publicação</p>
+                <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                  Escolha um item à esquerda para ler o inteiro teor e tratar sem sair da tela.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Overlay de detalhe no mobile (< lg) */}
+      {!desktop && mobileAberto && selecionada && (
+        <PainelDetalhe
+          key={`overlay-${selecionada}`}
           id={selecionada}
           teamMembers={teamMembers}
-          onClose={() => setSelecionada(null)}
+          partesFallback={partesSelecionada}
+          modo="overlay"
+          onFechar={() => setMobileAberto(false)}
           onConcluido={aoConcluir}
+          onReaberto={aoReabrir}
         />
       )}
     </div>
@@ -455,7 +637,7 @@ function Tile({
       onClick={onClick}
       aria-pressed={ativo}
       className={cn(
-        'flex flex-col items-start rounded-lg border bg-card px-4 py-3 text-left transition-colors',
+        'flex flex-col items-start rounded-xl border bg-card px-4 py-3 text-left shadow-card transition-colors',
         'hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         destaque && 'border-warning/40 bg-warning/5',
         ativo && 'ring-2 ring-ring',
@@ -476,204 +658,183 @@ function Tile({
   )
 }
 
-/** Nome pesquisado: advogado monitorado que casou; fallback p/ a OAB. */
-function nomePesquisado(pub: PublicacaoListItem): string {
-  if (pub.advogado) return pub.advogado
-  if (!pub.oab_consultada) return '—'
-  return `OAB ${pub.oab_consultada}${pub.uf_oab ? '/' + pub.uf_oab : ''}`
-}
-
-/** Célula/bloco PROCESSO (estilo Astrea): nº mascarado + as PARTES ("Autor × Réu")
- * em destaque (identidade do caso) + nome do cliente vinculado quando há processo
- * cadastrado no SIMAS. */
-function ProcessoCelula({ pub }: { pub: PublicacaoListItem }) {
-  const numero = pub.numero_mascara || pub.numero_processo
-  const pv = pub.processoVinculado
-  return (
-    <div className="min-w-0">
-      <span className="text-xs text-muted-foreground">{numero || '—'}</span>
-      {pub.partes && (
-        <span className="mt-0.5 block truncate font-medium text-foreground" title={pub.partes}>
-          {pub.partes}
-        </span>
-      )}
-      {pv?.clienteId && pv.clienteNome ? (
-        <Link
-          href={`/clientes/${pv.clienteId}`}
-          onClick={(e) => e.stopPropagation()}
-          className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-        >
-          <User className="h-3 w-3" /> {pv.clienteNome}
-        </Link>
-      ) : pv?.clienteNome ? (
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{pv.clienteNome}</span>
-      ) : null}
-    </div>
-  )
-}
-
-/** Duas linhas de tabela por publicação: a linha de colunas + a de trecho.
- * A linha inteira é clicável (conveniência de mouse); o controle acessível de
- * teclado/AT é o botão explícito "Acessar" (evita interativo aninhado no <tr>). */
-function LinhaTabela({ pub, onAbrir, onConcluir, onReabrir, ocupada }: {
-  pub: PublicacaoListItem; onAbrir: () => void; onConcluir: () => void; onReabrir: () => void; ocupada: boolean
+function DensidadeBtn({
+  ativo,
+  onClick,
+  icon,
+  rotulo,
+}: {
+  ativo: boolean
+  onClick: () => void
+  icon: ReactNode
+  rotulo: string
 }) {
-  const meta = STATUS_META[pub.status as PublicacaoStatus] ?? STATUS_META.nova
-  const tipo = pub.tipo_documento || pub.tipo_comunicacao
-  const naoTratada = pub.status === 'nova'
   return (
-    <>
-      <tr
-        className="cursor-pointer border-t border-border align-top transition-colors hover:bg-muted/40"
-        onClick={onAbrir}
-      >
-        <td className="px-3 py-2.5">
-          <div className="whitespace-nowrap text-foreground">{formatarData(pub.data_disponibilizacao)}</div>
-          {pub.data_publicacao_sugerida && (
-            <div className="text-xs text-muted-foreground">
-              Publicado: {formatarData(pub.data_publicacao_sugerida)}
-            </div>
-          )}
-        </td>
-        <td className="px-3 py-2.5">
-          <span className="flex items-start gap-1.5 text-foreground">
-            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="min-w-0 break-words">{tipo || '—'}</span>
-          </span>
-        </td>
-        <td className="px-3 py-2.5">
-          <ProcessoCelula pub={pub} />
-        </td>
-        <td className="hidden px-3 py-2.5 lg:table-cell">
-          {pub.sigla_tribunal && (
-            <span className="inline-block rounded bg-muted/60 px-1.5 py-0.5 text-xs font-medium text-foreground">
-              {pub.sigla_tribunal}
-            </span>
-          )}
-          {pub.orgao_julgador && (
-            <div className="mt-0.5 truncate text-xs text-muted-foreground" title={pub.orgao_julgador}>
-              {pub.orgao_julgador}
-            </div>
-          )}
-          {!pub.sigla_tribunal && !pub.orgao_julgador && <span className="text-muted-foreground">—</span>}
-        </td>
-        <td className="hidden truncate px-3 py-2.5 text-foreground xl:table-cell" title={nomePesquisado(pub)}>{nomePesquisado(pub)}</td>
-        <td className="px-3 py-2.5">
-          <StatusPill status={pub.status} label={meta.label} />
-        </td>
-        <td className="px-3 py-2.5">
-          <div className="flex items-center justify-end gap-1">
-            {naoTratada ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={ocupada}
-                onClick={(e) => { e.stopPropagation(); onConcluir() }}
-                className="h-8 w-8 p-0 text-success"
-                title="Concluir (marcar como tratada)"
-                aria-label="Concluir publicação (marcar como tratada)"
-              >
-                {ocupada ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={ocupada}
-                onClick={(e) => { e.stopPropagation(); onReabrir() }}
-                className="h-8 w-8 p-0"
-                title="Reabrir (voltar para não tratada)"
-                aria-label="Reabrir publicação (voltar para não tratada)"
-              >
-                {ocupada ? <Spinner className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => { e.stopPropagation(); onAbrir() }}
-              className="h-8 w-8 p-0"
-              title="Acessar publicação"
-              aria-label={`Acessar publicação ${pub.numero_mascara || pub.numero_processo || ''}`.trim()}
-            >
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </td>
-      </tr>
-      {pub.trecho && (
-        <tr className="cursor-pointer transition-colors hover:bg-muted/40" onClick={onAbrir}>
-          <td colSpan={7} className="px-3 pb-3">
-            <p className="line-clamp-1 text-xs text-muted-foreground/80">{pub.trecho}</p>
-          </td>
-        </tr>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={ativo}
+      title={rotulo}
+      className={cn(
+        'inline-flex h-11 items-center gap-1.5 px-3 text-sm font-medium transition-colors',
+        ativo ? 'bg-muted text-foreground' : 'bg-background text-muted-foreground hover:bg-muted/50',
       )}
-    </>
+    >
+      {icon}
+      <span className="hidden sm:inline">{rotulo}</span>
+    </button>
   )
 }
 
-/** Pill de status claro (estilo Astrea) — contraste garantido em qualquer fundo. */
-const PILL_CLASSES: Record<PublicacaoStatus, string> = {
-  nova:          'bg-warning/15 text-warning ring-1 ring-warning/40',
-  triada:        'bg-muted text-muted-foreground ring-1 ring-border',
-  tarefa_criada: 'bg-success/15 text-success ring-1 ring-success/40',
-  descartada:    'bg-muted text-muted-foreground ring-1 ring-border',
-}
-function StatusPill({ status, label }: { status: PublicacaoStatus; label: string }) {
+/** Tag neutra derivada (tipo/tribunal) — NUNCA prazo. */
+function Tag({ children }: { children: ReactNode }) {
   return (
-    <span className={cn('inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold', PILL_CLASSES[status] ?? PILL_CLASSES.nova)}>
-      {label}
+    <span className="inline-flex items-center rounded-md bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+      {children}
     </span>
   )
 }
 
-/** Card empilhado (mobile) — mesma informação da linha da tabela. */
-function CardPublicacao({ pub, onAbrir, onConcluir, onReabrir, ocupada }: {
-  pub: PublicacaoListItem; onAbrir: () => void; onConcluir: () => void; onReabrir: () => void; ocupada: boolean
+/** Card de uma publicação (substitui a linha de tabela) — master-detail. */
+function CardPublicacao({
+  pub,
+  prioridade,
+  densidade,
+  selecionado,
+  ocupada,
+  onAbrir,
+  onConcluir,
+  onReabrir,
+}: {
+  pub: PublicacaoListItem
+  prioridade: PrioridadeHint
+  densidade: Densidade
+  selecionado: boolean
+  ocupada: boolean
+  onAbrir: () => void
+  onConcluir: () => void
+  onReabrir: () => void
 }) {
-  const meta = STATUS_META[pub.status as PublicacaoStatus] ?? STATUS_META.nova
   const tipo = pub.tipo_documento || pub.tipo_comunicacao
   const naoTratada = pub.status === 'nova'
+  const numero = pub.numero_mascara || pub.numero_processo
+  const pv = pub.processoVinculado
+  const compacto = densidade === 'compacto'
+
+  // "TRIBUNAL · órgão · Divulgado DD/MM/AAAA"
+  const meta = [
+    pub.sigla_tribunal,
+    pub.orgao_julgador,
+    `Divulgado ${formatarData(pub.data_disponibilizacao)}`,
+  ].filter(Boolean).join(' · ')
+
   return (
-    <Card
-      className="cursor-pointer transition-colors hover:border-ring"
+    <article
       onClick={onAbrir}
+      aria-current={selecionado}
+      className={cn(
+        'cursor-pointer rounded-xl border bg-card shadow-card transition-colors',
+        compacto ? 'p-3' : 'p-4',
+        selecionado
+          ? 'border-primary bg-primary/[0.04] ring-1 ring-primary/40'
+          : 'border-border hover:border-ring',
+      )}
     >
-      <CardContent className="space-y-2 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusPill status={pub.status} label={meta.label} />
-          <span className="text-xs text-muted-foreground">{formatarData(pub.data_disponibilizacao)}</span>
-          {pub.sigla_tribunal && (
-            <span className="rounded bg-muted/60 px-1.5 py-0.5 text-xs font-medium text-foreground">
-              {pub.sigla_tribunal}
-            </span>
+      <div className="flex items-start gap-3">
+        {/* Checkbox de seleção (visual) */}
+        <span
+          aria-hidden
+          className={cn(
+            'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+            selecionado ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
           )}
-          {tipo && (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <FileText className="h-3 w-3" aria-hidden /> {tipo}
-            </span>
+        >
+          {selecionado && <Check className="h-3 w-3" />}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          {/* Linha 1: prioridade + tipo + status */}
+          <div className="flex items-center gap-2">
+            <PrioridadeBadge nivel={prioridade} />
+            {tipo && <span className="truncate text-xs font-medium text-muted-foreground">{tipo}</span>}
+            <StatusPill status={pub.status} className="ml-auto shrink-0" />
+          </div>
+
+          {/* Linha 2: tribunal · órgão · divulgado */}
+          <p className="mt-1.5 truncate text-[11px] uppercase tracking-wide text-muted-foreground" title={meta}>
+            {meta}
+          </p>
+
+          {/* Título = partes */}
+          <h3 className="mt-1.5 truncate font-semibold text-foreground" title={pub.partes ?? undefined}>
+            {pub.partes || 'Publicação sem partes identificadas'}
+          </h3>
+          {numero && <p className="text-xs text-muted-foreground">{numero}</p>}
+
+          {/* Trecho (oculto no modo compacto) */}
+          {!compacto && pub.trecho && (
+            <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground/80">{pub.trecho}</p>
           )}
+
+          {/* Rodapé: cliente + tags + ações */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            {pv?.clienteId && pv.clienteNome ? (
+              <Link
+                href={`/clientes/${pv.clienteId}`}
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <User className="h-3.5 w-3.5" /> {pv.clienteNome}
+              </Link>
+            ) : pv?.clienteNome ? (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <User className="h-3.5 w-3.5" /> {pv.clienteNome}
+              </span>
+            ) : null}
+
+            {!compacto && pub.sigla_tribunal && <Tag>{pub.sigla_tribunal}</Tag>}
+            {!compacto && tipo && <Tag>{tipo}</Tag>}
+
+            <div className="ml-auto flex items-center gap-1">
+              {naoTratada ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={ocupada}
+                  onClick={(e) => { e.stopPropagation(); onConcluir() }}
+                  className="h-8 w-8 p-0 text-success"
+                  title="Concluir (marcar como tratada)"
+                  aria-label="Concluir publicação (marcar como tratada)"
+                >
+                  {ocupada ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={ocupada}
+                  onClick={(e) => { e.stopPropagation(); onReabrir() }}
+                  className="h-8 w-8 p-0"
+                  title="Reabrir (voltar para não tratada)"
+                  aria-label="Reabrir publicação (voltar para não tratada)"
+                >
+                  {ocupada ? <Spinner className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); onAbrir() }}
+                className="h-8 w-8 p-0"
+                title="Abrir publicação"
+                aria-label={`Abrir publicação ${numero || ''}`.trim()}
+              >
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
-        <ProcessoCelula pub={pub} />
-        <p className="text-xs text-muted-foreground">{nomePesquisado(pub)}</p>
-        {pub.trecho && (
-          <p className="line-clamp-1 text-xs text-muted-foreground/80">{pub.trecho}</p>
-        )}
-        <div className="flex items-center gap-2">
-          {naoTratada ? (
-            <Button variant="secondary" size="sm" disabled={ocupada} onClick={(e) => { e.stopPropagation(); onConcluir() }}>
-              {ocupada ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />} Concluir
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" disabled={ocupada} onClick={(e) => { e.stopPropagation(); onReabrir() }}>
-              {ocupada ? <Spinner className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />} Reabrir
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onAbrir() }}>
-            Acessar <ArrowRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+      </div>
+    </article>
   )
 }

@@ -32,7 +32,7 @@ export default async function PublicacoesPage() {
     <>
       <Header
         titulo="Publicações"
-        subtitulo="Triagem de intimações e publicações do DJEN"
+        subtitulo="Triagem de intimações e publicações do DJEN — priorize prazos, leia o inteiro teor e resolva sem sair da tela."
         acoes={
           <Link href="/dashboard" className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
             <ChevronLeft className="h-4 w-4" />

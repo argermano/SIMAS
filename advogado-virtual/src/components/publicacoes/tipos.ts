@@ -1,4 +1,10 @@
 import type { BadgeProps } from '@/components/ui/badge'
+import {
+  classificarMovimento,
+  prioridadeDaCategoria,
+  type CategoriaMovimento,
+  type PrioridadeRelevancia,
+} from '@/lib/processos/categorias'
 
 /** Processo cadastrado no SIMAS (Fase 5) ao qual a publicação está vinculada.
  * DTO derivado do join publicacoes.processo_id → processos → clientes. Todos os
@@ -39,6 +45,10 @@ export interface PublicacaoListItem {
   partes?: string | null
   /** Nome do advogado monitorado (destinatário cuja OAB casou). */
   advogado?: string | null
+  /** Categoria curada + prioridade de RELEVÂNCIA (não prazo) derivadas no servidor.
+   * Opcionais: se ausentes (payload antigo), a UI deriva no cliente. */
+  categoria?: CategoriaMovimento | null
+  prioridade?: PrioridadeRelevancia
   processoVinculado?: ProcessoVinculado | null
 }
 
@@ -88,12 +98,22 @@ export interface ContadoresPublicacoes {
   naoTratadasTotal: number
 }
 
-/** Payload de GET /api/publicacoes/saude. `contadores` chega junto neste incremento. */
+/** Resumo por OAB monitorada (chips do topo): só inscrições com ≥1 publicação na
+ * caixa. `novas` = 'nova' disponibilizadas hoje (SP); `total` = todas no tenant. */
+export interface OabResumo {
+  oab: string
+  uf: string
+  novas: number
+  total: number
+}
+
+/** Payload de GET /api/publicacoes/saude. `contadores` e `porOab` chegam junto. */
 export interface SaudePublicacoes {
   novas: number
   ultimas: UltimaCaptura[]
   ultimaSucessoEm: string | null
   contadores?: ContadoresPublicacoes
+  porOab?: OabResumo[]
 }
 
 /** Hoje em America/Sao_Paulo no formato YYYY-MM-DD — espelha `hojeSaoPauloISO`
@@ -118,6 +138,37 @@ export const STATUS_META: Record<PublicacaoStatus, { label: string; variant: Bad
   triada:        { label: 'Tratada',           variant: 'secondary' },
   tarefa_criada: { label: 'Tratada c/ tarefa', variant: 'success' },
   descartada:    { label: 'Descartada',        variant: 'default' },
+}
+
+/* ── Prioridade = hint de RELEVÂNCIA (nunca de prazo) ─────────────────────────
+ * O nível vem PRONTO do servidor no item de lista (`prioridade`). Para o DETALHE
+ * (a rota /[id] não devolve o campo) e como fallback do payload antigo, deriva-se
+ * no cliente pela MESMA função do servidor (prioridadeDaCategoria ∘ classificar),
+ * garantindo lista e detalhe idênticos. NÃO tem relação com prazo — só sinaliza
+ * quão substantivo é o ato (sentença > despacho > juntada). Rótulo neutro. */
+export type PrioridadeHint = PrioridadeRelevancia
+
+/** Rótulo curto + classes de cor por nível. Cores de ACENTO (relevância), nunca
+ * o vermelho de urgência-por-prazo — a relevância alta ≠ prazo curto. */
+export const PRIORIDADE_META: Record<PrioridadeHint, { label: string; dot: string; texto: string; ring: string }> = {
+  alta:  { label: 'Alta',  dot: 'bg-warning',              texto: 'text-warning',          ring: 'ring-warning/40' },
+  media: { label: 'Média', dot: 'bg-primary',              texto: 'text-primary',          ring: 'ring-primary/30' },
+  baixa: { label: 'Baixa', dot: 'bg-muted-foreground/50',  texto: 'text-muted-foreground', ring: 'ring-border' },
+}
+
+/** Deriva o nível de relevância no cliente (detalhe / fallback), com a MESMA
+ * regra do servidor: classifica pela categoria e mapeia com prioridadeDaCategoria. */
+export function prioridadeDaPublicacao(input: {
+  tipo_documento?: string | null
+  tipo_comunicacao?: string | null
+  texto?: string | null
+}): PrioridadeHint {
+  const tipo = input.tipo_documento || input.tipo_comunicacao || ''
+  const texto = (input.texto || '').slice(0, 400)
+  // Espelha classificarPublicacao do servidor: quando NADA casa, a categoria cai
+  // em 'publicacao' (não null) — assim lista e detalhe derivam o MESMO nível.
+  const cat = classificarMovimento({ nome: `${tipo}. ${texto}` }) ?? 'publicacao'
+  return prioridadeDaCategoria(cat)
 }
 
 export const PRIORIDADE_OPCOES = [

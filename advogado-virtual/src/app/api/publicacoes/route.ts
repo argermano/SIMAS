@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { extrairTextoPlano, partesDoMeta, advogadoMonitorado } from '@/lib/processos/djen'
+import { extrairTextoPlano, partesDoMeta, advogadoMonitorado, classificarPublicacao } from '@/lib/processos/djen'
+import { prioridadeDaCategoria, type PrioridadeRelevancia } from '@/lib/processos/categorias'
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/publicacoes — caixa de entrada paginada (Lote 2)
@@ -21,10 +22,12 @@ const schemaQuery = z.object({
   statusIn: z.string().max(80).optional(),
   tribunal: z.string().max(20).optional(),
   oab:      z.string().max(20).optional(),
+  tipo:     z.string().max(80).optional(),
   q:        z.string().max(200).optional(),
   de:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (use YYYY-MM-DD)').optional(),
   ate:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (use YYYY-MM-DD)').optional(),
   triadaEm: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (use YYYY-MM-DD)').optional(),
+  ordenar:  z.enum(['data', 'prioridade']).optional(),
   page:     z.coerce.number().int().positive().default(1),
 })
 
@@ -79,16 +82,26 @@ export async function GET(req: Request) {
     statusIn: searchParams.get('statusIn') || undefined,
     tribunal: searchParams.get('tribunal') || undefined,
     oab:      searchParams.get('oab')      || undefined,
+    tipo:     searchParams.get('tipo')     || undefined,
     q:        searchParams.get('q')        || undefined,
     de:       searchParams.get('de')       || undefined,
     ate:      searchParams.get('ate')      || undefined,
     triadaEm: searchParams.get('triadaEm') || undefined,
+    ordenar:  searchParams.get('ordenar')  || undefined,
     page:     searchParams.get('page')     || undefined,
   })
   if (!parsed.success) return jsonError('Filtros inválidos', 400, parsed.error.flatten())
-  const { status, statusIn, tribunal, oab, q, de, ate, triadaEm, page } = parsed.data
+  const { status, statusIn, tribunal, oab, tipo, q, de, ate, triadaEm, ordenar, page } = parsed.data
 
   const offset = (page - 1) * PAGE_SIZE
+  // Prioridade é derivada (categoria → relevância), não coluna do banco: não dá
+  // para ordenar/paginar por ela no SQL. Nesse modo buscamos uma janela ampla,
+  // classificamos, ordenamos e paginamos EM MEMÓRIA. Cap defensivo p/ o modo
+  // prioridade não virar um SELECT ilimitado (base do piloto é pequena; além do
+  // teto a ordenação global degrada, mas nunca estoura). No modo padrão (data
+  // desc) o banco continua paginando com range (sem custo extra).
+  const porPrioridade = ordenar === 'prioridade'
+  const PRIORIDADE_CAP = 500
 
   let query = supabase
     .from('publicacoes')
@@ -96,7 +109,10 @@ export async function GET(req: Request) {
     .eq('tenant_id', usuario.tenant_id) // defesa em profundidade (RLS já isola)
     .order('data_disponibilizacao', { ascending: false })
     .order('created_at', { ascending: false }) // tie-break estável p/ paginação
-    .range(offset, offset + PAGE_SIZE - 1)
+  // Modo prioridade: janela ampla p/ ordenar em memória; padrão: página do banco.
+  query = porPrioridade
+    ? query.limit(PRIORIDADE_CAP)
+    : query.range(offset, offset + PAGE_SIZE - 1)
 
   // Status: `statusIn` (união higienizada) tem precedência sobre `status` único.
   const statusList = statusIn
@@ -109,6 +125,12 @@ export async function GET(req: Request) {
   if (oab)      query = query.eq('oab_consultada', oab)
   if (de)       query = query.gte('data_disponibilizacao', de)
   if (ate)      query = query.lte('data_disponibilizacao', ate)
+  // Filtro por TIPO: ilike no tipo do documento OU no tipo da comunicação (a API
+  // preenche um ou outro). Higieniza os chars estruturais do `or` do PostgREST.
+  if (tipo) {
+    const termoTipo = tipo.replace(/[,()*]/g, ' ').trim()
+    if (termoTipo) query = query.or(`tipo_documento.ilike.*${termoTipo}*,tipo_comunicacao.ilike.*${termoTipo}*`)
+  }
   // Recorte por `triada_em` num dia (janela SP [00:00, +1d 00:00) em -03:00).
   // Espelha o cálculo de /saude; o Brasil não observa horário de verão (offset fixo).
   if (triadaEm) {
@@ -131,9 +153,29 @@ export async function GET(req: Request) {
 
   const linhas = (data ?? []) as unknown as LinhaLista[]
 
+  // Deriva o texto plano (reuso p/ trecho), a categoria curada e a prioridade de
+  // RELEVÂNCIA (não prazo) UMA vez por linha, no servidor. `texto`/`meta` crus
+  // nunca saem no payload.
+  const enriquecidas = linhas.map((p) => {
+    const textoPlano = extrairTextoPlano(p.texto)
+    const categoria = classificarPublicacao({ tipoDocumento: p.tipo_documento ?? '', textoPlano })
+    return { p, textoPlano, categoria, prioridade: prioridadeDaCategoria(categoria) }
+  })
+
+  // Ordenação por prioridade (alta→baixa). O empate mantém a data desc que o banco
+  // já aplicou — Array.sort é estável, então a ordem de entrada é o tie-break.
+  if (porPrioridade) {
+    const rank: Record<PrioridadeRelevancia, number> = { alta: 0, media: 1, baixa: 2 }
+    enriquecidas.sort((a, b) => rank[a.prioridade] - rank[b.prioridade])
+  }
+
+  // No modo prioridade paginamos em memória (a janela ampla foi ordenada acima);
+  // no padrão o banco já entregou exatamente a página via range.
+  const paginaAtual = porPrioridade ? enriquecidas.slice(offset, offset + PAGE_SIZE) : enriquecidas
+
   // Processo vinculado (id/cliente) resolvido em LOTE p/ os itens da página —
   // 1 query em `processos` + 1 em `clientes` (sem N+1). `clientes.nome` é plaintext.
-  const processoIds = [...new Set(linhas.map((p) => p.processo_id).filter((v): v is string => !!v))]
+  const processoIds = [...new Set(paginaAtual.map((e) => e.p.processo_id).filter((v): v is string => !!v))]
   const vinculadoPorProcesso = new Map<string, ProcessoVinculadoLista>()
   if (processoIds.length) {
     const { data: procs } = await supabase
@@ -164,23 +206,34 @@ export async function GET(req: Request) {
     }
   }
 
-  const publicacoes = linhas.map((p) => {
-    const { texto, meta, ...rest } = p
+  const publicacoes = paginaAtual.map(({ p, textoPlano, categoria, prioridade }) => {
+    const { texto: _texto, meta, ...rest } = p
     return {
       ...rest,
       // Identidade do caso (partes) e advogado monitorado derivados server-side —
       // meta/texto NUNCA saem no payload (enxuto + seguro).
       partes: partesDoMeta(meta),
       advogado: advogadoMonitorado(meta, p.oab_consultada),
-      trecho: extrairTextoPlano(texto).slice(0, 160),
+      trecho: textoPlano.slice(0, 160),
+      // Hint de RELEVÂNCIA (não prazo): categoria curada + prioridade derivada.
+      categoria,
+      prioridade,
       processoVinculado: p.processo_id ? vinculadoPorProcesso.get(p.processo_id) ?? null : null,
     }
   })
+
+  // No modo prioridade a paginação é sobre a JANELA em memória (teto PRIORIDADE_CAP):
+  // o nº de páginas segue as linhas efetivamente carregadas, e não o `count` total,
+  // senão surgem páginas fantasma vazias além do teto que prendem o usuário numa
+  // lista sem controles. No modo padrão o range do banco casa com o `count`.
+  const totalPaginas = porPrioridade
+    ? Math.ceil(enriquecidas.length / PAGE_SIZE)
+    : Math.ceil((count ?? 0) / PAGE_SIZE)
 
   return NextResponse.json({
     publicacoes,
     total:        count ?? 0,
     pagina:       page,
-    totalPaginas: Math.ceil((count ?? 0) / PAGE_SIZE),
+    totalPaginas,
   })
 }

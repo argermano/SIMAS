@@ -119,3 +119,34 @@ export function classificarMovimento(input: {
 export function sugereEncerramento(categoria: CategoriaMovimento | null): boolean {
   return categoria === 'arquivamento'
 }
+
+/* ── prioridade de RELEVÂNCIA (triagem de publicações) ─────────────────────
+ * Hint visual para a caixa de Publicações: quão substantivo é o ato, para o
+ * advogado priorizar a leitura. É RELEVÂNCIA, NUNCA prazo — não há countdown,
+ * data-limite nem cor de urgência derivada daqui. O prazo é sempre decisão
+ * humana. Ver docs/PLANO-PUBLICACOES-OPUS.md (invariante de prazo). */
+export type PrioridadeRelevancia = 'alta' | 'media' | 'baixa'
+
+// Record (não Partial) → exaustivo por construção: adicionar uma CategoriaMovimento
+// sem prioridade quebra o build. Mantém a tabela e o union sempre em sincronia.
+const PRIORIDADE_POR_CATEGORIA: Record<CategoriaMovimento, PrioridadeRelevancia> = {
+  // Atos que decidem/encerram/recorrem — leia primeiro.
+  sentenca: 'alta',
+  transito_julgado: 'alta',
+  recurso: 'alta',
+  arquivamento: 'alta',
+  // Atos que pedem atenção mas não decidem o mérito de imediato.
+  audiencia: 'media',
+  expedicao_alvara: 'media',
+  decisao_despacho: 'media',
+  publicacao: 'media',
+  // Trâmite/expediente comum — ruído de fundo da triagem.
+  movimentacao_comum: 'baixa',
+  redistribuicao: 'baixa',
+}
+
+/** Prioridade de RELEVÂNCIA de uma publicação a partir da sua categoria curada.
+ * `null` (nada casou na classificação) → 'baixa'. NÃO é prazo. */
+export function prioridadeDaCategoria(cat: CategoriaMovimento | null): PrioridadeRelevancia {
+  return cat ? PRIORIDADE_POR_CATEGORIA[cat] : 'baixa'
+}

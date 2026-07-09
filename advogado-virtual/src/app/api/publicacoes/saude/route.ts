@@ -22,6 +22,22 @@ interface UltimaCaptura {
   finalizada_em: string | null
 }
 
+// Chip por OAB no topo da caixa: "{oab}/{uf} · {novas} novas de {total}".
+interface OabResumo {
+  oab: string
+  uf: string
+  novas: number
+  total: number
+}
+
+// Colunas leves p/ agregar o resumo por OAB (nunca puxa texto/meta).
+interface LinhaOab {
+  oab_consultada: string
+  uf_oab: string
+  status: string
+  data_disponibilizacao: string
+}
+
 export async function GET() {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
@@ -44,6 +60,7 @@ export async function GET() {
     naoTratadasHojeRes,
     tratadasHojeRes,
     descartadasHojeRes,
+    porOabRes,
   ] = await Promise.all([
     // Total de publicações ainda por triar (status 'nova') = naoTratadasTotal.
     supabase
@@ -90,12 +107,38 @@ export async function GET() {
       .eq('status', 'descartada')
       .gte('triada_em', inicioHoje)
       .lt('triada_em', fimHoje),
+    // Resumo por OAB (chips do topo): colunas leves de TODAS as publicacoes do
+    // tenant p/ agregar total e novas de hoje por inscrição. Escopo do piloto
+    // (base pequena) — nunca puxa texto/meta.
+    supabase
+      .from('publicacoes')
+      .select('oab_consultada, uf_oab, status, data_disponibilizacao')
+      .eq('tenant_id', usuario.tenant_id),
   ])
 
   const ultimaSucessoEm =
     (sucessoRes.data?.[0]?.finalizada_em as string | null | undefined) ?? null
 
   const naoTratadasTotal = novasRes.count ?? 0
+
+  // Agrega o resumo por OAB: só as inscrições PRESENTES na caixa (total ≥ 1). Um
+  // registro só existe no map quando aparece → OABs sem publicação não viram chip.
+  // `novas` = 'nova' disponibilizadas hoje (SP); `total` = todas da OAB no tenant.
+  const porOabMap = new Map<string, OabResumo>()
+  for (const r of (porOabRes.data ?? []) as unknown as LinhaOab[]) {
+    const oab = r.oab_consultada
+    const uf = r.uf_oab
+    if (!oab) continue
+    const chave = `${oab}:${uf}`
+    let e = porOabMap.get(chave)
+    if (!e) {
+      e = { oab, uf, novas: 0, total: 0 }
+      porOabMap.set(chave, e)
+    }
+    e.total++
+    if (r.status === 'nova' && r.data_disponibilizacao === hoje) e.novas++
+  }
+  const porOab = [...porOabMap.values()].sort((a, b) => a.oab.localeCompare(b.oab))
 
   return NextResponse.json({
     novas:   naoTratadasTotal,
@@ -107,5 +150,6 @@ export async function GET() {
       descartadasHoje:  descartadasHojeRes.count ?? 0,
       naoTratadasTotal,
     },
+    porOab,
   })
 }
