@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/ui/empty-state'
 import { cn, formatarData } from '@/lib/utils'
-import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText, ArrowRight, User } from 'lucide-react'
+import { Search, X, ChevronLeft, ChevronRight, Newspaper, FileText, ArrowRight, User, CheckCircle2 } from 'lucide-react'
+import { useToast } from '@/components/ui/toast'
 import { SaudeWidget } from './SaudeWidget'
 import { PublicacaoDrawer } from './PublicacaoDrawer'
 import {
@@ -49,6 +49,8 @@ interface FiltroTile {
 }
 
 export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] }) {
+  const { success, error: toastError } = useToast()
+  const [concluindo, setConcluindo] = useState<string | null>(null)
   const [status, setStatus] = useState('nova')
   const [statusIn, setStatusIn] = useState('')
   const [tribunal, setTribunal] = useState('')
@@ -177,6 +179,25 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
     setSelecionada(proximaNova(atualId))
     void carregar()
     void carregarSaude()
+  }
+
+  /** Concluir direto da listagem: marca como tratada (sem tarefa) e recarrega. */
+  async function concluirNaLista(id: string) {
+    setConcluindo(id)
+    try {
+      const r = await fetch(`/api/publicacoes/${id}/triar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acao: 'tratar' }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { toastError('Não foi possível concluir', d.error ?? 'Tente novamente.'); return }
+      success('Publicação concluída', 'Marcada como tratada.')
+      await carregar()
+      await carregarSaude()
+    } finally {
+      setConcluindo(null)
+    }
   }
 
   const hoje = hojeSaoPaulo()
@@ -323,7 +344,13 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
               </thead>
               <tbody>
                 {lista.map((p) => (
-                  <LinhaTabela key={p.id} pub={p} onAbrir={() => setSelecionada(p.id)} />
+                  <LinhaTabela
+                    key={p.id}
+                    pub={p}
+                    onAbrir={() => setSelecionada(p.id)}
+                    onConcluir={() => concluirNaLista(p.id)}
+                    concluindo={concluindo === p.id}
+                  />
                 ))}
               </tbody>
             </table>
@@ -332,7 +359,13 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
           {/* Mobile: cards empilhados */}
           <div className="space-y-2 md:hidden">
             {lista.map((p) => (
-              <CardPublicacao key={p.id} pub={p} onAbrir={() => setSelecionada(p.id)} />
+              <CardPublicacao
+                key={p.id}
+                pub={p}
+                onAbrir={() => setSelecionada(p.id)}
+                onConcluir={() => concluirNaLista(p.id)}
+                concluindo={concluindo === p.id}
+              />
             ))}
           </div>
 
@@ -458,9 +491,12 @@ function ProcessoCelula({ pub }: { pub: PublicacaoListItem }) {
 /** Duas linhas de tabela por publicação: a linha de colunas + a de trecho.
  * A linha inteira é clicável (conveniência de mouse); o controle acessível de
  * teclado/AT é o botão explícito "Acessar" (evita interativo aninhado no <tr>). */
-function LinhaTabela({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: () => void }) {
+function LinhaTabela({ pub, onAbrir, onConcluir, concluindo }: {
+  pub: PublicacaoListItem; onAbrir: () => void; onConcluir: () => void; concluindo: boolean
+}) {
   const meta = STATUS_META[pub.status as PublicacaoStatus] ?? STATUS_META.nova
   const tipo = pub.tipo_documento || pub.tipo_comunicacao
+  const naoTratada = pub.status === 'nova'
   return (
     <>
       <tr
@@ -499,18 +535,33 @@ function LinhaTabela({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: () =>
         </td>
         <td className="whitespace-nowrap px-3 py-2.5 text-foreground">{nomePesquisado(pub)}</td>
         <td className="px-3 py-2.5">
-          <Badge variant={meta.variant}>{meta.label}</Badge>
+          <StatusPill status={pub.status} label={meta.label} />
         </td>
-        <td className="px-3 py-2.5 text-right">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={(e) => { e.stopPropagation(); onAbrir() }}
-            className="whitespace-nowrap"
-            aria-label={`Acessar publicação ${pub.numero_mascara || pub.numero_processo || ''}`.trim()}
-          >
-            Acessar <ArrowRight className="h-4 w-4" />
-          </Button>
+        <td className="px-3 py-2.5">
+          <div className="flex items-center justify-end gap-2">
+            {naoTratada && (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={concluindo}
+                onClick={(e) => { e.stopPropagation(); onConcluir() }}
+                className="whitespace-nowrap"
+                aria-label="Concluir publicação (marcar como tratada)"
+              >
+                {concluindo ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                Concluir
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => { e.stopPropagation(); onAbrir() }}
+              className="whitespace-nowrap"
+              aria-label={`Acessar publicação ${pub.numero_mascara || pub.numero_processo || ''}`.trim()}
+            >
+              Acessar <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
         </td>
       </tr>
       {pub.trecho && (
@@ -524,10 +575,28 @@ function LinhaTabela({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: () =>
   )
 }
 
+/** Pill de status claro (estilo Astrea) — contraste garantido em qualquer fundo. */
+const PILL_CLASSES: Record<PublicacaoStatus, string> = {
+  nova:          'bg-warning/15 text-warning ring-1 ring-warning/40',
+  triada:        'bg-muted text-muted-foreground ring-1 ring-border',
+  tarefa_criada: 'bg-success/15 text-success ring-1 ring-success/40',
+  descartada:    'bg-muted text-muted-foreground ring-1 ring-border',
+}
+function StatusPill({ status, label }: { status: PublicacaoStatus; label: string }) {
+  return (
+    <span className={cn('inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold', PILL_CLASSES[status] ?? PILL_CLASSES.nova)}>
+      {label}
+    </span>
+  )
+}
+
 /** Card empilhado (mobile) — mesma informação da linha da tabela. */
-function CardPublicacao({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: () => void }) {
+function CardPublicacao({ pub, onAbrir, onConcluir, concluindo }: {
+  pub: PublicacaoListItem; onAbrir: () => void; onConcluir: () => void; concluindo: boolean
+}) {
   const meta = STATUS_META[pub.status as PublicacaoStatus] ?? STATUS_META.nova
   const tipo = pub.tipo_documento || pub.tipo_comunicacao
+  const naoTratada = pub.status === 'nova'
   return (
     <Card
       className="cursor-pointer transition-colors hover:border-ring"
@@ -535,7 +604,7 @@ function CardPublicacao({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: ()
     >
       <CardContent className="space-y-2 py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={meta.variant}>{meta.label}</Badge>
+          <StatusPill status={pub.status} label={meta.label} />
           <span className="text-xs text-muted-foreground">{formatarData(pub.data_disponibilizacao)}</span>
           {pub.sigla_tribunal && (
             <span className="rounded bg-muted/60 px-1.5 py-0.5 text-xs font-medium text-foreground">
@@ -553,9 +622,16 @@ function CardPublicacao({ pub, onAbrir }: { pub: PublicacaoListItem; onAbrir: ()
         {pub.trecho && (
           <p className="line-clamp-1 text-xs text-muted-foreground/80">{pub.trecho}</p>
         )}
-        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onAbrir() }}>
-          Acessar publicação <ArrowRight className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          {naoTratada && (
+            <Button variant="secondary" size="sm" disabled={concluindo} onClick={(e) => { e.stopPropagation(); onConcluir() }}>
+              {concluindo ? <Spinner className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />} Concluir
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onAbrir() }}>
+            Acessar <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
