@@ -46,6 +46,11 @@ interface EventoModalProps {
   pessoas: Pessoa[]
   onFechar: () => void
   onSalvo: () => void
+  /**
+   * Pré-vinculação OPCIONAL ao criar (ex.: "Agendar na agenda" a partir de
+   * /conversas). Ignorada na edição; default undefined — a /agenda não muda.
+   */
+  inicial?: { clienteId?: string; clienteNome?: string }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -119,7 +124,7 @@ const STATUS_OPTS = [
   { value: 'cancelada', label: 'Cancelada' },
 ]
 
-export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo }: EventoModalProps) {
+export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo, inicial }: EventoModalProps) {
   const toast = useToast()
   const editando = !!evento
 
@@ -213,7 +218,7 @@ export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo }: Even
       envolvidos,
       visibilidade,
       process_id: evento?.processo?.id ?? null,
-      cliente_id: evento?.cliente?.id ?? null,
+      cliente_id: evento?.cliente?.id ?? (!editando ? (inicial?.clienteId ?? null) : null),
     }
 
     setSalvando(true)
@@ -452,10 +457,12 @@ export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo }: Even
             )}
           </div>
 
-          {(evento?.processo || evento?.cliente) && (
+          {(evento?.processo || evento?.cliente || (!editando && inicial?.clienteNome)) && (
             <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
               {evento?.processo && <p>Processo: {evento.processo.titulo || evento.processo.numero}</p>}
-              {evento?.cliente && <p>Cliente: {evento.cliente.nome}</p>}
+              {(evento?.cliente || (!editando && inicial?.clienteNome)) && (
+                <p>Cliente: {evento?.cliente?.nome ?? inicial?.clienteNome}</p>
+              )}
             </div>
           )}
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CheckCircle2,
   Lock,
+  PanelRightOpen,
   RotateCcw,
   Send,
   StickyNote,
@@ -12,7 +13,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import { Spinner } from '@/components/ui/spinner'
 import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
@@ -46,6 +46,7 @@ export function Thread({
   onListaMudou,
   onAgenteDesconectado,
   onFechar,
+  onAbrirContexto,
 }: {
   conversa: Conversa
   conectado: boolean
@@ -53,6 +54,8 @@ export function Thread({
   onListaMudou: () => void
   onAgenteDesconectado: () => void
   onFechar?: () => void
+  /** Abre o painel de contexto como overlay (visível só abaixo de xl). */
+  onAbrirContexto?: () => void
 }) {
   const { success, error: toastError } = useToast()
   const [mensagens, setMensagens] = useState<Mensagem[]>([])
@@ -133,6 +136,8 @@ export function Thread({
       success(notaInterna ? 'Nota interna salva' : 'Mensagem enviada')
       await carregar(true)
       onListaMudou()
+    } catch {
+      toastError('Não enviado', 'Falha de rede. Tente novamente.')
     } finally {
       setEnviando(false)
     }
@@ -153,6 +158,8 @@ export function Thread({
       }
       success('Conversa assumida')
       onListaMudou()
+    } catch {
+      toastError('Não foi possível assumir', 'Falha de rede. Tente novamente.')
     } finally {
       setAcao(null)
     }
@@ -174,6 +181,8 @@ export function Thread({
       }
       success(novo === 'resolved' ? 'Conversa resolvida' : 'Conversa reaberta')
       onListaMudou()
+    } catch {
+      toastError('Não foi possível alterar', 'Falha de rede. Tente novamente.')
     } finally {
       setAcao(null)
     }
@@ -194,36 +203,37 @@ export function Thread({
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
         <AvatarContato nome={nome} avatarUrl={conversa.contato.avatarUrl} className="h-9 w-9" />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="min-w-0 truncate font-semibold text-foreground">{nome}</h2>
-            <Badge variant={conversa.inbox === 'DF' ? 'default' : 'accent'} className="px-2 py-0 text-[11px]">
-              {conversa.inbox}
-            </Badge>
-            <Badge variant={resolvida ? 'success' : 'secondary'} className="px-2 py-0 text-[11px]">
-              {resolvida ? 'Resolvida' : 'Aberta'}
-            </Badge>
-          </div>
-          <p className="truncate text-xs text-muted-foreground">
-            {conversa.assignee ? `Responsável: ${conversa.assignee.nome}` : 'Sem responsável'}
-            {conversa.contato.nome && conversa.contato.telefone ? ` · ${conversa.contato.telefone}` : ''}
+          <h2 className="min-w-0 truncate font-semibold text-foreground">{nome}</h2>
+          <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {conversa.contato.telefone ? `${conversa.contato.telefone} · ` : ''}
+            WhatsApp · {conversa.inbox}
+            {/* No overlay (< lg) o "Responsável" do lado direito fica oculto;
+                mostra aqui para a informação existir no mobile. */}
+            {modo === 'overlay' &&
+              ` · ${conversa.assignee ? `Resp.: ${conversa.assignee.nome}` : 'Sem responsável'}`}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground lg:inline">
+            {conversa.assignee ? `Responsável: ${conversa.assignee.nome}` : 'Sem responsável'}
+          </span>
           <Button
             variant="ghost"
             size="sm"
             onClick={assumir}
             disabled={acao !== null || !conectado}
+            className="border border-border bg-transparent hover:bg-muted"
             title={conectado ? 'Assumir a conversa' : 'Conecte sua conta para assumir'}
           >
             {acao === 'assumir' ? <Spinner className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
             <span className="hidden sm:inline">Assumir</span>
           </Button>
           <Button
-            variant={resolvida ? 'secondary' : 'ghost'}
+            variant="default"
             size="sm"
             onClick={alternarStatus}
             disabled={acao !== null || !conectado}
+            className="bg-foreground text-background hover:bg-foreground/90"
             title={
               !conectado
                 ? `Conecte sua conta para ${resolvida ? 'reabrir' : 'resolver'}`
@@ -241,6 +251,18 @@ export function Thread({
             )}
             <span className="hidden sm:inline">{resolvida ? 'Reabrir' : 'Resolver'}</span>
           </Button>
+          {onAbrirContexto && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onAbrirContexto}
+              className="xl:hidden"
+              title="Contexto do contato"
+              aria-label="Abrir contexto do contato"
+            >
+              <PanelRightOpen className="h-4 w-4" />
+            </Button>
+          )}
           {modo === 'overlay' && onFechar && (
             <Button variant="ghost" size="icon" onClick={onFechar} title="Fechar" aria-label="Fechar conversa">
               <X className="h-4 w-4" />
@@ -265,7 +287,7 @@ export function Thread({
           grupos.map((g) => (
             <div key={g.dia} className="space-y-2">
               <div className="flex justify-center">
-                <span className="rounded-full bg-muted px-3 py-1 text-[11px] font-medium text-muted-foreground">
+                <span className="rounded-full border border-border bg-card px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {rotuloDia(g.dia)}
                 </span>
               </div>
@@ -278,7 +300,7 @@ export function Thread({
         <div ref={fimRef} />
       </div>
 
-      {/* Rodapé — caixa de resposta */}
+      {/* Rodapé — composer */}
       <div className="border-t border-border bg-card px-4 py-3">
         {!conectado && (
           <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -291,8 +313,8 @@ export function Thread({
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           disabled={!conectado || enviando}
-          placeholder={notaInterna ? 'Escreva uma nota interna (não vai pro WhatsApp)…' : 'Escreva uma mensagem…'}
-          className={cn('min-h-[70px]', notaInterna && 'border-warning/50 bg-warning/5')}
+          placeholder={notaInterna ? 'Escreva uma nota interna (não vai pro WhatsApp)…' : 'Digite sua mensagem...'}
+          className={cn('min-h-[70px] rounded-xl', notaInterna && 'border-warning/50 bg-warning/5')}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault()
@@ -307,7 +329,7 @@ export function Thread({
             onClick={() => setNotaInterna((v) => !v)}
             aria-pressed={notaInterna}
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
+              'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors',
               notaInterna
                 ? 'border-warning/50 bg-warning/10 text-warning'
                 : 'border-border bg-background text-muted-foreground hover:border-ring',
@@ -320,13 +342,15 @@ export function Thread({
             <span className="text-[11px] font-medium text-warning">Não vai pro WhatsApp — visível só para a equipe.</span>
           )}
 
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            <span className="hidden text-[11px] text-muted-foreground sm:inline">⌘+↵ para enviar</span>
             <Button
-              variant={notaInterna ? 'secondary' : 'default'}
+              variant="default"
               size="sm"
               onClick={enviar}
               loading={enviando}
               disabled={!conectado || !texto.trim()}
+              className="bg-foreground text-background hover:bg-foreground/90"
               title={conectado ? 'Enviar (Ctrl/Cmd+Enter)' : 'Conecte sua conta para responder'}
             >
               {!enviando && <Send className="h-4 w-4" />}

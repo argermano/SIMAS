@@ -1,8 +1,5 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
 import { Conversas } from '@/components/conversas/Conversas'
 
 export const metadata = { title: 'Conversas' }
@@ -21,24 +18,11 @@ export default async function ConversasPage() {
   if (!usuario) redirect('/login')
   if (!['admin', 'advogado'].includes(usuario.role)) redirect('/dashboard')
 
+  // Sem <Header/>: o mock coloca o título dentro da coluna da lista e as
+  // 3 colunas ocupam a área de conteúdo em altura cheia.
   return (
-    <>
-      <Header
-        titulo="Conversas"
-        subtitulo="Atendimento omnichannel (WhatsApp DF/SC) — leia as conversas e responda pela sua conta conectada."
-        acoes={
-          <Link href="/dashboard" className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
-            <ChevronLeft className="h-4 w-4" />
-            Voltar
-          </Link>
-        }
-        nomeUsuario={usuario.nome}
-      />
-      <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-6xl">
-          <Conversas email={user.email ?? ''} />
-        </div>
-      </main>
-    </>
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Conversas email={user.email ?? ''} />
+    </main>
   )
 }

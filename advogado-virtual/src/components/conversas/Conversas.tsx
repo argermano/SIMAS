@@ -1,35 +1,29 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, MessageSquare, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, MessageSquare, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useToast } from '@/components/ui/toast'
-import type { AgenteMe, Conversa, InboxNome, RespostaLista, StatusConversa } from '@/lib/conversas/tipos'
+import type { AgenteMe, Conversa, RespostaLista, StatusConversa } from '@/lib/conversas/tipos'
 import { metaTemProxima } from '@/lib/conversas/paginacao'
+import { apenasDigitos } from '@/lib/conversas/telefone'
+import type { Pessoa } from '@/lib/agenda/tipos'
+import { EventoModal } from '@/components/agenda/EventoModal'
 import { ConexaoAgente } from './ConexaoAgente'
 import { ListaConversas } from './ListaConversas'
+import { PainelContexto } from './PainelContexto'
 import { Thread } from './Thread'
 import { mensagemErroRelay } from './erros'
 
-const STATUS_OPCOES: { value: StatusConversa; label: string }[] = [
-  { value: 'open', label: 'Abertas' },
-  { value: 'resolved', label: 'Resolvidas' },
-]
-
-const INBOX_OPCOES: { value: '' | InboxNome; label: string }[] = [
-  { value: '', label: 'Todos' },
-  { value: 'DF', label: 'DF' },
-  { value: 'SC', label: 'SC' },
-]
+type FiltroChip = 'todos' | 'aguardando' | 'nao_atribuidas' | 'resolvidas'
 
 export function Conversas({ email }: { email: string }) {
   void email // e-mail (auth) é injetado server-side no header X-Simas-User-Email; aqui é só informativo.
-  const { error: toastError } = useToast()
 
-  // Filtros
+  // Filtros: chips (client-side, exceto "resolvidas" que troca o status da query)
+  const [filtroChip, setFiltroChip] = useState<FiltroChip>('todos')
   const [status, setStatus] = useState<StatusConversa>('open')
-  const [inbox, setInbox] = useState<'' | InboxNome>('')
+  const [busca, setBusca] = useState('')
   const [page, setPage] = useState(1)
 
   // Lista
@@ -39,21 +33,58 @@ export function Conversas({ email }: { email: string }) {
   const [erroLista, setErroLista] = useState<string | null>(null)
   const [selecionadaId, setSelecionadaId] = useState<number | null>(null)
 
-  // Layout responsivo (um único painel de detalhe montado por vez)
-  const [desktop, setDesktop] = useState(true)
+  // Layout responsivo (um único painel de detalhe/contexto montado por vez)
+  const [desktop, setDesktop] = useState(true) // lg: thread inline
+  const [xlUp, setXlUp] = useState(true) // xl: coluna de contexto fixa
   const [mobileAberto, setMobileAberto] = useState(false)
+  const [contextoAberto, setContextoAberto] = useState(false)
 
   // Conexão do agente
   const [agente, setAgente] = useState<AgenteMe | null>(null)
   const [loadingAgente, setLoadingAgente] = useState(true)
 
-  // Rastreia o breakpoint lg (1024px).
+  // Agendar na agenda (EventoModal da /agenda com cliente pré-vinculado)
+  const [agendaAberta, setAgendaAberta] = useState(false)
+  const [agendaCliente, setAgendaCliente] = useState<{ id: string; nome: string } | null>(null)
+  const [pessoas, setPessoas] = useState<Pessoa[] | null>(null) // null = ainda não buscadas
+
+  const buscaRef = useRef<HTMLInputElement>(null)
+
+  // Tick de 60s para os selos "AGUARDANDO X" envelhecerem com a tela aberta
+  // (recomputa os rótulos client-side, sem refetch).
+  const [agoraEpochSeg, setAgoraEpochSeg] = useState(() => Math.floor(Date.now() / 1000))
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const upd = () => setDesktop(mq.matches)
+    const t = setInterval(() => setAgoraEpochSeg(Math.floor(Date.now() / 1000)), 60_000)
+    return () => clearInterval(t)
+  }, [])
+
+  // Rastreia os breakpoints lg (1024px) e xl (1280px).
+  useEffect(() => {
+    const lg = window.matchMedia('(min-width: 1024px)')
+    const xl = window.matchMedia('(min-width: 1280px)')
+    const upd = () => {
+      setDesktop(lg.matches)
+      setXlUp(xl.matches)
+    }
     upd()
-    mq.addEventListener('change', upd)
-    return () => mq.removeEventListener('change', upd)
+    lg.addEventListener('change', upd)
+    xl.addEventListener('change', upd)
+    return () => {
+      lg.removeEventListener('change', upd)
+      xl.removeEventListener('change', upd)
+    }
+  }, [])
+
+  // ⌘K / Ctrl+K foca a busca.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        buscaRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   const carregar = useCallback(async () => {
@@ -62,7 +93,6 @@ export function Conversas({ email }: { email: string }) {
     try {
       const params = new URLSearchParams()
       params.set('status', status)
-      if (inbox) params.set('inbox', inbox)
       params.set('page', String(page))
       const r = await fetch(`/api/conversas?${params.toString()}`)
       const d = await r.json().catch(() => ({}))
@@ -81,7 +111,7 @@ export function Conversas({ email }: { email: string }) {
     } finally {
       setLoading(false)
     }
-  }, [status, inbox, page])
+  }, [status, page])
 
   const carregarAgente = useCallback(async () => {
     setLoadingAgente(true)
@@ -104,16 +134,15 @@ export function Conversas({ email }: { email: string }) {
     void carregarAgente()
   }, [carregarAgente])
 
-  function mudarStatus(s: StatusConversa) {
-    setStatus(s)
-    setPage(1)
-    setSelecionadaId(null)
-  }
-
-  function mudarInbox(i: '' | InboxNome) {
-    setInbox(i)
-    setPage(1)
-    setSelecionadaId(null)
+  function mudarChip(chip: FiltroChip) {
+    setFiltroChip(chip)
+    const novoStatus: StatusConversa = chip === 'resolvidas' ? 'resolved' : 'open'
+    if (novoStatus !== status) {
+      // "Resolvidas" (e a volta) troca o status da QUERY e recarrega.
+      setStatus(novoStatus)
+      setPage(1)
+      setSelecionadaId(null)
+    }
   }
 
   function selecionar(id: number) {
@@ -126,8 +155,41 @@ export function Conversas({ email }: { email: string }) {
     setAgente({ conectado: false })
   }
 
+  async function abrirAgenda(cliente: { id: string; nome: string } | null) {
+    setAgendaCliente(cliente)
+    setAgendaAberta(true)
+    // Pessoas do tenant só quando o modal abre pela primeira vez.
+    if (pessoas === null) {
+      try {
+        const r = await fetch('/api/agenda/pessoas')
+        const d = await r.json().catch(() => ({}))
+        setPessoas(r.ok ? ((d as { pessoas?: Pessoa[] }).pessoas ?? []) : [])
+      } catch {
+        setPessoas([])
+      }
+    }
+  }
+
   const selecionada = conversas.find((c) => c.id === selecionadaId) ?? null
   const conectado = agente?.conectado === true
+
+  // Busca client-side por nome / telefone (dígitos) / trecho da última mensagem.
+  const visiveis = useMemo(() => {
+    const t = busca.trim().toLowerCase()
+    if (!t) return conversas
+    const dig = apenasDigitos(t)
+    return conversas.filter((c) => {
+      const nome = (c.contato.nome ?? '').toLowerCase()
+      const trecho = (c.ultimaMensagem?.trecho ?? '').toLowerCase()
+      const tel = apenasDigitos(c.contato.telefone)
+      return nome.includes(t) || trecho.includes(t) || (dig.length > 0 && tel.includes(dig))
+    })
+  }, [conversas, busca])
+
+  // Contagens dos chips — da página carregada (pós-busca).
+  const nTodos = visiveis.length
+  const nAguardando = visiveis.filter((c) => c.aguardandoDesde !== null).length
+  const nNaoAtribuidas = visiveis.filter((c) => !c.assignee).length
 
   // Se o meta do relay disser que não há próxima página, desabilita "Próxima".
   // Quando o meta não traz essa info (null), cai no comportamento antigo
@@ -136,54 +198,113 @@ export function Conversas({ email }: { email: string }) {
   const proximaDesabilitada =
     loading || temProxima === false || (temProxima === null && conversas.length === 0)
 
+  const chips: { value: FiltroChip; label: string; n: number | null }[] = [
+    { value: 'todos', label: 'Todos', n: nTodos },
+    { value: 'aguardando', label: 'Aguardando', n: nAguardando },
+    { value: 'nao_atribuidas', label: 'Não atribuídas', n: nNaoAtribuidas },
+    { value: 'resolvidas', label: 'Resolvidas', n: null },
+  ]
+
   return (
-    <div className="space-y-4">
-      {/* Banner/estado de conexão da conta */}
+    <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 lg:p-6">
+      {/* Banner/estado de conexão da conta (fluxo 428 preservado) */}
       <ConexaoAgente agente={agente} loading={loadingAgente} onMudou={carregarAgente} />
 
-      {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-card">
-        <div className="inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label="Status">
-          {STATUS_OPCOES.map((o) => (
-            <FiltroBtn key={o.value} ativo={status === o.value} onClick={() => mudarStatus(o.value)}>
-              {o.label}
-            </FiltroBtn>
-          ))}
-        </div>
+      {/* 3 colunas full-height: LISTA | THREAD | CONTEXTO (xl+) */}
+      <div className="flex min-h-0 flex-1 gap-4">
+        {/* COLUNA 1 — LISTA (~330px) */}
+        <section className="flex w-full min-w-0 flex-col lg:w-[330px] lg:shrink-0">
+          {/* Cabeçalho: título + contador, subtítulo, busca ⌘K, chips */}
+          <div className="shrink-0 space-y-3 pb-3">
+            <div className="max-lg:pl-12">
+              <div className="flex items-center gap-2">
+                <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-foreground font-heading">
+                  Conversas
+                </h1>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => carregar()}
+                  title="Atualizar lista"
+                  aria-label="Atualizar lista"
+                  className="h-7 w-7"
+                >
+                  <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+                </Button>
+                <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
+                  {loading && conversas.length === 0 ? '…' : nTodos}
+                </span>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                Atendimento omnichannel · WhatsApp DF/SC
+              </p>
+            </div>
 
-        <div className="inline-flex overflow-hidden rounded-md border border-border" role="group" aria-label="Inbox">
-          {INBOX_OPCOES.map((o) => (
-            <FiltroBtn key={o.value || 'todos'} ativo={inbox === o.value} onClick={() => mudarInbox(o.value)}>
-              {o.label}
-            </FiltroBtn>
-          ))}
-        </div>
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden
+              />
+              <input
+                ref={buscaRef}
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar cliente, telefone..."
+                aria-label="Buscar conversa por nome, telefone ou trecho"
+                className="h-9 w-full rounded-full border border-input bg-background pl-9 pr-12 text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <kbd
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                aria-hidden
+              >
+                ⌘K
+              </kbd>
+            </div>
 
-        <Button variant="ghost" size="sm" onClick={() => carregar()} className="ml-auto" title="Atualizar lista">
-          <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} /> Atualizar
-        </Button>
-      </div>
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtro de conversas">
+              {chips.map((chip) => {
+                const ativo = filtroChip === chip.value
+                return (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    onClick={() => mudarChip(chip.value)}
+                    aria-pressed={ativo}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                      ativo
+                        ? 'bg-foreground text-background'
+                        : 'border border-border bg-card text-muted-foreground hover:border-ring hover:text-foreground',
+                    )}
+                  >
+                    {chip.label}
+                    {chip.n !== null && (
+                      <span className={cn('font-semibold', ativo ? 'text-background/70' : 'text-foreground/70')}>
+                        {chip.n}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
-      {/* Master-detail */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        {/* ESQUERDA — lista */}
-        <div className="min-w-0 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {loading && conversas.length === 0
-              ? 'Carregando…'
-              : `${conversas.length} conversa${conversas.length === 1 ? '' : 's'}`}
-          </p>
-
-          <ListaConversas
-            conversas={conversas}
-            loading={loading}
-            erro={erroLista}
-            selecionadaId={selecionadaId}
-            onSelecionar={selecionar}
-          />
+          {/* Lista rolável */}
+          <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+            <ListaConversas
+              conversas={visiveis}
+              loading={loading}
+              erro={erroLista}
+              selecionadaId={selecionadaId}
+              onSelecionar={selecionar}
+              filtroChip={filtroChip}
+              agoraEpochSeg={agoraEpochSeg}
+            />
+          </div>
 
           {/* Paginação */}
-          <div className="flex items-center justify-between pt-1">
+          <div className="flex shrink-0 items-center justify-between pt-2">
             <p className="text-xs text-muted-foreground">Página {page}</p>
             <div className="flex items-center gap-2">
               <Button
@@ -204,31 +325,47 @@ export function Conversas({ email }: { email: string }) {
               </Button>
             </div>
           </div>
+        </section>
+
+        {/* COLUNA 2 — THREAD (inline no desktop) */}
+        <div className="hidden min-w-0 flex-1 lg:block">
+          {selecionada && desktop ? (
+            <Thread
+              key={selecionada.id}
+              conversa={selecionada}
+              conectado={conectado}
+              modo="inline"
+              onListaMudou={carregar}
+              onAgenteDesconectado={marcarDesconectado}
+              onAbrirContexto={() => setContextoAberto(true)}
+            />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 text-center">
+              <MessageSquare className="h-9 w-9 text-muted-foreground" aria-hidden />
+              <p className="mt-3 text-sm font-medium text-foreground">Selecione uma conversa</p>
+              <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+                Escolha uma conversa à esquerda para ler o histórico e responder sem sair da tela.
+              </p>
+            </div>
+          )}
         </div>
 
-        {/* DIREITA — detalhe (inline no desktop) */}
-        <div className="hidden lg:block">
-          <div className="lg:sticky lg:top-0 lg:h-[calc(100vh-7rem)]">
-            {selecionada && desktop ? (
-              <Thread
-                key={selecionada.id}
-                conversa={selecionada}
-                conectado={conectado}
-                modo="inline"
-                onListaMudou={carregar}
-                onAgenteDesconectado={marcarDesconectado}
-              />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 text-center">
-                <MessageSquare className="h-9 w-9 text-muted-foreground" aria-hidden />
-                <p className="mt-3 text-sm font-medium text-foreground">Selecione uma conversa</p>
-                <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-                  Escolha uma conversa à esquerda para ler o histórico e responder sem sair da tela.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* COLUNA 3 — CONTEXTO (~300px, só xl+; abaixo vira overlay).
+            A guarda CSS (hidden xl:block) evita a coluna no primeiro paint do
+            mobile (SSR/pré-hydration, antes do matchMedia corrigir xlUp);
+            o {xlUp && ...} continua evitando painel duplicado com o overlay. */}
+        {xlUp && (
+          <aside className="hidden w-[300px] shrink-0 xl:block">
+            <PainelContexto
+              key={selecionada?.id ?? 'vazio'}
+              conversa={selecionada}
+              conectado={conectado}
+              onAtribuido={carregar}
+              onAgendar={abrirAgenda}
+              onAgenteDesconectado={marcarDesconectado}
+            />
+          </aside>
+        )}
       </div>
 
       {/* Overlay de detalhe no mobile (< lg) */}
@@ -241,32 +378,61 @@ export function Conversas({ email }: { email: string }) {
           onListaMudou={carregar}
           onAgenteDesconectado={marcarDesconectado}
           onFechar={() => setMobileAberto(false)}
+          onAbrirContexto={() => setContextoAberto(true)}
         />
       )}
-    </div>
-  )
-}
 
-function FiltroBtn({
-  ativo,
-  onClick,
-  children,
-}: {
-  ativo: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={ativo}
-      className={cn(
-        'inline-flex h-9 items-center px-3 text-sm font-medium transition-colors',
-        ativo ? 'bg-muted text-foreground' : 'bg-background text-muted-foreground hover:bg-muted/50',
+      {/* Overlay do CONTEXTO (< xl), aberto pelo botão do cabeçalho da thread */}
+      {!xlUp && contextoAberto && selecionada && (
+        <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Contexto da conversa">
+          <button
+            type="button"
+            className="absolute inset-0 bg-foreground/30"
+            onClick={() => setContextoAberto(false)}
+            aria-label="Fechar contexto"
+            tabIndex={-1}
+          />
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col border-l border-border bg-card shadow-card">
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
+              <p className="text-sm font-semibold text-foreground">Contexto</p>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setContextoAberto(false)}
+                title="Fechar"
+                aria-label="Fechar contexto"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <PainelContexto
+                key={`overlay-ctx-${selecionada.id}`}
+                conversa={selecionada}
+                conectado={conectado}
+                onAtribuido={carregar}
+                onAgenteDesconectado={marcarDesconectado}
+                onAgendar={(cliente) => {
+                  setContextoAberto(false)
+                  void abrirAgenda(cliente)
+                }}
+              />
+            </div>
+          </div>
+        </div>
       )}
-    >
-      {children}
-    </button>
+
+      {/* Agendar na agenda — EventoModal da /agenda com cliente pré-vinculado */}
+      <EventoModal
+        aberto={agendaAberta}
+        evento={null}
+        pessoas={pessoas ?? []}
+        inicial={
+          agendaCliente ? { clienteId: agendaCliente.id, clienteNome: agendaCliente.nome } : undefined
+        }
+        onFechar={() => setAgendaAberta(false)}
+        onSalvo={() => setAgendaAberta(false)}
+      />
+    </div>
   )
 }

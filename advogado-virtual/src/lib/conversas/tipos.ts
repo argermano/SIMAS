@@ -22,6 +22,8 @@ export interface Assignee {
 export interface UltimaMensagem {
   trecho: string
   timestamp: number
+  /** Direção da última mensagem (campo novo do relay; ausente em versões antigas). */
+  direcao?: DirecaoMensagem
 }
 
 export interface Conversa {
@@ -32,6 +34,11 @@ export interface Conversa {
   assignee: Assignee | null
   ultimaMensagem: UltimaMensagem | null
   naoLidas: number
+  /**
+   * Desde quando o CLIENTE espera resposta (epoch em segundos).
+   * null = conversa respondida ou sem mensagens de entrada pendentes.
+   */
+  aguardandoDesde: number | null
 }
 
 export interface Anexo {
@@ -68,6 +75,27 @@ export interface AgenteMe {
   agentName?: string
   status?: string
   validadoEm?: number
+}
+
+// ---------------------------------------------------------------------------
+// Contexto SIMAS da conversa (GET /api/conversas/contexto?telefone=...):
+// cliente casado por telefone + processos dele + últimas publicações.
+// ---------------------------------------------------------------------------
+
+export interface ContextoConversa {
+  cliente: { id: string; nome: string } | null
+  processos: {
+    id: string
+    numeroMascara: string | null
+    titulo: string | null
+    situacao: string | null
+  }[]
+  publicacoes: {
+    id: string
+    trecho: string
+    tribunal: string | null
+    data: string | null
+  }[]
 }
 
 export interface RespostaLista {

@@ -1,17 +1,43 @@
 'use client'
 
-import { FileText, StickyNote } from 'lucide-react'
+import { Check, FileText, Image as ImageIcon, MapPin, Mic, StickyNote, User, Video } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { horaCurta } from '@/lib/conversas/formato'
 import type { Anexo, Mensagem } from '@/lib/conversas/tipos'
 
-/** Placeholder de anexo — o proxy /attachments do relay está desligado, então
- * NÃO baixamos bytes: mostramos só ícone + tipo. */
-function AnexoPlaceholder({ anexo }: { anexo: Anexo }) {
+/** Ícone + rótulo pt-BR por tipo de anexo (file_type do Chatwoot normalizado pelo relay). */
+function infoAnexo(tipo: string): { Icone: typeof FileText; rotulo: string } {
+  switch (tipo) {
+    case 'image':
+      return { Icone: ImageIcon, rotulo: 'Imagem' }
+    case 'audio':
+      return { Icone: Mic, rotulo: 'Áudio' }
+    case 'video':
+      return { Icone: Video, rotulo: 'Vídeo' }
+    case 'location':
+      return { Icone: MapPin, rotulo: 'Localização' }
+    case 'contact':
+      return { Icone: User, rotulo: 'Contato' }
+    default:
+      return { Icone: FileText, rotulo: tipo || 'Arquivo' }
+  }
+}
+
+/** Card de anexo — o proxy /attachments do relay está desligado, então
+ * NÃO baixamos bytes: mostramos só um card com ícone por tipo + rótulo. */
+function AnexoCard({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
+  const { Icone, rotulo } = infoAnexo(anexo.tipo)
   return (
-    <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2 py-1 text-xs text-muted-foreground">
-      <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <span className="truncate">{anexo.tipo || 'anexo'}</span>
+    <div
+      className={cn(
+        'inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs',
+        escuro
+          ? 'border-background/25 bg-background/10 text-background/90 dark:border-primary-foreground/25 dark:bg-primary-foreground/10 dark:text-primary-foreground/90'
+          : 'border-border bg-background/60 text-muted-foreground',
+      )}
+    >
+      <Icone className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span className="truncate font-medium">{rotulo}</span>
     </div>
   )
 }
@@ -33,13 +59,14 @@ export function MensagemBolha({ mensagem }: { mensagem: Mensagem }) {
 
   const cliente = direcao === 'entrada'
   const alinhaDireita = !cliente // saída (agente/bot) vai à direita
+  const saidaEscura = alinhaDireita && !privada
 
-  // Estilos por natureza da bolha.
+  // Estilos por natureza da bolha (mock: entrada em muted; saída escura).
   const estilo = privada
     ? 'bg-warning/10 border border-warning/30 text-foreground'
     : cliente
       ? 'bg-muted text-foreground'
-      : 'bg-primary text-primary-foreground'
+      : 'bg-foreground text-background dark:bg-primary/90'
 
   return (
     <div className={cn('flex w-full', alinhaDireita ? 'justify-end' : 'justify-start')}>
@@ -59,23 +86,24 @@ export function MensagemBolha({ mensagem }: { mensagem: Mensagem }) {
           {sender.nome && <span className="truncate">{sender.nome}</span>}
         </div>
 
-        <div className={cn('rounded-2xl px-3 py-2 text-sm shadow-card', estilo)}>
+        <div className={cn('rounded-2xl px-3.5 py-2 text-sm shadow-card', estilo)}>
           {conteudo && <p className="whitespace-pre-wrap break-words">{conteudo}</p>}
           {anexos && anexos.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               {anexos.map((a, i) => (
-                <AnexoPlaceholder key={i} anexo={a} />
+                <AnexoCard key={i} anexo={a} escuro={saidaEscura} />
               ))}
             </div>
           )}
           {hora && (
             <div
               className={cn(
-                'mt-0.5 text-right text-[10px]',
-                privada ? 'text-muted-foreground' : cliente ? 'text-muted-foreground' : 'text-primary-foreground/70',
+                'mt-0.5 flex items-center justify-end gap-1 text-[10px]',
+                saidaEscura ? 'text-background/70 dark:text-primary-foreground/70' : 'text-muted-foreground',
               )}
             >
-              {hora}
+              <span>{hora}</span>
+              {saidaEscura && <Check className="h-3 w-3 opacity-80" aria-hidden />}
             </div>
           )}
         </div>
