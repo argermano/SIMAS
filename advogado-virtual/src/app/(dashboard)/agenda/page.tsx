@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { Header } from '@/components/layout/Header'
 import { AgendaCalendario } from '@/components/agenda/AgendaCalendario'
 import type { Pessoa } from '@/lib/agenda/tipos'
 
@@ -33,16 +32,12 @@ export default async function AgendaPage() {
 
   const pessoas = (membros ?? []) as Pessoa[]
 
+  // O cabeçalho editorial da agenda (título "Agenda." + toolbar) é renderizado
+  // pelo próprio AgendaCalendario/BarraTopo — sem o <Header> padrão do dashboard.
+  // overflow-y-auto: a página rola verticalmente (coluna direita sticky).
   return (
-    <>
-      <Header
-        titulo="Agenda"
-        subtitulo="Tarefas, eventos, prazos, audiências e consultas"
-        nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
-      />
-      <main className="flex-1 overflow-hidden">
-        <AgendaCalendario meUserId={usuario.id} pessoas={pessoas} />
-      </main>
-    </>
+    <main className="flex-1 overflow-y-auto">
+      <AgendaCalendario meUserId={usuario.id} pessoas={pessoas} />
+    </main>
   )
 }

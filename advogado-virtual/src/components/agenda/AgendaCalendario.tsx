@@ -1,11 +1,13 @@
 'use client'
 
-// Orquestrador da tela /agenda: mantém filtro + data de referência + vista,
-// busca /api/agenda no intervalo da vista e renderiza barra + grade.
+// Orquestrador da tela /agenda: mantém filtro + data de referência + vista + dia
+// selecionado, busca /api/agenda no intervalo da vista e renderiza cabeçalho,
+// grade (esquerda) e coluna de detalhes/próximos compromissos (direita, sticky).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarX2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
 import { intervaloDaVista, rotuloPeriodo, chaveDia } from '@/lib/agenda/grade'
 import type { EventoCalendario, FiltroAgenda, Vista, Pessoa } from '@/lib/agenda/tipos'
@@ -13,6 +15,8 @@ import { BarraTopo } from './BarraTopo'
 import { GradeDia } from './GradeDia'
 import { GradeSemana } from './GradeSemana'
 import { GradeMes } from './GradeMes'
+import { PainelDia } from './PainelDia'
+import { ProximosCompromissos } from './ProximosCompromissos'
 import { EventoModal, type AgendaEvento } from './EventoModal'
 
 const DIA_MS = 86_400_000
@@ -95,6 +99,7 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
   const [eventos, setEventos] = useState<EventoCalendario[]>([])
   const [carregando, setCarregando] = useState(false)
   const [modal, setModal] = useState<EstadoModal>(null)
+  const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null)
 
   const carregar = useCallback(async (f: FiltroAgenda) => {
     setCarregando(true)
@@ -130,23 +135,30 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
 
   // --- Navegação / vista ---
   function mudarVista(v: Vista) {
+    setDiaSelecionado(null)
     setFiltro(f => comIntervalo(f, v, dataRef))
   }
   function irHoje() {
     const d = refHoje()
     setDataRef(d)
+    setDiaSelecionado(null)
     setFiltro(f => comIntervalo(f, f.vista, d))
   }
   function navegar(dir: number) {
     const d = deslocar(dataRef, filtro.vista, dir)
     setDataRef(d)
+    setDiaSelecionado(null)
     setFiltro(f => comIntervalo(f, f.vista, d))
   }
 
   // --- Filtros ---
   const aplicarFiltro = (patch: Partial<FiltroAgenda>) => setFiltro(f => ({ ...f, ...patch }))
-  const aplicarTags = (tags: string[]) => setFiltro(f => ({ ...f, tags }))
   const buscar = (q: string) => setFiltro(f => ({ ...f, q }))
+
+  // --- Seleção de dia (painel direito) ---
+  function selecionarDia(diaISO: string) {
+    setDiaSelecionado(prev => (prev && chaveDia(prev) === chaveDia(diaISO) ? null : diaISO))
+  }
 
   // --- Itens ---
   function aoClicarItem(ev: EventoCalendario) {
@@ -165,7 +177,7 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
   const rotulo = rotuloPeriodo(filtro.vista, dataRef)
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex min-h-full flex-col">
       <BarraTopo
         vista={filtro.vista}
         onVista={mudarVista}
@@ -173,33 +185,75 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
         filtro={filtro}
         pessoas={pessoas}
         onAplicarFiltro={aplicarFiltro}
-        onAplicarTags={aplicarTags}
         onBusca={buscar}
         onHoje={irHoje}
         onPrev={() => navegar(-1)}
         onProx={() => navegar(1)}
-        onAtualizar={() => carregar(filtro)}
         onNovo={() => setModal({ modo: 'novo' })}
         carregando={carregando}
       />
 
-      <div className="relative min-h-0 flex-1 overflow-hidden p-4">
-        {eventos.length === 0 && !carregando && (
-          <div className="pointer-events-none absolute inset-x-0 top-6 z-10 flex justify-center text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-2 rounded-full bg-card/90 px-3 py-1 shadow-sm">
-              <CalendarX2 className="h-4 w-4" /> Nenhum item neste período
-            </span>
+      <div className="grid flex-1 items-start gap-4 p-4 sm:p-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+        {/* Grade (esquerda) */}
+        <div className="relative min-w-0">
+          {eventos.length === 0 && !carregando && (
+            <div className="pointer-events-none absolute inset-x-0 top-6 z-10 flex justify-center text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-2 rounded-full bg-card/90 px-3 py-1 shadow-sm">
+                <CalendarX2 className="h-4 w-4" /> Nenhum item neste período
+              </span>
+            </div>
+          )}
+          <div
+            className={cn(
+              'grid',
+              filtro.vista === 'mes'
+                ? 'min-h-[40rem]'
+                : 'h-[calc(100vh-16rem)] min-h-[28rem]',
+            )}
+          >
+            {filtro.vista === 'dia' && (
+              <GradeDia
+                dataRef={dataRef}
+                eventos={eventos}
+                meUserId={meUserId}
+                onItemClick={aoClicarItem}
+                diaSelecionado={diaSelecionado}
+                onSelecionarDia={selecionarDia}
+              />
+            )}
+            {filtro.vista === 'semana' && (
+              <GradeSemana
+                dataRef={dataRef}
+                eventos={eventos}
+                meUserId={meUserId}
+                onItemClick={aoClicarItem}
+                diaSelecionado={diaSelecionado}
+                onSelecionarDia={selecionarDia}
+              />
+            )}
+            {filtro.vista === 'mes' && (
+              <GradeMes
+                dataRef={dataRef}
+                eventos={eventos}
+                meUserId={meUserId}
+                onItemClick={aoClicarItem}
+                diaSelecionado={diaSelecionado}
+                onSelecionarDia={selecionarDia}
+              />
+            )}
           </div>
-        )}
-        {filtro.vista === 'dia' && (
-          <GradeDia dataRef={dataRef} eventos={eventos} meUserId={meUserId} onItemClick={aoClicarItem} />
-        )}
-        {filtro.vista === 'semana' && (
-          <GradeSemana dataRef={dataRef} eventos={eventos} meUserId={meUserId} onItemClick={aoClicarItem} />
-        )}
-        {filtro.vista === 'mes' && (
-          <GradeMes dataRef={dataRef} eventos={eventos} meUserId={meUserId} onItemClick={aoClicarItem} />
-        )}
+        </div>
+
+        {/* Coluna direita (sticky em xl+; empilha abaixo no mobile) */}
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-4">
+          <PainelDia
+            dia={diaSelecionado}
+            eventos={eventos}
+            onAbrir={aoClicarItem}
+            onLimpar={() => setDiaSelecionado(null)}
+          />
+          <ProximosCompromissos eventos={eventos} onAbrir={aoClicarItem} />
+        </aside>
       </div>
 
       <EventoModal

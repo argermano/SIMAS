@@ -1,10 +1,12 @@
 'use client'
 
-// Chip/barra de um item do calendário. Consome EventoCalendario de @/lib/agenda/tipos.
+// Pílula pastel de um item do calendário (redesign /agenda): ícone do tipo +
+// título truncado, cores de TIPO_META, riscado quando concluída/cancelada.
 // Também exporta helpers de horário em America/Sao_Paulo reaproveitados pelas grades.
 
 import { cn, iniciais } from '@/lib/utils'
 import type { EventoCalendario } from '@/lib/agenda/tipos'
+import { TIPO_META } from './tipoMeta'
 
 const _fmtHora = new Intl.DateTimeFormat('pt-BR', {
   timeZone: 'America/Sao_Paulo',
@@ -45,31 +47,30 @@ interface ItemAgendaProps {
 export function ItemAgenda({ evento, meUserId, onClick, mostrarHora, className }: ItemAgendaProps) {
   const encerrado = evento.status === 'concluida' || evento.status === 'cancelada'
   const rotulo = rotuloResponsavel(evento, meUserId)
-  const cor = evento.cor || '#6b7280'
+  const meta = TIPO_META[evento.fonte]
+  const Icone = meta.Icone
 
   return (
     <button
       type="button"
-      onClick={() => onClick(evento)}
-      title={evento.titulo}
+      onClick={e => {
+        e.stopPropagation()
+        onClick(evento)
+      }}
+      title={`${meta.rotulo} · ${evento.titulo}`}
       className={cn(
-        'group flex w-full items-center gap-1 overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-left text-xs transition-colors hover:brightness-95',
+        'group flex w-full items-center gap-1 overflow-hidden rounded-md px-1.5 py-1 text-left text-xs font-medium transition-opacity hover:opacity-80',
+        meta.pill,
+        encerrado && 'opacity-70',
         className,
       )}
-      style={{ borderLeftColor: cor, backgroundColor: `${cor}1f` }}
     >
+      <Icone className="h-3 w-3 shrink-0" aria-hidden="true" />
       {mostrarHora && !evento.diaTodo && (
-        <span className="shrink-0 font-medium tabular-nums text-muted-foreground">
-          {horaLabelSP(evento.inicio)}
-        </span>
+        <span className="shrink-0 tabular-nums">{horaLabelSP(evento.inicio)}</span>
       )}
-      <span
-        className={cn(
-          'min-w-0 flex-1 truncate text-foreground',
-          encerrado && 'text-muted-foreground line-through',
-        )}
-      >
-        {rotulo && <span className="font-semibold">{rotulo} - </span>}
+      <span className={cn('min-w-0 flex-1 truncate', encerrado && 'line-through')}>
+        {rotulo && <span className="font-semibold">{rotulo} · </span>}
         {evento.titulo}
       </span>
     </button>

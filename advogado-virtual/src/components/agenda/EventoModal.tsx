@@ -16,6 +16,7 @@ import type {
   StatusItem,
   Visibilidade,
 } from '@/lib/agenda/tipos'
+import { TIPO_META } from './tipoMeta'
 
 /**
  * Registro editável de um agenda_evento (fonte 'evento'/'prazo'/'audiencia').
@@ -102,8 +103,9 @@ function dataSPparaISO(data: string, fimDoDia: boolean): string {
   return fimDoDia ? paredeSPparaISO(y, mo, da, 23, 59) : paredeSPparaISO(y, mo, da, 0, 0)
 }
 
+// A fonte 'evento' é ROTULADA "Reunião" no UI; o valor interno/DB continua 'evento'.
 const TIPO_OPTS = [
-  { value: 'evento', label: 'Evento' },
+  { value: 'evento', label: 'Reunião' },
   { value: 'prazo', label: 'Prazo' },
   { value: 'audiencia', label: 'Audiência' },
 ]
@@ -291,29 +293,60 @@ export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo }: Even
                 variant="danger"
                 size="md"
                 onClick={() => setConfirmarExcluir(true)}
-                className="mr-auto"
+                className="mr-auto rounded-full"
                 disabled={salvando}
               >
                 <Trash2 className="h-4 w-4" />
                 Excluir
               </Button>
             )}
-            <Button type="button" variant="secondary" size="md" onClick={onFechar} disabled={salvando}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={onFechar}
+              disabled={salvando}
+              className="rounded-full"
+            >
               Cancelar
             </Button>
-            <Button type="button" variant="default" size="md" onClick={salvar} loading={salvando}>
+            <Button
+              type="button"
+              variant="default"
+              size="md"
+              onClick={salvar}
+              loading={salvando}
+              className="rounded-full bg-foreground text-background hover:bg-foreground/90"
+            >
               Salvar
             </Button>
           </>
         }
       >
         <div className="space-y-4">
-          <Select
-            label="Tipo"
-            options={TIPO_OPTS}
-            value={tipo}
-            onChange={e => setTipo(e.target.value as AgendaEvento['tipo'])}
-          />
+          <div className="flex items-end gap-3">
+            <Select
+              label="Tipo"
+              options={TIPO_OPTS}
+              value={tipo}
+              onChange={e => setTipo(e.target.value as AgendaEvento['tipo'])}
+            />
+            {(() => {
+              const meta = TIPO_META[tipo]
+              return (
+                <span
+                  className={cn(
+                    'inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-medium',
+                    meta.pill
+                  )}
+                  aria-hidden
+                >
+                  <meta.Icone className="h-4 w-4" />
+                  {meta.rotulo}
+                </span>
+              )
+            })()}
+          </div>
 
           <Input
             label="Título"
@@ -359,7 +392,7 @@ export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo }: Even
                 type={diaTodo ? 'date' : 'datetime-local'}
                 value={inicio}
                 onChange={e => setInicio(e.target.value)}
-                className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent"
               />
             </div>
             <div className="w-full space-y-1.5">
@@ -368,7 +401,7 @@ export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo }: Even
                 type={diaTodo ? 'date' : 'datetime-local'}
                 value={fim}
                 onChange={e => setFim(e.target.value)}
-                className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-transparent"
               />
             </div>
           </div>
@@ -392,7 +425,7 @@ export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo }: Even
             {pessoas.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem pessoas disponíveis</p>
             ) : (
-              <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-input p-1">
+              <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-lg border border-input p-1">
                 {pessoas.map(p => {
                   const marcado = envolvidos.includes(p.id)
                   return (
@@ -420,7 +453,7 @@ export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo }: Even
           </div>
 
           {(evento?.processo || evento?.cliente) && (
-            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
               {evento?.processo && <p>Processo: {evento.processo.titulo || evento.processo.numero}</p>}
               {evento?.cliente && <p>Cliente: {evento.cliente.nome}</p>}
             </div>
