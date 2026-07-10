@@ -102,13 +102,13 @@ export function Thread({
     void carregar()
   }, [carregar])
 
-  // Atualização automática da conversa aberta: revalida em silêncio a cada 7s
+  // Atualização automática da conversa aberta: revalida em silêncio a cada 3s
   // (aba visível). Não mexe no composer (estado separado) e o auto-scroll abaixo
   // só dispara quando chega mensagem NOVA — ler histórico não é interrompido.
   useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState === 'visible') void carregar(true)
-    }, 7_000)
+    }, 3_000)
     return () => clearInterval(id)
   }, [carregar])
 

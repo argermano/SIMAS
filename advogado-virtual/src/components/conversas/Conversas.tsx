@@ -141,13 +141,13 @@ export function Conversas({ email }: { email: string }) {
   }, [carregar])
 
   // Atualização automática (pedido do dono, 2026-07-10): a lista se revalida em
-  // silêncio a cada 15s com a aba visível, e imediatamente quando a aba volta ao
+  // silêncio a cada 10s com a aba visível, e imediatamente quando a aba volta ao
   // foco. Sem piscar (silencioso) e sem custo com a aba em segundo plano.
   useEffect(() => {
     const tick = () => {
       if (document.visibilityState === 'visible') void carregar(true)
     }
-    const id = setInterval(tick, 15_000)
+    const id = setInterval(tick, 10_000)
     document.addEventListener('visibilitychange', tick)
     return () => {
       clearInterval(id)
