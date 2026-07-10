@@ -4,6 +4,11 @@ import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import {
+  conviteAposMutacao,
+  carregarDadosConvite,
+  enviarConviteEvento,
+} from '@/lib/agenda/convites'
+import {
   PAPEIS_AGENDA,
   schemaEditar,
   COLUNAS_EVENTO,
@@ -104,6 +109,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     metadata: { campos: Object.keys(campos), envolvidosAlterados: envolvidos !== undefined },
   })
 
+  // Convite ICS atualizado (SEQUENCE incrementado) — best-effort; nunca falha a rota.
+  await conviteAposMutacao(supabase, {
+    tenantId: usuario.tenant_id,
+    eventoId: id,
+    metodo: 'REQUEST',
+    incrementarSequence: true,
+  })
+
   return NextResponse.json({ evento })
 }
 
@@ -120,6 +133,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const guard = await carregarEEditavel(supabase, id, usuario)
   if (!guard.ok) return guard.response
 
+  // Snapshot ANTES do delete (a linha some) p/ mandar o CANCEL depois.
+  const convite = await carregarDadosConvite(supabase, usuario.tenant_id, id)
+
   const { error } = await supabase
     .from('agenda_eventos')
     .delete()
@@ -134,6 +150,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     resourceType: 'agenda_evento',
     resourceId: id,
   })
+
+  // CANCEL aos participantes (best-effort; nunca falha a rota).
+  if (convite && convite.participantes.length > 0) {
+    await enviarConviteEvento({
+      evento: convite.evento,
+      participantes: convite.participantes,
+      metodo: 'CANCEL',
+      sequence: convite.sequence + 1,
+    })
+  }
 
   return NextResponse.json({ ok: true })
 }

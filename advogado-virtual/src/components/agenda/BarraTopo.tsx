@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import {
   Scale, ChevronLeft, ChevronRight, Plus, Search, X, Filter, Loader2,
+  CalendarPlus, MapPin,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
@@ -33,13 +34,17 @@ interface BarraTopoProps {
   onPrev: () => void
   onProx: () => void
   onNovo: () => void
+  /** Abre o modal do feed ICS ("Conectar ao meu calendário"). */
+  onFeed: () => void
+  /** Abre o modal de presenças — só passado para admin/advogado. */
+  onPresencas?: () => void
   carregando?: boolean
 }
 
 export function BarraTopo({
   vista, onVista, rotulo, filtro, pessoas,
   onAplicarFiltro, onBusca,
-  onHoje, onPrev, onProx, onNovo, carregando,
+  onHoje, onPrev, onProx, onNovo, onFeed, onPresencas, carregando,
 }: BarraTopoProps) {
   const [filtrosAbertos, setFiltrosAbertos] = useState(false)
 
@@ -189,6 +194,30 @@ export function BarraTopo({
             onFechar={() => setFiltrosAbertos(false)}
           />
         </div>
+
+        <button
+          type="button"
+          onClick={onFeed}
+          title="Conectar ao meu calendário"
+          className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <CalendarPlus className="h-4 w-4" aria-hidden />
+          <span className="hidden md:inline">Conectar ao meu calendário</span>
+          <span className="sr-only md:hidden">Conectar ao meu calendário</span>
+        </button>
+
+        {onPresencas && (
+          <button
+            type="button"
+            onClick={onPresencas}
+            title="Presenças"
+            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <MapPin className="h-4 w-4" aria-hidden />
+            <span className="hidden md:inline">Presenças</span>
+            <span className="sr-only md:hidden">Presenças</span>
+          </button>
+        )}
 
         <div className="flex flex-wrap items-center gap-1.5">
           {ORDEM_CHIPS.map(f => {

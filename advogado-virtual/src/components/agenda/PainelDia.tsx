@@ -6,7 +6,8 @@
 import { CalendarDays, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { EventoCalendario } from '@/lib/agenda/tipos'
-import { mesmoDia } from '@/lib/agenda/grade'
+import { mesmoDia, chaveDia } from '@/lib/agenda/grade'
+import { ROTULO_UNIDADE, type UnidadePresenca } from '@/lib/agenda/presenca'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { TIPO_META } from './tipoMeta'
 
@@ -40,9 +41,14 @@ interface PainelDiaProps {
   eventos: EventoCalendario[]
   onAbrir: (ev: EventoCalendario) => void
   onLimpar: () => void
+  /** Presenças no intervalo (com nome resolvido) — chip "📍 <nome> em <unidade>". */
+  presencas?: { data: string; unidade: UnidadePresenca; nome: string }[]
 }
 
-export function PainelDia({ dia, eventos, onAbrir, onLimpar }: PainelDiaProps) {
+export function PainelDia({ dia, eventos, onAbrir, onLimpar, presencas }: PainelDiaProps) {
+  const presencasDoDia = dia
+    ? (presencas ?? []).filter((p) => p.data.slice(0, 10) === chaveDia(dia))
+    : []
   const doDia = dia
     ? eventos
         .filter((ev) => mesmoDia(ev.inicio, dia))
@@ -81,6 +87,20 @@ export function PainelDia({ dia, eventos, onAbrir, onLimpar }: PainelDiaProps) {
             <p className="text-sm font-semibold text-card-foreground">
               {dataExtenso(dia)}
             </p>
+
+            {presencasDoDia.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {presencasDoDia.map((p) => (
+                  <span
+                    key={`${p.data}-${p.nome}-${p.unidade}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-medium text-foreground"
+                  >
+                    <span aria-hidden>📍</span>
+                    {p.nome} em {ROTULO_UNIDADE[p.unidade]}
+                  </span>
+                ))}
+              </div>
+            )}
 
             {doDia.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhum item neste dia.</p>

@@ -22,22 +22,29 @@ export default async function AgendaPage() {
   if (!usuario) redirect('/login')
   if (!ROLES_PERMITIDOS.includes(usuario.role)) redirect('/dashboard')
 
-  // Pessoas do tenant (para o filtro Pessoas e o EventoModal).
+  // Pessoas do tenant (para o filtro Pessoas, o EventoModal e o PresencasModal).
   const { data: membros } = await supabase
     .from('users')
-    .select('id, nome')
+    .select('id, nome, is_advogado_principal')
     .eq('tenant_id', usuario.tenant_id)
     .eq('status', 'ativo')
     .order('nome')
 
-  const pessoas = (membros ?? []) as Pessoa[]
+  const pessoas: Pessoa[] = (membros ?? []).map(m => ({ id: m.id, nome: m.nome }))
+  const advogadaPrincipalId =
+    (membros ?? []).find(m => m.is_advogado_principal)?.id ?? null
 
   // O cabeçalho editorial da agenda (título "Agenda." + toolbar) é renderizado
   // pelo próprio AgendaCalendario/BarraTopo — sem o <Header> padrão do dashboard.
   // overflow-y-auto: a página rola verticalmente (coluna direita sticky).
   return (
     <main className="flex-1 overflow-y-auto">
-      <AgendaCalendario meUserId={usuario.id} pessoas={pessoas} />
+      <AgendaCalendario
+        meUserId={usuario.id}
+        pessoas={pessoas}
+        papel={usuario.role}
+        advogadaPrincipalId={advogadaPrincipalId}
+      />
     </main>
   )
 }

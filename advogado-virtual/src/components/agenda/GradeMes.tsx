@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { semanasDoMes, chaveDia } from '@/lib/agenda/grade'
 import type { EventoCalendario } from '@/lib/agenda/tipos'
+import { ROTULO_UNIDADE, type UnidadePresenca } from '@/lib/agenda/presenca'
 import { ItemAgenda } from './ItemAgenda'
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
@@ -22,6 +23,8 @@ interface GradeMesProps {
   onSelecionarDia?: (diaISO: string) => void
   /** Dia selecionado (ISO início de dia) — highlight sutil. */
   diaSelecionado?: string | null
+  /** Presenças no intervalo — etiqueta discreta 📍 na célula do dia. */
+  presencas?: { data: string; unidade: UnidadePresenca }[]
 }
 
 function ordenar(a: EventoCalendario, b: EventoCalendario): number {
@@ -36,6 +39,7 @@ export function GradeMes({
   onItemClick,
   onSelecionarDia,
   diaSelecionado,
+  presencas,
 }: GradeMesProps) {
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set())
 
@@ -55,6 +59,18 @@ export function GradeMes({
     for (const lista of mapa.values()) lista.sort(ordenar)
     return mapa
   }, [eventos])
+
+  // Unidades com presença por dia (dedup) — para a etiqueta 📍 discreta.
+  const presencaPorDia = useMemo(() => {
+    const mapa = new Map<string, UnidadePresenca[]>()
+    for (const p of presencas ?? []) {
+      const k = p.data.slice(0, 10)
+      const lista = mapa.get(k)
+      if (!lista) mapa.set(k, [p.unidade])
+      else if (!lista.includes(p.unidade)) lista.push(p.unidade)
+    }
+    return mapa
+  }, [presencas])
 
   function alternar(k: string) {
     setExpandidos(prev => {
@@ -98,6 +114,7 @@ export function GradeMes({
                     const selecionado = k === selKey
                     const numero = Number(k.slice(8, 10))
                     const lista = porDia.get(k) ?? []
+                    const unidadesDia = presencaPorDia.get(k)
                     const aberto = expandidos.has(k)
                     const visiveis = aberto ? lista : lista.slice(0, MAX_VISIVEL)
                     const restantes = lista.length - visiveis.length
@@ -131,11 +148,22 @@ export function GradeMes({
                           >
                             {numero}
                           </button>
-                          {lista.length > 0 && (
-                            <span className="pt-1 text-[11px] tabular-nums text-muted-foreground">
-                              {lista.length}
-                            </span>
-                          )}
+                          <span className="flex items-center gap-1 pt-1">
+                            {unidadesDia && (
+                              <span
+                                className="text-[10px] leading-none opacity-80"
+                                title={`Presença: ${unidadesDia.map(u => ROTULO_UNIDADE[u]).join(' · ')}`}
+                                aria-label={`Presença: ${unidadesDia.map(u => ROTULO_UNIDADE[u]).join(' e ')}`}
+                              >
+                                📍
+                              </span>
+                            )}
+                            {lista.length > 0 && (
+                              <span className="text-[11px] tabular-nums text-muted-foreground">
+                                {lista.length}
+                              </span>
+                            )}
+                          </span>
                         </div>
 
                         <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">

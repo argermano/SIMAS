@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
+import { conviteAposMutacao } from '@/lib/agenda/convites'
 import { PAPEIS_AGENDA, schemaStatus, COLUNAS_EVENTO } from '../../_lib'
 
 // POST /api/agenda/eventos/[id]/status — concluir / cancelar / reabrir.
@@ -60,6 +61,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     resourceId: id,
     metadata: { acao, status: patch.status },
   })
+
+  // Convite ICS best-effort: cancelar => CANCEL; reabrir => REQUEST (restaura
+  // o compromisso no calendário de quem recebeu o CANCEL). Concluir não envia.
+  if (acao === 'cancelar' || acao === 'reabrir') {
+    await conviteAposMutacao(supabase, {
+      tenantId: usuario.tenant_id,
+      eventoId: id,
+      metodo: acao === 'cancelar' ? 'CANCEL' : 'REQUEST',
+      incrementarSequence: true,
+    })
+  }
 
   return NextResponse.json({ evento })
 }

@@ -4,7 +4,7 @@
 // selecionado, busca /api/agenda no intervalo da vista e renderiza cabeçalho,
 // grade (esquerda) e coluna de detalhes/próximos compromissos (direita, sticky).
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarX2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -18,6 +18,8 @@ import { GradeMes } from './GradeMes'
 import { PainelDia } from './PainelDia'
 import { ProximosCompromissos } from './ProximosCompromissos'
 import { EventoModal, type AgendaEvento } from './EventoModal'
+import { FeedModal } from './FeedModal'
+import { PresencasModal, type PresencaDia } from './PresencasModal'
 
 const DIA_MS = 86_400_000
 
@@ -88,9 +90,15 @@ type EstadoModal =
 interface AgendaCalendarioProps {
   meUserId: string
   pessoas: Pessoa[]
+  /** Papel do usuário logado ('admin' | 'advogado' | 'colaborador') — habilita "Presenças". */
+  papel: string
+  /** Advogada principal do tenant (default do seletor de presenças). */
+  advogadaPrincipalId?: string | null
 }
 
-export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
+export function AgendaCalendario({
+  meUserId, pessoas, papel, advogadaPrincipalId,
+}: AgendaCalendarioProps) {
   const router = useRouter()
   const { error: toastErro } = useToast()
 
@@ -100,6 +108,11 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
   const [carregando, setCarregando] = useState(false)
   const [modal, setModal] = useState<EstadoModal>(null)
   const [diaSelecionado, setDiaSelecionado] = useState<string | null>(null)
+  const [feedAberto, setFeedAberto] = useState(false)
+  const [presencasAberto, setPresencasAberto] = useState(false)
+  const [presencas, setPresencas] = useState<PresencaDia[]>([])
+
+  const podePresencas = papel === 'admin' || papel === 'advogado'
 
   const carregar = useCallback(async (f: FiltroAgenda) => {
     setCarregando(true)
@@ -132,6 +145,44 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
     const t = setTimeout(() => { void carregar(filtroRef.current) }, 250)
     return () => clearTimeout(t)
   }, [filtro, carregar])
+
+  // Presenças do intervalo visível (best-effort: falha não interrompe a agenda).
+  const carregarPresencas = useCallback(async () => {
+    const f = filtroRef.current
+    if (!f.de || !f.ate) return
+    try {
+      const params = new URLSearchParams({ de: chaveDia(f.de), ate: chaveDia(f.ate) })
+      const res = await fetch(`/api/agenda/presencas?${params.toString()}`)
+      if (!res.ok) return
+      const dados = (await res.json()) as { presencas?: Array<Record<string, unknown>> }
+      const lista: PresencaDia[] = []
+      for (const p of dados.presencas ?? []) {
+        const userId = typeof p.userId === 'string' ? p.userId : typeof p.user_id === 'string' ? p.user_id : null
+        const data = typeof p.data === 'string' ? p.data.slice(0, 10) : null
+        const unidade = p.unidade as PresencaDia['unidade']
+        if (!userId || !data || !unidade) continue
+        lista.push({
+          userId,
+          data,
+          unidade,
+          observacao: typeof p.observacao === 'string' ? p.observacao : null,
+        })
+      }
+      setPresencas(lista)
+    } catch {
+      // silencioso — presença é informação acessória na grade
+    }
+  }, [])
+
+  useEffect(() => {
+    void carregarPresencas()
+  }, [filtro.de, filtro.ate, carregarPresencas])
+
+  // Nome das pessoas para o chip de presença do PainelDia.
+  const presencasComNome = useMemo(() => {
+    const nomePorId = new Map(pessoas.map(p => [p.id, p.nome]))
+    return presencas.map(p => ({ ...p, nome: nomePorId.get(p.userId) ?? 'Equipe' }))
+  }, [presencas, pessoas])
 
   // --- Navegação / vista ---
   function mudarVista(v: Vista) {
@@ -190,6 +241,8 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
         onPrev={() => navegar(-1)}
         onProx={() => navegar(1)}
         onNovo={() => setModal({ modo: 'novo' })}
+        onFeed={() => setFeedAberto(true)}
+        onPresencas={podePresencas ? () => setPresencasAberto(true) : undefined}
         carregando={carregando}
       />
 
@@ -239,6 +292,7 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
                 onItemClick={aoClicarItem}
                 diaSelecionado={diaSelecionado}
                 onSelecionarDia={selecionarDia}
+                presencas={presencas}
               />
             )}
           </div>
@@ -251,6 +305,7 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
             eventos={eventos}
             onAbrir={aoClicarItem}
             onLimpar={() => setDiaSelecionado(null)}
+            presencas={presencasComNome}
           />
           <ProximosCompromissos eventos={eventos} onAbrir={aoClicarItem} />
         </aside>
@@ -263,6 +318,18 @@ export function AgendaCalendario({ meUserId, pessoas }: AgendaCalendarioProps) {
         onFechar={() => setModal(null)}
         onSalvo={aoSalvarEvento}
       />
+
+      <FeedModal aberto={feedAberto} onFechar={() => setFeedAberto(false)} />
+
+      {podePresencas && (
+        <PresencasModal
+          aberto={presencasAberto}
+          onFechar={() => setPresencasAberto(false)}
+          pessoas={pessoas}
+          defaultUserId={advogadaPrincipalId ?? meUserId}
+          onAlterado={() => void carregarPresencas()}
+        />
+      )}
     </div>
   )
 }

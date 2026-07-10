@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
+import { conviteAposMutacao } from '@/lib/agenda/convites'
 import {
   PAPEIS_AGENDA,
   schemaCriar,
@@ -72,6 +73,13 @@ export async function POST(req: Request) {
     resourceType: 'agenda_evento',
     resourceId: evento.id,
     metadata: { tipo: d.tipo, visibilidade: d.visibilidade },
+  })
+
+  // Convite ICS por e-mail a responsável+envolvidos (best-effort; nunca falha a rota).
+  await conviteAposMutacao(supabase, {
+    tenantId: usuario.tenant_id,
+    eventoId: evento.id,
+    metodo: 'REQUEST',
   })
 
   return NextResponse.json({ evento }, { status: 201 })
