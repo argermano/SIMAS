@@ -280,21 +280,38 @@ async function consultarPorOab(
       `${DJEN_BASE}?numeroOab=${encodeURIComponent(numeroOab)}&ufOab=${encodeURIComponent(ufOab)}` +
       `&dataDisponibilizacaoInicio=${inicio}&dataDisponibilizacaoFim=${fim}` +
       `&itensPorPagina=1000&pagina=${pagina}`
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), 10_000)
-    try {
-      const res = await fetch(url, { signal: ctrl.signal })
-      if (!res.ok) throw new Error(`DJEN HTTP ${res.status}`)
-      const data = await res.json()
-      const raws = (data?.items as Array<Record<string, unknown>>) ?? []
-      for (const r of raws) {
-        const p = parseItemDjen(r)
-        if (p) itens.push(p)
+    // Retry com backoff para erro TRANSITÓRIO (403 do WAF — visto em produção
+    // 2026-07-10 bloqueando o IP da Vercel por minutos —, 429, 5xx, timeout/rede).
+    // Em 4xx "de verdade" (400/404) lança direto: retry não conserta request ruim.
+    let raws: Array<Record<string, unknown>> | null = null
+    for (let tentativa = 1; tentativa <= 3; tentativa++) {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 10_000)
+      try {
+        const res = await fetch(url, { signal: ctrl.signal })
+        if (!res.ok) {
+          const transitorio = res.status === 403 || res.status === 429 || res.status >= 500
+          if (!transitorio || tentativa === 3) throw new Error(`DJEN HTTP ${res.status}`)
+        } else {
+          const data = await res.json()
+          raws = (data?.items as Array<Record<string, unknown>>) ?? []
+          break
+        }
+      } catch (e) {
+        // Timeout/rede também é transitório; na 3ª tentativa propaga (o chamador
+        // registra 'falha' na auditoria e a marca d'água NÃO avança — recobre depois).
+        if (tentativa === 3) throw e
+      } finally {
+        clearTimeout(timer)
       }
-      if (raws.length < 1000) return { itens, completo: true } // última página
-    } finally {
-      clearTimeout(timer)
+      if (Date.now() + 5_000 * tentativa > deadline) throw new Error('DJEN sem tempo para retry')
+      await sleep(5_000 * tentativa) // 5s, 10s
     }
+    for (const r of raws ?? []) {
+      const p = parseItemDjen(r)
+      if (p) itens.push(p)
+    }
+    if ((raws ?? []).length < 1000) return { itens, completo: true } // última página
     await sleep(RATE_DELAY_MS)
   }
   return { itens, completo: false } // estourou o teto de páginas

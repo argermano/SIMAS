@@ -10,6 +10,7 @@ import { cn, formatarData } from '@/lib/utils'
 import {
   AlignJustify,
   ArrowRight,
+  CalendarDays,
   Check,
   CheckCircle2,
   ChevronLeft,
@@ -721,12 +722,10 @@ function CardPublicacao({
   const pv = pub.processoVinculado
   const compacto = densidade === 'compacto'
 
-  // "TRIBUNAL · órgão · Divulgado DD/MM/AAAA"
-  const meta = [
-    pub.sigla_tribunal,
-    pub.orgao_julgador,
-    `Divulgado ${formatarData(pub.data_disponibilizacao)}`,
-  ].filter(Boolean).join(' · ')
+  // "TRIBUNAL · órgão" (a DATA sai desta linha apagada: ganhou destaque próprio
+  // na linha 1 do card, a pedido do dono — é o 1º critério de triagem).
+  const meta = [pub.sigla_tribunal, pub.orgao_julgador].filter(Boolean).join(' · ')
+  const dataDivulgacao = formatarData(pub.data_disponibilizacao)
 
   return (
     <article
@@ -753,8 +752,17 @@ function CardPublicacao({
         </span>
 
         <div className="min-w-0 flex-1">
-          {/* Linha 1: prioridade + tipo + status */}
+          {/* Linha 1: DATA em destaque + prioridade + tipo + status */}
           <div className="flex items-center gap-2">
+            {dataDivulgacao && (
+              <span
+                className="inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs font-bold tabular-nums text-foreground"
+                title={`Divulgado em ${dataDivulgacao}`}
+              >
+                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                {dataDivulgacao}
+              </span>
+            )}
             <PrioridadeBadge nivel={prioridade} />
             {tipo && <span className="truncate text-xs font-medium text-muted-foreground">{tipo}</span>}
             <StatusPill status={pub.status} className="ml-auto shrink-0" />
