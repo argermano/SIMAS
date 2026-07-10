@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger'
 import { sincronizarProcessos } from '@/lib/processos/sync'
 import { sincronizarPublicacoesDjen } from '@/lib/processos/djen'
 import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
+import { rodarSentinela, type SentinelaResultado } from '@/lib/processos/sentinela'
 
 export const maxDuration = 60
 
@@ -12,6 +13,10 @@ export const maxDuration = 60
 // confirma presença (→ consulta realizada) ou não (→ novo lead). Fail-closed
 // por CRON_SECRET (a Vercel injeta o Bearer automaticamente).
 export async function GET(req: Request) {
+  // Âncora do orçamento de tempo do handler: os deadlines somados (30s sync +
+  // 18s DJEN + 8s sentinela) encostam no maxDuration=60 — a última etapa nunca
+  // pode passar de t0+55s ou a Vercel mata a função no meio.
+  const t0 = Date.now()
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return new NextResponse('Unauthorized', { status: 401 })
@@ -80,5 +85,21 @@ export async function GET(req: Request) {
     })
   }
 
-  return NextResponse.json({ ok: true, marcados: n, processos, djen })
+  // Sentinela DataJud × DJEN — cruza movimentos de publicação (DataJud) sem
+  // comunicação correspondente no DJEN e abre alertas internos de triagem.
+  // Roda DEPOIS das duas etapas (usa o que elas acabaram de gravar). Isolada:
+  // deadline próprio de ~8s e try/catch — NUNCA derruba o cron. A sentinela
+  // nunca notifica cliente (WhatsApp) e nunca calcula prazo.
+  let sentinela: SentinelaResultado | null = null
+  try {
+    sentinela = await rodarSentinela(admin, {
+      deadline: Math.min(Date.now() + 8_000, t0 + 55_000),
+    })
+    logger.info('cron.sentinela', { ...sentinela })
+  } catch (e) {
+    // rodarSentinela já é best-effort (não lança); cinto e suspensório.
+    logger.error('cron.sentinela.falha', {}, e as Error)
+  }
+
+  return NextResponse.json({ ok: true, marcados: n, processos, djen, sentinela })
 }

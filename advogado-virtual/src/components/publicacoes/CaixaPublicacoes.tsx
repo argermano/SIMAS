@@ -28,12 +28,14 @@ import { useToast } from '@/components/ui/toast'
 import { SaudeWidget } from './SaudeWidget'
 import { PainelDetalhe } from './PainelDetalhe'
 import { PrioridadeBadge, StatusPill } from './Pills'
+import { SentinelaPanel } from './SentinelaPanel'
 import {
   hojeSaoPaulo,
   prioridadeDaPublicacao,
   type PrioridadeHint,
   type PublicacaoListItem,
   type SaudePublicacoes,
+  type SentinelaAlerta,
   type TeamMember,
 } from './tipos'
 
@@ -105,6 +107,8 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
 
   const [saude, setSaude] = useState<SaudePublicacoes | null>(null)
   const [loadingSaude, setLoadingSaude] = useState(true)
+  // Alertas da sentinela DataJud × DJEN (painel âmbar; só abertos são exibidos).
+  const [sentinela, setSentinela] = useState<SentinelaAlerta[]>([])
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   // Snapshot mais recente da lista, para a fila "próxima não tratada" avançar
@@ -205,12 +209,27 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
     }
   }, [])
 
+  // Sentinela DataJud × DJEN — silenciosa em falha (o painel só aparece com
+  // alertas abertos; erro aqui nunca pode derrubar a caixa de publicações).
+  const carregarSentinela = useCallback(async () => {
+    try {
+      const r = await fetch('/api/publicacoes/sentinela')
+      if (r.ok) {
+        const d = (await r.json()) as { alertas?: SentinelaAlerta[] }
+        setSentinela(d.alertas ?? [])
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
   // Carregamento disparado por FILTRO → arma a auto-seleção do 1º item.
   useEffect(() => {
     autoSelecionar.current = true
     void carregar()
   }, [carregar])
   useEffect(() => { void carregarSaude() }, [carregarSaude])
+  useEffect(() => { void carregarSentinela() }, [carregarSentinela])
 
   // Seleciona a 1ª publicação ao carregar por filtro (nunca sobrescreve o avanço
   // pós-ação, que recarrega direto sem rearmar a flag).
@@ -384,6 +403,11 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
           </p>
         </div>
       )}
+
+      {/* SENTINELA DataJud × DJEN — movimentos que implicam publicação no diário
+          sem comunicação correspondente no DJEN (possível falha de envio pelo
+          tribunal). Triagem interna: nunca calcula prazo, nunca avisa cliente. */}
+      <SentinelaPanel alertas={sentinela} onRecarregar={() => void carregarSentinela()} />
 
       {/* Barra de SAÚDE (health + chips por OAB) */}
       <SaudeWidget dados={saude} loading={loadingSaude} />

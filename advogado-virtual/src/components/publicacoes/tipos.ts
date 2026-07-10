@@ -117,6 +117,33 @@ export interface AlertaCaptura {
   quando: string | null
 }
 
+/* ── Sentinela DataJud × DJEN ─────────────────────────────────────────────────
+ * Alerta de triagem interna: movimento do DataJud que implica publicação no
+ * diário SEM comunicação correspondente no DJEN. NUNCA calcula prazo e NUNCA
+ * notifica cliente — é aviso para o advogado conferir o expediente no PJe. */
+export type SentinelaStatus = 'aberta' | 'resolvida_auto' | 'verificada' | 'ignorada'
+
+/** Item de GET /api/publicacoes/sentinela → alertas[]. */
+export interface SentinelaAlerta {
+  id: string
+  /** Número do processo só com dígitos (processos.numero_cnj). */
+  numeroProcesso: string
+  /** CNJ mascarado quando disponível (preferir na exibição). */
+  numeroMascara?: string | null
+  movimentoNome: string
+  movimentoData: string
+  clienteId?: string | null
+  clienteNome?: string | null
+  status: SentinelaStatus
+  createdAt: string
+}
+
+/** Payload de GET /api/publicacoes/sentinela. */
+export interface SentinelaResposta {
+  alertas: SentinelaAlerta[]
+  total: number
+}
+
 /** Payload de GET /api/publicacoes/saude. `contadores` e `porOab` chegam junto. */
 export interface SaudePublicacoes {
   novas: number
