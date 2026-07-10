@@ -90,9 +90,11 @@ export function Conversas({ email }: { email: string }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const carregar = useCallback(async () => {
-    setLoading(true)
-    setErroLista(null)
+  const carregar = useCallback(async (silencioso = false) => {
+    if (!silencioso) {
+      setLoading(true)
+      setErroLista(null)
+    }
     try {
       const params = new URLSearchParams()
       params.set('status', status)
@@ -101,19 +103,23 @@ export function Conversas({ email }: { email: string }) {
       const r = await fetch(`/api/conversas?${params.toString()}`)
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
-        setErroLista(mensagemErroRelay(r.status, d))
-        setConversas([])
-        setMeta(null)
+        if (!silencioso) {
+          setErroLista(mensagemErroRelay(r.status, d))
+          setConversas([])
+          setMeta(null)
+        }
         return
       }
       setConversas((d as RespostaLista).conversas ?? [])
       setMeta((d as RespostaLista).meta ?? null)
     } catch {
-      setErroLista('Falha de rede ao carregar as conversas.')
-      setConversas([])
-      setMeta(null)
+      if (!silencioso) {
+        setErroLista('Falha de rede ao carregar as conversas.')
+        setConversas([])
+        setMeta(null)
+      }
     } finally {
-      setLoading(false)
+      if (!silencioso) setLoading(false)
     }
   }, [status, page, canal])
 
@@ -132,6 +138,21 @@ export function Conversas({ email }: { email: string }) {
 
   useEffect(() => {
     void carregar()
+  }, [carregar])
+
+  // Atualização automática (pedido do dono, 2026-07-10): a lista se revalida em
+  // silêncio a cada 15s com a aba visível, e imediatamente quando a aba volta ao
+  // foco. Sem piscar (silencioso) e sem custo com a aba em segundo plano.
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') void carregar(true)
+    }
+    const id = setInterval(tick, 15_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', tick)
+    }
   }, [carregar])
 
   useEffect(() => {

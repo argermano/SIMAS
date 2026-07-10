@@ -102,9 +102,25 @@ export function Thread({
     void carregar()
   }, [carregar])
 
-  // Rola para o fim quando as mensagens mudam.
+  // Atualização automática da conversa aberta: revalida em silêncio a cada 7s
+  // (aba visível). Não mexe no composer (estado separado) e o auto-scroll abaixo
+  // só dispara quando chega mensagem NOVA — ler histórico não é interrompido.
   useEffect(() => {
-    fimRef.current?.scrollIntoView({ block: 'end' })
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void carregar(true)
+    }, 7_000)
+    return () => clearInterval(id)
+  }, [carregar])
+
+  // Rola para o fim só quando chega mensagem NOVA (id do fim mudou) — a
+  // revalidação silenciosa com o mesmo conteúdo não rouba o scroll da leitura.
+  const ultimaIdRef = useRef<number | null>(null)
+  useEffect(() => {
+    const ultima = mensagens.length ? mensagens[mensagens.length - 1].id : null
+    if (ultima !== ultimaIdRef.current) {
+      ultimaIdRef.current = ultima
+      fimRef.current?.scrollIntoView({ block: 'end' })
+    }
   }, [mensagens])
 
   /** Trata um 428 (agente não conectado) de qualquer escrita. */
