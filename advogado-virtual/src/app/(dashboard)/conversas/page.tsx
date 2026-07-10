@@ -16,7 +16,7 @@ export default async function ConversasPage() {
     .eq('auth_user_id', user.id)
     .single()
   if (!usuario) redirect('/login')
-  if (!['admin', 'advogado'].includes(usuario.role)) redirect('/dashboard')
+  if (!['admin', 'advogado', 'colaborador'].includes(usuario.role)) redirect('/dashboard')
 
   // Sem <Header/>: o mock coloca o título dentro da coluna da lista e as
   // 3 colunas ocupam a área de conteúdo em altura cheia.

@@ -15,7 +15,7 @@ export async function POST(
 ) {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
-  const gate = requireRole(auth.usuario, ['admin', 'advogado'])
+  const gate = requireRole(auth.usuario, ['admin', 'advogado', 'colaborador'])
   if (gate) return gate
 
   const email = auth.user.email

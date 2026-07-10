@@ -30,7 +30,7 @@ function trechoPublicacao(html: string | null): string {
 export async function GET(req: NextRequest) {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
-  const gate = requireRole(auth.usuario, ['admin', 'advogado'])
+  const gate = requireRole(auth.usuario, ['admin', 'advogado', 'colaborador'])
   if (gate) return gate
   const { supabase, usuario } = auth
 

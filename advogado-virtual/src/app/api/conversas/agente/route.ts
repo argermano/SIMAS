@@ -12,7 +12,7 @@ const schemaRegister = z.object({
 export async function GET() {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
-  const gate = requireRole(auth.usuario, ['admin', 'advogado'])
+  const gate = requireRole(auth.usuario, ['admin', 'advogado', 'colaborador'])
   if (gate) return gate
 
   const email = auth.user.email
@@ -26,7 +26,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
-  const gate = requireRole(auth.usuario, ['admin', 'advogado'])
+  const gate = requireRole(auth.usuario, ['admin', 'advogado', 'colaborador'])
   if (gate) return gate
 
   const email = auth.user.email
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE() {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
-  const gate = requireRole(auth.usuario, ['admin', 'advogado'])
+  const gate = requireRole(auth.usuario, ['admin', 'advogado', 'colaborador'])
   if (gate) return gate
 
   const email = auth.user.email

@@ -119,7 +119,7 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
       icon:    Newspaper,
       ativoSe: (p: string) => p.startsWith('/publicacoes'),
     }] : []),
-    ...(roleRaw === 'admin' || roleRaw === 'advogado' ? [{
+    ...(roleRaw === 'admin' || roleRaw === 'advogado' || roleRaw === 'colaborador' ? [{
       href:    '/conversas',
       label:   'Conversas',
       icon:    MessagesSquare,
