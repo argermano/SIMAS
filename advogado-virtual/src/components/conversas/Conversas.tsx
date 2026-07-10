@@ -22,6 +22,9 @@ export function Conversas({ email }: { email: string }) {
 
   // Filtros: chips (client-side, exceto "resolvidas" que troca o status da query)
   const [filtroChip, setFiltroChip] = useState<FiltroChip>('todos')
+  // Canal (inbox): '' = todas. Quem tem acesso a uma caixa só (escopo do relay)
+  // simplesmente não vê diferença; quem vê as duas (ex.: administradora) escolhe.
+  const [canal, setCanal] = useState<'' | 'DF' | 'SC'>('')
   const [status, setStatus] = useState<StatusConversa>('open')
   const [busca, setBusca] = useState('')
   const [page, setPage] = useState(1)
@@ -94,6 +97,7 @@ export function Conversas({ email }: { email: string }) {
       const params = new URLSearchParams()
       params.set('status', status)
       params.set('page', String(page))
+      if (canal) params.set('inbox', canal)
       const r = await fetch(`/api/conversas?${params.toString()}`)
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
@@ -111,7 +115,7 @@ export function Conversas({ email }: { email: string }) {
     } finally {
       setLoading(false)
     }
-  }, [status, page])
+  }, [status, page, canal])
 
   const carregarAgente = useCallback(async () => {
     setLoadingAgente(true)
@@ -260,6 +264,27 @@ export function Conversas({ email }: { email: string }) {
               >
                 ⌘K
               </kbd>
+            </div>
+
+            {/* Canal: Todas · DF · SC (o relay filtra na origem; agentes com uma
+                caixa só continuam vendo só a sua, qualquer que seja a escolha). */}
+            <div className="flex items-center gap-1.5" role="group" aria-label="Canal">
+              {([['', 'Todas'], ['DF', 'DF'], ['SC', 'SC']] as const).map(([v, rotulo]) => (
+                <button
+                  key={rotulo}
+                  type="button"
+                  onClick={() => { setCanal(v); setPage(1); setSelecionadaId(null) }}
+                  aria-pressed={canal === v}
+                  className={cn(
+                    'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                    canal === v
+                      ? 'bg-foreground text-background'
+                      : 'border border-border bg-card text-muted-foreground hover:border-ring hover:text-foreground',
+                  )}
+                >
+                  {rotulo}
+                </button>
+              ))}
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtro de conversas">
