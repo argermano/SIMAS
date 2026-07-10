@@ -117,6 +117,18 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
   // Seleciona o 1º item no próximo carregamento disparado por FILTRO (não após ações).
   const autoSelecionar = useRef(true)
 
+  // Deep-link (ex.: painel de contexto das Conversas): /publicacoes?pub=<id>
+  // seleciona e abre a publicação — o PainelDetalhe busca o detalhe pelo id,
+  // então funciona mesmo que o item não esteja na página carregada da lista.
+  useEffect(() => {
+    const m = /[?&]pub=([0-9a-f-]{8,})/i.exec(window.location.search)
+    if (m) {
+      autoSelecionar.current = false
+      setSelecionada(m[1])
+      setMobileAberto(true)
+    }
+  }, [])
+
   // Rastreia o breakpoint lg (1024px) para montar só um painel de detalhe.
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')

@@ -96,6 +96,13 @@ export interface ContextoConversa {
     tribunal: string | null
     data: string | null
   }[]
+  /** Casos/atendimentos do cliente (últimos 3; inclui importados sem CNJ). */
+  casos: {
+    id: string
+    titulo: string | null
+    area: string | null
+    status: string | null
+  }[]
 }
 
 export interface RespostaLista {

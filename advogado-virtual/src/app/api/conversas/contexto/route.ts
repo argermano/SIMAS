@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
 
   const cliente = (clientes ?? []).find((c) => mesmoTelefone(c.telefone, telefone))
   if (!cliente) {
-    const vazio: ContextoConversa = { cliente: null, processos: [], publicacoes: [] }
+    const vazio: ContextoConversa = { cliente: null, processos: [], publicacoes: [], casos: [] }
     return NextResponse.json(vazio)
   }
 
@@ -88,6 +88,24 @@ export async function GET(req: NextRequest) {
     }))
   }
 
+  // Casos/atendimentos do cliente (inclui os importados do Astrea sem CNJ).
+  const { data: atds } = await supabase
+    .from('atendimentos')
+    .select('id, area, status, created_at, metadados_extraidos')
+    .eq('tenant_id', usuario.tenant_id)
+    .eq('cliente_id', cliente.id)
+    .order('created_at', { ascending: false })
+    .limit(3)
+  const casos = (atds ?? []).map((a) => {
+    const meta = a.metadados_extraidos as { importado_astrea?: { titulo?: string } } | null
+    return {
+      id: a.id as string,
+      titulo: meta?.importado_astrea?.titulo ?? null,
+      area: (a.area as string) ?? null,
+      status: (a.status as string) ?? null,
+    }
+  })
+
   const contexto: ContextoConversa = {
     cliente: { id: cliente.id, nome: cliente.nome },
     processos: listaProcessos.map((p) => ({
@@ -97,6 +115,7 @@ export async function GET(req: NextRequest) {
       situacao: p.situacao ?? null,
     })),
     publicacoes,
+    casos,
   }
   return NextResponse.json(contexto)
 }

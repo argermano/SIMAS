@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   ArrowLeftRight,
   CalendarPlus,
+  ExternalLink,
   FolderOpen,
   Link2,
   MessageSquare,
@@ -178,10 +179,15 @@ export function PainelContexto({
           <AvatarContato nome={nome} avatarUrl={conversa.contato.avatarUrl} className="h-16 w-16 text-xl" />
           <h3 className="mt-3 max-w-full truncate font-semibold text-foreground">{nome}</h3>
           {telefone && <p className="mt-0.5 text-xs text-muted-foreground">{telefone}</p>}
-          {cliente && cliente.nome !== nome && (
-            <p className="mt-0.5 max-w-full truncate text-xs text-muted-foreground">
+          {cliente && (
+            <Link
+              href={`/clientes/${cliente.id}`}
+              className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate text-xs font-medium text-primary hover:underline"
+              title="Abrir a ficha do cliente"
+            >
               Cliente: {cliente.nome}
-            </p>
+              <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
+            </Link>
           )}
         </div>
 
@@ -251,11 +257,17 @@ export function PainelContexto({
               {contexto && contexto.publicacoes.length > 0 ? (
                 <ul className="space-y-3">
                   {contexto.publicacoes.slice(0, 3).map((pub) => (
-                    <li key={pub.id} className="border-l-2 border-primary/50 pl-3">
-                      <p className="break-words text-sm italic text-foreground">“{pub.trecho}”</p>
-                      <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
-                        {[pub.tribunal, dataPtBr(pub.data)].filter(Boolean).join(' · ')}
-                      </p>
+                    <li key={pub.id}>
+                      <Link
+                        href={`/publicacoes?pub=${pub.id}`}
+                        className="block border-l-2 border-primary/50 pl-3 transition-colors hover:border-primary hover:bg-muted/40"
+                        title="Abrir na caixa de Publicações"
+                      >
+                        <p className="break-words text-sm italic text-foreground">“{pub.trecho}”</p>
+                        <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                          {[pub.tribunal, dataPtBr(pub.data)].filter(Boolean).join(' · ')}
+                        </p>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -263,6 +275,30 @@ export function PainelContexto({
                 <p className="text-xs text-muted-foreground">Sem publicações recentes.</p>
               )}
             </section>
+
+            {/* CASOS (atendimentos — inclui importados do Astrea sem CNJ) */}
+            {contexto && contexto.casos.length > 0 && (
+              <section className="space-y-2">
+                <Eyebrow>Casos</Eyebrow>
+                <ul className="space-y-2">
+                  {contexto.casos.map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        href={`/clientes/${cliente.id}/casos/${c.id}`}
+                        className="block rounded-lg border border-border bg-background px-3 py-2 transition-colors hover:border-ring hover:bg-muted/50"
+                      >
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {c.titulo || `Caso de ${c.area || 'atendimento'}`}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {[c.area, c.status].filter(Boolean).join(' · ')}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* AÇÕES RÁPIDAS */}
             <section className="space-y-2">
