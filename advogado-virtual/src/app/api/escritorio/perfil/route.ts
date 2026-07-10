@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
+import { logAudit } from '@/lib/audit'
 
 const ESTADOS_BR = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
   'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
@@ -62,6 +63,18 @@ export async function PATCH(req: NextRequest) {
     .single()
 
   if (error) return jsonError(error.message, 500)
+
+  // Auditoria: sem trilha, "salvei e sumiu" fica indiagnosticável (lição de
+  // 2026-07-10 — a limpeza da base restaurou valores antigos do perfil e não
+  // havia como saber quem salvou o quê, quando).
+  await logAudit({
+    tenantId: usuario.tenant_id,
+    userId: usuario.id,
+    action: 'escritorio.perfil_atualizado',
+    resourceType: 'tenant',
+    resourceId: usuario.tenant_id,
+    metadata: { campos: Object.keys(dados) },
+  })
 
   return NextResponse.json({ escritorio: atualizado })
 }
