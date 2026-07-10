@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, MessageSquare, RefreshCw, Search, X } from 'lucide-react'
+import { Bell, BellOff, ChevronLeft, ChevronRight, MessageSquare, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { NOTIF_PREF_KEY, notificacoesLigadas } from './NotificadorConversas'
 import type { AgenteMe, Conversa, RespostaLista, StatusConversa } from '@/lib/conversas/tipos'
 import { metaTemProxima } from '@/lib/conversas/paginacao'
 import { apenasDigitos } from '@/lib/conversas/telefone'
@@ -25,6 +26,13 @@ export function Conversas({ email }: { email: string }) {
   // Canal (inbox): '' = todas. Quem tem acesso a uma caixa só (escopo do relay)
   // simplesmente não vê diferença; quem vê as duas (ex.: administradora) escolhe.
   const [canal, setCanal] = useState<'' | 'DF' | 'SC'>('')
+  const [notifOn, setNotifOn] = useState(true)
+  useEffect(() => { setNotifOn(notificacoesLigadas()) }, [])
+  function alternarNotif() {
+    const novo = !notifOn
+    setNotifOn(novo)
+    try { localStorage.setItem(NOTIF_PREF_KEY, novo ? 'on' : 'off') } catch { /* ignore */ }
+  }
   const [status, setStatus] = useState<StatusConversa>('open')
   const [busca, setBusca] = useState('')
   const [page, setPage] = useState(1)
@@ -255,6 +263,17 @@ export function Conversas({ email }: { email: string }) {
                   className="h-7 w-7"
                 >
                   <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={alternarNotif}
+                  title={notifOn ? 'Notificações de mensagens novas: LIGADAS (clique para desligar)' : 'Notificações de mensagens novas: DESLIGADAS (clique para ligar)'}
+                  aria-label={notifOn ? 'Desligar notificações' : 'Ligar notificações'}
+                  aria-pressed={notifOn}
+                  className="h-7 w-7"
+                >
+                  {notifOn ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5 text-muted-foreground" />}
                 </Button>
                 <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
                   {loading && conversas.length === 0 ? '…' : nTodos}

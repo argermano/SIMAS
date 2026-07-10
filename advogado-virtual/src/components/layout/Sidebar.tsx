@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { NotificadorConversas } from '@/components/conversas/NotificadorConversas'
 import { useState, useEffect } from 'react'
 import {
   LayoutDashboard, Users, Settings, LogOut,
@@ -81,6 +82,7 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed,  setCollapsed]  = useState(false)
   const [novasPub,   setNovasPub]   = useState(0)
+  const [novasConv,  setNovasConv]  = useState(0)
 
   useEffect(() => {
     const saved = localStorage.getItem('sidebar-collapsed')
@@ -204,6 +206,9 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
                   {item.href === '/publicacoes' && novasPub > 0 && isCollapsed && (
                     <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-warning" aria-hidden="true" />
                   )}
+                  {item.href === '/conversas' && novasConv > 0 && isCollapsed && (
+                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-success" aria-hidden="true" />
+                  )}
                   {!isCollapsed && (
                     <span className="overflow-hidden whitespace-nowrap animate-in fade-in-0 duration-300">
                       {item.label}
@@ -215,6 +220,14 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
                       aria-label={`${novasPub} publicações novas`}
                     >
                       {novasPub > 99 ? '99+' : novasPub}
+                    </span>
+                  )}
+                  {item.href === '/conversas' && novasConv > 0 && !isCollapsed && (
+                    <span
+                      className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-success px-1.5 text-[11px] font-semibold text-white"
+                      aria-label={`${novasConv} conversas com mensagens novas`}
+                    >
+                      {novasConv > 99 ? '99+' : novasConv}
                     </span>
                   )}
                 </Link>
@@ -298,6 +311,8 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
 
   return (
     <>
+      {/* Notificador global de mensagens novas do WhatsApp (toast + badge). */}
+      <NotificadorConversas pathname={pathname} onBadge={setNovasConv} />
       <button
         onClick={() => setMobileOpen(true)}
         className="fixed left-4 top-4 z-40 rounded-lg bg-primary p-2 text-white shadow-lg lg:hidden"
