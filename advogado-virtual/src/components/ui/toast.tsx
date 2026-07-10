@@ -11,6 +11,10 @@ export interface ToastData {
   type: ToastType
   title: string
   message?: string
+  /** Tempo em tela (default 5000ms). */
+  duracaoMs?: number
+  /** Torna o toast clicável: navega para o destino e fecha. */
+  href?: string
 }
 
 interface ToastProps extends ToastData {
@@ -31,21 +35,32 @@ const STYLES: Record<ToastType, string> = {
   info:    'border-info/20 bg-info/5',
 }
 
-export function Toast({ id, type, title, message, onClose }: ToastProps) {
+export function Toast({ id, type, title, message, duracaoMs, href, onClose }: ToastProps) {
   React.useEffect(() => {
-    const timer = setTimeout(() => onClose(id), 5000)
+    const timer = setTimeout(() => onClose(id), duracaoMs ?? 5000)
     return () => clearTimeout(timer)
-  }, [id, onClose])
+  }, [id, onClose, duracaoMs])
+
+  function abrir() {
+    if (!href) return
+    onClose(id)
+    // window.location cobre o provider fora do escopo de rota (root layout).
+    window.location.assign(href)
+  }
 
   return (
     <div
+      onClick={abrir}
       className={cn(
         'flex items-start gap-3 rounded-lg border p-4 shadow-md',
         'animate-in slide-in-from-right-full',
         'w-full max-w-sm',
+        href && 'cursor-pointer transition-colors hover:border-ring hover:shadow-lg',
         STYLES[type]
       )}
-      role="alert"
+      role={href ? 'button' : 'alert'}
+      tabIndex={href ? 0 : undefined}
+      onKeyDown={href ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir() } } : undefined}
     >
       <div className="mt-0.5 shrink-0">{ICONS[type]}</div>
       <div className="flex-1 min-w-0">
@@ -53,7 +68,7 @@ export function Toast({ id, type, title, message, onClose }: ToastProps) {
         {message && <p className="mt-0.5 text-sm text-muted-foreground">{message}</p>}
       </div>
       <button
-        onClick={() => onClose(id)}
+        onClick={(e) => { e.stopPropagation(); onClose(id) }}
         className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
         aria-label="Fechar"
       >

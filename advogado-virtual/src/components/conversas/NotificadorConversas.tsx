@@ -27,7 +27,7 @@ export function NotificadorConversas({
   pathname: string
   onBadge: (n: number) => void
 }) {
-  const { success } = useToast()
+  const { toast } = useToast()
   const parado = useRef(false) // 401/403 → para de checar nesta sessão
 
   const checar = useCallback(async () => {
@@ -61,15 +61,18 @@ export function NotificadorConversas({
         const novas = conversas.filter((c) => (entrada(c) ?? 0) > visto)
         const primeira = novas.sort((a, b) => (entrada(b) ?? 0) - (entrada(a) ?? 0))[0]
         const nome = primeira?.contato.nome || primeira?.contato.telefone || 'Cliente'
-        success(
-          novas.length === 1 ? `Nova mensagem de ${nome}` : `${novas.length} conversas com mensagens novas`,
-          primeira?.ultimaMensagem?.trecho ?? 'Abra Conversas para responder.',
-        )
+        toast({
+          type: 'success',
+          title: novas.length === 1 ? `Nova mensagem de ${nome}` : `${novas.length} conversas com mensagens novas`,
+          message: (primeira?.ultimaMensagem?.trecho ?? '') + ' — clique para abrir',
+          duracaoMs: 20_000,
+          href: novas.length === 1 && primeira ? `/conversas?conversa=${primeira.id}` : '/conversas',
+        })
         onBadge(novas.length)
         localStorage.setItem(VISTO_KEY, String(maisNova)) // não repete o mesmo aviso a cada minuto
       }
     } catch { /* rede: tenta no próximo ciclo */ }
-  }, [pathname, onBadge, success])
+  }, [pathname, onBadge, toast])
 
   useEffect(() => {
     void checar()

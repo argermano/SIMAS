@@ -148,6 +148,21 @@ export function Conversas({ email }: { email: string }) {
     void carregar()
   }, [carregar])
 
+  // Deep-link do toast de notificação: /conversas?conversa=<id> abre a conversa.
+  const deepLinkRef = useRef<number | null>(null)
+  useEffect(() => {
+    const m = /[?&]conversa=(\d+)/.exec(window.location.search)
+    if (m) deepLinkRef.current = Number(m[1])
+  }, [])
+  useEffect(() => {
+    if (deepLinkRef.current == null || conversas.length === 0) return
+    const alvo = conversas.find((c) => c.id === deepLinkRef.current)
+    if (alvo) {
+      setSelecionadaId(alvo.id)
+      deepLinkRef.current = null
+    }
+  }, [conversas])
+
   // Atualização automática (pedido do dono, 2026-07-10): a lista se revalida em
   // silêncio a cada 10s com a aba visível, e imediatamente quando a aba volta ao
   // foco. Sem piscar (silencioso) e sem custo com a aba em segundo plano.
