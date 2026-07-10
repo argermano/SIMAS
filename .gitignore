@@ -10,3 +10,4 @@ token.json
 # Arquivos de sistema
 .DS_Store
 Thumbs.db
+*.xlsx
