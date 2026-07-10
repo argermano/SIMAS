@@ -68,13 +68,15 @@ export async function GET() {
       .select('id', { count: 'exact', head: true })
       .eq('tenant_id', usuario.tenant_id)
       .eq('status', 'nova'),
-    // Últimas 6 rodadas (por OAB), mais recentes primeiro.
+    // Últimas rodadas (mais recentes primeiro). Janela de 20 p/ garantir que a
+    // rodada MAIS RECENTE de CADA OAB monitorada esteja presente (alerta abaixo);
+    // o widget continua exibindo só as 6 primeiras.
     supabase
       .from('capturas_publicacoes')
-      .select('oab, uf, status, qtd_encontradas, qtd_novas, finalizada_em')
+      .select('oab, uf, status, qtd_encontradas, qtd_novas, finalizada_em, erro')
       .eq('tenant_id', usuario.tenant_id)
       .order('created_at', { ascending: false })
-      .limit(6),
+      .limit(20),
     // Última captura bem-sucedida (p/ marcar o widget de vermelho quando atrasada).
     supabase
       .from('capturas_publicacoes')
@@ -140,10 +142,34 @@ export async function GET() {
   }
   const porOab = [...porOabMap.values()].sort((a, b) => a.oab.localeCompare(b.oab))
 
+  // ALERTAS de captura (pedido do dono, 2026-07-10 — período de comparação com o
+  // Astrea): se a rodada MAIS RECENTE de alguma OAB terminou em 'falha', o usuário
+  // precisa de ciência EXPLÍCITA ao entrar na tela — os diários podem estar
+  // incompletos. (O sinal "26h sem sucesso" do widget não cobre a falha do dia:
+  // o sucesso de ontem ainda segura o verde.) 'parcial' também alerta: cobertura
+  // incompleta da janela.
+  const capturas = (ultimasRes.data ?? []) as unknown as (UltimaCaptura & { erro?: string | null })[]
+  const maisRecentePorOab = new Map<string, UltimaCaptura & { erro?: string | null }>()
+  for (const c of capturas) {
+    const chave = `${c.oab}:${c.uf}`
+    if (!maisRecentePorOab.has(chave)) maisRecentePorOab.set(chave, c) // já vem desc
+  }
+  const alertas = [...maisRecentePorOab.values()]
+    .filter((c) => c.status === 'falha' || c.status === 'parcial')
+    .map((c) => ({
+      oab: c.oab,
+      uf: c.uf,
+      status: c.status,
+      erro: c.erro ?? null,
+      quando: c.finalizada_em,
+    }))
+    .sort((a, b) => a.oab.localeCompare(b.oab))
+
   return NextResponse.json({
     novas:   naoTratadasTotal,
-    ultimas: (ultimasRes.data ?? []) as unknown as UltimaCaptura[],
+    ultimas: capturas.slice(0, 6).map(({ erro: _erro, ...c }) => c),
     ultimaSucessoEm,
+    alertas,
     contadores: {
       naoTratadasHoje:  naoTratadasHojeRes.count ?? 0,
       tratadasHoje:     tratadasHojeRes.count ?? 0,

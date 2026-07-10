@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { cn, formatarData } from '@/lib/utils'
+import { cn, formatarData, formatarDataHora } from '@/lib/utils'
 import {
   AlignJustify,
+  AlertTriangle,
   ArrowRight,
   CalendarDays,
   Check,
@@ -356,6 +357,34 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
 
   return (
     <div className="space-y-4">
+      {/* ALERTA DE CAPTURA (período de comparação com o Astrea): a última rodada
+          de alguma OAB falhou/ficou parcial → ciência EXPLÍCITA ao entrar na tela.
+          Os diários podem estar incompletos até a recuperação. */}
+      {saude?.alertas && saude.alertas.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-xl border border-destructive/50 bg-destructive/10 p-4"
+        >
+          <p className="flex items-center gap-2 font-bold text-destructive">
+            <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden />
+            Alerta: falha na captura de publicações — os diários podem estar incompletos
+          </p>
+          <ul className="mt-2 space-y-0.5 text-sm text-destructive/90">
+            {saude.alertas.map((a) => (
+              <li key={`${a.oab}-${a.uf}`}>
+                OAB {a.oab}/{a.uf}: {a.status === 'parcial' ? 'cobertura parcial da janela' : (a.erro || 'falha na consulta ao DJEN')}
+                {a.quando ? ` · ${formatarDataHora(a.quando)}` : ''}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-destructive/80">
+            Enquanto isso, confira as publicações no Astrea. A recuperação é automática na
+            próxima captura (a janela não coberta é refeita); se o alerta persistir por mais
+            de um dia, acione o suporte para reprocessar.
+          </p>
+        </div>
+      )}
+
       {/* Barra de SAÚDE (health + chips por OAB) */}
       <SaudeWidget dados={saude} loading={loadingSaude} />
 
@@ -725,7 +754,10 @@ function CardPublicacao({
   // "TRIBUNAL · órgão" (a DATA sai desta linha apagada: ganhou destaque próprio
   // na linha 1 do card, a pedido do dono — é o 1º critério de triagem).
   const meta = [pub.sigla_tribunal, pub.orgao_julgador].filter(Boolean).join(' · ')
+  // DIVULGAÇÃO em destaque (a lista ordena por ela — dá mais tempo ao escritório);
+  // PUBLICAÇÃO (presumida) ao lado, como no Astrea. Nunca calculamos prazo.
   const dataDivulgacao = formatarData(pub.data_disponibilizacao)
+  const dataPublicacao = pub.data_publicacao_sugerida ? formatarData(pub.data_publicacao_sugerida) : null
 
   return (
     <article
@@ -752,8 +784,9 @@ function CardPublicacao({
         </span>
 
         <div className="min-w-0 flex-1">
-          {/* Linha 1: DATA em destaque + prioridade + tipo + status */}
-          <div className="flex items-center gap-2">
+          {/* Linha 1: DATAS em destaque (divulgação forte + publicação presumida) +
+              prioridade + tipo + status */}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {dataDivulgacao && (
               <span
                 className="inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs font-bold tabular-nums text-foreground"
@@ -761,6 +794,14 @@ function CardPublicacao({
               >
                 <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                 {dataDivulgacao}
+              </span>
+            )}
+            {dataPublicacao && (
+              <span
+                className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+                title="Data de publicação presumida — o prazo é definido por você"
+              >
+                Publicação: <span className="font-semibold text-foreground/80">{dataPublicacao}</span>
               </span>
             )}
             <PrioridadeBadge nivel={prioridade} />

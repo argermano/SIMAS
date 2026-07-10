@@ -107,6 +107,16 @@ export interface OabResumo {
   total: number
 }
 
+/** Alerta de captura: a rodada MAIS RECENTE de uma OAB terminou em falha/parcial —
+ * os diários podem estar incompletos e o usuário precisa de ciência explícita. */
+export interface AlertaCaptura {
+  oab: string
+  uf: string
+  status: 'falha' | 'parcial'
+  erro: string | null
+  quando: string | null
+}
+
 /** Payload de GET /api/publicacoes/saude. `contadores` e `porOab` chegam junto. */
 export interface SaudePublicacoes {
   novas: number
@@ -114,6 +124,7 @@ export interface SaudePublicacoes {
   ultimaSucessoEm: string | null
   contadores?: ContadoresPublicacoes
   porOab?: OabResumo[]
+  alertas?: AlertaCaptura[]
 }
 
 /** Hoje em America/Sao_Paulo no formato YYYY-MM-DD — espelha `hojeSaoPauloISO`
