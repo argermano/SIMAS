@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Users, Settings, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
   KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter, BellRing, Newspaper, MessagesSquare,
+  CalendarDays,
 } from 'lucide-react'
 import { LogoMark } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils'
@@ -40,6 +41,12 @@ const MENU_ITEMS = [
     label:   'Tarefas',
     icon:    KanbanSquare,
     ativoSe: (p: string) => p.startsWith('/tarefas'),
+  },
+  {
+    href:    '/agenda',
+    label:   'Agenda',
+    icon:    CalendarDays,
+    ativoSe: (p: string) => p.startsWith('/agenda'),
   },
   {
     href:    '/contratos',

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { pertenceAoTenant } from '@/lib/ownership'
+import { logAudit } from '@/lib/audit'
 
 const schemaCreate = z.object({
   description:      z.string().min(1).max(2000),
@@ -146,6 +147,23 @@ export async function POST(req: NextRequest) {
       tag_ids.map(tid => ({ task_id: task.id, tag_id: tid }))
     )
   }
+
+  // Trilha de auditoria → alimenta o histórico do modal de tarefa.
+  await logAudit({
+    tenantId: usuario.tenant_id,
+    userId: usuario.id,
+    action: 'task.create',
+    resourceType: 'task',
+    resourceId: task.id,
+    metadata: {
+      description: taskData.description,
+      priority: taskData.priority,
+      due_date: taskData.due_date ?? null,
+      kanban_board_id: taskData.kanban_board_id ?? null,
+      origin: taskData.origin,
+      origin_reference: taskData.origin_reference ?? null,
+    },
+  })
 
   return NextResponse.json({ task }, { status: 201 })
 }

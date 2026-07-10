@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -9,9 +9,13 @@ import { ConfirmDialog } from '@/components/ui/dialog'
 import {
   X, Calendar, User, Flag, Layers, Tag,
   CheckCircle2, Trash2, Loader2, Pencil, Check, ExternalLink,
+  MessageSquare, History, FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TaskData } from './TaskCard'
+import { AbaComentarios, type Comentario } from './detalhe/AbaComentarios'
+import { AbaHistorico } from './detalhe/AbaHistorico'
+import { CardPublicacao } from './detalhe/CardPublicacao'
 
 interface Column   { id: string; name: string; position: number; color?: string | null }
 interface Board    { id: string; name: string; kanban_columns: Column[] }
@@ -86,6 +90,15 @@ export function TaskDetailModal({
   const [deleting,     setDeleting]      = useState(false)
   const [isCompleted,  setIsCompleted]   = useState(!!task.completed_at)
 
+  // ── Abas de paridade (Comentários / Histórico / Publicação) ──
+  const publicacaoId = task.origin_reference?.startsWith('publicacao:')
+    ? task.origin_reference.slice('publicacao:'.length)
+    : null
+  type Aba = 'comentarios' | 'historico' | 'publicacao'
+  const [activeTab,        setActiveTab]        = useState<Aba>('comentarios')
+  const [comentarios,      setComentarios]      = useState<Comentario[] | null>(null)
+  const [loadingComments,  setLoadingComments]  = useState(false)
+
   // Resetar estado quando a tarefa mudar
   useEffect(() => {
     setDescription(task.description)
@@ -98,7 +111,33 @@ export function TaskDetailModal({
     setSelectedTags((task.task_tag_links ?? []).map(l => l.tag_id))
     setIsCompleted(!!task.completed_at)
     setEditingDesc(false)
+    setActiveTab('comentarios')
+    setComentarios(null)
   }, [task.id])
+
+  // Carregar comentários ao abrir/trocar de tarefa (alimenta o badge de contagem).
+  useEffect(() => {
+    if (!open) return
+    let vivo = true
+    setLoadingComments(true)
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/tasks/${task.id}/comentarios`)
+        if (!vivo) return
+        if (res.ok) {
+          const d = await res.json().catch(() => ({}))
+          setComentarios((d.comentarios ?? (Array.isArray(d) ? d : [])) as Comentario[])
+        } else {
+          setComentarios([])
+        }
+      } catch {
+        if (vivo) setComentarios([])
+      } finally {
+        if (vivo) setLoadingComments(false)
+      }
+    })()
+    return () => { vivo = false }
+  }, [task.id, open])
 
   if (!open) return null
 
@@ -435,6 +474,47 @@ export function TaskDetailModal({
             )}
           </div>
 
+          {/* ── Abas de paridade (Comentários / Histórico / Publicação) ── */}
+          <div className="border-t border-border">
+            <div className="flex items-center gap-1 px-4 pt-2" role="tablist">
+              <TabButton
+                active={activeTab === 'comentarios'}
+                onClick={() => setActiveTab('comentarios')}
+                icon={<MessageSquare className="h-4 w-4" />}
+                label="Comentários"
+                badge={comentarios?.length ?? undefined}
+              />
+              <TabButton
+                active={activeTab === 'historico'}
+                onClick={() => setActiveTab('historico')}
+                icon={<History className="h-4 w-4" />}
+                label="Histórico"
+              />
+              {publicacaoId && (
+                <TabButton
+                  active={activeTab === 'publicacao'}
+                  onClick={() => setActiveTab('publicacao')}
+                  icon={<FileText className="h-4 w-4" />}
+                  label="Publicação"
+                />
+              )}
+            </div>
+            <div className="px-6 py-4">
+              {activeTab === 'comentarios' && (
+                <AbaComentarios
+                  taskId={task.id}
+                  comentarios={comentarios}
+                  loading={loadingComments}
+                  onCreated={novo => setComentarios(prev => [...(prev ?? []), novo])}
+                />
+              )}
+              {activeTab === 'historico' && <AbaHistorico taskId={task.id} />}
+              {activeTab === 'publicacao' && publicacaoId && (
+                <CardPublicacao publicacaoId={publicacaoId} />
+              )}
+            </div>
+          </div>
+
           {/* ── Footer ── */}
           <div className="flex items-center justify-between border-t border-border px-6 py-4">
             <div className="flex gap-2">
@@ -482,5 +562,38 @@ export function TaskDetailModal({
         loading={deleting}
       />
     </>
+  )
+}
+
+interface TabButtonProps {
+  active:  boolean
+  onClick: () => void
+  icon:    ReactNode
+  label:   string
+  badge?:  number
+}
+
+function TabButton({ active, onClick, icon, label, badge }: TabButtonProps) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-1.5 rounded-t-md border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+        active
+          ? 'border-primary text-primary'
+          : 'border-transparent text-muted-foreground hover:text-foreground'
+      )}
+    >
+      {icon}
+      {label}
+      {typeof badge === 'number' && badge > 0 && (
+        <span className="ml-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
+          {badge}
+        </span>
+      )}
+    </button>
   )
 }

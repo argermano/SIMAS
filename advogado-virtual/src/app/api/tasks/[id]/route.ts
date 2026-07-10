@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { logAudit } from '@/lib/audit'
 import { z } from 'zod'
 
 const schemaUpdate = z.object({
@@ -29,6 +30,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!parsed.success) return jsonError('Dados inválidos', 400)
 
   const { extra_assignees, tag_ids, ...taskData } = parsed.data
+
+  // Estado anterior (para o diff do histórico). Não altera o comportamento:
+  // se a tarefa não existir/for de outro tenant, o update abaixo falha como antes.
+  const camposEscalares = Object.keys(taskData) as (keyof typeof taskData)[]
+  const { data: anterior } = camposEscalares.length
+    ? await supabase
+        .from('tasks')
+        .select(
+          'description, due_date, task_list_id, process_id, assignee_id, priority, kanban_board_id, kanban_column_id, completed_at',
+        )
+        .eq('id', id)
+        .eq('tenant_id', usuario.tenant_id)
+        .maybeSingle()
+    : { data: null }
 
   const { data: task, error } = await supabase
     .from('tasks')
@@ -60,6 +75,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // Trilha de auditoria → alimenta o histórico do modal. Só registra o que mudou.
+  const changes: { field: string; de?: unknown; para?: unknown }[] = []
+  const anteriorRec = (anterior ?? {}) as Record<string, unknown>
+  for (const campo of camposEscalares) {
+    const de = anteriorRec[campo as string]
+    const para = taskData[campo]
+    if ((de ?? null) !== (para ?? null)) changes.push({ field: campo as string, de: de ?? null, para: para ?? null })
+  }
+  if (extra_assignees !== undefined) changes.push({ field: 'extra_assignees', para: extra_assignees })
+  if (tag_ids !== undefined) changes.push({ field: 'tag_ids', para: tag_ids })
+
+  if (changes.length > 0) {
+    await logAudit({
+      tenantId: usuario.tenant_id,
+      userId: usuario.id,
+      action: 'task.update',
+      resourceType: 'task',
+      resourceId: id,
+      metadata: { changes },
+    })
+  }
+
   return NextResponse.json({ task })
 }
 
@@ -70,6 +107,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
 
+  // Captura mínima para o histórico antes do hard-delete (não altera comportamento).
+  const { data: alvo } = await supabase
+    .from('tasks')
+    .select('description')
+    .eq('id', id)
+    .eq('tenant_id', usuario.tenant_id)
+    .maybeSingle()
+
   const { error } = await supabase
     .from('tasks')
     .delete()
@@ -77,5 +122,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .eq('tenant_id', usuario.tenant_id)
 
   if (error) return jsonError(error.message, 500)
+
+  await logAudit({
+    tenantId: usuario.tenant_id,
+    userId: usuario.id,
+    action: 'task.delete',
+    resourceType: 'task',
+    resourceId: id,
+    metadata: { description: alvo?.description ?? null },
+  })
+
   return NextResponse.json({ ok: true })
 }
