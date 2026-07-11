@@ -6,7 +6,7 @@ import { logAudit } from '@/lib/audit'
 import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
 import { hojeSaoPauloISO } from '@/lib/processos/util'
 import { enviarAvisoWhatsApp } from '@/lib/processos/notificar'
-import { montarTextoAvisoParcela } from '@/lib/financeiro/aviso'
+import { montarMensagensAvisoParcela } from '@/lib/financeiro/aviso'
 import { gerarPixCopiaECola } from '@/lib/financeiro/pix'
 
 export const maxDuration = 60
@@ -276,17 +276,27 @@ async function enviarAvisosParcelas(admin: SupabaseClient, deadline: number) {
       }
     }
 
-    const texto = montarTextoAvisoParcela({
+    // Sequência de mensagens (formato aprovado pelo dono, 2026-07-11):
+    // aviso → copia-e-cola limpo → "Chave Pix: ...". Envio em ordem; se a
+    // primeira falhar, não manda as demais (código solto sem contexto).
+    const mensagens = montarMensagensAvisoParcela({
       nomeCliente: (cli.nome as string) ?? null,
       descricao: p.descricao,
       valorCentavos: p.valor_centavos,
       vencimentoISO: p.vencimento,
       pixCopiaECola,
+      chavePix: fin.pix_chave ?? null,
       escritorioNome: (ten?.nome as string) ?? null,
       ehHoje,
     })
 
-    const res = await enviarAvisoWhatsApp(cli.telefone as string, texto)
+    let res = await enviarAvisoWhatsApp(cli.telefone as string, mensagens[0])
+    if (res.ok) {
+      for (const extra of mensagens.slice(1)) {
+        const r2 = await enviarAvisoWhatsApp(cli.telefone as string, extra)
+        if (!r2.ok) { res = r2; break } // registra a falha parcial na auditoria abaixo
+      }
+    }
     if (res.ok) resultado.enviados++
     else {
       // Claim fica: preferimos NÃO reenviar (invariante "nunca 2x") a arriscar

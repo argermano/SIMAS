@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
-import { montarTextoAvisoParcela } from '@/lib/financeiro/aviso'
+import { montarMensagensAvisoParcela } from '@/lib/financeiro/aviso'
 import { gerarPixCopiaECola } from '@/lib/financeiro/pix'
 import { enviarAvisoWhatsApp } from '@/lib/processos/notificar'
 import { hojeSaoPauloISO } from '@/lib/processos/util'
@@ -22,7 +22,8 @@ import { hojeSaoPauloISO } from '@/lib/processos/util'
 interface Contexto {
   parcela: { id: string; descricao: string; valor_centavos: number; vencimento: string; status: string; cliente_id: string }
   cliente: { nome: string | null; telefone: string | null; aviso_cobranca: boolean }
-  texto: string
+  /** [0] aviso (editável no modal) · [1] copia-e-cola · [2] "Chave Pix: ..." */
+  mensagens: string[]
 }
 
 async function carregarContexto(tenantId: string, parcelaId: string): Promise<Contexto | { erro: string; status: number }> {
@@ -53,17 +54,18 @@ async function carregarContexto(tenantId: string, parcelaId: string): Promise<Co
         valorCentavos: p.valor_centavos,
       })
     : null
-  const texto = montarTextoAvisoParcela({
+  const mensagens = montarMensagensAvisoParcela({
     nomeCliente: c.nome,
     descricao: p.descricao,
     valorCentavos: p.valor_centavos,
     vencimentoISO: p.vencimento,
     pixCopiaECola: pix,
+    chavePix: fin?.pix_chave ?? null,
     escritorioNome: t?.nome ?? null,
     ehHoje: p.vencimento === hoje,
     ehVencida: p.vencimento < hoje,
   })
-  return { parcela: p, cliente: c, texto }
+  return { parcela: p, cliente: c, mensagens }
 }
 
 export async function GET(
@@ -79,7 +81,8 @@ export async function GET(
   const ctx = await carregarContexto(auth.usuario.tenant_id, id)
   if ('erro' in ctx) return jsonError(ctx.erro, ctx.status)
   return NextResponse.json({
-    texto: ctx.texto,
+    texto: ctx.mensagens[0],
+    extras: ctx.mensagens.slice(1),
     telefone: ctx.cliente.telefone,
     clienteNome: ctx.cliente.nome,
     avisoOptOut: !ctx.cliente.aviso_cobranca,
@@ -105,8 +108,14 @@ export async function POST(
   if ('erro' in ctx) return jsonError(ctx.erro, ctx.status)
   if (!ctx.cliente.telefone) return jsonError('Cliente sem telefone cadastrado', 400)
 
+  // Sequência: o texto editado pelo humano + as mensagens técnicas geradas no
+  // servidor (copia-e-cola limpo e chave) — em ordem.
   const r = await enviarAvisoWhatsApp(ctx.cliente.telefone, parsed.data.texto)
   if (!r.ok) return jsonError('Falha ao enviar pelo WhatsApp — tente novamente', 502)
+  for (const extra of ctx.mensagens.slice(1)) {
+    const r2 = await enviarAvisoWhatsApp(ctx.cliente.telefone, extra)
+    if (!r2.ok) return jsonError('Aviso enviado, mas o Pix não foi — reenvie pelo botão', 502)
+  }
 
   await logAudit({
     tenantId: auth.usuario.tenant_id,

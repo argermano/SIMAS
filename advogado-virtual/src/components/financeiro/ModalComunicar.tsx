@@ -28,6 +28,7 @@ export function ModalComunicar({
   const [carregando, setCarregando] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [texto, setTexto] = useState('')
+  const [extras, setExtras] = useState<string[]>([])
   const [telefone, setTelefone] = useState<string | null>(null)
   const [avisoOptOut, setAvisoOptOut] = useState(false)
   const [vencida, setVencida] = useState(false)
@@ -46,8 +47,9 @@ export function ModalComunicar({
           setErro((d as { error?: string }).error ?? 'Não foi possível gerar a mensagem.')
           return
         }
-        const resp = d as { texto: string; telefone: string | null; avisoOptOut: boolean; vencida: boolean }
+        const resp = d as { texto: string; extras?: string[]; telefone: string | null; avisoOptOut: boolean; vencida: boolean }
         setTexto(resp.texto)
+        setExtras(resp.extras ?? [])
         setTelefone(resp.telefone)
         setAvisoOptOut(resp.avisoOptOut)
         setVencida(resp.vencida)
@@ -107,12 +109,20 @@ export function ModalComunicar({
             </p>
           )}
           <Textarea
-            label="Mensagem (revise antes de enviar)"
+            label="Mensagem 1 — o aviso (revise/edite antes de enviar)"
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            className="min-h-[180px] font-mono text-xs"
+            className="min-h-[160px] text-xs"
             disabled={enviando}
           />
+          {extras.map((m, i) => (
+            <div key={i}>
+              <p className="mb-1 text-xs font-medium text-muted-foreground">
+                Mensagem {i + 2} — enviada em seguida, separada (para o cliente copiar com um toque)
+              </p>
+              <pre className="max-h-24 overflow-auto rounded-md border border-border bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">{m}</pre>
+            </div>
+          ))}
           <div className="flex justify-end gap-2 border-t border-border/60 pt-3">
             <Button variant="secondary" onClick={onFechar} disabled={enviando}>
               Cancelar
