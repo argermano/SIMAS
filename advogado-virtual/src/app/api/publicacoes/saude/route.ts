@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { hojeSaoPauloISO } from '@/lib/processos/util'
+import { oabsDoTenant } from '@/lib/processos/djen'
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/publicacoes/saude — widget de saúde da captura (Lote 2)
@@ -148,6 +149,18 @@ export async function GET() {
   // incompletos. (O sinal "26h sem sucesso" do widget não cobre a falha do dia:
   // o sucesso de ontem ainda segura o verde.) 'parcial' também alerta: cobertura
   // incompleta da janela.
+  // Só alerta OABs MONITORADAS HOJE — uma inscrição removida da configuração
+  // deixaria um alerta "fantasma" eterno (última rodada dela nunca mais muda).
+  const { data: tenantRow } = await supabase
+    .from('tenants')
+    .select('oab_numero, oab_estado, config')
+    .eq('id', usuario.tenant_id)
+    .single()
+  const monitoradas = new Set(
+    (tenantRow ? oabsDoTenant(tenantRow as { oab_numero: string | null; oab_estado: string | null; config: unknown }) : [])
+      .map((o) => `${o.numero}:${o.uf}`),
+  )
+
   const capturas = (ultimasRes.data ?? []) as unknown as (UltimaCaptura & { erro?: string | null })[]
   const maisRecentePorOab = new Map<string, UltimaCaptura & { erro?: string | null }>()
   for (const c of capturas) {
@@ -155,6 +168,7 @@ export async function GET() {
     if (!maisRecentePorOab.has(chave)) maisRecentePorOab.set(chave, c) // já vem desc
   }
   const alertas = [...maisRecentePorOab.values()]
+    .filter((c) => monitoradas.size === 0 || monitoradas.has(`${c.oab}:${c.uf}`))
     .filter((c) => c.status === 'falha' || c.status === 'parcial')
     .map((c) => ({
       oab: c.oab,
