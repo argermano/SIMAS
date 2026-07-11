@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   Wallet, CalendarClock, AlertTriangle, CheckCircle2, Copy, HandCoins,
-  XCircle, Plus, Search, ChevronLeft, ChevronRight, FilterX,
+  XCircle, Plus, Search, ChevronLeft, ChevronRight, FilterX, MessageSquare
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,7 @@ import { cn, formatarData } from '@/lib/utils'
 import { formatarValor } from '@/lib/financeiro/parcelas'
 import { gerarPixCopiaECola } from '@/lib/financeiro/pix'
 import { ModalBaixa } from './ModalBaixa'
+import { ModalComunicar } from './ModalComunicar'
 import { ModalNovaCobranca, type PrefillContrato } from './ModalNovaCobranca'
 import { type Parcela, type PixConfig, LABELS_MEIO, hojeISO, somarDiasISO, ehVencida } from './tipos'
 
@@ -81,6 +82,7 @@ export function FinanceiroClient() {
 
   // Modais
   const [parcelaBaixa, setParcelaBaixa]       = useState<Parcela | null>(null)
+  const [parcelaComunicar, setParcelaComunicar] = useState<Parcela | null>(null)
   const [parcelaCancelar, setParcelaCancelar] = useState<Parcela | null>(null)
   const [cancelando, setCancelando]           = useState(false)
   const [novaAberta, setNovaAberta]           = useState(false)
@@ -414,6 +416,14 @@ export function FinanceiroClient() {
                               </button>
                               <button
                                 type="button"
+                                onClick={() => setParcelaComunicar(p)}
+                                title="Comunicar cobrança por WhatsApp (revisa a mensagem antes de enviar)"
+                                className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                              >
+                                <MessageSquare className="h-3.5 w-3.5" /> WhatsApp
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => setParcelaBaixa(p)}
                                 title="Registrar pagamento (dar baixa)"
                                 className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-success hover:bg-success/10 transition-colors"
@@ -460,6 +470,12 @@ export function FinanceiroClient() {
       )}
 
       {/* Modais */}
+      <ModalComunicar
+        parcela={parcelaComunicar}
+        onFechar={() => setParcelaComunicar(null)}
+        onEnviado={() => { /* nada a recarregar — envio não muda a parcela */ }}
+      />
+
       <ModalBaixa
         parcela={parcelaBaixa}
         onClose={() => setParcelaBaixa(null)}

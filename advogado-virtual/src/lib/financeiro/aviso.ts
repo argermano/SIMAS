@@ -12,6 +12,8 @@ export interface AvisoParcelaInput {
   pixCopiaECola?: string | null // incluído quando o escritório tem Pix configurado
   escritorioNome: string | null
   ehHoje: boolean // true = vence hoje (D-0); false = vence em 3 dias (D-3)
+  /** Envio manual de parcela já vencida: "venceu em DD/MM" (tem precedência sobre ehHoje). */
+  ehVencida?: boolean
 }
 
 /** Primeiro nome, capitalizado, para a saudação (mesmo padrão do notificar.ts). */
@@ -32,7 +34,7 @@ export function montarTextoAvisoParcela(a: AvisoParcelaInput): string {
   const nome = primeiroNome(a.nomeCliente)
   const saud = nome ? `Olá, ${nome}!` : 'Olá!'
   const data = formatarDataISO(a.vencimentoISO)
-  const quando = a.ehHoje ? `vence hoje (${data})` : `vence em ${data}`
+  const quando = a.ehVencida ? `venceu em ${data}` : a.ehHoje ? `vence hoje (${data})` : `vence em ${data}`
   const assinatura = a.escritorioNome ? `— Equipe ${a.escritorioNome}` : '— Equipe do escritório'
 
   const linhas = [
