@@ -20,9 +20,12 @@ const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as co
 type MediaType = (typeof MEDIA_TYPES)[number]
 
 const schema = z.object({
-  conversaId: z.string().trim().min(1).max(100),
+  // O modal envia o id numérico do Chatwoot — aceita número ou string.
+  conversaId: z.coerce.string().trim().min(1).max(100),
   anexoUrl: z.string().url().max(2000),
-  telefone: z.string().trim().min(1).max(30),
+  // Sem telefone (conversa não vinculada a cliente) ainda dá para extrair os
+  // dados — só não há parcela para sugerir.
+  telefone: z.string().trim().min(1).max(30).nullish(),
 })
 
 // A IA pode sinalizar que a imagem não é um comprovante.
@@ -51,8 +54,8 @@ export async function POST(req: NextRequest) {
 
   const parsed = await validateBody(req, schema)
   if (!parsed.ok) return parsed.response
-  const { conversaId, anexoUrl, telefone } = parsed.data
-  if (!apenasDigitos(telefone)) return jsonError('Telefone inválido', 400)
+  const { conversaId, anexoUrl } = parsed.data
+  const telefone = parsed.data.telefone && apenasDigitos(parsed.data.telefone) ? parsed.data.telefone : null
 
   // 1) Bytes do anexo via relay (server-only; segredos nunca chegam ao browser).
   // O relay identifica o agente pelo X-Simas-User-Email — mesma guarda da rota
@@ -109,15 +112,18 @@ export async function POST(req: NextRequest) {
   }
 
   // 4) Casa o cliente pelo telefone da conversa (padrão do /api/conversas/contexto).
-  const { data: clientes, error: erroClientes } = await supabase
-    .from('clientes')
-    .select('id, nome, telefone')
-    .eq('tenant_id', usuario.tenant_id)
-    .is('deleted_at', null)
-    .not('telefone', 'is', null)
-    .order('created_at', { ascending: true })
-  if (erroClientes) return jsonError(erroClientes.message, 500)
-  const cliente = (clientes ?? []).find((c) => mesmoTelefone(c.telefone, telefone)) ?? null
+  let cliente: { id: string; nome: string | null; telefone: string | null } | null = null
+  if (telefone) {
+    const { data: clientes, error: erroClientes } = await supabase
+      .from('clientes')
+      .select('id, nome, telefone')
+      .eq('tenant_id', usuario.tenant_id)
+      .is('deleted_at', null)
+      .not('telefone', 'is', null)
+      .order('created_at', { ascending: true })
+    if (erroClientes) return jsonError(erroClientes.message, 500)
+    cliente = (clientes ?? []).find((c) => mesmoTelefone(c.telefone, telefone)) ?? null
+  }
 
   if (!cliente) {
     return NextResponse.json({ dados, cliente: null, sugestao: null, alternativas: [] })
