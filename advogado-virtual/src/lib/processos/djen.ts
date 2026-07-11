@@ -36,6 +36,11 @@ import { logger } from '@/lib/logger'
 type Admin = SupabaseClient
 
 const DJEN_BASE = process.env.DJEN_BASE ?? 'https://comunicaapi.pje.jus.br/api/v1/comunicacao'
+// Token do proxy de saída na VPS (Caddy /djen/*): o WAF do DJEN bloqueia o IP da
+// Vercel no horário do cron; com DJEN_BASE apontando pro proxy, o header abaixo
+// autentica. Sem a env, o header não é enviado (acesso direto continua funcionando).
+const DJEN_PROXY_TOKEN = process.env.DJEN_PROXY_TOKEN ?? ''
+const DJEN_HEADERS: Record<string, string> | undefined = DJEN_PROXY_TOKEN ? { 'X-Djen-Token': DJEN_PROXY_TOKEN } : undefined
 const BACKFILL_DIAS = 30
 const RATE_DELAY_MS = 3200 // ~20 req/min por IP
 const CAP = 40 // teto de movimentos com resumo IA por execução/tenant (não capa a persistência)
@@ -288,7 +293,7 @@ async function consultarPorOab(
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 10_000)
       try {
-        const res = await fetch(url, { signal: ctrl.signal })
+        const res = await fetch(url, { signal: ctrl.signal, headers: DJEN_HEADERS })
         if (!res.ok) {
           const transitorio = res.status === 403 || res.status === 429 || res.status >= 500
           if (!transitorio || tentativa === 3) throw new Error(`DJEN HTTP ${res.status}`)
