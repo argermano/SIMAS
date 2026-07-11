@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -58,6 +58,10 @@ export function FormPerfilProfissional({ escritorio }: FormPerfilProfissionalPro
   const { success, error: toastError } = useToast()
   const router = useRouter()
 
+  // Snapshot inicial: o submit envia SÓ o que mudou (diff) — uma aba antiga
+  // salva não consegue mais sobrescrever campos que o usuário não tocou
+  // (lição do caso OAB 32777, 2026-07-10/11).
+  const inicialRef = useRef<Record<string, string>>({})
   const [form, setForm] = useState({
     nome_responsavel:   escritorio.nome_responsavel   ?? '',
     oab_numero:         escritorio.oab_numero         ?? '',
@@ -77,6 +81,11 @@ export function FormPerfilProfissional({ escritorio }: FormPerfilProfissionalPro
   })
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    inicialRef.current = { ...form }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function set(campo: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
       let valor = e.target.value
@@ -93,7 +102,11 @@ export function FormPerfilProfissional({ escritorio }: FormPerfilProfissionalPro
     try {
       const payload: Record<string, string | null> = {}
       for (const [k, v] of Object.entries(form)) {
-        payload[k] = v || null
+        if (v !== (inicialRef.current[k] ?? '')) payload[k] = v || null
+      }
+      if (Object.keys(payload).length === 0) {
+        success('Nada a salvar', 'Nenhum campo foi alterado.')
+        return
       }
       const res = await fetch('/api/escritorio/perfil', {
         method: 'PATCH',
@@ -105,6 +118,7 @@ export function FormPerfilProfissional({ escritorio }: FormPerfilProfissionalPro
         toastError('Erro ao salvar', json.error ?? 'Tente novamente.')
         return
       }
+      inicialRef.current = { ...form }
       success('Dados atualizados!', 'Os dados profissionais do escritório foram salvos.')
       router.refresh()  // invalida o cache de navegação para não mostrar dados antigos ao voltar
     } finally {
