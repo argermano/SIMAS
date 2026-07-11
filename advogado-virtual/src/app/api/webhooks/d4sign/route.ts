@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { getProvedorAssinatura } from '@/lib/assinatura'
+import { onContratoAssinado } from '@/lib/financeiro/gancho-contrato'
 import type { D4SignWebhookPayload } from '@/lib/d4sign/types'
 
 function timingSafeEqualStr(a: string, b: string): boolean {
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   const { data: signature } = await supabase
     .from('contract_signatures')
-    .select('id, status, tenant_id, created_by')
+    .select('id, status, tenant_id, created_by, contrato_id')
     .eq('d4sign_uuid', uuid)
     .maybeSingle()
 
@@ -98,6 +99,12 @@ export async function POST(req: NextRequest) {
           .eq('id', task.id)
       }
     } catch { /* silencioso */ }
+
+    // Gancho financeiro: contrato assinado → tarefa "Gerar parcelas" (best-effort,
+    // dedup por origin_reference dentro do helper — nunca falha o webhook).
+    if (signature.contrato_id) {
+      await onContratoAssinado(supabase, signature.tenant_id, signature.contrato_id, signature.created_by ?? null)
+    }
   }
 
   if (novoStatus === 'cancelled') {

@@ -5,10 +5,12 @@ import Link from 'next/link'
 import {
   ArrowLeftRight,
   CalendarPlus,
+  Copy,
   ExternalLink,
   FolderOpen,
   Link2,
   MessageSquare,
+  MessageSquarePlus,
   RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -21,6 +23,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
+import { montarTextoAvisoParcela } from '@/lib/financeiro/aviso'
+import { formatarValor } from '@/lib/financeiro/parcelas'
 import type { Agente, ContextoConversa, Conversa } from '@/lib/conversas/tipos'
 import { AvatarContato } from './AvatarContato'
 import { codeDoErro, mensagemErroRelay } from './erros'
@@ -31,6 +35,33 @@ function dataPtBr(data: string | null): string | null {
   if (!data) return null
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data)
   return m ? `${m[3]}/${m[2]}/${m[1]}` : data
+}
+
+/** Hoje (yyyy-mm-dd) em America/Sao_Paulo — mesma régua do backend de avisos. */
+function hojeSaoPauloISO(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+}
+
+// ---------------------------------------------------------------------------
+// Parcelas em aberto (módulo Financeiro) — contrato de
+// GET /api/financeiro/parcelas-do-cliente?telefone=
+// ---------------------------------------------------------------------------
+
+interface ParcelaAberta {
+  id: string
+  descricao: string
+  valor_centavos: number
+  vencimento: string // yyyy-mm-dd
+  vencida?: boolean
+  /** Copia-e-cola pronto (null quando o escritório não configurou o Pix). */
+  pix?: string | null
+  /** Texto do aviso pronto para o composer (gerado no servidor). */
+  textoAviso?: string | null
+}
+
+interface RespostaParcelasCliente {
+  cliente: { id: string; nome: string } | null
+  parcelas?: ParcelaAberta[]
 }
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
@@ -53,6 +84,7 @@ export function PainelContexto({
   onAtribuido,
   onAgendar,
   onAgenteDesconectado,
+  onInserirTexto,
 }: {
   conversa: Conversa | null
   conectado: boolean
@@ -60,6 +92,9 @@ export function PainelContexto({
   onAgendar: (cliente: { id: string; nome: string } | null) => void
   /** Opcional: um 428 na transferência marca o agente como desconectado no shell. */
   onAgenteDesconectado?: () => void
+  /** Opcional (plumbing do shell): preenche o composer da thread com um texto
+   * pronto — o humano revisa e envia; nada sai automaticamente. */
+  onInserirTexto?: (texto: string) => void
 }) {
   const { success, error: toastError } = useToast()
 
@@ -75,6 +110,9 @@ export function PainelContexto({
   const [agentes, setAgentes] = useState<Agente[] | null>(null)
   const [loadingAgentes, setLoadingAgentes] = useState(false)
   const [transferindo, setTransferindo] = useState(false)
+
+  // Parcelas em aberto (Financeiro) — best-effort: erro/rota ausente só oculta o card.
+  const [parcelasResp, setParcelasResp] = useState<RespostaParcelasCliente | null>(null)
 
   const carregarContexto = useCallback(async () => {
     if (!telefone) {
@@ -106,6 +144,62 @@ export function PainelContexto({
     setContexto(null)
     void carregarContexto()
   }, [carregarContexto])
+
+  // Parcelas em aberto do cliente casado — best-effort: qualquer erro
+  // (inclusive rota do Financeiro ainda não publicada) só oculta o card.
+  const clienteId = contexto?.cliente?.id ?? null
+  useEffect(() => {
+    setParcelasResp(null)
+    if (!telefone || !clienteId) return
+    let ativo = true
+    void (async () => {
+      try {
+        const r = await fetch(
+          `/api/financeiro/parcelas-do-cliente?telefone=${encodeURIComponent(telefone)}`,
+        )
+        if (!r.ok) return
+        const d = (await r.json().catch(() => null)) as RespostaParcelasCliente | null
+        if (ativo && d) setParcelasResp(d)
+      } catch {
+        /* card fica oculto */
+      }
+    })()
+    return () => {
+      ativo = false
+    }
+  }, [telefone, clienteId])
+
+  async function copiarPix(p: ParcelaAberta) {
+    const codigo = p.pix?.trim()
+    if (!codigo) return
+    try {
+      await navigator.clipboard.writeText(codigo)
+      success('Pix copiado', 'Copia-e-cola pronto para colar onde precisar.')
+    } catch {
+      toastError('Não foi possível copiar', 'Copie o código pela tela do Financeiro.')
+    }
+  }
+
+  /** Preenche o composer com o texto da cobrança — o humano revisa e envia. */
+  function inserirCobranca(p: ParcelaAberta) {
+    const cli = contexto?.cliente
+    if (!onInserirTexto || !cli) return
+    // O servidor já manda o texto pronto; o fallback local cobre versões
+    // antigas da rota (mesmo formato, sem o nome do escritório).
+    const texto =
+      p.textoAviso?.trim() ||
+      montarTextoAvisoParcela({
+        nomeCliente: cli.nome,
+        descricao: p.descricao,
+        valorCentavos: p.valor_centavos,
+        vencimentoISO: p.vencimento,
+        pixCopiaECola: p.pix ?? null,
+        escritorioNome: null,
+        ehHoje: p.vencimento === hojeSaoPauloISO(),
+      })
+    onInserirTexto(texto)
+    success('Cobrança inserida no chat', 'Revise o texto antes de enviar.')
+  }
 
   async function carregarAgentes() {
     if (agentes !== null || loadingAgentes) return
@@ -170,6 +264,9 @@ export function PainelContexto({
   const cliente = contexto?.cliente ?? null
   // "Casos ativos" ao pé da letra: encerrados não entram na lista do painel.
   const processosAtivos = (contexto?.processos ?? []).filter((p) => p.situacao !== 'encerrado')
+  // Parcelas abertas (a rota já filtra e ordena por vencimento; até 3 no card).
+  const hojeISO = hojeSaoPauloISO()
+  const parcelasAbertas = parcelasResp?.parcelas ?? []
 
   return (
     <aside className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card">
@@ -296,6 +393,65 @@ export function PainelContexto({
                       </Link>
                     </li>
                   ))}
+                </ul>
+              </section>
+            )}
+
+            {/* PARCELAS EM ABERTO (Financeiro) — só aparece quando há parcela
+                aberta. "Inserir cobrança" preenche o composer: humano revisa
+                e envia; nada sai automático. */}
+            {parcelasAbertas.length > 0 && (
+              <section className="space-y-2">
+                <Eyebrow>Parcelas em aberto · {parcelasAbertas.length}</Eyebrow>
+                <ul className="space-y-2">
+                  {parcelasAbertas.slice(0, 3).map((p) => {
+                    const vencida = p.vencida ?? p.vencimento < hojeISO
+                    const temPix = !!p.pix?.trim()
+                    return (
+                      <li key={p.id} className="rounded-lg border border-border bg-background px-3 py-2">
+                        <p className="truncate text-sm font-medium text-foreground" title={p.descricao}>
+                          {p.descricao}
+                        </p>
+                        <p className="mt-0.5 text-xs">
+                          <span className="font-semibold text-foreground">
+                            {formatarValor(p.valor_centavos)}
+                          </span>{' '}
+                          <span className={cn(vencida ? 'font-semibold text-destructive' : 'text-muted-foreground')}>
+                            · {vencida ? 'venceu' : 'vence'} {dataPtBr(p.vencimento)}
+                          </span>
+                        </p>
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          {onInserirTexto && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="h-7 flex-1 whitespace-normal px-2 text-xs"
+                              onClick={() => inserirCobranca(p)}
+                              title="Preencher o composer com o texto da cobrança (você revisa e envia)"
+                            >
+                              <MessageSquarePlus className="h-3.5 w-3.5 shrink-0" />
+                              Inserir cobrança no chat
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 border border-border"
+                            disabled={!temPix}
+                            onClick={() => void copiarPix(p)}
+                            title={
+                              temPix
+                                ? 'Copiar o Pix copia-e-cola desta parcela'
+                                : 'Configure a chave Pix em Configurações'
+                            }
+                            aria-label="Copiar Pix copia-e-cola"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </li>
+                    )
+                  })}
                 </ul>
               </section>
             )}

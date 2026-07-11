@@ -12,6 +12,7 @@ import { montarTextoAviso, enviarAvisoWhatsApp } from './notificar'
 import { completionJSON } from '@/lib/anthropic/client'
 import { logger } from '@/lib/logger'
 import { logAudit } from '@/lib/audit'
+import { criarTarefaAutomatica } from '@/lib/financeiro/gancho-contrato'
 
 type Admin = SupabaseClient
 
@@ -200,12 +201,12 @@ async function syncUmProcesso(
     }
   })
 
-  let inseridos: Array<{ id: string; notif_status: string; notif_texto: string | null }> = []
+  let inseridos: Array<{ id: string; notif_status: string; notif_texto: string | null; categoria: string | null }> = []
   if (linhas.length) {
     const { data, error } = await admin
       .from('processo_movimentos')
       .upsert(linhas, { onConflict: 'processo_id,raw_hash', ignoreDuplicates: true })
-      .select('id, notif_status, notif_texto')
+      .select('id, notif_status, notif_texto, categoria')
     if (error) {
       logger.error('processos.sync.insert', { processo: proc.id }, error)
       return null
@@ -245,6 +246,42 @@ async function syncUmProcesso(
       }
     }
   }
+  // GANCHO FINANCEIRO (L1): alvará expedido em processo cujo cliente tem contrato
+  // com percentual de êxito > 0 → tarefa automática "avaliar cobrança de êxito".
+  // Best-effort (nunca derruba o sync) e com dedup por origin_reference
+  // `exito:<movimentoId>`. NÃO mexe no fluxo de notificação acima. No snapshot
+  // inicial (baseline) não cria tarefa — alvará histórico não é acionável agora,
+  // mesma lógica que impede aviso retroativo.
+  const alvaras = baseline ? [] : inseridos.filter((r) => r.categoria === 'expedicao_alvara')
+  if (alvaras.length > 0) {
+    try {
+      // Só contrato VIGENTE (assinado, ou exportado no fluxo antigo) — rascunho
+      // abandonado com percentual preenchido não pode sugerir cobrança de êxito.
+      const { data: contratos } = await admin
+        .from('contratos_honorarios')
+        .select('percentual_exito')
+        .eq('tenant_id', proc.tenant_id)
+        .eq('cliente_id', proc.cliente_id)
+        .in('status', ['assinado', 'exportado'])
+        .gt('percentual_exito', 0)
+        .limit(1)
+      const pct = contratos?.[0]?.percentual_exito
+      if (pct != null) {
+        for (const r of alvaras) {
+          await criarTarefaAutomatica(admin, {
+            tenantId: proc.tenant_id,
+            description: `Alvará expedido — avaliar cobrança de êxito (${Number(pct)}%) — processo ${rotulo}`,
+            originReference: `exito:${r.id}`,
+            processId: proc.id,
+            priority: 'alta',
+          })
+        }
+      }
+    } catch (err) {
+      logger.error('processos.sync.gancho_exito', { processo: proc.id }, err as Error)
+    }
+  }
+
   // Telemetria: notificáveis inseridos (todos entram 'pendente') menos os que o
   // automático enviou = os que ficaram na fila. (Objetos locais não refletem o
   // UPDATE no banco, então derivamos do contador de enviados.)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { onContratoAssinado } from '@/lib/financeiro/gancho-contrato'
 
 // POST /api/contratos/[id]/marcar-assinado — confirma assinatura manual (sem arquivo)
 export async function POST(
@@ -39,6 +40,9 @@ export async function POST(
     .single()
 
   if (error) return jsonError(error.message, 500)
+
+  // Gancho financeiro: tarefa "Gerar parcelas" (best-effort, dedup no helper).
+  await onContratoAssinado(supabase, usuario.tenant_id, id, usuario.id)
 
   return NextResponse.json({ contrato: atualizado })
 }

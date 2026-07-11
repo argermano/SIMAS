@@ -61,6 +61,18 @@ export function Conversas({ email }: { email: string }) {
 
   const buscaRef = useRef<HTMLInputElement>(null)
 
+  // Plumbing PainelContexto → composer da Thread ("Inserir cobrança no chat"):
+  // a Thread montada registra aqui a função que preenche o composer.
+  const inserirTextoRef = useRef<((texto: string) => void) | null>(null)
+  const registrarInserirTexto = useCallback((fn: ((texto: string) => void) | null) => {
+    inserirTextoRef.current = fn
+  }, [])
+  const inserirNoComposer = useCallback((texto: string) => {
+    inserirTextoRef.current?.(texto)
+    // Fecha o overlay de contexto (< xl) para o composer ficar visível.
+    setContextoAberto(false)
+  }, [])
+
   // Tick de 60s para os selos "AGUARDANDO X" envelhecerem com a tela aberta
   // (recomputa os rótulos client-side, sem refetch).
   const [agoraEpochSeg, setAgoraEpochSeg] = useState(() => Math.floor(Date.now() / 1000))
@@ -418,6 +430,7 @@ export function Conversas({ email }: { email: string }) {
               onListaMudou={carregar}
               onAgenteDesconectado={marcarDesconectado}
               onAbrirContexto={() => setContextoAberto(true)}
+              registrarInserirTexto={registrarInserirTexto}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 text-center">
@@ -443,6 +456,7 @@ export function Conversas({ email }: { email: string }) {
               onAtribuido={carregar}
               onAgendar={abrirAgenda}
               onAgenteDesconectado={marcarDesconectado}
+              onInserirTexto={inserirNoComposer}
             />
           </aside>
         )}
@@ -459,6 +473,7 @@ export function Conversas({ email }: { email: string }) {
           onAgenteDesconectado={marcarDesconectado}
           onFechar={() => setMobileAberto(false)}
           onAbrirContexto={() => setContextoAberto(true)}
+          registrarInserirTexto={registrarInserirTexto}
         />
       )}
 
@@ -496,6 +511,7 @@ export function Conversas({ email }: { email: string }) {
                   setContextoAberto(false)
                   void abrirAgenda(cliente)
                 }}
+                onInserirTexto={inserirNoComposer}
               />
             </div>
           </div>

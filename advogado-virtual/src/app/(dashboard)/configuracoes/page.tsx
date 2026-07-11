@@ -5,12 +5,13 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, CheckCircle, AlertTriangle, Info } from 'lucide-react'
+import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, CheckCircle, AlertTriangle, Info, Wallet } from 'lucide-react'
 import { formatarData } from '@/lib/utils'
 import { isEncryptionConfigured } from '@/lib/encryption'
 import { LABELS_ROLE } from '@/types'
 import { FormPerfilProfissional } from '@/components/configuracoes/FormPerfilProfissional'
 import { ConfigMovimentacoes } from '@/components/configuracoes/ConfigMovimentacoes'
+import { ConfigFinanceiro } from '@/components/configuracoes/ConfigFinanceiro'
 import { PainelConsumoIA } from '@/components/configuracoes/PainelConsumoIA'
 import { PadroesDocumentos } from '@/components/configuracoes/PadroesDocumentos'
 import { FormatacaoEscritorio } from '@/components/configuracoes/FormatacaoEscritorio'
@@ -157,6 +158,21 @@ export default async function ConfiguracoesPage() {
         </CardHeader>
         <CardContent>
           <ConfigMovimentacoes />
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Financeiro (Pix do escritório) — admin/advogado */}
+      {['admin', 'advogado'].includes(usuario.role) && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Wallet className="h-5 w-5 text-muted-foreground" />
+            Financeiro
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ConfigFinanceiro />
         </CardContent>
       </Card>
       )}

@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, Settings, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
   KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter, BellRing, Newspaper, MessagesSquare,
-  CalendarDays,
+  CalendarDays, Wallet,
 } from 'lucide-react'
 import { LogoMark } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils'
@@ -54,6 +54,12 @@ const MENU_ITEMS = [
     label:   'Contratos a assinar',
     icon:    FileSignature,
     ativoSe: (p: string) => p.startsWith('/contratos'),
+  },
+  {
+    href:    '/financeiro',
+    label:   'Financeiro',
+    icon:    Wallet,
+    ativoSe: (p: string) => p.startsWith('/financeiro'),
   },
   {
     href:    '/biblioteca',

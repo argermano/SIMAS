@@ -47,6 +47,7 @@ export function Thread({
   onAgenteDesconectado,
   onFechar,
   onAbrirContexto,
+  registrarInserirTexto,
 }: {
   conversa: Conversa
   conectado: boolean
@@ -56,6 +57,9 @@ export function Thread({
   onFechar?: () => void
   /** Abre o painel de contexto como overlay (visível só abaixo de xl). */
   onAbrirContexto?: () => void
+  /** Plumbing do shell: registra uma função que preenche o composer (usada
+   * pelo "Inserir cobrança no chat" do PainelContexto). null ao desmontar. */
+  registrarInserirTexto?: (fn: ((texto: string) => void) | null) => void
 }) {
   const { success, error: toastError } = useToast()
   const [mensagens, setMensagens] = useState<Mensagem[]>([])
@@ -101,6 +105,12 @@ export function Thread({
   useEffect(() => {
     void carregar()
   }, [carregar])
+
+  // Expõe "preencher o composer" para o shell (PainelContexto → cobrança).
+  useEffect(() => {
+    registrarInserirTexto?.((texto) => setTexto(texto))
+    return () => registrarInserirTexto?.(null)
+  }, [registrarInserirTexto])
 
   // Atualização automática da conversa aberta: revalida em silêncio a cada 3s
   // (aba visível). Não mexe no composer (estado separado) e o auto-scroll abaixo
@@ -308,7 +318,12 @@ export function Thread({
                 </span>
               </div>
               {g.mensagens.map((m) => (
-                <MensagemBolha key={m.id} mensagem={m} />
+                <MensagemBolha
+                  key={m.id}
+                  mensagem={m}
+                  conversaId={id}
+                  telefone={conversa.contato.telefone}
+                />
               ))}
             </div>
           ))

@@ -2,6 +2,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { onContratoAssinado } from '@/lib/financeiro/gancho-contrato'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -93,6 +94,9 @@ export async function PATCH(
 
   if (error) return jsonError(error.message, 500)
   if (!atualizado) return jsonError('Contrato não encontrado', 404)
+
+  // Gancho financeiro: tarefa "Gerar parcelas" (best-effort, dedup no helper).
+  await onContratoAssinado(supabase, usuario.tenant_id, id, usuario.id)
 
   return NextResponse.json({ contrato: atualizado })
 }

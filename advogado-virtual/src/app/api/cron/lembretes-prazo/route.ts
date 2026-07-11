@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { createClient as createAdminClient, type SupabaseClient } from '@supabase/supabase-js'
 import { enviarEmail, emailTemplate, urlBaseApp } from '@/lib/email'
 import { logger } from '@/lib/logger'
+import { logAudit } from '@/lib/audit'
 import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
+import { hojeSaoPauloISO } from '@/lib/processos/util'
+import { enviarAvisoWhatsApp } from '@/lib/processos/notificar'
+import { montarTextoAvisoParcela } from '@/lib/financeiro/aviso'
+import { gerarPixCopiaECola } from '@/lib/financeiro/pix'
 
 export const maxDuration = 60
 
@@ -15,6 +20,7 @@ export const maxDuration = 60
 // secret configurado, responde 401 (não roda). A Vercel injeta esse header
 // automaticamente nos crons quando CRON_SECRET está no ambiente.
 export async function GET(req: Request) {
+  const t0 = Date.now()
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return new NextResponse('Unauthorized', { status: 401 })
@@ -134,7 +140,171 @@ export async function GET(req: Request) {
     logger.error('cron.publicacoes_vigia.falha', {}, e as Error)
   }
 
-  return NextResponse.json({ ok: true, pessoas: porPessoa.size, enviados, tarefas: idsLembrados.length })
+  // Avisos de parcela (Financeiro L1) — etapa ISOLADA com deadline próprio:
+  // nunca derruba os lembretes/vigia acima. D-3 e D-0, claim atômico antes do
+  // envio, opt-out por cliente, NUNCA parcela vencida (só igualdade de data).
+  let avisosParcelas: { candidatas: number; enviados: number; erros: number } = {
+    candidatas: 0, enviados: 0, erros: 0,
+  }
+  try {
+    // Deadline ancorado no INÍCIO da request (maxDuration=60): reduz a janela
+    // de kill entre o claim e o envio quando as etapas anteriores demoram.
+    avisosParcelas = await enviarAvisosParcelas(admin, t0 + 50_000)
+    logger.info('cron.avisos_parcelas', { ...avisosParcelas })
+  } catch (e) {
+    logger.error('cron.avisos_parcelas.falha', {}, e as Error)
+  }
+
+  return NextResponse.json({ ok: true, pessoas: porPessoa.size, enviados, tarefas: idsLembrados.length, avisosParcelas })
+}
+
+/** Soma `dias` a uma data YYYY-MM-DD ancorando no meio-dia UTC (imune a fuso/DST). */
+function somarDiasISO(iso: string, dias: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d, 12))
+  dt.setUTCDate(dt.getUTCDate() + dias)
+  return dt.toISOString().slice(0, 10)
+}
+
+interface ParcelaAviso {
+  id: string
+  tenant_id: string
+  cliente_id: string
+  descricao: string
+  valor_centavos: number
+  vencimento: string
+  aviso_d3_em: string | null
+  aviso_d0_em: string | null
+}
+
+/**
+ * Varre parcelas ABERTAS que vencem hoje (D-0, aviso_d0_em null) ou em 3 dias
+ * (D-3, aviso_d3_em null) — datas no fuso America/Sao_Paulo — e envia o aviso
+ * por WhatsApp ao cliente que tem aviso_cobranca ligado e telefone. O CLAIM é
+ * atômico (UPDATE ... WHERE aviso_dX_em IS NULL RETURNING, padrão Fase 5) e
+ * acontece ANTES do envio: nunca 2 avisos da mesma parcela, mesmo sob
+ * concorrência. Parcela vencida NUNCA entra (comparação por igualdade de data).
+ * LGPD: loga apenas ids/contagens — nunca valores ou texto.
+ */
+async function enviarAvisosParcelas(admin: SupabaseClient, deadline: number) {
+  const hoje = hojeSaoPauloISO()
+  const d3 = somarDiasISO(hoje, 3)
+
+  // Paginação ORDENADA até esgotar (ou até o deadline): a janela D-3 é por
+  // igualdade de data — parcela que ficar fora hoje perde o D-3 para sempre.
+  const PAGINA = 200
+  const todas: ParcelaAviso[] = []
+  for (let offset = 0; ; offset += PAGINA) {
+    const { data, error } = await admin
+      .from('parcelas')
+      .select('id, tenant_id, cliente_id, descricao, valor_centavos, vencimento, aviso_d3_em, aviso_d0_em')
+      .eq('status', 'aberta')
+      .in('vencimento', [hoje, d3])
+      .order('vencimento', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + PAGINA - 1)
+    if (error) throw error
+    todas.push(...((data ?? []) as ParcelaAviso[]))
+    if ((data ?? []).length < PAGINA) break
+    if (Date.now() > deadline) {
+      logger.warn('cron.avisos_parcelas.deadline_na_busca', { carregadas: todas.length })
+      break
+    }
+  }
+
+  // Só as com aviso ainda pendente (claim null para a janela correspondente).
+  const pendentes = todas.filter((p) =>
+    p.vencimento === hoje ? !p.aviso_d0_em : !p.aviso_d3_em,
+  )
+  const resultado = { candidatas: pendentes.length, enviados: 0, erros: 0 }
+  if (pendentes.length === 0) return resultado
+
+  // Contexto em lote: clientes (opt-out/telefone) e tenants (nome + Pix).
+  const clienteIds = [...new Set(pendentes.map((p) => p.cliente_id))]
+  const tenantIds = [...new Set(pendentes.map((p) => p.tenant_id))]
+  const [{ data: clientes }, { data: tenants }] = await Promise.all([
+    admin.from('clientes').select('id, nome, telefone, aviso_cobranca').in('id', clienteIds).is('deleted_at', null),
+    admin.from('tenants').select('id, nome, config').in('id', tenantIds),
+  ])
+  const porCliente = new Map((clientes ?? []).map((c) => [c.id as string, c]))
+  const porTenant = new Map((tenants ?? []).map((t) => [t.id as string, t]))
+
+  let processadas = 0
+  for (const p of pendentes) {
+    if (Date.now() > deadline) {
+      // Visibilidade: quantas ficaram de fora quando o deadline cortou o lote.
+      logger.warn('cron.avisos_parcelas.deadline_cortou', {
+        processadas,
+        restantes: pendentes.length - processadas,
+      })
+      break
+    }
+    processadas++
+
+    const cli = porCliente.get(p.cliente_id)
+    // Opt-out (aviso_cobranca desligado), cliente removido ou sem telefone:
+    // não envia e NÃO faz claim (se religar antes do D-0, o aviso do dia sai).
+    if (!cli || cli.aviso_cobranca !== true || !cli.telefone) continue
+
+    // CLAIM atômico antes do envio (padrão Fase 5): só envia quem virar a coluna.
+    const ehHoje = p.vencimento === hoje
+    const campo = ehHoje ? 'aviso_d0_em' : 'aviso_d3_em'
+    const { data: claim } = await admin
+      .from('parcelas')
+      .update({ [campo]: new Date().toISOString() })
+      .eq('id', p.id)
+      .eq('status', 'aberta')
+      .is(campo, null)
+      .select('id')
+    if (!claim || claim.length === 0) continue // outro worker já pegou
+
+    const ten = porTenant.get(p.tenant_id)
+    const fin = ((ten?.config as Record<string, unknown> | null)?.financeiro ?? {}) as {
+      pix_chave?: string; pix_nome?: string; pix_cidade?: string
+    }
+    let pixCopiaECola: string | null = null
+    if (fin.pix_chave && fin.pix_nome && fin.pix_cidade) {
+      try {
+        pixCopiaECola = gerarPixCopiaECola({
+          chave: fin.pix_chave,
+          nome: fin.pix_nome,
+          cidade: fin.pix_cidade,
+          valorCentavos: p.valor_centavos,
+        })
+      } catch {
+        pixCopiaECola = null // config Pix inválida — aviso segue sem o copia-e-cola
+      }
+    }
+
+    const texto = montarTextoAvisoParcela({
+      nomeCliente: (cli.nome as string) ?? null,
+      descricao: p.descricao,
+      valorCentavos: p.valor_centavos,
+      vencimentoISO: p.vencimento,
+      pixCopiaECola,
+      escritorioNome: (ten?.nome as string) ?? null,
+      ehHoje,
+    })
+
+    const res = await enviarAvisoWhatsApp(cli.telefone as string, texto)
+    if (res.ok) resultado.enviados++
+    else {
+      // Claim fica: preferimos NÃO reenviar (invariante "nunca 2x") a arriscar
+      // duplicado. Registra a falha na auditoria para a equipe reenviar
+      // manualmente pelo card das Conversas (LGPD: só ids, sem texto/valores).
+      resultado.erros++
+      logger.error('cron.avisos_parcelas.envio_falhou', { parcela: p.id })
+      await logAudit({
+        tenantId: p.tenant_id,
+        action: 'financeiro.aviso_falhou',
+        resourceType: 'parcela',
+        resourceId: p.id,
+        metadata: { janela: ehHoje ? 'd0' : 'd3', vencimento: p.vencimento },
+      })
+    }
+  }
+
+  return resultado
 }
 
 function escapar(s: string): string {
