@@ -4,7 +4,8 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { Mic, Square, Pause, Play, Loader2, ShieldCheck, CloudOff, RefreshCw } from 'lucide-react'
+import { Mic, Square, Pause, Play, Loader2, ShieldCheck, CloudOff, RefreshCw, Download } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import {
   salvarChunkPendente,
   removerChunkPendente,
@@ -92,20 +93,47 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
 
   // ─── Envio de um trecho (com persistência local antes do upload) ─
   // O blob é salvo no IndexedDB ANTES da tentativa; só é removido após o
-  // servidor confirmar. Falha de rede → o trecho fica guardado para retry.
+  // servidor confirmar. Falha de rede em QUALQUER etapa → o trecho fica
+  // guardado para retry. Os bytes sobem DIRETO ao Storage (signed URL): a
+  // Vercel fica fora do caminho do áudio, então o limite de body (~4.5MB) que
+  // perdia gravações longas não se aplica mais.
   const enviarChunk = useCallback(async (blob: Blob, chunkNum: number): Promise<RespostaUpload> => {
     if (!atendimentoId) return null
     await salvarChunkPendente({ atendimentoId, chunkNum, blob, mimeType: blob.type })
     try {
-      const formData = new FormData()
-      formData.append('audio', blob, `gravacao_chunk_${chunkNum}.webm`)
+      // 1. Pede uma signed URL de upload ao bucket (mesma rota do upload de arquivo).
+      const resUrl = await fetch('/api/ia/transcrever-audio-upload', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          fileName:      `gravacao_chunk_${chunkNum}.webm`,
+          fileSize:      blob.size,
+          atendimentoId,
+        }),
+      })
+      if (!resUrl.ok) return null
+      const { uploadToken, storagePath } = await resUrl.json()
 
-      const res  = await fetch(`/api/atendimentos/${atendimentoId}/audio`, {
-        method: 'POST',
-        body:   formData,
+      // 2. Upload direto do blob para o Supabase Storage via signed URL.
+      const supabase = createClient()
+      const { error: uploadError } = await supabase.storage
+        .from('documentos')
+        .uploadToSignedUrl(storagePath, uploadToken, blob, {
+          contentType: blob.type || 'audio/webm',
+        })
+      if (uploadError) return null
+
+      // 3. Dispara a transcrição por JSON — o servidor baixa o chunk do bucket
+      //    e segue o mesmo pipeline de acúmulo/persistência da transcrição.
+      const res = await fetch(`/api/atendimentos/${atendimentoId}/audio`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ storagePath, chunkNum }),
       })
       if (!res.ok) return null
       const data = await res.json()
+
+      // 4. Só agora o trecho saiu com segurança — remove o pendente local.
       await removerChunkPendente(atendimentoId, chunkNum)
       return {
         transcricao:         data.transcricao ?? '',
@@ -269,14 +297,13 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
           onTranscricao(transcricaoAcumuladaRef.current)
         }
       } else {
-        const transcricaoFinal = transcricaoAcumuladaRef.current
-          ? transcricaoAcumuladaRef.current + '\n' + resp.transcricao
-          : resp.transcricao
-
+        // O acúmulo local da fila (enfileirarUpload) já somou este trecho final —
+        // concatenar de novo aqui duplicava o último trecho. Usa o acúmulo
+        // autoritativo do servidor, como o reenvio de pendentes já faz.
         transcricaoAcumuladaRef.current = ''
         chunkNumeroRef.current = 0
 
-        onTranscricao(transcricaoFinal)
+        onTranscricao(resp.transcricaoCompleta || resp.transcricao)
       }
     } catch {
       setErro('Erro ao enviar o áudio. Os trechos gravados estão guardados neste dispositivo.')
@@ -379,6 +406,29 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
     setErro('')
   }, [atendimentoId])
 
+  // ─── Resgate de última instância: baixar os trechos para o computador ─────
+  // Se, mesmo com retry, os trechos não sobem (rede ruim persistente), a
+  // usuária ainda consegue salvar o áudio localmente — nunca mais "perdi a
+  // gravação". Um arquivo .webm por trecho; as object URLs são revogadas.
+  const handleBaixarPendentes = useCallback(async () => {
+    if (!atendimentoId) return
+    const itens = await listarChunksPendentes(atendimentoId)
+    if (itens.length === 0) return
+    for (const item of itens) {
+      const url = URL.createObjectURL(item.blob)
+      const a   = document.createElement('a')
+      a.href     = url
+      a.download = `gravacao_trecho_${item.chunkNum}.webm`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      // Revoga só depois de um tempo — revogar na hora cancelaria o download.
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+      // Intervalo entre downloads: navegadores agrupam cliques simultâneos.
+      await new Promise(r => setTimeout(r, 300))
+    }
+  }, [atendimentoId])
+
   const desabilitado = disabled || !atendimentoId
 
   const temGuardados = pendentes > 0 || (recuperaveis?.length ?? 0) > 0
@@ -451,10 +501,17 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
                 {reenviando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 Enviar trechos guardados
               </Button>
+              <Button size="sm" variant="secondary" onClick={handleBaixarPendentes} disabled={reenviando} className="gap-1.5">
+                <Download className="h-3.5 w-3.5" />
+                Baixar áudio
+              </Button>
               <Button size="sm" variant="secondary" onClick={handleDescartarGuardados} disabled={reenviando}>
                 Descartar
               </Button>
             </div>
+            <p className="w-full text-xs text-amber-800 dark:text-amber-300/80">
+              O áudio está salvo neste navegador. Se o envio não completar, use &quot;Baixar áudio&quot; para guardar os trechos no computador.
+            </p>
           </div>
         )}
 
