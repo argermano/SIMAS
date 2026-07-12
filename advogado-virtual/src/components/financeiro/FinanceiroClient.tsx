@@ -23,6 +23,7 @@ import { ModalBaixa } from './ModalBaixa'
 import { ModalComunicar } from './ModalComunicar'
 import { ModalNovaCobranca, type PrefillContrato } from './ModalNovaCobranca'
 import { ConferirComprovanteModal } from './ConferirComprovanteModal'
+import { InboxComprovantes } from './InboxComprovantes'
 import { PagamentoModal } from './PagamentoModal'
 import { type Parcela, type PixConfig, LABELS_MEIO, hojeISO, somarDiasISO, ehVencida, aguardandoBaixa } from './tipos'
 
@@ -291,6 +292,10 @@ export function FinanceiroClient() {
 
   return (
     <div className="space-y-5">
+      {/* Inbox de comprovantes recebidos sem cobrança (migration 053): aparece
+          só quando há pendentes. Atribuir/descartar recarrega as parcelas. */}
+      <InboxComprovantes onChange={aposMudanca} />
+
       {/* Indicadores */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <IndicadorCard
