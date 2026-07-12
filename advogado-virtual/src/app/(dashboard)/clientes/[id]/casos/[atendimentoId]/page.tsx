@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PecasPorArea } from '@/components/atendimento/PecasPorArea'
+import { OutraPecaChip } from '@/components/atendimento/OutraPecaChip'
 import { CapaProcesso, type DadosProcesso } from '@/components/atendimento/CapaProcesso'
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
 import { AREAS } from '@/lib/constants/areas'
@@ -243,21 +244,22 @@ export default async function CasoPage({
                         </span>
                       </summary>
                       <div className="space-y-2 border-t px-3 py-3">
-                        {pecasArea.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {pecasArea.map((tipo) => (
-                              <Link
-                                key={tipo}
-                                href={`/${a.area}/pecas/${tipo}?id=${atendimentoId}`}
-                                className="rounded-lg border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:border-primary/30 hover:bg-primary/10 transition-colors"
-                              >
-                                {TIPOS_PECA[tipo]?.nome ?? tipo}
-                              </Link>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">Sem peças mapeadas para esta área.</p>
-                        )}
+                        {/* Chips do catálogo + "Outra…" p/ digitar uma peça fora do catálogo */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          {pecasArea.map((tipo) => (
+                            <Link
+                              key={tipo}
+                              href={`/${a.area}/pecas/${tipo}?id=${atendimentoId}`}
+                              className="rounded-lg border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:border-primary/30 hover:bg-primary/10 transition-colors"
+                            >
+                              {TIPOS_PECA[tipo]?.nome ?? tipo}
+                            </Link>
+                          ))}
+                          <OutraPecaChip area={a.area} atendimentoId={atendimentoId} />
+                          {pecasArea.length === 0 && (
+                            <span className="text-xs text-muted-foreground">Sem peças mapeadas — digite a que precisa</span>
+                          )}
+                        </div>
                         <Link
                           href={`/${a.area}/consultoria?atendimentoId=${atendimentoId}`}
                           className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-primary"

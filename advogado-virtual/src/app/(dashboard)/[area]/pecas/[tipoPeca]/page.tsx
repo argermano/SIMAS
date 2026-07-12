@@ -9,11 +9,23 @@ import { ChevronLeft } from 'lucide-react'
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ area: string; tipoPeca: string }>
+  searchParams: Promise<{ nome?: string }>
 }) {
   const { area, tipoPeca } = await params
   const areaConfig = AREAS[area as AreaId]
+
+  // Peça personalizada ("Outra…"): o título vem do nome digitado (searchParam)
+  if (tipoPeca === 'outra') {
+    const { nome } = await searchParams
+    const nomeLimpo = (nome ?? '').trim()
+    return {
+      title: nomeLimpo ? `${nomeLimpo} — ${areaConfig?.nome ?? 'Área'}` : 'Nova Peça',
+    }
+  }
+
   const pecaConfig = TIPOS_PECA[tipoPeca]
   return {
     title: pecaConfig
@@ -27,19 +39,37 @@ export default async function NovaPecaPage({
   searchParams,
 }: {
   params: Promise<{ area: string; tipoPeca: string }>
-  searchParams: Promise<{ id?: string; clienteId?: string }>
+  searchParams: Promise<{ id?: string; clienteId?: string; nome?: string }>
 }) {
   const { area, tipoPeca } = await params
-  const { id: atendimentoIdParam, clienteId: clienteIdParam } = await searchParams
+  const { id: atendimentoIdParam, clienteId: clienteIdParam, nome: nomeParam } = await searchParams
 
   const areaConfig = AREAS[area as AreaId]
   if (!areaConfig || !areaConfig.ativo) notFound()
 
-  const pecaConfig = TIPOS_PECA[tipoPeca]
-  if (!pecaConfig) notFound()
+  // Slug reservado "outra": peça personalizada digitada pelo advogado (fora do catálogo).
+  // O `tipo` passado à tela é o próprio texto — flui ao gerar-peca (prompt genérico)
+  // e fica legível em pecas.tipo. Exige `nome` válido (3..80 após trim).
+  const outra = tipoPeca === 'outra'
+  const nomeDigitado = (nomeParam ?? '').trim()
+  if (outra && (nomeDigitado.length < 3 || nomeDigitado.length > 80)) notFound()
 
-  // Verifica se o tipo de peça pertence a esta área
-  if (!(areaConfig.pecas as readonly string[]).includes(tipoPeca)) notFound()
+  let tipoParaTela: string
+  let tipoPecaNome: string
+  let subtitulo: string
+  if (outra) {
+    tipoParaTela = nomeDigitado
+    tipoPecaNome = nomeDigitado
+    subtitulo = `${areaConfig.nome} — peça personalizada`
+  } else {
+    const pecaConfig = TIPOS_PECA[tipoPeca]
+    if (!pecaConfig) notFound()
+    // Verifica se o tipo de peça pertence a esta área
+    if (!(areaConfig.pecas as readonly string[]).includes(tipoPeca)) notFound()
+    tipoParaTela = tipoPeca
+    tipoPecaNome = pecaConfig.nome
+    subtitulo = `${areaConfig.nome} — ${pecaConfig.descricao}`
+  }
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -56,8 +86,8 @@ export default async function NovaPecaPage({
   return (
     <>
       <Header
-        titulo={pecaConfig.nome}
-        subtitulo={`${areaConfig.nome} — ${pecaConfig.descricao}`}
+        titulo={tipoPecaNome}
+        subtitulo={subtitulo}
         nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
         acoes={
           <Link
@@ -74,8 +104,8 @@ export default async function NovaPecaPage({
         <div className="mx-auto max-w-3xl">
           <TelaAtendimento
             area={area}
-            tipoPeca={tipoPeca}
-            tipoPecaNome={pecaConfig.nome}
+            tipoPeca={tipoParaTela}
+            tipoPecaNome={tipoPecaNome}
             tenantId={usuario.tenant_id}
             userId={usuario.id}
             roleUsuario={usuario.role ?? 'advogado'}

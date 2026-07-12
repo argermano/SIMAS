@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Zap, FileText, Brain, ChevronRight, RefreshCw } from 'lucide-react'
 import { TIPOS_PECA, MODELOS_PRONTOS } from '@/lib/constants/tipos-peca'
+import { OutraPecaChip } from '@/components/atendimento/OutraPecaChip'
 import type { Area } from '@/lib/constants/areas'
 
 interface PainelAreaProps {
@@ -62,6 +63,10 @@ export function PainelArea({ area }: PainelAreaProps) {
                 </Link>
               )
             })}
+          </div>
+          {/* "Outra…": digitar uma peça fora do catálogo (sem caso vinculado aqui) */}
+          <div className="mt-3">
+            <OutraPecaChip area={area.id} />
           </div>
         </CardContent>
       </Card>
