@@ -276,10 +276,15 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
     }
   }
 
-  // Gera a peça direto a partir do estudo, levando o contexto do caso (atendimentoId)
-  async function gerarPecaDireto(area: string, tipo: string) {
+  // Gera a peça direto a partir do estudo, levando o contexto do caso (atendimentoId).
+  // nomeOutra: peça fora do catálogo (slug reservado /pecas/outra?nome=...).
+  async function gerarPecaDireto(area: string, tipo: string, nomeOutra?: string) {
     await salvarRelatoAtual()
-    router.push(atendimentoId ? `/${area}/pecas/${tipo}?id=${atendimentoId}` : `/${area}/pecas/${tipo}`)
+    const qs = new URLSearchParams()
+    if (nomeOutra) qs.set('nome', nomeOutra)
+    if (atendimentoId) qs.set('id', atendimentoId)
+    const sufixo = qs.size > 0 ? `?${qs.toString()}` : ''
+    router.push(`/${area}/pecas/${tipo}${sufixo}`)
   }
 
   // Caminho opcional: aprofundar a análise (parecer/estratégia) na área
@@ -761,26 +766,21 @@ function AcoesGerarPeca({
   onAprofundar,
 }: {
   areaId: string
-  onGerar: (area: string, tipo: string) => void
+  onGerar: (area: string, tipo: string, nomeOutra?: string) => void
   onAprofundar: (area: string) => void
 }) {
   const pecas = ((AREAS as Record<string, { pecas?: readonly string[] }>)[areaId]?.pecas ?? []) as readonly string[]
-  const tipoPadrao = pecas.includes('peticao_inicial') ? 'peticao_inicial' : (pecas[0] ?? '')
+  const tipoPadrao = pecas.includes('peticao_inicial') ? 'peticao_inicial' : (pecas[0] ?? OUTRA)
   const [tipo, setTipo] = useState(tipoPadrao)
+  const [nomeOutra, setNomeOutra] = useState('')
 
-  // Sem peças mapeadas para a área: oferece apenas o caminho de análise
-  if (pecas.length === 0) {
-    return (
-      <Button
-        size="sm"
-        variant="secondary"
-        onClick={() => onAprofundar(areaId)}
-        className="shrink-0 gap-1.5"
-      >
-        Aprofundar análise
-        <ArrowRight className="h-3.5 w-3.5" />
-      </Button>
-    )
+  // "Outra…" sempre disponível: a peça desejada pode não estar no catálogo da
+  // área (mesmo fluxo do slug reservado /pecas/outra da tela do caso).
+  const ehOutra = tipo === OUTRA
+  const nomeValido = nomeOutra.trim().length >= 3
+  const gerar = () => {
+    if (ehOutra && !nomeValido) return
+    onGerar(areaId, ehOutra ? 'outra' : tipo, ehOutra ? nomeOutra.trim() : undefined)
   }
 
   return (
@@ -790,14 +790,29 @@ function AcoesGerarPeca({
           <Select
             value={tipo}
             onChange={(e) => setTipo(e.target.value)}
-            options={pecas.map((p) => ({ value: p, label: TIPOS_PECA[p]?.nome ?? p }))}
+            options={[
+              ...pecas.map((p) => ({ value: p, label: TIPOS_PECA[p]?.nome ?? p })),
+              { value: OUTRA, label: 'Outra…' },
+            ]}
           />
         </div>
-        <Button size="sm" onClick={() => onGerar(areaId, tipo)} className="gap-1.5">
+        <Button size="sm" onClick={gerar} disabled={ehOutra && !nomeValido} className="gap-1.5">
           Gerar peça
           <ArrowRight className="h-3.5 w-3.5" />
         </Button>
       </div>
+      {ehOutra && (
+        <input
+          type="text"
+          value={nomeOutra}
+          onChange={(e) => setNomeOutra(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') gerar() }}
+          placeholder="Qual peça? ex.: Embargos de Terceiro"
+          maxLength={80}
+          autoFocus
+          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+      )}
       <button
         onClick={() => onAprofundar(areaId)}
         className="self-end text-xs font-medium text-muted-foreground hover:text-primary underline underline-offset-2"
@@ -807,3 +822,7 @@ function AcoesGerarPeca({
     </div>
   )
 }
+
+// Valor sentinela do seletor para "peça fora do catálogo" (o slug real da rota
+// é 'outra'; o sentinela evita colisão caso alguma área ganhe um tipo homônimo).
+const OUTRA = '__outra__'
