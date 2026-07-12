@@ -21,7 +21,10 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS cidade TEXT;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS estado TEXT;
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS cep TEXT;
 
--- Migrar dados do advogado principal (se houver) para o tenant
+-- Migrar dados do advogado principal (se houver) para o tenant.
+-- GUARDA (2026-07-11): só backfill quando o tenant ainda não tem OAB — sem a
+-- guarda, cada reexecução do runner sobrescrevia os dados digitados em
+-- Configurações com os valores desatualizados de users (caso "OAB 32777").
 UPDATE tenants t
 SET
   oab_numero       = u.oab_numero,
@@ -41,4 +44,5 @@ SET
   cep              = u.cep_profissional
 FROM users u
 WHERE u.tenant_id = t.id
-  AND u.is_advogado_principal = true;
+  AND u.is_advogado_principal = true
+  AND t.oab_numero IS NULL;

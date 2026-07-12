@@ -56,5 +56,7 @@ CREATE TRIGGER tenants_updated_at
 -- Dado inicial: tenant padrão para MVP (1 escritório fixo)
 -- ─────────────────────────────────────────────────────────────
 
+-- Guarda contra reexecução: seed só quando a tabela está vazia.
 INSERT INTO tenants (nome, plano, status)
-VALUES ('Meu Escritório', 'trial', 'ativo');
+SELECT 'Meu Escritório', 'trial', 'ativo'
+WHERE NOT EXISTS (SELECT 1 FROM tenants);

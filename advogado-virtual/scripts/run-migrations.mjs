@@ -1,5 +1,12 @@
 /**
- * Executa as migrations do Supabase via Management API
+ * Executa as migrations do Supabase via Management API.
+ *
+ * Cada migration roda UMA VEZ: os arquivos aplicados ficam registrados na
+ * tabela _migrations_aplicadas e são pulados nas rodadas seguintes.
+ * (Antes o script reexecutava tudo e confiava em "IF NOT EXISTS" — mas
+ * backfills de DADOS rodavam de novo a cada rodada; foi assim que a migration
+ * 018 ficou meses sobrescrevendo os dados profissionais de Configurações com
+ * valores antigos de users — o caso da "OAB 32777 que sempre voltava".)
  */
 import { readFileSync, readdirSync } from 'fs'
 import { join, dirname } from 'path'
@@ -17,8 +24,6 @@ if (!PROJECT_REF || !ACCESS_TOKEN) {
   process.exit(1)
 }
 
-// Aplica TODAS as migrations em ordem numérica (idempotente — erros de "já existe"
-// são ignorados). Inclui automaticamente novas migrations adicionadas ao diretório.
 const MIGRATIONS_DIR = join(__dirname, '..', 'supabase', 'migrations')
 const MIGRATIONS = readdirSync(MIGRATIONS_DIR)
   .filter((f) => f.endsWith('.sql'))
@@ -60,7 +65,22 @@ async function executarSQL(sql, nome) {
 async function main() {
   console.log('🚀 Iniciando execução das migrations...\n')
 
+  await executarSQL(`
+    CREATE TABLE IF NOT EXISTS _migrations_aplicadas (
+      nome text PRIMARY KEY,
+      aplicada_em timestamptz NOT NULL DEFAULT now()
+    );
+    ALTER TABLE _migrations_aplicadas ENABLE ROW LEVEL SECURITY;
+  `, '_migrations_aplicadas')
+
+  const aplicadas = new Set(
+    (await executarSQL('SELECT nome FROM _migrations_aplicadas', 'listar')).map((r) => r.nome),
+  )
+
+  let executadas = 0
   for (const arquivo of MIGRATIONS) {
+    if (aplicadas.has(arquivo)) continue
+
     const caminho = join(MIGRATIONS_DIR, arquivo)
     const sql = readFileSync(caminho, 'utf-8')
 
@@ -71,7 +91,7 @@ async function main() {
       console.log('✅ OK')
     } catch (err) {
       const msg = err.message || String(err)
-      // Erros de "já existe" são aceitáveis (idempotente)
+      // Erros de "já existe" são aceitáveis (migrations antigas pré-rastreamento)
       if (msg.includes('already exists') || msg.includes('duplicate key') || msg.includes('já existe')) {
         console.log(`⚠️  Já existe (ignorado)`)
       } else {
@@ -79,9 +99,21 @@ async function main() {
         process.exit(1)
       }
     }
+
+    // Registra mesmo quando caiu no "já existe": o arquivo foi processado e
+    // não deve rodar de novo (é justamente a reexecução que causava estrago).
+    await executarSQL(
+      `INSERT INTO _migrations_aplicadas (nome) VALUES ('${arquivo.replace(/'/g, "''")}') ON CONFLICT (nome) DO NOTHING`,
+      `registrar ${arquivo}`,
+    )
+    executadas++
   }
 
-  console.log('\n✅ Todas as migrations executadas com sucesso!')
+  if (executadas === 0) {
+    console.log('✅ Nenhuma migration pendente — tudo já aplicado.')
+  } else {
+    console.log(`\n✅ ${executadas} migration(s) executada(s) com sucesso!`)
+  }
   console.log(`\nProjeto: https://supabase.com/dashboard/project/${PROJECT_REF}`)
 }
 
