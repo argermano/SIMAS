@@ -130,6 +130,14 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ storagePath, chunkNum }),
       })
+      if (res.status === 400 || res.status === 415) {
+        // Rejeição determinística (arquivo não é áudio válido — ex.: fragmento
+        // sem cabeçalho gerado pelo bug antigo do corte de 10 min). Reenviar
+        // nunca vai funcionar: descarta o pendente em vez de prendê-lo para
+        // sempre na fila de retry.
+        await removerChunkPendente(atendimentoId, chunkNum)
+        return null
+      }
       if (!res.ok) return null
       const data = await res.json()
 
@@ -216,12 +224,17 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
     const chunkNum   = chunkNumeroRef.current + 1
     chunkNumeroRef.current = chunkNum
 
-    // Para o recorder atual e captura o blob
+    // Para o recorder atual e captura o blob. O blob é montado SÓ no onstop
+    // (depois do dataavailable final) e o buffer é limpo DEPOIS da montagem:
+    // limpar antes do stop descartava os 10 minutos acumulados e sobrava um
+    // fragmento sem cabeçalho WebM — áudio inválido que a transcrição rejeita
+    // (era a causa raiz das "gravações perdidas" em reuniões longas).
     const blob = await new Promise<Blob>((resolve) => {
       recorder.onstop = () => {
-        resolve(new Blob(chunksRef.current, { type: mimeType }))
+        const b = new Blob(chunksRef.current, { type: mimeType })
+        chunksRef.current = []
+        resolve(b)
       }
-      chunksRef.current = []
       recorder.stop()
     })
 
