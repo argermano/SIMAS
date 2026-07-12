@@ -8,6 +8,7 @@ import { SeloCitacoes } from '@/components/pecas/SeloCitacoes'
 import { ComparadorSecoes } from '@/components/pecas/ComparadorSecoes'
 import { useStreaming } from '@/components/shared/StreamingText'
 import { formatarPeca } from '@/lib/format/formatar-peca'
+import { salvarPecaComGuarda } from '@/lib/ia/pecas/salvar-peca-client'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { Send, CheckCircle, Clock, ClipboardCheck, X, Loader2, GitCompare } from 'lucide-react'
@@ -111,21 +112,14 @@ export function EditorPecaClient({
     const silencioso = opts?.silencioso ?? false
     if (!silencioso) setSalvando(true)
     try {
-      const res = await fetch('/api/ia/salvar-peca', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // Autosave (silencioso) não cria versão; o save manual versiona.
-        body:    JSON.stringify({ pecaId, conteudo, semVersao: silencioso }),
-      })
-      if (res.ok) {
+      // Autosave (silencioso) não versiona e não passa pela guarda anti-encolhimento.
+      const r = await salvarPecaComGuarda({ pecaId, conteudo, semVersao: silencioso })
+      if (r.ok) {
         setConteudoAtual(conteudo)
         if (!silencioso) success('Peça salva!', 'Conteúdo salvo com sucesso.')
-      } else {
-        const data = await res.json()
-        if (!silencioso) toastError('Erro ao salvar', data.error ?? 'Tente novamente')
+      } else if (!silencioso && !r.cancelado) {
+        toastError('Erro ao salvar', r.erro)
       }
-    } catch {
-      if (!silencioso) toastError('Erro', 'Falha de rede')
     } finally {
       if (!silencioso) setSalvando(false)
     }
@@ -186,19 +180,16 @@ export function EditorPecaClient({
     setCorrigindo(tipo)
     try {
       const resultado = await startStream('/api/ia/correcao-auto', { pecaId, tipo })
-      if (!resultado) {
-        toastError('Erro', 'Não foi possível aplicar a correção.')
+      // Sem resultado OU stream incompleto (queda de conexão): mantém a peça
+      // original intacta — não sobrescreve com um texto parcial.
+      if (!resultado || resultado.completo === false) {
+        toastError('Correção interrompida', 'A conexão caiu durante a correção — a peça original foi mantida. Tente novamente.')
         return
       }
       const corrigido = formatarPeca(resultado.fullText)
-      const res = await fetch('/api/ia/salvar-peca', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ pecaId, conteudo: corrigido }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        toastError('Erro ao salvar', data.error ?? 'Tente novamente')
+      const r = await salvarPecaComGuarda({ pecaId, conteudo: corrigido })
+      if (!r.ok) {
+        if (!r.cancelado) toastError('Erro ao salvar', r.erro)
         return
       }
       setConteudoAtual(corrigido)

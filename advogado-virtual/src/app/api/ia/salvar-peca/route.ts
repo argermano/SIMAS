@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { calcularTaxaEdicao } from '@/lib/telemetria/taxa-edicao'
+import { encolhimentoPerigoso } from '@/lib/ia/pecas/guarda-encolhimento'
 
 export const maxDuration = 120
 
 // POST /api/ia/salvar-peca — salva conteúdo editado da peça
 export async function POST(req: NextRequest) {
   try {
-    const { pecaId, conteudo, semVersao } = await req.json()
+    const { pecaId, conteudo, semVersao, forcar } = await req.json()
 
     if (!pecaId || conteudo === undefined) {
       return jsonError('pecaId e conteudo são obrigatórios', 400)
@@ -41,6 +42,18 @@ export async function POST(req: NextRequest) {
         .eq('tenant_id', usuario.tenant_id)
       if (error) return jsonError('Erro ao salvar peça', 500)
       return NextResponse.json({ ok: true, versao: pecaAtual.versao ?? 1 })
+    }
+
+    // Guarda anti-encolhimento (camada C): salvar um conteúdo bem menor que o
+    // rascunho já salvo exige confirmação explícita (forcar) — protege o texto
+    // íntegro do servidor de ser sobrescrito por um parcial pós-queda. Só no
+    // save versionado; o autosave (semVersao) reflete a edição ao vivo.
+    if (!forcar && encolhimentoPerigoso(pecaAtual.conteudo_markdown, conteudo)) {
+      return jsonError('Conteúdo menor que o rascunho salvo', 409, {
+        code: 'CONTEUDO_MENOR',
+        atual: pecaAtual.conteudo_markdown?.length ?? 0,
+        novo: conteudo.length,
+      })
     }
 
     // Salva versão histórica antes de atualizar

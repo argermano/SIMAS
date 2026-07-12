@@ -21,6 +21,8 @@ import { VERSAO_IA_PADRAO, type VersaoIA } from '@/lib/anthropic/versoes'
 import { ConfirmarDadosModal } from './ConfirmarDadosModal'
 import { ModalGeracaoPeca } from './ModalGeracaoPeca'
 import { ModalExtraindoDados } from './ModalExtraindoDados'
+import { BannerRecuperacao, type EstadoRecuperacao } from './BannerRecuperacao'
+import { recuperarPecaCompleta } from '@/lib/ia/pecas/recuperar-peca'
 import type { ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
 import type { DadosExtraidosAutor, DadosExtraidosReu } from '@/lib/prompts/extracao/dados-cliente'
 import { Mic, Keyboard, Users, FileText, MessageSquare, Save, Check, Zap, MapPin } from 'lucide-react'
@@ -79,6 +81,8 @@ export function TelaAtendimento({
   const [salvo, setSalvo]                       = useState(false)
   const [carregando, setCarregando]             = useState(!!atendimentoIdInicial)
   const [mostraModalGeracao, setMostraModalGeracao] = useState(false)
+  const [recuperacao, setRecuperacao] = useState<EstadoRecuperacao | null>(null)
+  const recuperacaoAbort = useRef<AbortController | null>(null)
   const [jurisprudencia, setJurisprudencia] = useState<ResultadoJurisprudencia[]>([])
   const [tribunaisSelecionados, setTribunaisSelecionados] = useState<string[]>([])
   const [localizacao, setLocalizacao] = useState({ cidade: '', estado: '' })
@@ -360,10 +364,47 @@ export function TelaAtendimento({
     continuarGeracao()
   }
 
+  // Cancela qualquer recuperação em andamento (unmount ou novo início).
+  const cancelarRecuperacao = useCallback(() => {
+    recuperacaoAbort.current?.abort()
+    recuperacaoAbort.current = null
+    setRecuperacao(null)
+    setMostraModalGeracao(false)
+  }, [])
+
+  // Limpa timers/polling da recuperação ao desmontar.
+  useEffect(() => () => { recuperacaoAbort.current?.abort() }, [])
+
+  // Stream caiu no meio: o servidor ainda gera e salva o texto completo pela
+  // rede de segurança. Aqui esperamos esse texto por polling do X-Peca-Id — e
+  // NÃO salvamos o parcial (senão bloquearíamos a gravação do servidor).
+  async function recuperar(pecaId: string, tamanhoParcial: number) {
+    const controller = new AbortController()
+    recuperacaoAbort.current = controller
+    setRecuperacao({ fase: 'recuperando' })
+
+    const r = await recuperarPecaCompleta({ pecaId, tamanhoParcial, sinal: controller.signal })
+    if (controller.signal.aborted) return
+
+    if (r.ok) {
+      setRecuperacao({ fase: 'sucesso', chars: r.conteudo.length })
+      // O texto íntegro já está salvo no servidor — segue o fluxo normal.
+      const emRevisao = roleUsuario === 'colaborador'
+      setTimeout(() => {
+        if (controller.signal.aborted) return
+        if (emRevisao) success('Peça enviada para revisão!', 'Um advogado ou administrador irá avaliar e aprovar a peça.')
+        router.push(emRevisao ? `/${area}` : `/${area}/editor/${pecaId}`)
+      }, 1400)
+    } else if (r.motivo === 'timeout') {
+      setRecuperacao({ fase: 'falha' })
+    }
+  }
+
   // Fase 2: streaming da peça + redirecionamento
   async function continuarGeracao(qualificacao?: { autor?: DadosExtraidosAutor; reu?: DadosExtraidosReu }) {
     if (!atendimentoId) return
 
+    cancelarRecuperacao()
     setMostraModalGeracao(true)
 
     const resultado = await startStream('/api/ia/gerar-peca', {
@@ -382,10 +423,23 @@ export function TelaAtendimento({
       return
     }
 
+    // Stream interrompido (conexão caiu): não salvar o parcial por cima. Recupera
+    // o texto completo que o servidor está salvando (via X-Peca-Id).
+    if (resultado.completo === false) {
+      const pecaId = resultado.headers.get('X-Peca-Id')
+      if (pecaId) {
+        await recuperar(pecaId, resultado.fullText.length)
+      } else {
+        setMostraModalGeracao(false)
+        toastError('Conexão instável', 'A geração foi interrompida antes de identificar a peça. Tente novamente.')
+      }
+      return
+    }
+
     // A peça é salva mesmo quando cortada por limite de tamanho — só avisamos
     // o advogado para revisar o final antes de considerá-la pronta.
     if (resultado.stopReason === 'max_tokens') {
-      toastWarning('Peça possivelmente cortada', 'A geração atingiu o limite de tamanho — revise o final da peça no editor.')
+      toastWarning('Peça possivelmente cortada', 'A peça atingiu o limite de tamanho da geração — revise o final.')
     }
 
     // Formata, salva a peça, marca o caso e resolve o destino (helper compartilhado)
@@ -420,13 +474,18 @@ export function TelaAtendimento({
   return (
     <div className="space-y-6">
 
-      {/* Modal de geração com streaming */}
-      {mostraModalGeracao && (
+      {/* Modal de geração com streaming (some quando entra em recuperação) */}
+      {mostraModalGeracao && !recuperacao && (
         <ModalGeracaoPeca
           tipoPecaNome={tipoPecaNome}
           textoGerado={textoGerado}
           gerando={gerando}
         />
+      )}
+
+      {/* Recuperação pós-queda: aviso claro no lugar do falso sucesso */}
+      {recuperacao && (
+        <BannerRecuperacao estado={recuperacao} onFechar={cancelarRecuperacao} />
       )}
 
       {/* Modal de extração de dados em andamento */}

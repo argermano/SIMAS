@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
+import { salvarPecaComGuarda } from '@/lib/ia/pecas/salvar-peca-client'
 import { Save, Check, Eye, Pencil } from 'lucide-react'
 
 interface EditorPecaProps {
@@ -25,22 +26,14 @@ export function EditorPeca({ pecaId, conteudo, versao, status, onConteudoChange 
   async function salvar() {
     setSalvando(true)
     try {
-      const res = await fetch(`/api/ia/salvar-peca`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pecaId, conteudo }),
-      })
-
-      if (res.ok) {
+      const r = await salvarPecaComGuarda({ pecaId, conteudo })
+      if (r.ok) {
         setSalvo(true)
         success('Peça salva!', `Versão ${versao} salva com sucesso.`)
         setTimeout(() => setSalvo(false), 2000)
-      } else {
-        const data = await res.json()
-        toastError('Erro ao salvar', data.error ?? 'Tente novamente')
+      } else if (!r.cancelado) {
+        toastError('Erro ao salvar', r.erro)
       }
-    } catch {
-      toastError('Erro', 'Falha de rede')
     } finally {
       setSalvando(false)
     }

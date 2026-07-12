@@ -6,6 +6,7 @@
 // eliminando a duplicação e padronizando o tratamento de erro.
 
 import { formatarPeca } from '@/lib/format/formatar-peca'
+import { salvarPecaComGuarda } from '@/lib/ia/pecas/salvar-peca-client'
 
 export type ResultadoStream = { fullText: string; headers: Headers; stopReason?: string | null }
 
@@ -30,14 +31,11 @@ export async function finalizarGeracaoPeca(params: {
   // Formatação forense padronizada antes de salvar
   const conteudoFormatado = formatarPeca(params.resultado.fullText)
 
-  const resSalvar = await fetch('/api/ia/salvar-peca', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pecaId, conteudo: conteudoFormatado }),
-  })
-  if (!resSalvar.ok) {
-    const data = await resSalvar.json().catch(() => ({}))
-    return { ok: false, erro: data.error ?? 'Falha ao salvar a peça' }
+  // Salva com a guarda anti-encolhimento: se a rede de segurança do servidor já
+  // gravou um texto maior, pede confirmação antes de substituí-lo.
+  const salvo = await salvarPecaComGuarda({ pecaId, conteudo: conteudoFormatado })
+  if (!salvo.ok) {
+    return { ok: false, erro: salvo.cancelado ? 'Salvamento cancelado.' : salvo.erro }
   }
 
   const resStatus = await fetch(`/api/atendimentos/${params.atendimentoId}`, {

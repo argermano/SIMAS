@@ -11,6 +11,8 @@ import { finalizarGeracaoPeca } from '@/lib/ia/pecas/finalizar-geracao'
 import { SeletorCliente } from './SeletorCliente'
 import { UploadDocumentos } from './UploadDocumentos'
 import { MicrofoneInline } from './MicrofoneInline'
+import { BannerRecuperacao, type EstadoRecuperacao } from './BannerRecuperacao'
+import { recuperarPecaCompleta } from '@/lib/ia/pecas/recuperar-peca'
 import {
   Users, FileText, MessageSquare, Upload, Loader2, Zap,
   Save, Check, RefreshCw, AlertCircle,
@@ -42,9 +44,14 @@ export function TelaRefinamento({
   const [pecaOriginal, setPecaOriginal] = useState('')
   const [instrucoes, setInstrucoes] = useState('')
   const [mostraModalGeracao, setMostraModalGeracao] = useState(false)
+  const [recuperacao, setRecuperacao] = useState<EstadoRecuperacao | null>(null)
+  const recuperacaoAbort = useRef<AbortController | null>(null)
   const [carregandoPeca, setCarregandoPeca] = useState(false)
   const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string }>>([])
   const inputPecaRef = useRef<HTMLInputElement>(null)
+
+  // Limpa o polling da recuperação ao desmontar.
+  useEffect(() => () => { recuperacaoAbort.current?.abort() }, [])
 
   // Criar atendimento ao selecionar cliente
   const handleClienteSelecionado = useCallback(async (c: { id: string; nome: string } | null) => {
@@ -124,6 +131,37 @@ export function TelaRefinamento({
     }
   }
 
+  // Cancela recuperação em andamento (unmount ou novo início).
+  const cancelarRecuperacao = useCallback(() => {
+    recuperacaoAbort.current?.abort()
+    recuperacaoAbort.current = null
+    setRecuperacao(null)
+    setMostraModalGeracao(false)
+  }, [])
+
+  // Stream caiu no meio: espera o texto completo que o servidor salva pela rede
+  // de segurança (polling do X-Peca-Id) em vez de gravar o parcial por cima.
+  async function recuperar(pecaId: string, tamanhoParcial: number) {
+    const controller = new AbortController()
+    recuperacaoAbort.current = controller
+    setRecuperacao({ fase: 'recuperando' })
+
+    const r = await recuperarPecaCompleta({ pecaId, tamanhoParcial, sinal: controller.signal })
+    if (controller.signal.aborted) return
+
+    if (r.ok) {
+      setRecuperacao({ fase: 'sucesso', chars: r.conteudo.length })
+      const emRevisao = roleUsuario === 'colaborador'
+      setTimeout(() => {
+        if (controller.signal.aborted) return
+        if (emRevisao) success('Peça enviada para revisão!', 'Um advogado ou administrador irá avaliar e aprovar a peça.')
+        router.push(emRevisao ? `/${area}` : `/${area}/editor/${pecaId}`)
+      }, 1400)
+    } else if (r.motivo === 'timeout') {
+      setRecuperacao({ fase: 'falha' })
+    }
+  }
+
   // Gerar peça refinada
   async function gerarRefinamento() {
     if (!atendimentoId || !pecaOriginal.trim()) return
@@ -138,6 +176,7 @@ export function TelaRefinamento({
       }),
     })
 
+    cancelarRecuperacao()
     setMostraModalGeracao(true)
 
     const resultado = await startStream('/api/ia/refinamento-peca', {
@@ -153,8 +192,20 @@ export function TelaRefinamento({
       return
     }
 
+    // Stream interrompido (conexão caiu): recupera o texto completo do servidor.
+    if (resultado.completo === false) {
+      const pecaId = resultado.headers.get('X-Peca-Id')
+      if (pecaId) {
+        await recuperar(pecaId, resultado.fullText.length)
+      } else {
+        setMostraModalGeracao(false)
+        toastError('Conexão instável', 'O refino foi interrompido antes de identificar a peça. Tente novamente.')
+      }
+      return
+    }
+
     if (resultado.stopReason === 'max_tokens') {
-      toastWarning('Peça possivelmente cortada', 'A geração atingiu o limite de tamanho — revise o final da peça no editor.')
+      toastWarning('Peça possivelmente cortada', 'A peça atingiu o limite de tamanho da geração — revise o final.')
     }
 
     // Formata, salva a peça, marca o caso e resolve o destino (helper compartilhado)
@@ -176,8 +227,13 @@ export function TelaRefinamento({
   return (
     <div className="space-y-6">
 
-      {/* Modal de geração com streaming */}
-      {mostraModalGeracao && (
+      {/* Recuperação pós-queda: aviso claro no lugar do falso sucesso */}
+      {recuperacao && (
+        <BannerRecuperacao estado={recuperacao} onFechar={cancelarRecuperacao} />
+      )}
+
+      {/* Modal de geração com streaming (some quando entra em recuperação) */}
+      {mostraModalGeracao && !recuperacao && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-lg rounded-2xl bg-card shadow-2xl">
             <div className="border-b px-6 py-4">

@@ -108,6 +108,13 @@ export interface ResultadoStreaming {
   headers: Headers
   /** Motivo de término reportado pelo modelo ('end_turn', 'max_tokens', ...). */
   stopReason?: string | null
+  /**
+   * True SOMENTE quando o evento SSE 'done' chegou — ou seja, o stream terminou
+   * de forma limpa. False quando a conexão caiu no meio (EOF precoce sem 'done'
+   * ou erro de rede após já haver texto parcial): o chamador deve tratar como
+   * incompleto e recuperar o texto completo salvo no servidor (X-Peca-Id).
+   */
+  completo: boolean
 }
 
 /**
@@ -128,8 +135,16 @@ export function useStreaming() {
     setError(null)
     setText('')
 
+    // Guardados fora do try para que o catch de queda de rede consiga devolver
+    // o parcial (com os headers, p/ o X-Peca-Id) em vez de simplesmente null.
+    let res: Response | undefined
+    let fullText = ''
+    let stopReason: string | null | undefined
+    let recebeuDone = false
+    let erroDoServidor = false
+
     try {
-      const res = await fetch(url, {
+      res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -138,6 +153,7 @@ export function useStreaming() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: 'Erro desconhecido' }))
+        erroDoServidor = true
         throw new Error(data.error ?? `HTTP ${res.status}`)
       }
 
@@ -146,8 +162,6 @@ export function useStreaming() {
 
       const decoder = new TextDecoder()
       const parser = createSSEParser()
-      let fullText = ''
-      let stopReason: string | null | undefined
 
       const despachar = (data: ReturnType<typeof parser.feed>[number]) => {
         if (data.type === 'text') {
@@ -155,7 +169,9 @@ export function useStreaming() {
           setText(fullText)
         } else if (data.type === 'done') {
           stopReason = (data as { stopReason?: string | null }).stopReason
+          recebeuDone = true // só aqui o stream é considerado completo
         } else if (data.type === 'error') {
+          erroDoServidor = true // falha real de geração, não queda de rede
           throw new Error((data as { error?: string }).error ?? 'Erro na geração')
         }
       }
@@ -169,12 +185,20 @@ export function useStreaming() {
       for (const ev of parser.flush()) despachar(ev)
 
       setLoading(false)
-      return { fullText, headers: res.headers, stopReason }
+      // completo só é true se o evento 'done' chegou; EOF precoce → false.
+      return { fullText, headers: res.headers, stopReason, completo: recebeuDone }
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return null
+      if ((err as Error).name === 'AbortError') return null // stop() do usuário
       const msg = (err as Error).message
       setError(msg)
       setLoading(false)
+      // Queda de rede DEPOIS de já ter headers + texto parcial (e não foi erro
+      // explícito do servidor): devolve o parcial marcado como incompleto para
+      // o chamador recuperar o texto completo salvo no servidor. Caso contrário
+      // (erro do servidor/HTTP, sem parcial), mantém o null de antes.
+      if (res && fullText && !erroDoServidor) {
+        return { fullText, headers: res.headers, stopReason: undefined, completo: false }
+      }
       return null
     }
   }
