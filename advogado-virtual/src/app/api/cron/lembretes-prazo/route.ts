@@ -199,6 +199,9 @@ async function enviarAvisosParcelas(admin: SupabaseClient, deadline: number) {
       .from('parcelas')
       .select('id, tenant_id, cliente_id, descricao, valor_centavos, vencimento, aviso_d3_em, aviso_d0_em')
       .eq('status', 'aberta')
+      // Quem já mandou comprovante (staging "aguardando baixa") fica FORA dos
+      // avisos: não se cobra o cliente que já pagou e só espera a conferência.
+      .is('comprovante_recebido_em', null)
       .in('vencimento', [hoje, d3])
       .order('vencimento', { ascending: true })
       .order('id', { ascending: true })

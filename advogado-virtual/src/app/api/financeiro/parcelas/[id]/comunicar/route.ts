@@ -24,13 +24,15 @@ interface Contexto {
   cliente: { nome: string | null; telefone: string | null; aviso_cobranca: boolean }
   /** [0] aviso (editável no modal) · [1] copia-e-cola · [2] "Chave Pix: ..." */
   mensagens: string[]
+  /** Cliente já enviou comprovante aguardando conferência (staging da parcela). */
+  comprovantePendente: boolean
 }
 
 async function carregarContexto(tenantId: string, parcelaId: string): Promise<Contexto | { erro: string; status: number }> {
   const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data: p } = await admin
     .from('parcelas')
-    .select('id, descricao, valor_centavos, vencimento, status, cliente_id')
+    .select('id, descricao, valor_centavos, vencimento, status, cliente_id, comprovante_recebido_em')
     .eq('id', parcelaId)
     .eq('tenant_id', tenantId)
     .single()
@@ -65,7 +67,7 @@ async function carregarContexto(tenantId: string, parcelaId: string): Promise<Co
     ehHoje: p.vencimento === hoje,
     ehVencida: p.vencimento < hoje,
   })
-  return { parcela: p, cliente: c, mensagens }
+  return { parcela: p, cliente: c, mensagens, comprovantePendente: p.comprovante_recebido_em != null }
 }
 
 export async function GET(
@@ -87,6 +89,9 @@ export async function GET(
     clienteNome: ctx.cliente.nome,
     avisoOptOut: !ctx.cliente.aviso_cobranca,
     vencida: ctx.parcela.vencimento < hojeSaoPauloISO(),
+    // Sinaliza ao modal que o cliente já mandou comprovante aguardando
+    // conferência — o envio NÃO é bloqueado (decisão humana), só avisado.
+    comprovantePendente: ctx.comprovantePendente,
   })
 }
 

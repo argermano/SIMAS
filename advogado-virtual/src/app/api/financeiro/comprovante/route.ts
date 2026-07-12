@@ -5,19 +5,18 @@ import { jsonError, validateBody } from '@/lib/api'
 import { logger } from '@/lib/logger'
 import { relayFetchBinario } from '@/lib/conversas/relay'
 import { apenasDigitos, mesmoTelefone } from '@/lib/conversas/telefone'
-import { extractTextFromImage, extractTextFromPdf, completionJSON } from '@/lib/anthropic/client'
-import { dadosComprovanteSchema, sugerirParcela, type DadosComprovante } from '@/lib/financeiro/comprovante'
+import { extrairDadosComprovante } from '@/lib/financeiro/extracao'
+import { sugerirParcela, type DadosComprovante } from '@/lib/financeiro/comprovante'
 
 // POST /api/financeiro/comprovante — lê um comprovante anexado na conversa
 // (imagem via relay -> OCR Haiku -> completionJSON) e SUGERE a parcela aberta
 // que melhor casa. INVARIANTE DURA: NÃO dá baixa e não grava nada — a baixa
 // acontece só na confirmação humana (rota /parcelas/[id]/baixa).
+// A extração (OCR + estruturação) mora em src/lib/financeiro/extracao.ts,
+// compartilhada com o recebimento automático (webhook Chatwoot).
 // LGPD: nunca logar texto/valores do comprovante — só ids e contagens.
 
 const ROLES = ['admin', 'advogado', 'colaborador']
-
-const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const
-type MediaType = (typeof MEDIA_TYPES)[number]
 
 const schema = z.object({
   // O modal envia o id numérico do Chatwoot — aceita número ou string.
@@ -27,23 +26,6 @@ const schema = z.object({
   // dados — só não há parcela para sugerir.
   telefone: z.string().trim().min(1).max(30).nullish(),
 })
-
-// A IA pode sinalizar que a imagem não é um comprovante.
-const respostaIASchema = z.union([
-  z.object({ naoComprovante: z.literal(true) }),
-  dadosComprovanteSchema,
-])
-
-const SYSTEM_EXTRACAO = `Você extrai dados estruturados de comprovantes de pagamento brasileiros (Pix, TED, transferência, boleto) a partir do texto OCR fornecido.
-
-Retorne um JSON com:
-- "valorCentavos": inteiro — o valor PAGO convertido para CENTAVOS (ex.: R$ 1.234,56 → 123456)
-- "dataISO": string "yyyy-mm-dd" — a data em que o pagamento foi realizado
-- "pagadorNome": string (opcional) — nome de quem pagou
-- "banco": string (opcional) — instituição do pagador
-- "endToEndId": string (opcional) — identificador E2E do Pix (começa com "E"), se houver
-
-Se o texto claramente NÃO for um comprovante de pagamento, retorne exatamente: {"naoComprovante": true}`
 
 export async function POST(req: NextRequest) {
   const auth = await getAuthContext()
@@ -70,48 +52,32 @@ export async function POST(req: NextRequest) {
     return jsonError('Não foi possível obter o anexo da conversa', anexo.status >= 400 ? anexo.status : 502)
   }
 
-  const contentType = (anexo.contentType ?? '').split(';')[0].trim().toLowerCase()
-
-  // 2) OCR (Haiku) — imagem ou PDF.
-  let textoOCR: string
-  try {
-    if (contentType === 'application/pdf') {
-      textoOCR = await extractTextFromPdf({ pdfBase64: anexo.buffer.toString('base64') })
-    } else if ((MEDIA_TYPES as readonly string[]).includes(contentType)) {
-      textoOCR = await extractTextFromImage({
-        imageBase64: anexo.buffer.toString('base64'),
-        mediaType: contentType as MediaType,
-      })
-    } else {
-      return jsonError('Tipo de anexo não suportado para leitura (esperado imagem ou PDF)', 415)
+  // 2) OCR + estruturação (lib compartilhada). Mapeia cada motivo de falha
+  // para o mesmo status/mensagem de antes da extração da lib.
+  const extracao = await extrairDadosComprovante({
+    buffer: anexo.buffer,
+    contentType: anexo.contentType ?? '',
+  })
+  if (!extracao.ok) {
+    switch (extracao.motivo) {
+      case 'tipo_nao_suportado':
+        return jsonError('Tipo de anexo não suportado para leitura (esperado imagem ou PDF)', 415)
+      case 'sem_texto':
+        return jsonError('Não foi possível ler texto no anexo', 422)
+      case 'nao_comprovante':
+        return jsonError('O anexo não parece ser um comprovante de pagamento', 422)
+      case 'erro_ia':
+        if (extracao.fase === 'ocr') {
+          logger.error('financeiro.comprovante.ocr_falha', { conversaId, tenantId: usuario.tenant_id })
+          return jsonError('Erro ao ler o anexo com a IA. Tente novamente.', 502)
+        }
+        logger.error('financeiro.comprovante.extracao_falha', { conversaId, tenantId: usuario.tenant_id })
+        return jsonError('Não foi possível extrair os dados do comprovante', 422)
     }
-  } catch (err) {
-    logger.error('financeiro.comprovante.ocr_falha', { conversaId, tenantId: usuario.tenant_id }, err)
-    return jsonError('Erro ao ler o anexo com a IA. Tente novamente.', 502)
   }
-  if (!textoOCR.trim()) {
-    return jsonError('Não foi possível ler texto no anexo', 422)
-  }
+  const dados: DadosComprovante = extracao.dados
 
-  // 3) Estruturação em JSON validado (zod).
-  let dados: DadosComprovante
-  try {
-    const { result } = await completionJSON({
-      system: SYSTEM_EXTRACAO,
-      prompt: `Texto OCR do anexo:\n\n${textoOCR}`,
-      maxTokens: 1024,
-      schema: respostaIASchema,
-    })
-    if ('naoComprovante' in result) {
-      return jsonError('O anexo não parece ser um comprovante de pagamento', 422)
-    }
-    dados = result
-  } catch (err) {
-    logger.error('financeiro.comprovante.extracao_falha', { conversaId, tenantId: usuario.tenant_id }, err)
-    return jsonError('Não foi possível extrair os dados do comprovante', 422)
-  }
-
-  // 4) Casa o cliente pelo telefone da conversa (padrão do /api/conversas/contexto).
+  // 3) Casa o cliente pelo telefone da conversa (padrão do /api/conversas/contexto).
   let cliente: { id: string; nome: string | null; telefone: string | null } | null = null
   if (telefone) {
     const { data: clientes, error: erroClientes } = await supabase
@@ -129,7 +95,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ dados, cliente: null, sugestao: null, alternativas: [] })
   }
 
-  // 5) Sugere a melhor parcela aberta (valor exato > ±1%; nunca dá baixa).
+  // 4) Sugere a melhor parcela aberta (valor exato > ±1%; nunca dá baixa).
   const { data: abertas, error: erroParcelas } = await supabase
     .from('parcelas')
     .select('id, descricao, valor_centavos, vencimento')

@@ -32,6 +32,7 @@ export function ModalComunicar({
   const [telefone, setTelefone] = useState<string | null>(null)
   const [avisoOptOut, setAvisoOptOut] = useState(false)
   const [vencida, setVencida] = useState(false)
+  const [comprovantePendente, setComprovantePendente] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
@@ -47,12 +48,13 @@ export function ModalComunicar({
           setErro((d as { error?: string }).error ?? 'Não foi possível gerar a mensagem.')
           return
         }
-        const resp = d as { texto: string; extras?: string[]; telefone: string | null; avisoOptOut: boolean; vencida: boolean }
+        const resp = d as { texto: string; extras?: string[]; telefone: string | null; avisoOptOut: boolean; vencida: boolean; comprovantePendente?: boolean }
         setTexto(resp.texto)
         setExtras(resp.extras ?? [])
         setTelefone(resp.telefone)
         setAvisoOptOut(resp.avisoOptOut)
         setVencida(resp.vencida)
+        setComprovantePendente(resp.comprovantePendente ?? false)
       } catch {
         setErro('Falha de rede ao gerar a mensagem.')
       } finally {
@@ -98,6 +100,11 @@ export function ModalComunicar({
           <p className="text-sm text-muted-foreground">
             Para: <span className="font-medium text-foreground">{telefone ?? 'cliente sem telefone cadastrado'}</span>
           </p>
+          {comprovantePendente && (
+            <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
+              Este cliente já enviou um comprovante que está aguardando conferência — confira antes de cobrar.
+            </p>
+          )}
           {avisoOptOut && (
             <p className="rounded-md bg-warning/10 px-3 py-2 text-xs text-warning">
               Este cliente está com os avisos automáticos desligados — este envio manual é uma decisão sua.

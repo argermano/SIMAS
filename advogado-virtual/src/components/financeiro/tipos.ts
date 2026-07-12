@@ -14,6 +14,17 @@ export interface Parcela {
   pago_em?: string | null
   pago_valor_centavos?: number | null
   meio?: 'pix' | 'boleto' | 'transferencia' | 'dinheiro' | 'outro' | null
+  // Comprovante recebido por WhatsApp e pré-organizado pelo staging (migration
+  // 052). Parcela "aguardando baixa" = status 'aberta' E comprovante_recebido_em
+  // não-nulo. A baixa continua sendo confirmação humana (nunca automática).
+  comprovante_recebido_em?: string | null
+  comprovante_recebido_url?: string | null    // path no bucket privado "documentos"
+  comprovante_recebido_dados?: Record<string, unknown> | null // dados da IA + { mensagemId, conversaId, contentType }
+}
+
+/** Parcela aberta com comprovante recebido aguardando conferência humana. */
+export function aguardandoBaixa(p: Parcela): boolean {
+  return p.status === 'aberta' && !!p.comprovante_recebido_em
 }
 
 export interface PixConfig {

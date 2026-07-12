@@ -14,7 +14,11 @@ const DATA_RE = /^\d{4}-\d{2}-\d{2}$/
 
 const COLS =
   'id, cliente_id, contrato_id, processo_id, descricao, valor_centavos, vencimento, ' +
-  'status, pago_em, pago_valor_centavos, meio, comprovante_url, created_at'
+  'status, pago_em, pago_valor_centavos, meio, comprovante_url, created_at, ' +
+  // Staging do comprovante recebido por WhatsApp (migration 052) — habilita o
+  // estado derivado "aguardando baixa" na tela. A URL aqui é só o path no
+  // bucket (a UI pede signed URL sob demanda); jsonb com os dados da IA.
+  'comprovante_recebido_em, comprovante_recebido_url, comprovante_recebido_dados'
 
 interface ParcelaRow {
   id: string
@@ -30,6 +34,9 @@ interface ParcelaRow {
   meio: string | null
   comprovante_url: string | null
   created_at: string
+  comprovante_recebido_em: string | null
+  comprovante_recebido_url: string | null
+  comprovante_recebido_dados: Record<string, unknown> | null
 }
 
 // GET /api/financeiro/parcelas — lista com filtros e paginação.
@@ -50,6 +57,10 @@ export async function GET(req: NextRequest) {
   const pagoDe = searchParams.get('pagoDe')
   const pagoAte = searchParams.get('pagoAte')
   const clienteId = searchParams.get('clienteId')
+  // "aguardando baixa" = parcela aberta com comprovante recebido por WhatsApp
+  // ainda não conferido. Filtro server-side para o chip contar o TOTAL do tenant
+  // (não só a página) e paginar corretamente ao focar só nesses casos.
+  const aguardando = searchParams.get('aguardando') === '1'
   const q = (searchParams.get('q') ?? '').trim()
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1') || 1)
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20') || 20))
@@ -87,7 +98,10 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: true })
     .range(offset, offset + limit - 1)
 
-  if (status === 'vencida') {
+  if (aguardando) {
+    // Sobrepõe o status: aguardando baixa é sempre aberta + comprovante recebido.
+    query = query.eq('status', 'aberta').not('comprovante_recebido_em', 'is', null)
+  } else if (status === 'vencida') {
     query = query.eq('status', 'aberta').lt('vencimento', hojeSaoPauloISO())
   } else if (status) {
     if (!['aberta', 'paga', 'cancelada'].includes(status)) return jsonError('Status inválido', 400)

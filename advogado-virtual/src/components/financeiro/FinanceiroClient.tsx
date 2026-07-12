@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   Wallet, CalendarClock, AlertTriangle, CheckCircle2, Copy, HandCoins,
-  XCircle, Plus, Search, ChevronLeft, ChevronRight, FilterX, MessageSquare
+  XCircle, Plus, Search, ChevronLeft, ChevronRight, FilterX, MessageSquare, FileClock
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,7 +22,8 @@ import { gerarPixCopiaECola } from '@/lib/financeiro/pix'
 import { ModalBaixa } from './ModalBaixa'
 import { ModalComunicar } from './ModalComunicar'
 import { ModalNovaCobranca, type PrefillContrato } from './ModalNovaCobranca'
-import { type Parcela, type PixConfig, LABELS_MEIO, hojeISO, somarDiasISO, ehVencida } from './tipos'
+import { ConferirComprovanteModal } from './ConferirComprovanteModal'
+import { type Parcela, type PixConfig, LABELS_MEIO, hojeISO, somarDiasISO, ehVencida, aguardandoBaixa } from './tipos'
 
 // ─────────────────────────────────────────────────────────────
 // Tipos locais
@@ -76,6 +77,11 @@ export function FinanceiroClient() {
   const [filtros, setFiltros]   = useState<Filtros>({ ...FILTROS_VAZIOS, status: 'aberta' })
   const [preset, setPreset]     = useState<Preset>(null)
   const [buscaLocal, setBuscaLocal] = useState('')
+  // Filtro rápido "aguardando baixa": mostra só as parcelas abertas com
+  // comprovante recebido aguardando conferência. É SERVER-SIDE (paginado) e o
+  // contador vem do TOTAL do tenant — nunca subconta a página carregada.
+  const [soAguardando, setSoAguardando] = useState(false)
+  const [aguardandoTotal, setAguardandoTotal] = useState(0)
 
   // Config Pix do escritório (para o Copiar Pix)
   const [pix, setPix] = useState<PixConfig | null>(null)
@@ -87,6 +93,7 @@ export function FinanceiroClient() {
   const [cancelando, setCancelando]           = useState(false)
   const [novaAberta, setNovaAberta]           = useState(false)
   const [prefill, setPrefill]                 = useState<PrefillContrato | null>(null)
+  const [parcelaConferir, setParcelaConferir] = useState<Parcela | null>(null)
 
   // ── Carregamento ────────────────────────────────────────────
 
@@ -103,11 +110,24 @@ export function FinanceiroClient() {
     } catch { /* resumo é decorativo — não bloqueia a lista */ }
   }, [])
 
-  const carregarParcelas = useCallback(async (f: Filtros, pag: number) => {
+  // Total do tenant de parcelas "aguardando baixa" (para o chip) — independente
+  // da página. Barato: pede só o count (limit=1).
+  const carregarAguardandoTotal = useCallback(async () => {
+    try {
+      const r = await fetch('/api/financeiro/parcelas?aguardando=1&limit=1')
+      if (!r.ok) return
+      const d = await r.json().catch(() => ({}))
+      setAguardandoTotal(Number(d.total ?? 0))
+    } catch { /* chip é auxiliar — não bloqueia */ }
+  }, [])
+
+  const carregarParcelas = useCallback(async (f: Filtros, pag: number, soAg: boolean) => {
     setLoading(true)
     try {
       const qs = new URLSearchParams()
-      if (f.status)  qs.set('status', f.status)
+      // "Aguardando baixa" sobrepõe o filtro de status (é sempre aberta).
+      if (soAg)      qs.set('aguardando', '1')
+      else if (f.status) qs.set('status', f.status)
       if (f.de)      qs.set('de', f.de)
       if (f.ate)     qs.set('ate', f.ate)
       if (f.pagoDe)  qs.set('pagoDe', f.pagoDe)
@@ -131,7 +151,8 @@ export function FinanceiroClient() {
   }, [toastError])
 
   useEffect(() => { carregarResumo() }, [carregarResumo])
-  useEffect(() => { carregarParcelas(filtros, pagina) }, [carregarParcelas, filtros, pagina])
+  useEffect(() => { carregarAguardandoTotal() }, [carregarAguardandoTotal])
+  useEffect(() => { carregarParcelas(filtros, pagina, soAguardando) }, [carregarParcelas, filtros, pagina, soAguardando])
 
   useEffect(() => {
     fetch('/api/escritorio/config-financeiro')
@@ -204,7 +225,16 @@ export function FinanceiroClient() {
     setPreset(null)
     setPagina(1)
     setBuscaLocal('')
+    setSoAguardando(false)
     setFiltros({ ...FILTROS_VAZIOS })
+  }
+
+  // Alterna o filtro "aguardando baixa" (server-side): sempre volta à página 1
+  // e limpa qualquer preset ativo para não misturar os dois recortes.
+  function alternarAguardando() {
+    setPreset(null)
+    setPagina(1)
+    setSoAguardando((v) => !v)
   }
 
   async function copiarPix(p: Parcela) {
@@ -233,8 +263,7 @@ export function FinanceiroClient() {
       if (!r.ok) { toastError('Não foi possível cancelar', d.error ?? 'Tente novamente.'); return }
       success('Cobrança cancelada', parcelaCancelar.descricao)
       setParcelaCancelar(null)
-      carregarResumo()
-      carregarParcelas(filtros, pagina)
+      aposMudanca()
     } finally {
       setCancelando(false)
     }
@@ -242,11 +271,19 @@ export function FinanceiroClient() {
 
   function aposMudanca() {
     carregarResumo()
-    carregarParcelas(filtros, pagina)
+    carregarAguardandoTotal()
+    carregarParcelas(filtros, pagina, soAguardando)
   }
 
   const totalPaginas = Math.max(1, Math.ceil(total / 20))
   const pixConfigurado = Boolean(pix?.pix_chave)
+
+  // A lista já vem filtrada do servidor (aguardando=1) quando soAguardando.
+  const parcelasVisiveis = parcelas
+  // Desliga o filtro só quando NÃO resta NENHUMA aguardando no tenant inteiro
+  // (total do servidor) — não com base na página, para não dar falso "tudo
+  // conferido" enquanto sobram pendentes em páginas seguintes.
+  useEffect(() => { if (soAguardando && aguardandoTotal === 0) setSoAguardando(false) }, [soAguardando, aguardandoTotal])
 
   // ── Render ──────────────────────────────────────────────────
 
@@ -315,6 +352,22 @@ export function FinanceiroClient() {
             onBlur={() => { if (buscaLocal.trim() !== filtros.q) mudarFiltro({ q: buscaLocal.trim() }) }}
           />
         </form>
+        {aguardandoTotal > 0 && (
+          <button
+            type="button"
+            onClick={alternarAguardando}
+            aria-pressed={soAguardando}
+            title={soAguardando ? 'Mostrar todas as parcelas' : 'Mostrar só as que têm comprovante para conferir'}
+            className={cn(
+              'mb-1 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              soAguardando
+                ? 'border-warning bg-warning/15 text-warning'
+                : 'border-warning/40 text-warning hover:bg-warning/10',
+            )}
+          >
+            <FileClock className="h-3.5 w-3.5" /> Aguardando baixa ({aguardandoTotal})
+          </button>
+        )}
         {(filtros.q || filtros.de || filtros.ate || filtros.status !== 'aberta' || preset) && (
           <Button variant="ghost" size="sm" onClick={limparFiltros} className="mb-1">
             <FilterX className="h-4 w-4" /> Limpar
@@ -334,12 +387,14 @@ export function FinanceiroClient() {
             <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
               <Spinner className="h-5 w-5" /> Carregando parcelas…
             </div>
-          ) : parcelas.length === 0 ? (
+          ) : parcelasVisiveis.length === 0 ? (
             <EmptyState
               icon={<Wallet className="h-10 w-10" />}
               title="Nenhuma parcela encontrada"
               description={
-                filtros.q || filtros.de || filtros.ate || preset
+                soAguardando
+                  ? 'Nenhuma parcela aguardando baixa no momento.'
+                  : filtros.q || filtros.de || filtros.ate || preset
                   ? 'Ajuste os filtros ou limpe a busca.'
                   : 'Crie a primeira cobrança para começar a acompanhar os honorários.'
               }
@@ -361,8 +416,9 @@ export function FinanceiroClient() {
                   </tr>
                 </thead>
                 <tbody>
-                  {parcelas.map((p) => {
+                  {parcelasVisiveis.map((p) => {
                     const vencida = ehVencida(p, hoje)
+                    const aguardando = aguardandoBaixa(p)
                     return (
                       <tr key={p.id} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
                         <td className="px-4 py-3">
@@ -381,7 +437,11 @@ export function FinanceiroClient() {
                           {vencida && <span className="ml-1.5 text-[11px] font-medium uppercase">vencida</span>}
                         </td>
                         <td className="px-4 py-3">
-                          {p.status === 'paga' ? (
+                          {aguardando ? (
+                            <Badge variant="warning" className="gap-1 ring-1 ring-warning/40">
+                              <FileClock className="h-3 w-3" /> Aguardando baixa
+                            </Badge>
+                          ) : p.status === 'paga' ? (
                             <Badge variant="success">Paga</Badge>
                           ) : p.status === 'cancelada' ? (
                             <Badge variant="default">Cancelada</Badge>
@@ -400,6 +460,16 @@ export function FinanceiroClient() {
                         <td className="px-4 py-3">
                           {p.status === 'aberta' ? (
                             <div className="flex items-center justify-end gap-1">
+                              {aguardando && (
+                                <button
+                                  type="button"
+                                  onClick={() => setParcelaConferir(p)}
+                                  title="Conferir o comprovante recebido e dar baixa"
+                                  className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-2 py-1.5 text-xs font-semibold text-warning hover:bg-warning/25 transition-colors"
+                                >
+                                  <FileClock className="h-3.5 w-3.5" /> Conferir baixa
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => copiarPix(p)}
@@ -480,6 +550,11 @@ export function FinanceiroClient() {
         parcela={parcelaBaixa}
         onClose={() => setParcelaBaixa(null)}
         onDone={() => { setParcelaBaixa(null); aposMudanca() }}
+      />
+      <ConferirComprovanteModal
+        parcela={parcelaConferir}
+        onClose={() => setParcelaConferir(null)}
+        onDone={() => { setParcelaConferir(null); aposMudanca() }}
       />
       <ModalNovaCobranca
         open={novaAberta}
