@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ExternalLink, RefreshCw, ScanLine } from 'lucide-react'
+import { AlertTriangle, Download, ExternalLink, RefreshCw, ScanLine } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
@@ -25,7 +25,8 @@ interface DadosPendente {
 
 interface Pendente {
   dados: DadosPendente
-  imagemUrl: string | null
+  imagemUrl: string | null    // inline (para <img>/nova aba)
+  downloadUrl: string | null  // força download (Content-Disposition attachment)
   contentType: string | null
 }
 
@@ -220,31 +221,54 @@ export function ConferirComprovanteModal({
       ) : pendente && dados ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {/* Arquivo recebido */}
-          <div className="rounded-lg border border-border bg-muted/20 p-2">
-            {!pendente.imagemUrl || (!ehPdf && imgErro) ? (
-              // Sem URL OU a imagem falhou ao carregar (signed URL expirada,
-              // arquivo corrompido, blip de rede): mostra o fallback textual em
-              // vez do glifo de imagem quebrada, para não confundir a conferência.
-              <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-                Arquivo indisponível.
-              </p>
-            ) : ehPdf ? (
-              <a
-                href={pendente.imagemUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 rounded-md bg-background px-3 py-8 text-sm font-medium text-primary hover:underline"
-              >
-                <ExternalLink className="h-4 w-4" /> Abrir comprovante (PDF)
-              </a>
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element -- signed URL de bucket privado, não otimizável
-              <img
-                src={pendente.imagemUrl}
-                alt="Comprovante recebido"
-                onError={() => setImgErro(true)}
-                className="max-h-72 w-full rounded-md object-contain"
-              />
+          <div className="space-y-2">
+            <div className="rounded-lg border border-border bg-muted/20 p-2">
+              {!pendente.imagemUrl || (!ehPdf && imgErro) ? (
+                // Sem URL OU a imagem falhou ao carregar (signed URL expirada,
+                // arquivo corrompido, blip de rede): mostra o fallback textual em
+                // vez do glifo de imagem quebrada, para não confundir a conferência.
+                <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  Arquivo indisponível.
+                </p>
+              ) : ehPdf ? (
+                <a
+                  href={pendente.imagemUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 rounded-md bg-background px-3 py-10 text-sm font-medium text-primary hover:underline"
+                >
+                  <ExternalLink className="h-4 w-4" /> Abrir comprovante (PDF)
+                </a>
+              ) : (
+                <a href={pendente.imagemUrl} target="_blank" rel="noopener noreferrer" title="Abrir em tamanho real">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- signed URL de bucket privado, não otimizável */}
+                  <img
+                    src={pendente.imagemUrl}
+                    alt="Comprovante recebido"
+                    onError={() => setImgErro(true)}
+                    className="max-h-96 w-full cursor-zoom-in rounded-md object-contain"
+                  />
+                </a>
+              )}
+            </div>
+            {/* Ver o arquivo em tamanho real / baixar (LGPD: signed URLs curtas) */}
+            {(pendente.imagemUrl || pendente.downloadUrl) && (
+              <div className="flex flex-wrap gap-2">
+                {pendente.imagemUrl && (
+                  <Button asChild variant="secondary" size="sm">
+                    <a href={pendente.imagemUrl} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-4 w-4" /> Abrir em tamanho real
+                    </a>
+                  </Button>
+                )}
+                {pendente.downloadUrl && (
+                  <Button asChild variant="secondary" size="sm">
+                    <a href={pendente.downloadUrl}>
+                      <Download className="h-4 w-4" /> Baixar
+                    </a>
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 

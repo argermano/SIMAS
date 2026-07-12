@@ -50,18 +50,27 @@ export async function GET(
   const dados = (parcela.comprovante_recebido_dados ?? {}) as Record<string, unknown>
   const contentType = typeof dados.contentType === 'string' ? dados.contentType : null
 
-  // Signed URL de 10 min (o arquivo mora em bucket privado por tenant).
+  // Signed URLs de 10 min (o arquivo mora em bucket privado por tenant): uma
+  // inline (img/nova aba) e outra que força download (Content-Disposition
+  // attachment via opção { download } do supabase-js v2).
   let imagemUrl: string | null = null
+  let downloadUrl: string | null = null
   if (parcela.comprovante_recebido_url) {
-    const { data: signed, error } = await adminStorage()
-      .createSignedUrl(parcela.comprovante_recebido_url, 600)
-    if (error) {
+    const store = adminStorage()
+    const ext = (parcela.comprovante_recebido_url.split('.').pop() ?? 'dat').toLowerCase()
+    const dataArq = (parcela.comprovante_recebido_em ?? '').slice(0, 10) || 'comprovante'
+    const [inline, download] = await Promise.all([
+      store.createSignedUrl(parcela.comprovante_recebido_url, 600),
+      store.createSignedUrl(parcela.comprovante_recebido_url, 600, { download: `comprovante-${dataArq}.${ext}` }),
+    ])
+    if (inline.error || download.error) {
       logger.error('financeiro.comprovante_pendente.signed_url', { parcelaId: id, tenantId: usuario.tenant_id })
     }
-    imagemUrl = signed?.signedUrl ?? null
+    imagemUrl = inline.data?.signedUrl ?? null
+    downloadUrl = download.data?.signedUrl ?? null
   }
 
-  return NextResponse.json({ dados, imagemUrl, contentType })
+  return NextResponse.json({ dados, imagemUrl, downloadUrl, contentType })
 }
 
 // DELETE — "não é comprovante": limpa o staging, remove o arquivo do bucket

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   Wallet, CalendarClock, AlertTriangle, CheckCircle2, Copy, HandCoins,
-  XCircle, Plus, Search, ChevronLeft, ChevronRight, FilterX, MessageSquare, FileClock
+  XCircle, Plus, Search, ChevronLeft, ChevronRight, FilterX, MessageSquare, FileClock, Receipt
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +23,7 @@ import { ModalBaixa } from './ModalBaixa'
 import { ModalComunicar } from './ModalComunicar'
 import { ModalNovaCobranca, type PrefillContrato } from './ModalNovaCobranca'
 import { ConferirComprovanteModal } from './ConferirComprovanteModal'
+import { PagamentoModal } from './PagamentoModal'
 import { type Parcela, type PixConfig, LABELS_MEIO, hojeISO, somarDiasISO, ehVencida, aguardandoBaixa } from './tipos'
 
 // ─────────────────────────────────────────────────────────────
@@ -94,6 +95,7 @@ export function FinanceiroClient() {
   const [novaAberta, setNovaAberta]           = useState(false)
   const [prefill, setPrefill]                 = useState<PrefillContrato | null>(null)
   const [parcelaConferir, setParcelaConferir] = useState<Parcela | null>(null)
+  const [parcelaPagamento, setParcelaPagamento] = useState<Parcela | null>(null)
 
   // ── Carregamento ────────────────────────────────────────────
 
@@ -509,6 +511,17 @@ export function FinanceiroClient() {
                                 <XCircle className="h-3.5 w-3.5" /> Cancelar
                               </button>
                             </div>
+                          ) : p.status === 'paga' ? (
+                            <div className="flex items-center justify-end">
+                              <button
+                                type="button"
+                                onClick={() => setParcelaPagamento(p)}
+                                title="Ver os dados do pagamento e o comprovante"
+                                className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                              >
+                                <Receipt className="h-3.5 w-3.5" /> Ver pagamento
+                              </button>
+                            </div>
                           ) : (
                             <span className="block text-right text-xs text-muted-foreground">—</span>
                           )}
@@ -555,6 +568,10 @@ export function FinanceiroClient() {
         parcela={parcelaConferir}
         onClose={() => setParcelaConferir(null)}
         onDone={() => { setParcelaConferir(null); aposMudanca() }}
+      />
+      <PagamentoModal
+        parcela={parcelaPagamento}
+        onClose={() => setParcelaPagamento(null)}
       />
       <ModalNovaCobranca
         open={novaAberta}
