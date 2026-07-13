@@ -8,6 +8,11 @@ describe('transferidaPeloBot', () => {
     expect(transferidaPeloBot({ labels: ['vip', HANDOFF_LABEL], status: 'open' })).toBe(true)
   })
 
+  it('reconhece a etiqueta antiga "andamento-processo" (conversas legadas)', () => {
+    expect(transferidaPeloBot({ labels: ['andamento-processo'], status: 'open' })).toBe(true)
+    expect(transferidaPeloBot({ labels: ['atendimento-humano'], status: 'open' })).toBe(true)
+  })
+
   it('label presente mas conversa resolvida → false', () => {
     expect(transferidaPeloBot({ labels: [HANDOFF_LABEL], status: 'resolved' })).toBe(false)
   })
