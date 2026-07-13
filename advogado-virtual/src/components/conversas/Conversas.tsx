@@ -8,6 +8,7 @@ import { NOTIF_PREF_KEY, notificacoesLigadas } from './NotificadorConversas'
 import type { AgenteMe, Conversa, RespostaLista, StatusConversa } from '@/lib/conversas/tipos'
 import { metaTemProxima } from '@/lib/conversas/paginacao'
 import { apenasDigitos } from '@/lib/conversas/telefone'
+import { transferidaPeloBot } from '@/lib/conversas/handoff'
 import type { Pessoa } from '@/lib/agenda/tipos'
 import { EventoModal } from '@/components/agenda/EventoModal'
 import { ConexaoAgente } from './ConexaoAgente'
@@ -16,7 +17,7 @@ import { PainelContexto } from './PainelContexto'
 import { Thread } from './Thread'
 import { mensagemErroRelay } from './erros'
 
-type FiltroChip = 'todos' | 'aguardando' | 'nao_atribuidas' | 'resolvidas'
+type FiltroChip = 'todos' | 'transferidas' | 'aguardando' | 'nao_atribuidas' | 'resolvidas'
 
 export function Conversas({ email }: { email: string }) {
   void email // e-mail (auth) é injetado server-side no header X-Simas-User-Email; aqui é só informativo.
@@ -248,6 +249,7 @@ export function Conversas({ email }: { email: string }) {
 
   // Contagens dos chips — da página carregada (pós-busca).
   const nTodos = visiveis.length
+  const nTransferidas = visiveis.filter((c) => transferidaPeloBot(c)).length
   const nAguardando = visiveis.filter((c) => c.aguardandoDesde !== null).length
   const nNaoAtribuidas = visiveis.filter((c) => !c.assignee).length
 
@@ -260,6 +262,7 @@ export function Conversas({ email }: { email: string }) {
 
   const chips: { value: FiltroChip; label: string; n: number | null }[] = [
     { value: 'todos', label: 'Todos', n: nTodos },
+    { value: 'transferidas', label: 'Transferidas', n: nTransferidas },
     { value: 'aguardando', label: 'Aguardando', n: nAguardando },
     { value: 'nao_atribuidas', label: 'Não atribuídas', n: nNaoAtribuidas },
     { value: 'resolvidas', label: 'Resolvidas', n: null },

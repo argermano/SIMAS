@@ -39,6 +39,8 @@ export interface Conversa {
    * null = conversa respondida ou sem mensagens de entrada pendentes.
    */
   aguardandoDesde: number | null
+  /** Etiquetas do Chatwoot repassadas pelo relay (ex.: "atendimento-humano"). [] se ausente (relay antigo). */
+  labels: string[]
 }
 
 export interface Anexo {

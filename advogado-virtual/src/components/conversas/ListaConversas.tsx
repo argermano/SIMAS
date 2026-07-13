@@ -6,10 +6,11 @@ import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import { horaCurta } from '@/lib/conversas/formato'
 import { rotuloAguardando } from '@/lib/conversas/aguardando'
+import { transferidaPeloBot, transferidaPendente } from '@/lib/conversas/handoff'
 import type { Conversa } from '@/lib/conversas/tipos'
 import { AvatarContato } from './AvatarContato'
 
-export type FiltroChip = 'todos' | 'aguardando' | 'nao_atribuidas' | 'resolvidas'
+export type FiltroChip = 'todos' | 'transferidas' | 'aguardando' | 'nao_atribuidas' | 'resolvidas'
 
 export function ListaConversas({
   conversas,
@@ -48,6 +49,7 @@ export function ListaConversas({
 
   // "resolvidas" e "todos" são passthrough: o status da query já filtra no servidor.
   const visiveis = conversas.filter((c) => {
+    if (filtroChip === 'transferidas') return transferidaPeloBot(c)
     if (filtroChip === 'aguardando') return c.aguardandoDesde !== null
     if (filtroChip === 'nao_atribuidas') return c.assignee === null
     return true
@@ -108,14 +110,19 @@ function ItemConversa({
   const resolvida = conversa.status === 'resolved'
   const selo = resolvida ? null : rotuloAguardando(conversa.aguardandoDesde, agoraEpochSeg)
   const critico = selo?.nivel === 'critico'
+  const transferida = transferidaPeloBot(conversa)
+  const transferidaPend = transferidaPendente(conversa)
 
-  // Barra de acento à esquerda: vermelha quando aguardando >= 4h (mesmo sem
-  // seleção); primária quando selecionado; transparente no resto.
-  const barra = critico
-    ? 'border-l-destructive'
-    : selecionado
-      ? 'border-l-primary'
-      : 'border-l-transparent'
+  // Barra de acento à esquerda, por prioridade acionável:
+  // 1) transferida-e-não-assumida (o bot largou e ninguém pegou) → violeta;
+  // 2) aguardando >= 4h → vermelha; 3) selecionado → primária; 4) transparente.
+  const barra = transferidaPend
+    ? 'border-l-violet-500 dark:border-l-violet-400'
+    : critico
+      ? 'border-l-destructive'
+      : selecionado
+        ? 'border-l-primary'
+        : 'border-l-transparent'
 
   return (
     <article
@@ -135,16 +142,26 @@ function ItemConversa({
         selecionado ? 'bg-primary/[0.06] dark:bg-primary/10' : 'hover:bg-muted/60',
       )}
     >
-      {/* Selo superior: tempo aguardando (derivado) ou RESOLVIDO */}
-      {(selo || resolvida) && (
-        <p
-          className={cn(
-            'mb-1 text-[10px] font-semibold uppercase tracking-wide',
-            resolvida ? 'text-success' : CLASSE_NIVEL[selo!.nivel],
+      {/* Selo superior. Transferida pelo assistente tem prioridade visual e pode
+          conviver com o selo de tempo aguardando (violeta ≠ vermelho/âmbar). */}
+      {(transferida || selo || resolvida) && (
+        <div className="mb-1 flex flex-wrap items-center gap-1.5">
+          {transferida && (
+            <span className="inline-flex items-center rounded-full bg-violet-500/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:bg-violet-400/15 dark:text-violet-300">
+              🙋 Transferida pelo assistente
+            </span>
           )}
-        >
-          {resolvida ? 'RESOLVIDO' : selo!.texto}
-        </p>
+          {(selo || resolvida) && (
+            <span
+              className={cn(
+                'text-[10px] font-semibold uppercase tracking-wide',
+                resolvida ? 'text-success' : CLASSE_NIVEL[selo!.nivel],
+              )}
+            >
+              {resolvida ? 'RESOLVIDO' : selo!.texto}
+            </span>
+          )}
+        </div>
       )}
 
       <div className="flex items-start gap-3">

@@ -24,5 +24,25 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  return NextResponse.json(data, { status })
+  return NextResponse.json(comLabels(data), { status })
+}
+
+/**
+ * Garante labels: string[] (default []) em cada conversa, mesmo com o relay
+ * antigo (que ainda não devolve o campo). Aditivo e à prova de shape: se o
+ * corpo não tiver o formato esperado, repassa intacto.
+ */
+function comLabels(data: unknown): unknown {
+  if (!data || typeof data !== 'object') return data
+  const d = data as { conversas?: unknown }
+  if (!Array.isArray(d.conversas)) return data
+  return {
+    ...d,
+    conversas: d.conversas.map((c) => {
+      if (!c || typeof c !== 'object') return c
+      const raw = (c as { labels?: unknown }).labels
+      const labels = Array.isArray(raw) ? raw.filter((l): l is string => typeof l === 'string') : []
+      return { ...c, labels }
+    }),
+  }
 }
