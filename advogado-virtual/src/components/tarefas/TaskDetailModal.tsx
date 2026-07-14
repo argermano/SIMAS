@@ -7,15 +7,16 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import {
-  X, Calendar, User, Flag, Layers, Tag,
+  X, Calendar, User, Users, Flag, Layers, Tag,
   CheckCircle2, Trash2, Loader2, Pencil, Check, ExternalLink,
-  MessageSquare, History, FileText,
+  MessageSquare, History, FileText, ListChecks,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TaskData } from './TaskCard'
 import { VinculoPicker, type VinculoSelecionado } from './VinculoPicker'
 import { resolverVinculoView, ROTULO_TIPO, type VinculoView } from '@/lib/tarefas/vinculo'
-import { AbaComentarios, type Comentario } from './detalhe/AbaComentarios'
+import { ComentariosSecao, type Comentario } from './ComentariosSecao'
+import { SubtarefasSecao } from './SubtarefasSecao'
 import { AbaHistorico } from './detalhe/AbaHistorico'
 import { CardPublicacao } from './detalhe/CardPublicacao'
 
@@ -36,6 +37,8 @@ interface TaskDetailModalProps {
   lists:        TaskList[]
   tags:         TaskTag[]
   teamMembers?: TeamMember[]
+  currentUserId?:   string
+  currentUserName?: string
   open:         boolean
   onClose:      () => void
   onSaved:      () => void
@@ -75,7 +78,7 @@ function initials(nome: string) {
 }
 
 export function TaskDetailModal({
-  task, boards, lists, tags, teamMembers, open, onClose, onSaved,
+  task, boards, lists, tags, teamMembers, currentUserId, currentUserName, open, onClose, onSaved,
 }: TaskDetailModalProps) {
   const { success, error: toastError } = useToast()
 
@@ -83,6 +86,9 @@ export function TaskDetailModal({
   const [dueDate,      setDueDate]       = useState(toInputDate(task.due_date))
   const [priority,     setPriority]      = useState(task.priority)
   const [assigneeId,   setAssigneeId]    = useState(task.assignee_id ?? task.users?.id ?? '')
+  const [extraAssignees, setExtraAssignees] = useState<string[]>(
+    (task.task_assignees ?? []).map(a => a.user_id)
+  )
   const [boardId,      setBoardId]       = useState(task.kanban_board_id ?? '')
   const [columnId,     setColumnId]      = useState(task.kanban_column_id ?? '')
   const [taskListId,   setTaskListId]    = useState(task.task_list_id ?? '')
@@ -102,10 +108,11 @@ export function TaskDetailModal({
   const publicacaoId = task.origin_reference?.startsWith('publicacao:')
     ? task.origin_reference.slice('publicacao:'.length)
     : null
-  type Aba = 'comentarios' | 'historico' | 'publicacao'
+  type Aba = 'comentarios' | 'subtarefas' | 'historico' | 'publicacao'
   const [activeTab,        setActiveTab]        = useState<Aba>('comentarios')
   const [comentarios,      setComentarios]      = useState<Comentario[] | null>(null)
   const [loadingComments,  setLoadingComments]  = useState(false)
+  const [subCount,         setSubCount]         = useState<number | null>(null)
 
   // Resetar estado quando a tarefa mudar
   useEffect(() => {
@@ -113,6 +120,7 @@ export function TaskDetailModal({
     setDueDate(toInputDate(task.due_date))
     setPriority(task.priority)
     setAssigneeId(task.assignee_id ?? task.users?.id ?? '')
+    setExtraAssignees((task.task_assignees ?? []).map(a => a.user_id))
     setBoardId(task.kanban_board_id ?? '')
     setColumnId(task.kanban_column_id ?? '')
     setTaskListId(task.task_list_id ?? '')
@@ -122,6 +130,7 @@ export function TaskDetailModal({
     setEditingDesc(false)
     setActiveTab('comentarios')
     setComentarios(null)
+    setSubCount(null)
   }, [task.id])
 
   // Carregar comentários ao abrir/trocar de tarefa (alimenta o badge de contagem).
@@ -148,6 +157,23 @@ export function TaskDetailModal({
     return () => { vivo = false }
   }, [task.id, open])
 
+  // Contagem de subtarefas p/ o badge da aba (a lista completa é carregada na aba).
+  useEffect(() => {
+    if (!open) return
+    let vivo = true
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/tasks/${task.id}/subtarefas`)
+        if (!vivo) return
+        const d = await res.json().catch(() => ({}))
+        setSubCount(((d.subtarefas ?? []) as unknown[]).length)
+      } catch {
+        if (vivo) setSubCount(null)
+      }
+    })()
+    return () => { vivo = false }
+  }, [task.id, open])
+
   if (!open) return null
 
   const currentBoard  = boards.find(b => b.id === boardId)
@@ -159,6 +185,39 @@ export function TaskDetailModal({
     task.users ? { id: task.users.id, nome: task.users.nome } : null,
     ...(task.task_assignees ?? []).map(a => a.users),
   ].filter(Boolean) as { id: string; nome: string }[]
+
+  // Responsáveis "ao vivo" (reflete a edição em curso): principal + extras.
+  // Resolve nomes pela equipe; cai no dado salvo da task quando disponível.
+  const nomeDoMembro = (uid: string) =>
+    teamMembers?.find(m => m.id === uid)?.nome
+    ?? allAssignees.find(a => a.id === uid)?.nome
+    ?? '—'
+  const allAssigneesLive = [
+    assigneeId ? { id: assigneeId, nome: nomeDoMembro(assigneeId) } : null,
+    ...extraAssignees
+      .filter(uid => uid !== assigneeId)
+      .map(uid => ({ id: uid, nome: nomeDoMembro(uid) })),
+  ].filter(Boolean) as { id: string; nome: string }[]
+
+  function toggleExtra(uid: string) {
+    setExtraAssignees(prev =>
+      prev.includes(uid) ? prev.filter(u => u !== uid) : [...prev, uid]
+    )
+  }
+
+  // Trocar o principal: o anterior NÃO some da tarefa — vira co-responsável
+  // (extra). Sem isto, promover um extra a principal descartava o antigo em
+  // silêncio. O novo principal sai dos extras p/ não duplicar (o toggle abaixo
+  // já o esconde, e o save filtra uid !== assigneeId).
+  function handlePrincipalChange(novo: string) {
+    setExtraAssignees(prev => {
+      const semNovo = prev.filter(uid => uid !== novo)
+      return assigneeId && assigneeId !== novo && !semNovo.includes(assigneeId)
+        ? [...semNovo, assigneeId]
+        : semNovo
+    })
+    setAssigneeId(novo)
+  }
 
   function handleBoardChange(id: string) {
     setBoardId(id)
@@ -179,6 +238,7 @@ export function TaskDetailModal({
         due_date:         dueDate || null,
         priority,
         assignee_id:      assigneeId || null,
+        extra_assignees:  extraAssignees.filter(uid => uid !== assigneeId),
         kanban_board_id:  boardId  || null,
         kanban_column_id: columnId || null,
         task_list_id:     taskListId || null,
@@ -433,7 +493,7 @@ export function TaskDetailModal({
               {teamMembers && teamMembers.length > 0 ? (
                 <Select
                   value={assigneeId}
-                  onChange={e => setAssigneeId(e.target.value)}
+                  onChange={e => handlePrincipalChange(e.target.value)}
                   options={teamMembers.map(m => ({ value: m.id, label: m.nome }))}
                   placeholder="Selecione..."
                 />
@@ -455,6 +515,53 @@ export function TaskDetailModal({
               )}
             </div>
           </div>
+
+          {/* ── Outros responsáveis (multi) — principal via Select acima ── */}
+          {teamMembers && teamMembers.length > 1 && (
+            <div className="space-y-2 px-6 pb-4">
+              <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Users className="h-3.5 w-3.5" /> Responsáveis
+              </label>
+              {/* Todos (principal + extras) com avatar/inicial + nome */}
+              <div className="flex flex-wrap gap-1.5">
+                {allAssigneesLive.map(u => (
+                  <span
+                    key={u.id}
+                    title={u.nome}
+                    className="flex items-center gap-1.5 rounded-full bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary"
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/80 text-[9px] font-bold text-white">
+                      {initials(u.nome)}
+                    </span>
+                    {u.nome.split(' ')[0]}
+                  </span>
+                ))}
+              </div>
+              {/* Alternar outros responsáveis (exclui o principal p/ não duplicar) */}
+              <div className="flex flex-wrap gap-2 pt-0.5">
+                {teamMembers.filter(m => m.id !== assigneeId).map(m => {
+                  const on = extraAssignees.includes(m.id)
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggleExtra(m.id)}
+                      title={m.nome}
+                      className={cn(
+                        'flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                        on
+                          ? 'bg-primary text-white'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                      )}
+                    >
+                      {on && <Check className="h-3 w-3" />}
+                      {m.nome.split(' ')[0]}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ── Vínculo: cliente, caso ou processo ── */}
           <div className="px-6 pb-4">
@@ -520,6 +627,13 @@ export function TaskDetailModal({
                 badge={comentarios?.length ?? undefined}
               />
               <TabButton
+                active={activeTab === 'subtarefas'}
+                onClick={() => setActiveTab('subtarefas')}
+                icon={<ListChecks className="h-4 w-4" />}
+                label="Subtarefas"
+                badge={subCount ?? undefined}
+              />
+              <TabButton
                 active={activeTab === 'historico'}
                 onClick={() => setActiveTab('historico')}
                 icon={<History className="h-4 w-4" />}
@@ -536,11 +650,22 @@ export function TaskDetailModal({
             </div>
             <div className="px-6 py-4">
               {activeTab === 'comentarios' && (
-                <AbaComentarios
+                <ComentariosSecao
                   taskId={task.id}
                   comentarios={comentarios}
                   loading={loadingComments}
+                  teamMembers={teamMembers}
                   onCreated={novo => setComentarios(prev => [...(prev ?? []), novo])}
+                />
+              )}
+              {activeTab === 'subtarefas' && (
+                <SubtarefasSecao
+                  taskId={task.id}
+                  teamMembers={teamMembers}
+                  currentUserId={currentUserId}
+                  currentUserName={currentUserName}
+                  defaultBoardId={boardId || boards[0]?.id}
+                  onCountChange={setSubCount}
                 />
               )}
               {activeTab === 'historico' && <AbaHistorico taskId={task.id} />}

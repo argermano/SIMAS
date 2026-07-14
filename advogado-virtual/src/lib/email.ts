@@ -149,4 +149,33 @@ export function enviarEmailPecaRejeitada(n: NotificacaoPeca & { motivo: string }
   })
 }
 
+interface MencaoComentario {
+  para: string            // e-mail do mencionado
+  nomeMencionado: string
+  nomeAutor: string       // quem mencionou
+  tarefa: string          // descrição da tarefa (contexto)
+  conteudo: string        // texto do comentário
+}
+
+/**
+ * Notifica um colega mencionado (@) em um comentário de tarefa. Best-effort:
+ * herda o comportamento de enviarEmail (não lança; desligado sem RESEND_API_KEY).
+ */
+export function enviarEmailMencaoComentario(n: MencaoComentario): Promise<boolean> {
+  return enviarEmail({
+    para: n.para,
+    assunto: `${n.nomeAutor} mencionou você em uma tarefa`,
+    html: emailTemplate({
+      titulo: `Você foi mencionado, ${escaparHtml(n.nomeMencionado)}`,
+      conteudo: `
+        <p><strong>${escaparHtml(n.nomeAutor)}</strong> mencionou você em um comentário na tarefa <strong>${escaparHtml(n.tarefa)}</strong>:</p>
+        <blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #4f5fcc;background:#f8f9fc;color:#475569;border-radius:6px;white-space:pre-wrap;">
+          ${escaparHtml(n.conteudo)}
+        </blockquote>
+      `,
+      botao: { texto: 'Abrir tarefas', url: `${baseUrl()}/tarefas` },
+    }),
+  })
+}
+
 export { baseUrl as urlBaseApp }

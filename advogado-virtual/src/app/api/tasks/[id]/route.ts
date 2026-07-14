@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
+import { pertenceAoTenant } from '@/lib/ownership'
 import { z } from 'zod'
 import { vinculoParaColunas } from '@/lib/tarefas/vinculo'
 import { vinculoValido } from '@/lib/tarefas/validar-vinculo'
@@ -48,6 +49,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     Object.assign(taskData, vinculoParaColunas(vinculo))
   }
 
+  // Fronteira de tenant (paridade com o POST): cada responsável extra tem de ser
+  // usuário do MESMO escritório. A RLS de task_assignees só confere o task_id
+  // (não o user_id) — sem isto dava p/ gravar responsável de outro tenant / sondar UUIDs.
+  let extrasUnicos: string[] | undefined
+  if (extra_assignees !== undefined) {
+    extrasUnicos = [...new Set(extra_assignees)]
+    for (const uid of extrasUnicos) {
+      if (!(await pertenceAoTenant(supabase, 'users', uid, usuario.tenant_id))) {
+        return jsonError('Responsável inválido', 400)
+      }
+    }
+  }
+
   // Estado anterior (para o diff do histórico). Não altera o comportamento:
   // se a tarefa não existir/for de outro tenant, o update abaixo falha como antes.
   const camposEscalares = Object.keys(taskData)
@@ -73,11 +87,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (error) return jsonError(error.message, 500)
 
   // Atualizar responsáveis adicionais (substituição completa)
-  if (extra_assignees !== undefined) {
+  if (extrasUnicos !== undefined) {
+    // Remove o principal dos extras (não duplica o responsável no card). Principal
+    // efetivo = o enviado no PATCH ou, se não veio, o já gravado (anterior).
+    const principal =
+      rest.assignee_id ?? (anterior as { assignee_id?: string | null } | null)?.assignee_id ?? undefined
+    const paraInserir = extrasUnicos.filter(uid => uid !== principal)
     await supabase.from('task_assignees').delete().eq('task_id', id)
-    if (extra_assignees.length > 0) {
+    if (paraInserir.length > 0) {
       await supabase.from('task_assignees').insert(
-        extra_assignees.map(uid => ({ task_id: id, user_id: uid }))
+        paraInserir.map(uid => ({ task_id: id, user_id: uid }))
       )
     }
   }

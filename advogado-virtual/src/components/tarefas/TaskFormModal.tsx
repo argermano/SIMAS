@@ -7,8 +7,13 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Tag } from 'lucide-react'
+import { Plus, Tag, Check } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { VinculoPicker, type VinculoSelecionado } from './VinculoPicker'
+
+function initials(nome: string) {
+  return nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+}
 
 interface Board { id: string; name: string; kanban_columns: Column[] }
 interface Column { id: string; name: string; position: number }
@@ -27,6 +32,8 @@ interface TaskFormModalProps {
   teamMembers?:       TeamMember[]
   defaultBoardId?:    string
   defaultColumnId?:   string
+  /** Se presente, cria a tarefa como subtarefa (filha) desta tarefa-mãe. */
+  parentTaskId?:      string
 }
 
 const PRIORITY_OPTIONS = [
@@ -39,7 +46,7 @@ const PRIORITY_OPTIONS = [
 export function TaskFormModal({
   open, onClose, onSaved,
   currentUserId, currentUserName, teamMembers,
-  defaultBoardId, defaultColumnId,
+  defaultBoardId, defaultColumnId, parentTaskId,
 }: TaskFormModalProps) {
   const { success, error: toastError } = useToast()
 
@@ -47,6 +54,7 @@ export function TaskFormModal({
   const [dueDate,       setDueDate]        = useState('')
   const [taskListId,    setTaskListId]     = useState('')
   const [assigneeId,    setAssigneeId]     = useState(currentUserId)
+  const [extraAssignees, setExtraAssignees] = useState<string[]>([])
   const [priority,      setPriority]       = useState<'baixa'|'media'|'alta'|'urgente'>('media')
   const [boardId,       setBoardId]        = useState(defaultBoardId ?? '')
   const [columnId,      setColumnId]       = useState(defaultColumnId ?? '')
@@ -119,6 +127,12 @@ export function TaskFormModal({
     )
   }
 
+  function toggleExtra(id: string) {
+    setExtraAssignees(prev =>
+      prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]
+    )
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!description.trim()) return
@@ -133,11 +147,13 @@ export function TaskFormModal({
           due_date:         dueDate || null,
           task_list_id:     taskListId || null,
           assignee_id:      assigneeId,
+          extra_assignees:  extraAssignees.filter(id => id !== assigneeId),
           priority,
           kanban_board_id:  boardId  || null,
           kanban_column_id: columnId || null,
           tag_ids:          selectedTags,
           vinculo:          vinculo ? { tipo: vinculo.tipo, id: vinculo.id } : null,
+          parent_task_id:   parentTaskId ?? null, // subtarefa: id da tarefa-mãe
         }),
       })
       const data = await res.json()
@@ -160,6 +176,7 @@ export function TaskFormModal({
     setShowNewList(false)
     setSelectedTags([])
     setShowTags(false)
+    setExtraAssignees([])
     setVinculo(null)
     onClose()
   }
@@ -168,7 +185,7 @@ export function TaskFormModal({
     <Dialog
       open={open}
       onClose={handleClose}
-      title="Adicionar tarefa"
+      title={parentTaskId ? 'Adicionar subtarefa' : 'Adicionar tarefa'}
       size="lg"
       footer={
         <>
@@ -288,6 +305,42 @@ export function TaskFormModal({
             options={PRIORITY_OPTIONS}
           />
         </div>
+
+        {/* Outros responsáveis (multi) — exclui o principal para não duplicar */}
+        {teamMembers && teamMembers.length > 1 && (
+          <div className="space-y-1.5">
+            <label className="block text-base font-medium text-foreground">
+              Outros responsáveis
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {teamMembers.filter(m => m.id !== assigneeId).map(m => {
+                const on = extraAssignees.includes(m.id)
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => toggleExtra(m.id)}
+                    title={m.nome}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-xs font-medium transition-colors',
+                      on
+                        ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/70',
+                    )}
+                  >
+                    <span className={cn(
+                      'flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold',
+                      on ? 'bg-primary text-white' : 'bg-muted-foreground/25 text-muted-foreground',
+                    )}>
+                      {on ? <Check className="h-3 w-3" /> : initials(m.nome)}
+                    </span>
+                    {m.nome.split(' ')[0]}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Quadro + Coluna */}
         <div className="grid grid-cols-2 gap-3">

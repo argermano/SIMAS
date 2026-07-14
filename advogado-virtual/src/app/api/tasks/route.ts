@@ -19,6 +19,7 @@ const schemaCreate = z.object({
   process_id:       z.string().uuid().optional().nullable(),
   vinculo:          schemaVinculo.optional(),
   assignee_id:      z.string().uuid(),
+  parent_task_id:   z.string().uuid().optional().nullable(), // subtarefa: id da tarefa-mãe
   priority:         z.enum(['baixa', 'media', 'alta', 'urgente']).default('media'),
   kanban_board_id:  z.string().uuid().optional().nullable(),
   kanban_column_id: z.string().uuid().optional().nullable(),
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
   const period     = searchParams.get('period')    // 'month', 'week', 'today'
   const tag_id     = searchParams.get('tag_id')
   const search     = searchParams.get('search')
+  const parent     = searchParams.get('parent') // uuid da mãe | 'all' p/ incluir filhas
 
   // Paginação configurável (retrocompatível: default = limit 100, página 1).
   const limitParam = Number(searchParams.get('limit'))
@@ -55,7 +57,7 @@ export async function GET(req: NextRequest) {
     .from('tasks')
     .select(`
       id, description, due_date, priority, origin, completed_at, created_at, updated_at,
-      task_list_id, process_id, cliente_id, processo_id, assignee_id, kanban_board_id, kanban_column_id, origin_reference,
+      task_list_id, process_id, cliente_id, processo_id, assignee_id, kanban_board_id, kanban_column_id, origin_reference, parent_task_id,
       task_lists(name),
       atendimentos(id, area, numero_processo, clientes(id, nome)),
       cliente:clientes!cliente_id(id, nome),
@@ -70,6 +72,15 @@ export async function GET(req: NextRequest) {
 
   if (board_id)  query = query.eq('kanban_board_id', board_id)
   if (column_id) query = query.eq('kanban_column_id', column_id)
+
+  // Subtarefas: por padrão o board mostra só tarefas-raiz (sem mãe) — as filhas
+  // aparecem dentro da mãe (via /api/tasks/[id]/subtarefas). ?parent=<id> lista
+  // as filhas de uma mãe; ?parent=all inclui tudo (raiz + filhas).
+  if (parent && parent !== 'all') {
+    query = query.eq('parent_task_id', parent)
+  } else if (!parent) {
+    query = query.is('parent_task_id', null)
+  }
 
   if (assignee === 'me') {
     query = query.eq('assignee_id', usuario.id)
@@ -123,13 +134,32 @@ export async function POST(req: NextRequest) {
 
   const { extra_assignees, tag_ids, vinculo, ...taskData } = parsed.data
 
+  // Dedup + remove o principal dos extras (ele já vai em tasks.assignee_id):
+  // duplicar mostraria o mesmo responsável 2x no card e inflaria o "+N".
+  const extrasLimpos = [...new Set(extra_assignees ?? [])].filter(uid => uid !== taskData.assignee_id)
+
   // A8: os responsáveis (assignee + extras) precisam ser usuários do tenant —
   // impede vincular tarefa a usuário de outro tenant (link cruzado / sondagem de IDs).
-  const responsaveis = [taskData.assignee_id, ...(extra_assignees ?? [])]
+  const responsaveis = [taskData.assignee_id, ...extrasLimpos]
   for (const uid of responsaveis) {
     if (!(await pertenceAoTenant(supabase, 'users', uid, usuario.tenant_id))) {
       return jsonError('Responsável inválido', 400)
     }
+  }
+
+  // Subtarefa: a tarefa-mãe precisa ser do mesmo tenant (impede vincular filha a
+  // tarefa de outro escritório / sondar IDs — a FK só exige que a mãe exista).
+  if (taskData.parent_task_id) {
+    const { data: mae } = await supabase
+      .from('tasks')
+      .select('id, parent_task_id')
+      .eq('id', taskData.parent_task_id)
+      .eq('tenant_id', usuario.tenant_id)
+      .maybeSingle()
+    if (!mae) return jsonError('Tarefa-mãe inválida', 400)
+    // Só 1 nível: a mãe tem de ser uma tarefa-raiz. Uma "neta" ficaria invisível
+    // (fora do board e da aba de subtarefas da avó, que só lista filhas diretas).
+    if (mae.parent_task_id) return jsonError('Não é possível criar subtarefa de uma subtarefa', 400)
   }
 
   // Vínculo único (cliente/caso/processo): valida propriedade e mapeia p/ as 3 colunas.
@@ -154,10 +184,10 @@ export async function POST(req: NextRequest) {
 
   if (error) return jsonError(error.message, 500)
 
-  // Responsáveis adicionais
-  if (extra_assignees && extra_assignees.length > 0) {
+  // Responsáveis adicionais (já validados e sem o principal)
+  if (extrasLimpos.length > 0) {
     await supabase.from('task_assignees').insert(
-      extra_assignees.map(uid => ({ task_id: task.id, user_id: uid }))
+      extrasLimpos.map(uid => ({ task_id: task.id, user_id: uid }))
     )
   }
 

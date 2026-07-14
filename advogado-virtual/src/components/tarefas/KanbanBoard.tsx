@@ -236,6 +236,8 @@ export function KanbanBoard({
           lists={lists}
           tags={tags}
           teamMembers={teamMembers}
+          currentUserId={currentUserId}
+          currentUserName={currentUserName}
           onClose={() => setDetailTask(null)}
           onSaved={() => { handleSaved(); setDetailTask(null) }}
         />
