@@ -20,6 +20,7 @@ export interface TaskData {
   kanban_column_id?: string | null
   task_list_id?:     string | null
   kanban_board_id?:  string | null
+  parent_task_id?:   string | null
   users?:            { id: string; nome: string } | null
   task_tag_links?:   { tag_id: string; task_tags: { id: string; name: string; color: string } | null }[]
   task_assignees?:   { user_id: string; users: { id: string; nome: string } | null }[]
@@ -112,6 +113,17 @@ function TaskCardBase({ task, onClick }: TaskCardProps) {
             </span>
           ))}
         </div>
+      )}
+
+      {/* Selo de subtarefa: card aparece no quadro, mas sinaliza que é filha
+          de outra tarefa (o vínculo com a mãe é gerido dentro da tarefa-mãe). */}
+      {task.parent_task_id && (
+        <span
+          title="Esta é uma subtarefa de outra tarefa"
+          className="mb-1 inline-flex items-center gap-1 rounded-md bg-muted/70 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
+        >
+          ↳ Subtarefa
+        </span>
       )}
 
       {/* Descrição */}

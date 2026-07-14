@@ -76,6 +76,9 @@ export function KanbanBoard({
 
   const fetchTasks = useCallback(async () => {
     const params = new URLSearchParams({ board_id: board.id })
+    // Inclui as subtarefas no quadro (pedido do dono): sem isto o GET só traz
+    // as tarefas-raiz. Cada subtarefa aparece como card na sua própria coluna.
+    params.set('parent', 'all')
     if (filters.assignee !== 'all') params.set('assignee', filters.assignee)
     if (filters.period)             params.set('period',   filters.period)
     if (filters.tagId)              params.set('tag_id',   filters.tagId)
