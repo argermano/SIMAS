@@ -3,7 +3,11 @@
 import { memo } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { User, Briefcase, Scale } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { resolverVinculoView, type VinculoTipo } from '@/lib/tarefas/vinculo'
+
+type RelNome = { id: string; nome: string } | null
 
 export interface TaskData {
   id:                string
@@ -19,8 +23,20 @@ export interface TaskData {
   users?:            { id: string; nome: string } | null
   task_tag_links?:   { tag_id: string; task_tags: { id: string; name: string; color: string } | null }[]
   task_assignees?:   { user_id: string; users: { id: string; nome: string } | null }[]
-  atendimentos?:     { id: string; area: string } | null
+  // Vínculo único (migration 054): process_id=caso, cliente_id=cliente, processo_id=processo
+  process_id?:       string | null
+  cliente_id?:       string | null
+  processo_id?:      string | null
+  atendimentos?:     { id: string; area: string; numero_processo?: string | null; clientes?: RelNome } | null
+  cliente?:          RelNome
+  processo?:         { id: string; numero_cnj: string; apelido: string | null; clientes?: RelNome } | null
   origin_reference?: string | null
+}
+
+const VINCULO_ICON: Record<VinculoTipo, typeof User> = {
+  cliente:     User,
+  atendimento: Briefcase,
+  processo:    Scale,
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -67,6 +83,9 @@ function TaskCardBase({ task, onClick }: TaskCardProps) {
   const visibleAssignees = allAssignees.slice(0, 2)
   const extra            = allAssignees.length - 2
 
+  const vinculo    = resolverVinculoView(task)
+  const VinculoIcon = vinculo ? VINCULO_ICON[vinculo.tipo] : null
+
   return (
     <div
       ref={setNodeRef}
@@ -100,11 +119,20 @@ function TaskCardBase({ task, onClick }: TaskCardProps) {
         {task.description}
       </p>
 
-      {/* Processo vinculado */}
-      {task.atendimentos && (
-        <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-          {task.atendimentos.area}
-        </p>
+      {/* Selo do vínculo (cliente / caso / processo) */}
+      {vinculo && VinculoIcon && (
+        <span
+          title={vinculo.sublabel ? `${vinculo.label} · ${vinculo.sublabel}` : vinculo.label}
+          className={cn(
+            'mt-2 inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-xs',
+            vinculo.removido
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-muted/70 text-muted-foreground',
+          )}
+        >
+          <VinculoIcon className="h-3 w-3 shrink-0" />
+          <span className="truncate">{vinculo.label}</span>
+        </span>
       )}
 
       {/* Footer: avatares + data */}

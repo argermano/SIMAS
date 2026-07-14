@@ -3,12 +3,19 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { z } from 'zod'
+import { vinculoParaColunas } from '@/lib/tarefas/vinculo'
+import { vinculoValido } from '@/lib/tarefas/validar-vinculo'
+
+const schemaVinculo = z
+  .object({ tipo: z.enum(['cliente', 'atendimento', 'processo']), id: z.string().uuid() })
+  .nullable()
 
 const schemaUpdate = z.object({
   description:      z.string().min(1).max(2000).optional(),
   due_date:         z.string().nullable().optional(),
   task_list_id:     z.string().uuid().nullable().optional(),
   process_id:       z.string().uuid().nullable().optional(),
+  vinculo:          schemaVinculo.optional(),
   assignee_id:      z.string().uuid().optional(),
   priority:         z.enum(['baixa', 'media', 'alta', 'urgente']).optional(),
   kanban_board_id:  z.string().uuid().nullable().optional(),
@@ -29,16 +36,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const parsed = schemaUpdate.safeParse(body)
   if (!parsed.success) return jsonError('Dados inválidos', 400)
 
-  const { extra_assignees, tag_ids, ...taskData } = parsed.data
+  const { extra_assignees, tag_ids, vinculo, ...rest } = parsed.data
+  const taskData: Record<string, unknown> = { ...rest }
+
+  // Vínculo único (cliente/caso/processo): valida propriedade e mapeia p/ as 3
+  // colunas (a escolhida recebe o id, as outras vão a null → mantém exclusividade).
+  if (vinculo !== undefined) {
+    if (vinculo && !(await vinculoValido(supabase, vinculo, usuario.tenant_id))) {
+      return jsonError('Vínculo inválido', 400)
+    }
+    Object.assign(taskData, vinculoParaColunas(vinculo))
+  }
 
   // Estado anterior (para o diff do histórico). Não altera o comportamento:
   // se a tarefa não existir/for de outro tenant, o update abaixo falha como antes.
-  const camposEscalares = Object.keys(taskData) as (keyof typeof taskData)[]
+  const camposEscalares = Object.keys(taskData)
   const { data: anterior } = camposEscalares.length
     ? await supabase
         .from('tasks')
         .select(
-          'description, due_date, task_list_id, process_id, assignee_id, priority, kanban_board_id, kanban_column_id, completed_at',
+          'description, due_date, task_list_id, process_id, cliente_id, processo_id, assignee_id, priority, kanban_board_id, kanban_column_id, completed_at',
         )
         .eq('id', id)
         .eq('tenant_id', usuario.tenant_id)

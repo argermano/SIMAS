@@ -1,0 +1,123 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getAuthContext } from '@/lib/auth'
+import { decryptClienteFields } from '@/lib/encryption'
+import { formatarCnj, rotularArea, sublabelCliente, type VinculoTipo } from '@/lib/tarefas/vinculo'
+
+/**
+ * GET /api/tarefas/vinculos?q=...
+ * Busca unificada para o campo "Cliente, caso ou processo" da tarefa do Kanban.
+ * Mistura até ~8 resultados dos 3 tipos, escopo do tenant. q < 2 chars → [].
+ *   cliente     → label=nome,                     sublabel=CPF/telefone
+ *   atendimento → label=área,                     sublabel=cliente (· nº processo)
+ *   processo    → label=apelido/nº CNJ,           sublabel=cliente
+ */
+
+interface Resultado {
+  tipo:     VinculoTipo
+  id:       string
+  label:    string
+  sublabel: string | null
+}
+
+const POR_TIPO = 4 // teto por tipo antes de intercalar
+
+// Embeds to-one podem vir como objeto ou array — normaliza para o primeiro.
+function umNome(rel: unknown): string | null {
+  const r = Array.isArray(rel) ? rel[0] : rel
+  const nome = (r as { nome?: string } | null)?.nome
+  return nome ? nome.trim() : null
+}
+
+// Intercala as 3 listas (round-robin) para garantir mistura dos tipos.
+function intercalar(...listas: Resultado[][]): Resultado[] {
+  const out: Resultado[] = []
+  const max = Math.max(0, ...listas.map((l) => l.length))
+  for (let i = 0; i < max; i++) {
+    for (const l of listas) if (l[i]) out.push(l[i])
+  }
+  return out
+}
+
+export async function GET(req: NextRequest) {
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
+
+  const q = (new URL(req.url).searchParams.get('q') ?? '').trim()
+  if (q.length < 2) return NextResponse.json({ resultados: [] })
+
+  const tenantId = usuario.tenant_id
+  const like = `%${q}%`
+  const digitos = q.replace(/\D/g, '')
+
+  // ── Clientes (por nome) ──────────────────────────────────────────────
+  const pCliente = supabase
+    .from('clientes')
+    .select('id, nome, cpf, telefone')
+    .eq('tenant_id', tenantId)
+    .is('deleted_at', null)
+    .neq('status_cadastro', 'pre_cadastro')
+    .ilike('nome', like)
+    .order('nome', { ascending: true })
+    .limit(POR_TIPO)
+
+  // ── Atendimentos / casos (por área ou nº do processo) ────────────────
+  const pAtend = supabase
+    .from('atendimentos')
+    .select('id, area, numero_processo, clientes:cliente_id ( id, nome )')
+    .eq('tenant_id', tenantId)
+    .is('deleted_at', null)
+    .or(`area.ilike.${like},numero_processo.ilike.${like}`)
+    .order('created_at', { ascending: false })
+    .limit(POR_TIPO)
+
+  // ── Processos / Fase 5 (por nº CNJ ou apelido) ───────────────────────
+  const orProcesso = digitos.length >= 2
+    ? `numero_cnj.ilike.%${digitos}%,apelido.ilike.${like}`
+    : `apelido.ilike.${like}`
+  const pProc = supabase
+    .from('processos')
+    .select('id, numero_cnj, apelido, clientes:cliente_id ( id, nome )')
+    .eq('tenant_id', tenantId)
+    .or(orProcesso)
+    .order('created_at', { ascending: false })
+    .limit(POR_TIPO)
+
+  const [rCliente, rAtend, rProc] = await Promise.all([pCliente, pAtend, pProc])
+
+  const clientes: Resultado[] = (rCliente.data ?? []).map((c) => {
+    const dec = decryptClienteFields(c as Record<string, unknown>) as { cpf?: string | null; telefone?: string | null }
+    return {
+      tipo: 'cliente' as const,
+      id: c.id as string,
+      label: (c.nome as string) ?? 'Cliente',
+      sublabel: sublabelCliente(dec.cpf, dec.telefone),
+    }
+  })
+
+  const atendimentos: Resultado[] = (rAtend.data ?? []).map((a) => {
+    const nome = umNome((a as { clientes?: unknown }).clientes)
+    const numero = (a as { numero_processo?: string | null }).numero_processo?.trim() || null
+    const sub = [nome, numero].filter(Boolean).join(' · ') || null
+    return {
+      tipo: 'atendimento' as const,
+      id: a.id as string,
+      label: rotularArea((a as { area?: string }).area),
+      sublabel: sub,
+    }
+  })
+
+  const processos: Resultado[] = (rProc.data ?? []).map((p) => {
+    const numeroFmt = formatarCnj((p as { numero_cnj?: string }).numero_cnj)
+    const apelido = (p as { apelido?: string | null }).apelido?.trim()
+    return {
+      tipo: 'processo' as const,
+      id: p.id as string,
+      label: apelido || numeroFmt,
+      sublabel: umNome((p as { clientes?: unknown }).clientes),
+    }
+  })
+
+  const resultados = intercalar(clientes, atendimentos, processos).slice(0, 8)
+  return NextResponse.json({ resultados })
+}

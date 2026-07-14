@@ -4,12 +4,20 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { pertenceAoTenant } from '@/lib/ownership'
 import { logAudit } from '@/lib/audit'
+import { vinculoParaColunas } from '@/lib/tarefas/vinculo'
+import { vinculoValido } from '@/lib/tarefas/validar-vinculo'
+
+// Vínculo único (cliente | caso | processo) — ver migration 054 e lib/tarefas/vinculo.
+const schemaVinculo = z
+  .object({ tipo: z.enum(['cliente', 'atendimento', 'processo']), id: z.string().uuid() })
+  .nullable()
 
 const schemaCreate = z.object({
   description:      z.string().min(1).max(2000),
   due_date:         z.string().optional().nullable(),
   task_list_id:     z.string().uuid().optional().nullable(),
   process_id:       z.string().uuid().optional().nullable(),
+  vinculo:          schemaVinculo.optional(),
   assignee_id:      z.string().uuid(),
   priority:         z.enum(['baixa', 'media', 'alta', 'urgente']).default('media'),
   kanban_board_id:  z.string().uuid().optional().nullable(),
@@ -47,9 +55,11 @@ export async function GET(req: NextRequest) {
     .from('tasks')
     .select(`
       id, description, due_date, priority, origin, completed_at, created_at, updated_at,
-      task_list_id, process_id, assignee_id, kanban_board_id, kanban_column_id, origin_reference,
+      task_list_id, process_id, cliente_id, processo_id, assignee_id, kanban_board_id, kanban_column_id, origin_reference,
       task_lists(name),
-      atendimentos(id, area),
+      atendimentos(id, area, numero_processo, clientes(id, nome)),
+      cliente:clientes!cliente_id(id, nome),
+      processo:processos!processo_id(id, numero_cnj, apelido, clientes(id, nome)),
       users!tasks_assignee_id_fkey(id, nome),
       task_tag_links(tag_id, task_tags(id, name, color)),
       task_assignees(user_id, users(id, nome))
@@ -111,7 +121,7 @@ export async function POST(req: NextRequest) {
   const parsed = await validateBody(req, schemaCreate)
   if (!parsed.ok) return parsed.response
 
-  const { extra_assignees, tag_ids, ...taskData } = parsed.data
+  const { extra_assignees, tag_ids, vinculo, ...taskData } = parsed.data
 
   // A8: os responsáveis (assignee + extras) precisam ser usuários do tenant —
   // impede vincular tarefa a usuário de outro tenant (link cruzado / sondagem de IDs).
@@ -122,10 +132,20 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Vínculo único (cliente/caso/processo): valida propriedade e mapeia p/ as 3 colunas.
+  let colunasVinculo: ReturnType<typeof vinculoParaColunas> | null = null
+  if (vinculo !== undefined) {
+    if (vinculo && !(await vinculoValido(supabase, vinculo, usuario.tenant_id))) {
+      return jsonError('Vínculo inválido', 400)
+    }
+    colunasVinculo = vinculoParaColunas(vinculo)
+  }
+
   const { data: task, error } = await supabase
     .from('tasks')
     .insert({
       ...taskData,
+      ...(colunasVinculo ?? {}), // sobrepõe process_id p/ garantir exclusividade
       tenant_id:  usuario.tenant_id,
       created_by: usuario.id,
     })

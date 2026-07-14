@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
-import { Loader2, Plus, Tag } from 'lucide-react'
+import { Plus, Tag } from 'lucide-react'
+import { VinculoPicker, type VinculoSelecionado } from './VinculoPicker'
 
 interface Board { id: string; name: string; kanban_columns: Column[] }
 interface Column { id: string; name: string; position: number }
@@ -53,6 +54,7 @@ export function TaskFormModal({
   const [showNewList,   setShowNewList]    = useState(false)
   const [selectedTags,  setSelectedTags]   = useState<string[]>([])
   const [showTags,      setShowTags]       = useState(false)
+  const [vinculo,       setVinculo]        = useState<VinculoSelecionado | null>(null)
   const [saving,        setSaving]         = useState(false)
   const [savingList,    setSavingList]     = useState(false)
 
@@ -135,6 +137,7 @@ export function TaskFormModal({
           kanban_board_id:  boardId  || null,
           kanban_column_id: columnId || null,
           tag_ids:          selectedTags,
+          vinculo:          vinculo ? { tipo: vinculo.tipo, id: vinculo.id } : null,
         }),
       })
       const data = await res.json()
@@ -157,6 +160,7 @@ export function TaskFormModal({
     setShowNewList(false)
     setSelectedTags([])
     setShowTags(false)
+    setVinculo(null)
     onClose()
   }
 
@@ -258,6 +262,9 @@ export function TaskFormModal({
             )}
           </div>
         </div>
+
+        {/* Vínculo: cliente, caso ou processo (opcional) */}
+        <VinculoPicker value={vinculo} onChange={setVinculo} />
 
         {/* Responsável + Prioridade */}
         <div className="grid grid-cols-2 gap-3">

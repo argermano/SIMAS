@@ -13,9 +13,15 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { TaskData } from './TaskCard'
+import { VinculoPicker, type VinculoSelecionado } from './VinculoPicker'
+import { resolverVinculoView, ROTULO_TIPO, type VinculoView } from '@/lib/tarefas/vinculo'
 import { AbaComentarios, type Comentario } from './detalhe/AbaComentarios'
 import { AbaHistorico } from './detalhe/AbaHistorico'
 import { CardPublicacao } from './detalhe/CardPublicacao'
+
+function vinculoParaSelecionado(v: VinculoView | null): VinculoSelecionado | null {
+  return v ? { tipo: v.tipo, id: v.id, label: v.label, sublabel: v.sublabel } : null
+}
 
 interface Column   { id: string; name: string; position: number; color?: string | null }
 interface Board    { id: string; name: string; kanban_columns: Column[] }
@@ -83,6 +89,8 @@ export function TaskDetailModal({
   const [selectedTags, setSelectedTags]  = useState<string[]>(
     (task.task_tag_links ?? []).map(l => l.tag_id)
   )
+  const vinculoSalvo = resolverVinculoView(task)
+  const [vinculo,      setVinculo]       = useState<VinculoSelecionado | null>(vinculoParaSelecionado(vinculoSalvo))
   const [editingDesc,  setEditingDesc]   = useState(false)
   const [saving,       setSaving]        = useState(false)
   const [completing,   setCompleting]    = useState(false)
@@ -109,6 +117,7 @@ export function TaskDetailModal({
     setColumnId(task.kanban_column_id ?? '')
     setTaskListId(task.task_list_id ?? '')
     setSelectedTags((task.task_tag_links ?? []).map(l => l.tag_id))
+    setVinculo(vinculoParaSelecionado(resolverVinculoView(task)))
     setIsCompleted(!!task.completed_at)
     setEditingDesc(false)
     setActiveTab('comentarios')
@@ -165,20 +174,28 @@ export function TaskDetailModal({
   async function save(extra?: Record<string, unknown>) {
     setSaving(true)
     try {
+      const payload: Record<string, unknown> = {
+        description,
+        due_date:         dueDate || null,
+        priority,
+        assignee_id:      assigneeId || null,
+        kanban_board_id:  boardId  || null,
+        kanban_column_id: columnId || null,
+        task_list_id:     taskListId || null,
+        tag_ids:          selectedTags,
+        ...extra,
+      }
+      // Só envia o vínculo se mudou — evita revalidar (e um 400 espúrio se a
+      // entidade tiver sido apagada) num salvamento que só mexeu noutro campo.
+      const idAtual = vinculo?.id ?? null
+      const idSalvo = vinculoSalvo?.id ?? null
+      if (idAtual !== idSalvo) {
+        payload.vinculo = vinculo ? { tipo: vinculo.tipo, id: vinculo.id } : null
+      }
       const res = await fetch(`/api/tasks/${task.id}`, {
         method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          description,
-          due_date:         dueDate || null,
-          priority,
-          assignee_id:      assigneeId || null,
-          kanban_board_id:  boardId  || null,
-          kanban_column_id: columnId || null,
-          task_list_id:     taskListId || null,
-          tag_ids:          selectedTags,
-          ...extra,
-        }),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) {
         const d = await res.json()
@@ -437,6 +454,24 @@ export function TaskDetailModal({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ── Vínculo: cliente, caso ou processo ── */}
+          <div className="px-6 pb-4">
+            <VinculoPicker
+              value={vinculo}
+              onChange={setVinculo}
+              removido={!!vinculoSalvo?.removido && vinculo?.id === vinculoSalvo.id}
+            />
+            {vinculoSalvo && !vinculoSalvo.removido && vinculoSalvo.href && vinculo?.id === vinculoSalvo.id && (
+              <a
+                href={vinculoSalvo.href}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Abrir {ROTULO_TIPO[vinculoSalvo.tipo].toLowerCase()}
+              </a>
+            )}
           </div>
 
           {/* ── Tags ── */}
