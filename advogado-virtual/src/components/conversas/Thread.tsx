@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Lock,
   PanelRightOpen,
+  Paperclip,
   RotateCcw,
   Send,
   StickyNote,
@@ -21,6 +22,25 @@ import { agrupadorDia } from '@/lib/conversas/formato'
 import type { Conversa, Mensagem, RespostaMensagens } from '@/lib/conversas/tipos'
 import { MensagemBolha } from './MensagemBolha'
 import { codeDoErro, mensagemErroRelay, rotuloDia } from './erros'
+import {
+  LIMITE_UPLOAD_BYTES,
+  TIPOS_ANEXO_PERMITIDOS,
+  tipoAnexoPermitido,
+  mimePorNomeArquivo,
+} from '@/lib/conversas/anexos'
+
+// accept do seletor: MIME da allowlist + extensões (alguns navegadores só casam por extensão).
+const ACCEPT_ANEXO = [
+  ...TIPOS_ANEXO_PERMITIDOS,
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt',
+].join(',')
+
+/** Tamanho legível para o chip do anexo (B/KB/MB). */
+function formatarTamanho(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 interface Grupo {
   dia: string
@@ -48,6 +68,7 @@ export function Thread({
   onFechar,
   onAbrirContexto,
   registrarInserirTexto,
+  registrarRecarregar,
 }: {
   conversa: Conversa
   conectado: boolean
@@ -60,6 +81,9 @@ export function Thread({
   /** Plumbing do shell: registra uma função que preenche o composer (usada
    * pelo "Inserir cobrança no chat" do PainelContexto). null ao desmontar. */
   registrarInserirTexto?: (fn: ((texto: string) => void) | null) => void
+  /** Plumbing do shell: registra "recarregar a thread" (usada quando o
+   * PainelContexto envia um documento do SIMAS nesta conversa). null ao desmontar. */
+  registrarRecarregar?: (fn: (() => void) | null) => void
 }) {
   const { success, error: toastError } = useToast()
   const [mensagens, setMensagens] = useState<Mensagem[]>([])
@@ -70,8 +94,11 @@ export function Thread({
   const [notaInterna, setNotaInterna] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [acao, setAcao] = useState<'assumir' | 'status' | null>(null)
+  // Arquivo do PC selecionado no clipe (envio como anexo; a legenda é o próprio textarea).
+  const [arquivo, setArquivo] = useState<File | null>(null)
 
   const fimRef = useRef<HTMLDivElement>(null)
+  const inputFileRef = useRef<HTMLInputElement>(null)
   const id = conversa.id
 
   const carregar = useCallback(async (silencioso = false) => {
@@ -112,6 +139,12 @@ export function Thread({
     return () => registrarInserirTexto?.(null)
   }, [registrarInserirTexto])
 
+  // Expõe "recarregar a thread" para o shell (PainelContexto → documento do SIMAS).
+  useEffect(() => {
+    registrarRecarregar?.(() => void carregar(true))
+    return () => registrarRecarregar?.(null)
+  }, [registrarRecarregar, carregar])
+
   // Atualização automática da conversa aberta: revalida em silêncio a cada 3s
   // (aba visível). Não mexe no composer (estado separado) e o auto-scroll abaixo
   // só dispara quando chega mensagem NOVA — ler histórico não é interrompido.
@@ -143,9 +176,58 @@ export function Thread({
     return false
   }
 
+  /** Valida (tipo/tamanho) e guarda o arquivo escolhido no seletor oculto. */
+  function selecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    e.target.value = '' // permite re-selecionar o mesmo arquivo depois
+    if (!f) return
+    // Alguns SOs dão File.type '' para .doc/.docx: cai na extensão antes de barrar.
+    const tipo = f.type ? f.type : mimePorNomeArquivo(f.name)
+    if (!tipoAnexoPermitido(tipo)) {
+      toastError('Tipo não permitido', 'Envie imagem, PDF, Word, Excel ou texto.')
+      return
+    }
+    if (f.size > LIMITE_UPLOAD_BYTES) {
+      toastError('Arquivo muito grande', 'O limite é 4 MB.')
+      return
+    }
+    setArquivo(f)
+  }
+
+  /** Envia o arquivo do PC como anexo (multipart); a legenda é o texto do composer. */
+  async function enviarAnexo() {
+    if (!arquivo) return
+    setEnviando(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', arquivo)
+      const caption = texto.trim()
+      if (caption) fd.append('caption', caption)
+      const r = await fetch(`/api/conversas/${id}/anexo`, { method: 'POST', body: fd })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        if (tratou428(r.status, d)) return
+        if (r.status === 413) toastError('Arquivo muito grande', 'O limite é 4 MB.')
+        else toastError('Não enviado', mensagemErroRelay(r.status, d))
+        return
+      }
+      setArquivo(null)
+      setTexto('')
+      success('Documento enviado')
+      await carregar(true)
+      onListaMudou()
+    } catch {
+      toastError('Não enviado', 'Falha de rede. Tente novamente.')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
   async function enviar() {
+    if (enviando) return
+    if (arquivo) return enviarAnexo() // com arquivo, o textarea vira legenda
     const content = texto.trim()
-    if (!content || enviando) return
+    if (!content) return
     setEnviando(true)
     try {
       const r = await fetch(`/api/conversas/${id}/mensagens`, {
@@ -323,6 +405,7 @@ export function Thread({
                   mensagem={m}
                   conversaId={id}
                   telefone={conversa.contato.telefone}
+                  conectado={conectado}
                 />
               ))}
             </div>
@@ -340,11 +423,46 @@ export function Thread({
           </p>
         )}
 
+        {/* Seletor de arquivo oculto — acionado pelo botão de clipe (rótulo no botão). */}
+        <input
+          ref={inputFileRef}
+          type="file"
+          accept={ACCEPT_ANEXO}
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={selecionarArquivo}
+        />
+
+        {/* Chip do arquivo selecionado: nome + tamanho + remover. */}
+        {arquivo && (
+          <div className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm">
+            <Paperclip className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate" title={arquivo.name}>{arquivo.name}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">{formatarTamanho(arquivo.size)}</span>
+            <button
+              type="button"
+              onClick={() => setArquivo(null)}
+              disabled={enviando}
+              aria-label="Remover arquivo"
+              className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         <Textarea
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           disabled={!conectado || enviando}
-          placeholder={notaInterna ? 'Escreva uma nota interna (não vai pro WhatsApp)…' : 'Digite sua mensagem...'}
+          placeholder={
+            notaInterna
+              ? 'Escreva uma nota interna (não vai pro WhatsApp)…'
+              : arquivo
+                ? 'Legenda do documento (opcional)…'
+                : 'Digite sua mensagem...'
+          }
           className={cn('min-h-[70px] rounded-xl', notaInterna && 'border-warning/50 bg-warning/5')}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -357,7 +475,8 @@ export function Thread({
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setNotaInterna((v) => !v)}
+            // Nota interna não leva anexo: ao ligar, descarta o arquivo pendente.
+            onClick={() => setNotaInterna((v) => { if (!v) setArquivo(null); return !v })}
             aria-pressed={notaInterna}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors',
@@ -374,13 +493,31 @@ export function Thread({
           )}
 
           <div className="ml-auto flex items-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => inputFileRef.current?.click()}
+              disabled={!conectado || enviando || notaInterna}
+              className="border border-border bg-transparent hover:bg-muted"
+              title={
+                notaInterna
+                  ? 'Anexos não vão em nota interna'
+                  : conectado
+                    ? 'Anexar arquivo do computador'
+                    : 'Conecte sua conta para anexar'
+              }
+              aria-label="Anexar arquivo"
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
             <span className="hidden text-[11px] text-muted-foreground sm:inline">⌘+↵ para enviar</span>
             <Button
               variant="default"
               size="sm"
               onClick={enviar}
               loading={enviando}
-              disabled={!conectado || !texto.trim()}
+              disabled={!conectado || (!texto.trim() && !arquivo)}
               className="bg-foreground text-background hover:bg-foreground/90"
               title={conectado ? 'Enviar (Ctrl/Cmd+Enter)' : 'Conecte sua conta para responder'}
             >

@@ -98,6 +98,14 @@ export function Conversas({ email }: { email: string }) {
     setContextoAberto(false)
   }, [])
 
+  // Plumbing PainelContexto → Thread ("Enviar documento do SIMAS"): a Thread
+  // montada registra aqui como recarregar a thread (o callback que a usa é
+  // `aoEnviarDocumento`, definido após `revalidar`).
+  const recarregarThreadRef = useRef<(() => void) | null>(null)
+  const registrarRecarregar = useCallback((fn: (() => void) | null) => {
+    recarregarThreadRef.current = fn
+  }, [])
+
   // Tick de 60s para os selos "AGUARDANDO X" envelhecerem com a tela aberta
   // (recomputa os rótulos client-side, sem refetch).
   const [agoraEpochSeg, setAgoraEpochSeg] = useState(() => Math.floor(Date.now() / 1000))
@@ -219,6 +227,13 @@ export function Conversas({ email }: { email: string }) {
     },
     [buscarPagina],
   )
+
+  // Documento do SIMAS enviado pelo PainelContexto: recarrega a thread aberta
+  // (paridade com o upload do PC) e revalida a lista (reordena + prévia).
+  const aoEnviarDocumento = useCallback(() => {
+    recarregarThreadRef.current?.()
+    void revalidar(true)
+  }, [revalidar])
 
   const carregarAgente = useCallback(async () => {
     setLoadingAgente(true)
@@ -552,6 +567,7 @@ export function Conversas({ email }: { email: string }) {
               onAgenteDesconectado={marcarDesconectado}
               onAbrirContexto={() => setContextoAberto(true)}
               registrarInserirTexto={registrarInserirTexto}
+              registrarRecarregar={registrarRecarregar}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 text-center">
@@ -578,6 +594,7 @@ export function Conversas({ email }: { email: string }) {
               onAgendar={abrirAgenda}
               onAgenteDesconectado={marcarDesconectado}
               onInserirTexto={inserirNoComposer}
+              onDocumentoEnviado={aoEnviarDocumento}
             />
           </aside>
         )}
@@ -595,6 +612,7 @@ export function Conversas({ email }: { email: string }) {
           onFechar={() => setMobileAberto(false)}
           onAbrirContexto={() => setContextoAberto(true)}
           registrarInserirTexto={registrarInserirTexto}
+          registrarRecarregar={registrarRecarregar}
         />
       )}
 
@@ -633,6 +651,7 @@ export function Conversas({ email }: { email: string }) {
                   void abrirAgenda(cliente)
                 }}
                 onInserirTexto={inserirNoComposer}
+                onDocumentoEnviado={aoEnviarDocumento}
               />
             </div>
           </div>

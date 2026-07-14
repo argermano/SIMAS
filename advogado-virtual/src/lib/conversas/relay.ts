@@ -44,6 +44,7 @@ export function montarUrl(
 
 const TIMEOUT_MS = 8000
 const TIMEOUT_BINARIO_MS = 15000
+const TIMEOUT_ANEXO_MS = 30000
 
 /**
  * Faz uma requisição ao relay injetando Authorization Bearer + X-Simas-User-Email.
@@ -134,6 +135,79 @@ export async function relayFetchBinario(path: string, opts: RelayOpts): Promise<
   } catch (err) {
     logger.error('conversas.relay.indisponivel', { path }, err)
     return { status: 502, buffer: null, contentType: null }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export interface RelayAnexoParams {
+  email: string
+  conversaId: string
+  bytes: Buffer
+  filename: string
+  contentType: string
+  caption?: string
+}
+
+// Nome/legenda viajam URL-encoded em headers (X-Filename/X-Caption). Um nome
+// arbitrariamente longo (unicode) estouraria o maxHeaderSize do relay/undici e a
+// requisição falharia sem pista. Limitamos o nome preservando a extensão; a legenda
+// já vem limitada pelas rotas (1024 chars) — cortamos aqui só como defesa extra.
+const MAX_FILENAME_CHARS = 200
+
+function limitarNome(nome: string): string {
+  const n = nome.trim() || 'anexo'
+  if (n.length <= MAX_FILENAME_CHARS) return n
+  const ponto = n.lastIndexOf('.')
+  const ext = ponto > 0 && n.length - ponto <= 12 ? n.slice(ponto) : ''
+  return n.slice(0, MAX_FILENAME_CHARS - ext.length) + ext
+}
+
+/**
+ * Envia um ANEXO (bytes crus) ao relay POST /conversations/:id/anexo, que resolve
+ * o token PESSOAL do agente, monta o multipart e posta no Chatwoot como mensagem
+ * outgoing com attachments[]. O corpo é o binário; nome/legenda vão em headers
+ * URL-encoded (X-Filename / X-Caption) para suportar unicode com segurança.
+ * Best-effort: nunca lança. Timeout maior (30s) porque o relay faz upload à Chatwoot.
+ * Status especiais idênticos ao relayFetch: 503 RELAY_NAO_CONFIGURADO / 502 RELAY_INDISPONIVEL.
+ * (428 AGENTE_NAO_CONECTADO / 413 / etc. vêm do próprio relay e são repassados.)
+ */
+export async function relaySendAttachment(params: RelayAnexoParams): Promise<RelayResposta> {
+  const base = process.env.RELAY_URL
+  const token = process.env.RELAY_TOKEN
+  if (!base || !token) {
+    logger.error('conversas.relay.sem_config', { temUrl: !!base, temToken: !!token })
+    return { status: 503, data: { code: 'RELAY_NAO_CONFIGURADO' } }
+  }
+
+  const url = montarUrl(base, `/conversations/${params.conversaId}/anexo`)
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'X-Simas-User-Email': params.email,
+    'Content-Type': params.contentType,
+    'X-Filename': encodeURIComponent(limitarNome(params.filename)),
+  }
+  if (params.caption) headers['X-Caption'] = encodeURIComponent(params.caption)
+
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_ANEXO_MS)
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: new Uint8Array(params.bytes),
+      signal: ctrl.signal,
+    })
+    let data: unknown = {}
+    try {
+      data = await r.json()
+    } catch {
+      data = {}
+    }
+    return { status: r.status, data }
+  } catch (err) {
+    logger.error('conversas.relay.indisponivel', { path: '/conversations/:id/anexo' }, err)
+    return { status: 502, data: { code: 'RELAY_INDISPONIVEL' } }
   } finally {
     clearTimeout(timer)
   }

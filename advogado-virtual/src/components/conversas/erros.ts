@@ -31,6 +31,8 @@ export function mensagemErroRelay(status: number, data: unknown): string {
     default:
       break
   }
+  // 428 = agente sem token pessoal conectado (relay), com ou sem `code`.
+  if (status === 428) return 'Conecte sua conta do Chatwoot para responder.'
   if (status === 401) return 'Sessão expirada. Faça login novamente.'
   if (status === 403) return 'Você não tem permissão para esta ação.'
   if (status === 404) return 'Não encontrado.'

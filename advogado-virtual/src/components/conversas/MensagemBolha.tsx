@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
   Check,
   FileText,
+  Forward,
   Image as ImageIcon,
   MapPin,
   Mic,
@@ -16,6 +17,13 @@ import { cn } from '@/lib/utils'
 import { horaCurta } from '@/lib/conversas/formato'
 import type { Anexo, Mensagem } from '@/lib/conversas/tipos'
 import { ComprovanteModal } from './ComprovanteModal'
+import { EncaminharModal } from './EncaminharModal'
+
+/** Só imagens e arquivos podem ser reencaminhados (a allowlist do relay recusa
+ * áudio/vídeo/localização/contato de qualquer forma). */
+function podeEncaminhar(a: Anexo): boolean {
+  return a.tipo === 'image' || a.tipo === 'file'
+}
 
 /** Ícone + rótulo pt-BR por tipo de anexo (file_type do Chatwoot normalizado pelo relay). */
 function infoAnexo(tipo: string): { Icone: typeof FileText; rotulo: string } {
@@ -78,18 +86,23 @@ export function MensagemBolha({
   mensagem,
   conversaId,
   telefone,
+  conectado = true,
 }: {
   mensagem: Mensagem
   /** Id da conversa — habilita "Ler comprovante (IA)" nas imagens de entrada. */
   conversaId?: number
   /** Telefone do contato (para casar o cliente na leitura do comprovante). */
   telefone?: string | null
+  /** Encaminhar exige token pessoal (escrita): desabilita quando não conectado. */
+  conectado?: boolean
 }) {
   const { direcao, privada, conteudo, anexos, sender, timestamp } = mensagem
   const hora = horaCurta(timestamp)
 
   // Comprovante (IA): modal aberto para a URL da imagem clicada.
   const [comprovanteUrl, setComprovanteUrl] = useState<string | null>(null)
+  // Encaminhar: anexo recebido a reenviar para outra conversa.
+  const [encaminharAnexo, setEncaminharAnexo] = useState<Anexo | null>(null)
 
   // Atividade do sistema: linha central discreta.
   if (direcao === 'atividade') {
@@ -138,13 +151,35 @@ export function MensagemBolha({
           {conteudo && <p className="whitespace-pre-wrap break-words">{conteudo}</p>}
           {anexos && anexos.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {anexos.map((a, i) =>
-                a.tipo === 'image' ? (
-                  <AnexoImagem key={i} anexo={a} escuro={saidaEscura} />
-                ) : (
-                  <AnexoCard key={i} anexo={a} escuro={saidaEscura} />
-                ),
-              )}
+              {anexos.map((a, i) => (
+                <div key={i} className="flex flex-col gap-1">
+                  {a.tipo === 'image' ? (
+                    <AnexoImagem anexo={a} escuro={saidaEscura} />
+                  ) : (
+                    <AnexoCard anexo={a} escuro={saidaEscura} />
+                  )}
+                  {/* Encaminhar: só no anexo RECEBIDO do cliente (imagem/arquivo). */}
+                  {cliente && podeEncaminhar(a) && (
+                    <button
+                      type="button"
+                      onClick={() => setEncaminharAnexo(a)}
+                      disabled={!conectado}
+                      className={cn(
+                        'inline-flex items-center gap-1 self-start rounded-md border border-border bg-background/70 px-2 py-0.5',
+                        'text-[11px] font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground',
+                        'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground',
+                      )}
+                      title={
+                        conectado
+                          ? 'Encaminhar este anexo para outra conversa'
+                          : 'Conecte sua conta para encaminhar'
+                      }
+                    >
+                      <Forward className="h-3 w-3" aria-hidden /> Encaminhar
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
           {/* Imagem de ENTRADA: leitura de comprovante pela IA (só sugere;
@@ -184,6 +219,15 @@ export function MensagemBolha({
           anexoUrl={comprovanteUrl}
           telefone={telefone ?? null}
           onFechar={() => setComprovanteUrl(null)}
+        />
+      )}
+
+      {encaminharAnexo && (
+        <EncaminharModal
+          aberto
+          anexo={encaminharAnexo}
+          origemConversaId={conversaId}
+          onFechar={() => setEncaminharAnexo(null)}
         />
       )}
     </div>

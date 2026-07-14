@@ -11,6 +11,7 @@ import {
   Link2,
   MessageSquare,
   MessageSquarePlus,
+  Paperclip,
   RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,6 +28,7 @@ import { montarTextoAvisoParcela } from '@/lib/financeiro/aviso'
 import { formatarValor } from '@/lib/financeiro/parcelas'
 import type { Agente, ContextoConversa, Conversa } from '@/lib/conversas/tipos'
 import { AvatarContato } from './AvatarContato'
+import { AnexarDocumentoModal } from './AnexarDocumentoModal'
 import { codeDoErro, mensagemErroRelay } from './erros'
 import { VincularCliente } from './VincularCliente'
 
@@ -85,6 +87,7 @@ export function PainelContexto({
   onAgendar,
   onAgenteDesconectado,
   onInserirTexto,
+  onDocumentoEnviado,
 }: {
   conversa: Conversa | null
   conectado: boolean
@@ -95,6 +98,8 @@ export function PainelContexto({
   /** Opcional (plumbing do shell): preenche o composer da thread com um texto
    * pronto — o humano revisa e envia; nada sai automaticamente. */
   onInserirTexto?: (texto: string) => void
+  /** Opcional: documento do SIMAS enviado — recarrega thread/lista no shell. */
+  onDocumentoEnviado?: () => void
 }) {
   const { success, error: toastError } = useToast()
 
@@ -113,6 +118,9 @@ export function PainelContexto({
 
   // Parcelas em aberto (Financeiro) — best-effort: erro/rota ausente só oculta o card.
   const [parcelasResp, setParcelasResp] = useState<RespostaParcelasCliente | null>(null)
+
+  // Enviar documento do SIMAS ao cliente (anexa um documento do caso na conversa).
+  const [anexarDoc, setAnexarDoc] = useState(false)
 
   const carregarContexto = useCallback(async () => {
     if (!telefone) {
@@ -510,7 +518,32 @@ export function PainelContexto({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+
+              {/* Envio de documento do SIMAS ao cliente (o relay usa o token
+                  pessoal do agente; 428 quando não conectado). */}
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-auto min-h-9 w-full whitespace-normal py-2"
+                disabled={!conectado}
+                onClick={() => setAnexarDoc(true)}
+                title={
+                  conectado
+                    ? 'Enviar um documento do caso ao cliente'
+                    : 'Conecte sua conta para enviar documentos'
+                }
+              >
+                <Paperclip className="h-4 w-4 shrink-0" /> Enviar documento
+              </Button>
             </section>
+
+            <AnexarDocumentoModal
+              aberto={anexarDoc}
+              conversaId={conversa.id}
+              clienteId={cliente.id}
+              onFechar={() => setAnexarDoc(false)}
+              onEnviado={onDocumentoEnviado}
+            />
           </>
         ) : (
           <section className="space-y-3">
