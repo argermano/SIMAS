@@ -397,7 +397,11 @@ export function EditorContratoClient({
       <DocumentEditor
         titulo={contrato.titulo}
         conteudo={contrato.conteudo_markdown}
-        onVoltar={() => router.push(clienteId ? `/clientes/${clienteId}` : '/contratos')}
+        // Round-trip (pedido do dono): veio do atendimento → volta pro caso; senão cliente/lista.
+        onVoltar={() => router.push(
+          atendimentoId && clienteId ? `/clientes/${clienteId}/casos/${atendimentoId}`
+          : clienteId ? `/clientes/${clienteId}` : '/contratos'
+        )}
         onSalvar={handleSalvar}
         salvando={salvando}
         extraAcoes={

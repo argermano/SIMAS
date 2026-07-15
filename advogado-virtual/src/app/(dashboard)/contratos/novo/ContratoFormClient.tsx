@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { MarkdownPreview } from '@/components/ui/markdown-preview'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
+import { CompletarDadosCliente } from '@/components/documentos/CompletarDadosCliente'
+import { camposFaltantes, type CampoCliente } from '@/lib/documentos/campos-cliente'
 import {
   Users, DollarSign, Brain, Loader2, Upload, FileText, ChevronRight,
   FolderOpen, CheckCircle, Sparkles, Link2,
@@ -67,7 +69,7 @@ const SEM_MODELO    = '__none__'   // gerar do zero com IA, ignorando o modelo p
 
 export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdInicial }: ContratoFormClientProps) {
   const router = useRouter()
-  const { success, error: toastError } = useToast()
+  const { success, error: toastError, warning } = useToast()
 
   const [cliente,           setCliente]           = useState<{ id: string; nome: string } | null>(clienteInicial ?? null)
   const [atendimentoId,     setAtendimentoId]     = useState<string>('')
@@ -83,6 +85,8 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
   const [gerando,           setGerando]           = useState(false)
   const [conteudoGerado,    setConteudoGerado]    = useState('')
   const [contratoId,        setContratoId]        = useState<string | null>(null)
+  const [placeholders,      setPlaceholders]      = useState<string[]>([]) // {{campos}} do template de contrato
+  const [faltantes,         setFaltantes]         = useState<CampoCliente[]>([]) // dados do cliente vazios que o contrato usa
 
   // ── Repositório de modelos ──
   const [modelosSalvos,       setModelosSalvos]       = useState<TemplateContrato[]>([])
@@ -148,6 +152,23 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
     carregar()
   }, [])
 
+  // Placeholders do template de contrato → base p/ saber quais dados do cliente pedir antes de gerar.
+  useEffect(() => {
+    fetch('/api/documentos/exportar-modelo?tipo=contrato_honorarios')
+      .then(r => r.json())
+      .then(d => setPlaceholders(d.placeholders ?? []))
+      .catch(() => {})
+  }, [])
+
+  // Cadastro do cliente x placeholders → campos DO CLIENTE vazios que o contrato vai usar.
+  useEffect(() => {
+    if (!cliente) { setFaltantes([]); return }
+    fetch(`/api/clientes/${cliente.id}`)
+      .then(r => r.json())
+      .then(d => { if (d.cliente) setFaltantes(camposFaltantes(d.cliente, placeholders)) })
+      .catch(() => {})
+  }, [cliente?.id, placeholders])
+
   async function selecionarModelo(id: string | null) {
     // PADRAO_CONFIG e SEM_MODELO não carregam texto (o backend resolve o modelo).
     if (!id || id === PADRAO_CONFIG || id === SEM_MODELO) {
@@ -201,6 +222,10 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
     if (!cliente) {
       toastError('Atenção', 'Selecione um cliente')
       return
+    }
+    // Avisa (não bloqueia): campos vazios do cliente sairão como [PREENCHER].
+    if (faltantes.length > 0) {
+      warning('Dados do cliente em branco', 'Complete acima para não perder a informação nem redigitar depois.')
     }
 
     setGerando(true)
@@ -284,7 +309,7 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
     } finally {
       setGerando(false)
     }
-  }, [cliente, atendimentoId, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, modeloSelecionadoId, temModeloSelecionado, router, success, toastError])
+  }, [cliente, atendimentoId, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, modeloSelecionadoId, temModeloSelecionado, faltantes, router, success, toastError, warning])
 
   return (
     <div className="space-y-6">
@@ -554,6 +579,15 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Dados do cliente que o contrato usa e estão em branco — completa e salva no cadastro */}
+      {cliente && faltantes.length > 0 && !conteudoGerado && (
+        <CompletarDadosCliente
+          clienteId={cliente.id}
+          campos={faltantes}
+          onSalvo={(atualizados) => setFaltantes(f => f.filter(c => !(c.campo in atualizados)))}
+        />
       )}
 
       {/* Botões */}

@@ -11,6 +11,8 @@ import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
 import { EditorDocumentoPronto } from '@/components/documentos/EditorDocumentoPronto'
+import { CompletarDadosCliente } from '@/components/documentos/CompletarDadosCliente'
+import { camposFaltantes } from '@/lib/documentos/campos-cliente'
 import { TIPOS_COM_MODELO_DOCX } from '@/lib/export/tipos-modelo-docx'
 import { Users, FileText, CheckCircle, AlertCircle, Loader2, Zap } from 'lucide-react'
 import { formatarMoedaInput } from '@/lib/utils'
@@ -47,6 +49,9 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
   const { success, error: toastError } = useToast()
 
   const [cliente, setCliente] = useState<{ id: string; nome: string } | null>(null)
+  // Cadastro completo (14 campos) + placeholders do template → o que falta ao documento
+  const [clienteDados, setClienteDados] = useState<Record<string, unknown> | null>(null)
+  const [placeholdersDoc, setPlaceholdersDoc] = useState<string[]>([])
 
   // Modelo .docx do escritório (fonte única) — preenche preservando a formatação
   const suportaModelo = TIPOS_COM_MODELO_DOCX.includes(tipoModelo)
@@ -76,11 +81,15 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
 
   // Verifica se há modelo .docx do escritório cadastrado para este tipo
   useEffect(() => {
-    if (!suportaModelo) { setCarregandoModelo(false); setModeloDocxExiste(false); return }
     let ativo = true
+    setCarregandoModelo(true)
     fetch(`/api/documentos/exportar-modelo?tipo=${tipoModelo}`)
       .then((r) => r.json())
-      .then((d) => { if (ativo) setModeloDocxExiste(!!d.existe) })
+      .then((d) => {
+        if (!ativo) return
+        setModeloDocxExiste(suportaModelo && !!d.existe)
+        setPlaceholdersDoc(Array.isArray(d.placeholders) ? d.placeholders : [])
+      })
       .catch(() => { /* silencioso */ })
       .finally(() => { if (ativo) setCarregandoModelo(false) })
     return () => { ativo = false }
@@ -97,6 +106,17 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
       })
       .catch(() => { /* silencioso */ })
   }, [clienteIdInicial])
+
+  // Cadastro completo do cliente selecionado → base para calcular campos faltantes
+  useEffect(() => {
+    if (!cliente?.id) { setClienteDados(null); return }
+    let ativo = true
+    fetch(`/api/clientes/${cliente.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (ativo && d.cliente) setClienteDados(d.cliente) })
+      .catch(() => { /* silencioso */ })
+    return () => { ativo = false }
+  }, [cliente?.id])
 
   function montarCamposExtras(): Record<string, string> {
     const campos: Record<string, string> = {}
@@ -205,6 +225,9 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
       setSalvandoCaso(false)
     }
   }
+
+  // Só campos DO CLIENTE que o documento usa e estão vazios no cadastro
+  const faltantes = clienteDados ? camposFaltantes(clienteDados, placeholdersDoc) : []
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -437,6 +460,25 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
         </Card>
       )}
 
+      {/* 3.5 Completar dados do cliente usados pelo documento e ainda em branco */}
+      {cliente && faltantes.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <AlertCircle className="h-5 w-5 text-muted-foreground" />
+              Completar dados do cliente
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CompletarDadosCliente
+              clienteId={cliente.id}
+              campos={faltantes}
+              onSalvo={(atualizados) => setClienteDados((c) => ({ ...(c ?? {}), ...atualizados }))}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* 4. Botão gerar */}
       <div className="flex justify-end">
         <Button
@@ -447,7 +489,7 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
           className="gap-2 bg-amber-600 hover:bg-amber-700"
         >
           <Zap className="h-5 w-5" />
-          {gerando ? 'Gerando…' : `Gerar ${tipoNome}`}
+          {gerando ? 'Gerando…' : faltantes.length > 0 ? 'Gerar mesmo assim (ficará [PREENCHER])' : `Gerar ${tipoNome}`}
         </Button>
       </div>
     </div>

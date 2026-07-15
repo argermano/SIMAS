@@ -4,29 +4,93 @@ import { jsonError } from '@/lib/api'
 import { preencherTemplateDocx, MAX_MODELO_BYTES } from '@/lib/export/preencher-template-docx'
 import { montarPlaceholders } from '@/lib/export/montar-placeholders'
 import { TIPO_MODELO_DOCX, NOME_AMIGAVEL_DOC } from '@/lib/export/tipos-modelo-docx'
+import { extrairTextoDocx } from '@/lib/modelos/templatizar-docx'
+import { extrairPlaceholders, PLACEHOLDERS_PADRAO_POR_TIPO } from '@/lib/documentos/campos-cliente'
 import { decryptClienteFields } from '@/lib/encryption'
 
-// GET /api/documentos/exportar-modelo?tipo=procuracao — informa se há modelo .docx cadastrado
+// Tipo de geração → tipo do modelo em `modelos_documento` na variante MARKDOWN (fluxo IA).
+// Espelha TIPO_MODELO_DOC de /api/ia/gerar-documento (notificação não tem modelo).
+const TIPO_MODELO_MARKDOWN: Record<string, string | null> = {
+  procuracao: 'procuracao',
+  declaracao_hipossuficiencia: 'declaracao',
+  substabelecimento: 'substabelecimento',
+  contrato_honorarios: 'contrato',
+  notificacao_extrajudicial: null,
+}
+
+// GET /api/documentos/exportar-modelo?tipo=procuracao
+// Retorna { existe } (há modelo .docx cadastrado?) E { placeholders } — os {{campos}}
+// USADOS pelo template ATIVO daquele tipo. A tela usa `placeholders` para saber, via
+// camposFaltantes, quais dados do cliente pedir ao atendente ANTES de gerar.
 export async function GET(req: NextRequest) {
   const tipo = req.nextUrl.searchParams.get('tipo') ?? ''
-  const tipoModelo = TIPO_MODELO_DOCX[tipo]
-  if (!tipoModelo) return NextResponse.json({ existe: false })
+  if (!tipo) return NextResponse.json({ existe: false, placeholders: [] })
 
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
 
-  const { data: modelo } = await supabase
-    .from('modelos_documento')
-    .select('file_url')
-    .eq('tenant_id', usuario.tenant_id)
-    .eq('tipo', tipoModelo)
-    .not('file_url', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const tipoModeloDocx = TIPO_MODELO_DOCX[tipo]
+  const tipoModeloMd = TIPO_MODELO_MARKDOWN[tipo]
 
-  return NextResponse.json({ existe: !!modelo?.file_url && /\.docx$/i.test(modelo.file_url) })
+  let existe = false
+  let placeholders: string[] = []
+
+  // 1) Fonte primária: modelo .docx do escritório (só para tipos que o suportam).
+  if (tipoModeloDocx) {
+    const { data: modelo } = await supabase
+      .from('modelos_documento')
+      .select('file_url')
+      .eq('tenant_id', usuario.tenant_id)
+      .eq('tipo', tipoModeloDocx)
+      .not('file_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    existe = !!modelo?.file_url && /\.docx$/i.test(modelo.file_url)
+    if (existe) {
+      try {
+        const { data: arquivo } = await supabase.storage.from('documentos').download(modelo!.file_url)
+        if (arquivo && arquivo.size <= MAX_MODELO_BYTES) {
+          const buf = Buffer.from(await arquivo.arrayBuffer())
+          placeholders = extrairPlaceholders(extrairTextoDocx(buf))
+        }
+      } catch { /* baixa/parse falhou → cai no fallback abaixo */ }
+    }
+  }
+
+  // 2) Sem .docx utilizável: modelo markdown do escritório (fluxo IA preenche o modelo).
+  if (placeholders.length === 0 && tipoModeloMd) {
+    const { data: md } = await supabase
+      .from('modelos_documento')
+      .select('conteudo_markdown')
+      .eq('tenant_id', usuario.tenant_id)
+      .eq('tipo', tipoModeloMd)
+      .not('conteudo_markdown', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (md?.conteudo_markdown?.trim()) placeholders = extrairPlaceholders(md.conteudo_markdown)
+  }
+
+  // 3) Template gerado por IA e cacheado para este tipo.
+  if (placeholders.length === 0) {
+    const { data: tpl } = await supabase
+      .from('templates_documentos')
+      .select('conteudo_markdown')
+      .eq('tenant_id', usuario.tenant_id)
+      .eq('tipo', tipo)
+      .maybeSingle()
+    if (tpl?.conteudo_markdown?.trim()) placeholders = extrairPlaceholders(tpl.conteudo_markdown)
+  }
+
+  // 4) Nenhum modelo: conjunto padrão por tipo (o que o fluxo IA de fato substitui).
+  if (placeholders.length === 0) {
+    placeholders = PLACEHOLDERS_PADRAO_POR_TIPO[tipo] ?? PLACEHOLDERS_PADRAO_POR_TIPO._default
+  }
+
+  return NextResponse.json({ existe, placeholders })
 }
 
 // POST /api/documentos/exportar-modelo
