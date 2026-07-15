@@ -99,7 +99,10 @@ export async function PATCH(
     .from('clientes')
     .update({
       ...encryptClienteFields(resultado.data),
-      email: resultado.data.email || null,
+      // '' (aceito pelo schema) vira null — mas SÓ quando o e-mail veio no
+      // payload. Um PATCH parcial (ex.: só { telefone } do cartão de contato, ou
+      // { cidade, estado }) não pode zerar o e-mail de quem não o enviou.
+      ...(resultado.data.email !== undefined ? { email: resultado.data.email || null } : {}),
     })
     .eq('id', id)
     .select()

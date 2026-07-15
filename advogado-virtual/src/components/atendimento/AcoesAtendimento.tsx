@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  MoreVertical, Loader2, Lock, Unlock, ArrowRightLeft, Printer, Trash2, Link2,
+  MoreVertical, Loader2, Lock, Unlock, ArrowRightLeft, Printer, Trash2, Link2, Settings2,
 } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { VinculoPicker, type VinculoSelecionado } from '@/components/tarefas/VinculoPicker'
 
 interface AcoesAtendimentoProps {
@@ -17,12 +18,17 @@ interface AcoesAtendimentoProps {
   encerrado: boolean
   /** Vínculo atual (057) para pré-carregar o mini-modal de "Vincular…". */
   vinculoAtual?: VinculoSelecionado | null
+  /**
+   * 'menu' (padrão): botão ⋮ com popover. 'lista': card "Ações" com os mesmos
+   * itens em coluna vertical (sidebar do caso, layout 2 colunas / Astrea).
+   */
+  variant?: 'menu' | 'lista'
 }
 
 // Menu de ações do atendimento/caso (encerrar/reabrir, transformar em caso,
 // vincular, imprimir ficha, excluir). As transições passam pelo PATCH { acao } — o
 // servidor centraliza as validações (não encerrar já-encerrado, estágio one-way).
-export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado, vinculoAtual }: AcoesAtendimentoProps) {
+export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado, vinculoAtual, variant = 'menu' }: AcoesAtendimentoProps) {
   const router = useRouter()
   const [aberto, setAberto] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -73,16 +79,95 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado,
   const itemCls =
     'flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60 disabled:opacity-50 transition-colors'
 
+  // Itens compartilhados entre o popover (variant 'menu') e o card vertical
+  // (variant 'lista'). O `fecharDepois` só é relevante no popover.
+  const itens = (fecharDepois: () => void) => (
+    <>
+      {/* Encerrar / Reabrir */}
+      {encerrado ? (
+        <button className={itemCls} disabled={busy} onClick={() => acao('reabrir')}>
+          <Unlock className="h-4 w-4 text-muted-foreground" /> Reabrir atendimento
+        </button>
+      ) : (
+        <button className={itemCls} disabled={busy} onClick={() => acao('encerrar', 'Encerrar este atendimento?')}>
+          <Lock className="h-4 w-4 text-muted-foreground" /> Encerrar
+        </button>
+      )}
+
+      {/* Transformar em caso — só quando ainda é atendimento (one-way) */}
+      {estagio === 'atendimento' && (
+        <button
+          className={itemCls}
+          disabled={busy}
+          onClick={() => acao('transformar_caso', 'Transformar este atendimento em caso? Esta ação não pode ser desfeita.')}
+        >
+          <ArrowRightLeft className="h-4 w-4 text-muted-foreground" /> Transformar em caso
+        </button>
+      )}
+
+      {/* Vincular a outro caso/atendimento ou processo (057) */}
+      <button
+        className={itemCls}
+        disabled={busy}
+        onClick={() => { fecharDepois(); setVincOpen(true) }}
+      >
+        <Link2 className="h-4 w-4 text-muted-foreground" /> {vinculoAtual ? 'Editar vínculo' : 'Vincular…'}
+      </button>
+
+      {/* Imprimir ficha */}
+      <Link
+        href={`/clientes/${clienteId}/casos/${atendimentoId}/ficha`}
+        className={itemCls}
+        onClick={fecharDepois}
+      >
+        <Printer className="h-4 w-4 text-muted-foreground" /> Imprimir ficha
+      </Link>
+
+      <div className="my-1 border-t border-border" />
+
+      {/* Excluir — confirmação forte */}
+      <button
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
+        disabled={busy}
+        onClick={excluir}
+      >
+        <Trash2 className="h-4 w-4" /> Excluir atendimento
+      </button>
+    </>
+  )
+
+  const modal = vincOpen && (
+    <VincularModal
+      atendimentoId={atendimentoId}
+      vinculoAtual={vinculoAtual ?? null}
+      onClose={() => setVincOpen(false)}
+      onSaved={() => { setVincOpen(false); router.refresh() }}
+    />
+  )
+
+  // Variant 'lista': card "Ações" com os itens em coluna (sidebar do caso).
+  if (variant === 'lista') {
+    return (
+      <>
+        {modal}
+        <Card className="overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
+            <p className="text-sm font-semibold text-foreground">Ações</p>
+            {busy && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          </div>
+          <div className="flex flex-col py-1">
+            {itens(() => {})}
+          </div>
+        </Card>
+      </>
+    )
+  }
+
+  // Variant 'menu' (padrão): botão ⋮ com popover.
   return (
     <div className="relative" ref={ref}>
-      {vincOpen && (
-        <VincularModal
-          atendimentoId={atendimentoId}
-          vinculoAtual={vinculoAtual ?? null}
-          onClose={() => setVincOpen(false)}
-          onSaved={() => { setVincOpen(false); router.refresh() }}
-        />
-      )}
+      {modal}
       <button
         onClick={() => setAberto((v) => !v)}
         disabled={busy}
@@ -95,56 +180,7 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado,
 
       {aberto && (
         <div className="absolute right-0 z-40 mt-1 w-60 overflow-hidden rounded-lg border border-border bg-card py-1 shadow-lg">
-          {/* Encerrar / Reabrir */}
-          {encerrado ? (
-            <button className={itemCls} disabled={busy} onClick={() => acao('reabrir')}>
-              <Unlock className="h-4 w-4 text-muted-foreground" /> Reabrir atendimento
-            </button>
-          ) : (
-            <button className={itemCls} disabled={busy} onClick={() => acao('encerrar', 'Encerrar este atendimento?')}>
-              <Lock className="h-4 w-4 text-muted-foreground" /> Encerrar
-            </button>
-          )}
-
-          {/* Transformar em caso — só quando ainda é atendimento (one-way) */}
-          {estagio === 'atendimento' && (
-            <button
-              className={itemCls}
-              disabled={busy}
-              onClick={() => acao('transformar_caso', 'Transformar este atendimento em caso? Esta ação não pode ser desfeita.')}
-            >
-              <ArrowRightLeft className="h-4 w-4 text-muted-foreground" /> Transformar em caso
-            </button>
-          )}
-
-          {/* Vincular a outro caso/atendimento ou processo (057) */}
-          <button
-            className={itemCls}
-            disabled={busy}
-            onClick={() => { setAberto(false); setVincOpen(true) }}
-          >
-            <Link2 className="h-4 w-4 text-muted-foreground" /> {vinculoAtual ? 'Editar vínculo' : 'Vincular…'}
-          </button>
-
-          {/* Imprimir ficha */}
-          <Link
-            href={`/clientes/${clienteId}/casos/${atendimentoId}/ficha`}
-            className={itemCls}
-            onClick={() => setAberto(false)}
-          >
-            <Printer className="h-4 w-4 text-muted-foreground" /> Imprimir ficha
-          </Link>
-
-          <div className="my-1 border-t border-border" />
-
-          {/* Excluir — confirmação forte */}
-          <button
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 disabled:opacity-50 transition-colors"
-            disabled={busy}
-            onClick={excluir}
-          >
-            <Trash2 className="h-4 w-4" /> Excluir atendimento
-          </button>
+          {itens(() => setAberto(false))}
         </div>
       )}
     </div>

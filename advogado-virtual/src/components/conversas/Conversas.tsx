@@ -13,8 +13,9 @@ import {
   mesmaLista,
   temMaisPorContagem,
 } from '@/lib/conversas/lista-infinita'
-import { apenasDigitos } from '@/lib/conversas/telefone'
+import { apenasDigitos, mesmoTelefone } from '@/lib/conversas/telefone'
 import { transferidaPeloBot } from '@/lib/conversas/handoff'
+import { useToast } from '@/components/ui/toast'
 import type { Pessoa } from '@/lib/agenda/tipos'
 import { EventoModal } from '@/components/agenda/EventoModal'
 import { ConexaoAgente } from './ConexaoAgente'
@@ -27,6 +28,7 @@ type FiltroChip = 'todos' | 'transferidas' | 'aguardando' | 'nao_atribuidas' | '
 
 export function Conversas({ email }: { email: string }) {
   void email // e-mail (auth) é injetado server-side no header X-Simas-User-Email; aqui é só informativo.
+  const { info } = useToast()
 
   // Filtros: chips (client-side, exceto "resolvidas" que troca o status da query)
   const [filtroChip, setFiltroChip] = useState<FiltroChip>('todos')
@@ -321,6 +323,37 @@ export function Conversas({ email }: { email: string }) {
       deepLinkRef.current = null
     }
   }, [conversas])
+
+  // Deep-link por telefone (/conversas?telefone=<dígitos>) — usado pelo cartão de
+  // contato do caso ("Chamar no Conversas"). Casa via mesmoTelefone (com/sem 9º
+  // dígito, DDI). Varre as páginas já carregadas; se não achou e ainda há mais,
+  // avisa UMA vez e segue (o scroll infinito carrega o resto e este efeito
+  // reavalia); se a lista terminou sem casar, avisa que não há conversa aberta.
+  // Não cria conversa nova (o relay não suporta) nem quebra o deep-link por id.
+  const deepLinkTelRef = useRef<string | null>(null)
+  const deepLinkTelAvisouRef = useRef(false)
+  useEffect(() => {
+    const m = /[?&]telefone=(\d+)/.exec(window.location.search)
+    if (m) deepLinkTelRef.current = m[1]
+  }, [])
+  useEffect(() => {
+    const alvoTel = deepLinkTelRef.current
+    if (alvoTel == null || loading) return
+    const alvo = conversas.find((c) => mesmoTelefone(c.contato.telefone, alvoTel))
+    if (alvo) {
+      setSelecionadaId(alvo.id)
+      setMobileAberto(true) // no mobile abre a thread; no desktop é ignorado
+      deepLinkTelRef.current = null
+      return
+    }
+    if (!temMais) {
+      info('Nenhuma conversa aberta com este número', 'Inicie o contato pelo WhatsApp; a conversa aparecerá aqui.')
+      deepLinkTelRef.current = null
+    } else if (!deepLinkTelAvisouRef.current) {
+      deepLinkTelAvisouRef.current = true
+      info('Procurando a conversa…', 'Role a lista para carregar mais conversas.')
+    }
+  }, [conversas, temMais, loading, info])
 
   // Atualização automática (pedido do dono, 2026-07-10): a lista se revalida em
   // silêncio a cada 10s com a aba visível, e imediatamente quando a aba volta ao

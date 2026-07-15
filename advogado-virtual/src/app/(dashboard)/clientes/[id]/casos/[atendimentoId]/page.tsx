@@ -9,6 +9,7 @@ import { OutraPecaChip } from '@/components/atendimento/OutraPecaChip'
 import { CapaProcesso, type DadosProcesso } from '@/components/atendimento/CapaProcesso'
 import { RegistrosAtendimento, type RegistroItem } from '@/components/atendimento/RegistrosAtendimento'
 import { AcoesAtendimento } from '@/components/atendimento/AcoesAtendimento'
+import { CartaoContatoCliente } from '@/components/atendimento/CartaoContatoCliente'
 import { TarefasDoCaso, type TarefaDoCaso } from '@/components/atendimento/TarefasDoCaso'
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
 import { decryptTranscricaoFields } from '@/lib/encryption'
@@ -61,7 +62,7 @@ export default async function CasoPage({
 
   const { data: at } = await supabase
     .from('atendimentos')
-    .select('id, area, status, created_at, numero_processo, dados_processo, titulo, etiquetas, estagio, encerrado_em, transcricao_raw, transcricao_editada, clientes(id, nome), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at), documentos(id, file_name, tipo, created_at)')
+    .select('id, area, status, created_at, numero_processo, dados_processo, titulo, etiquetas, estagio, encerrado_em, transcricao_raw, transcricao_editada, clientes(id, nome, telefone, email), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at), documentos(id, file_name, tipo, created_at)')
     .eq('id', atendimentoId)
     .eq('cliente_id', id)
     .eq('tenant_id', usuario.tenant_id)
@@ -117,7 +118,8 @@ export default async function CasoPage({
     .order('nome')
   const teamMembers = (membros ?? []) as Array<{ id: string; nome: string }>
 
-  const cliente = at.clientes as unknown as { id: string; nome: string } | null
+  // telefone/email não são cifrados (só cpf/rg), então vêm em texto-plano aqui.
+  const cliente = at.clientes as unknown as { id: string; nome: string; telefone: string | null; email: string | null } | null
   const analiseRow = (at.analises as Array<{ id: string; plano_a: ResultadoAnaliseGeral; created_at: string }> | null)?.[0] ?? null
   const analise = analiseRow?.plano_a ?? null
   const areasIdent = analise?.areas_identificadas ?? []
@@ -222,24 +224,21 @@ export default async function CasoPage({
         subtitulo={`Cliente: ${cliente?.nome ?? '—'} · ${badge.label} · ${formatarDataHora(at.created_at)}`}
         nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
         acoes={
-          <div className="flex items-center gap-2">
-            <Link href={`/clientes/${id}`} className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
-              <ChevronLeft className="h-4 w-4" />
-              Cliente
-            </Link>
-            <AcoesAtendimento
-              atendimentoId={atendimentoId}
-              clienteId={id}
-              estagio={estagio}
-              encerrado={!!encerradoEm}
-              vinculoAtual={vinculoAtual}
-            />
-          </div>
+          <Link href={`/clientes/${id}`} className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+            <ChevronLeft className="h-4 w-4" />
+            Cliente
+          </Link>
         }
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl space-y-5">
+        {/* Layout 2 colunas (inspirado no Astrea): à esquerda os detalhes do
+            atendimento (diário como protagonista); à direita as ações e os
+            complementos. No mobile empilha — principal primeiro, sidebar depois. */}
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+
+          {/* ───────────── COLUNA PRINCIPAL — detalhes do atendimento ───────────── */}
+          <div className="min-w-0 space-y-5">
 
           {/* Cabeçalho leve: estágio, encerramento e etiquetas */}
           <div className="flex flex-wrap items-center gap-2">
@@ -285,14 +284,7 @@ export default async function CasoPage({
             })()}
           </div>
 
-          {/* Capa do processo (nº CNJ + DataJud) */}
-          <CapaProcesso
-            atendimentoId={atendimentoId}
-            numeroInicial={(at as { numero_processo?: string | null }).numero_processo ?? null}
-            dadosIniciais={(at as { dados_processo?: DadosProcesso | null }).dados_processo ?? null}
-          />
-
-          {/* Registros do atendimento (diário) — 1ª seção do corpo, antes do Estudo */}
+          {/* Registros do atendimento (diário) — protagonista da coluna principal */}
           <RegistrosAtendimento
             atendimentoId={atendimentoId}
             registrosIniciais={registros}
@@ -448,59 +440,40 @@ export default async function CasoPage({
             </Card>
           )}
 
-          {/* Tarefas do caso (vínculo 054: tasks.process_id → este atendimento) */}
-          <TarefasDoCaso
-            atendimentoId={atendimentoId}
-            vinculoLabel={tituloCaso}
-            vinculoSublabel={cliente?.nome ?? null}
-            teamMembers={teamMembers}
-            currentUserId={usuario.id}
-            currentUserName={usuario.nome ?? user.email ?? 'Você'}
-            tarefas={tarefas}
-          />
+          </div>{/* /coluna principal */}
 
-          {/* Honorários (contratos deste caso + atalho p/ o financeiro do cliente) */}
-          {cliente && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <FileSignature className="h-5 w-5 text-blue-500" />
-                  Honorários
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5">
-                {(contratos ?? []).length > 0 ? (
-                  (contratos as Array<{ id: string; titulo: string; status: string; valor_fixo: number | null; percentual_exito: number | null }>).map((c) => {
-                    const valor = [
-                      c.valor_fixo != null ? `R$ ${Number(c.valor_fixo).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
-                      c.percentual_exito != null ? `${Number(c.percentual_exito)}% de êxito` : null,
-                    ].filter(Boolean).join(' + ')
-                    const aprovado = c.status === 'aprovado' || c.status === 'exportado'
-                    const statusLabel = c.status === 'aprovado' ? 'Aprovado' : c.status === 'exportado' ? 'Exportado' : c.status === 'em_revisao' ? 'Em revisão' : 'Rascunho'
-                    return (
-                      <Link key={c.id} href={`/contratos/${c.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors group">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <FileSignature className="h-4 w-4 shrink-0 text-blue-500" />
-                          <span className="min-w-0">
-                            <span className="block truncate font-medium text-foreground">{c.titulo}</span>
-                            {valor && <span className="block text-xs text-muted-foreground">{valor}</span>}
-                          </span>
-                        </span>
-                        <Badge variant={aprovado ? 'success' : 'secondary'} className="shrink-0 px-1.5 py-0 text-[10px]">{statusLabel}</Badge>
-                      </Link>
-                    )
-                  })
-                ) : (
-                  <p className="text-sm italic text-muted-foreground">Nenhum contrato de honorários neste caso.</p>
-                )}
-                <Link href={`/financeiro?clienteId=${cliente.id}`} className="inline-flex items-center gap-1 pt-1 text-sm font-semibold text-primary hover:underline">
-                  Ver financeiro do cliente <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </CardContent>
-            </Card>
-          )}
+          {/* ───────────── COLUNA DIREITA — ações e complementos ───────────── */}
+          <aside className="space-y-4">
 
-          {/* Documentos do caso */}
+            {/* (a) Contato do cliente — nome (dossiê), telefone/WhatsApp e e-mail */}
+            {cliente && (
+              <CartaoContatoCliente
+                clienteId={cliente.id}
+                atendimentoId={atendimentoId}
+                nome={cliente.nome}
+                telefoneInicial={cliente.telefone}
+                email={cliente.email}
+              />
+            )}
+
+            {/* (b) Ações do atendimento — lista vertical discreta (antes no header) */}
+            <AcoesAtendimento
+              atendimentoId={atendimentoId}
+              clienteId={id}
+              estagio={estagio}
+              encerrado={!!encerradoEm}
+              vinculoAtual={vinculoAtual}
+              variant="lista"
+            />
+
+            {/* (c) Capa do processo (nº CNJ + DataJud) — cabe na coluna de 360px */}
+            <CapaProcesso
+              atendimentoId={atendimentoId}
+              numeroInicial={(at as { numero_processo?: string | null }).numero_processo ?? null}
+              dadosIniciais={(at as { dados_processo?: DadosProcesso | null }).dados_processo ?? null}
+            />
+
+          {/* (d) Documentos do caso */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -543,6 +516,60 @@ export default async function CasoPage({
               )}
             </CardContent>
           </Card>
+
+          {/* (e) Tarefas do caso (vínculo 054: tasks.process_id → este atendimento) */}
+          <TarefasDoCaso
+            atendimentoId={atendimentoId}
+            vinculoLabel={tituloCaso}
+            vinculoSublabel={cliente?.nome ?? null}
+            teamMembers={teamMembers}
+            currentUserId={usuario.id}
+            currentUserName={usuario.nome ?? user.email ?? 'Você'}
+            tarefas={tarefas}
+          />
+
+          {/* (f) Honorários (contratos deste caso + atalho p/ o financeiro do cliente) */}
+          {cliente && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <FileSignature className="h-5 w-5 text-blue-500" />
+                  Honorários
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5">
+                {(contratos ?? []).length > 0 ? (
+                  (contratos as Array<{ id: string; titulo: string; status: string; valor_fixo: number | null; percentual_exito: number | null }>).map((c) => {
+                    const valor = [
+                      c.valor_fixo != null ? `R$ ${Number(c.valor_fixo).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+                      c.percentual_exito != null ? `${Number(c.percentual_exito)}% de êxito` : null,
+                    ].filter(Boolean).join(' + ')
+                    const aprovado = c.status === 'aprovado' || c.status === 'exportado'
+                    const statusLabel = c.status === 'aprovado' ? 'Aprovado' : c.status === 'exportado' ? 'Exportado' : c.status === 'em_revisao' ? 'Em revisão' : 'Rascunho'
+                    return (
+                      <Link key={c.id} href={`/contratos/${c.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors group">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <FileSignature className="h-4 w-4 shrink-0 text-blue-500" />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium text-foreground">{c.titulo}</span>
+                            {valor && <span className="block text-xs text-muted-foreground">{valor}</span>}
+                          </span>
+                        </span>
+                        <Badge variant={aprovado ? 'success' : 'secondary'} className="shrink-0 px-1.5 py-0 text-[10px]">{statusLabel}</Badge>
+                      </Link>
+                    )
+                  })
+                ) : (
+                  <p className="text-sm italic text-muted-foreground">Nenhum contrato de honorários neste caso.</p>
+                )}
+                <Link href={`/financeiro?clienteId=${cliente.id}`} className="inline-flex items-center gap-1 pt-1 text-sm font-semibold text-primary hover:underline">
+                  Ver financeiro do cliente <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+
+          </aside>{/* /coluna direita */}
 
         </div>
       </main>
