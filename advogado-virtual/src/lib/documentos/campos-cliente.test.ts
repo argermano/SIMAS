@@ -30,11 +30,14 @@ describe('camposFaltantes', () => {
     cidade: 'Curitiba',
   }
 
-  it('retorna só campos DO CLIENTE usados e vazios', () => {
+  it('retorna só campos DO CLIENTE usados e vazios (endereço expande em bloco)', () => {
     const usados = ['nome_cliente', 'cpf_cliente', 'rg_cliente', 'cidade_cliente']
     const faltam = camposFaltantes(cliente, usados)
-    expect(faltam.map((c) => c.placeholder)).toEqual(['cpf_cliente', 'rg_cliente'])
-    // nome e cidade estão preenchidos → não entram
+    // nome e cidade preenchidos não entram; cidade_cliente (parte de endereço)
+    // puxa o BLOCO de endereço — as demais partes vazias viram pendência também.
+    expect(faltam.map((c) => c.placeholder)).toEqual([
+      'cpf_cliente', 'rg_cliente', 'endereco_cliente', 'bairro_cliente', 'estado_cliente', 'cep_cliente',
+    ])
   })
 
   it('espaço em branco conta como vazio', () => {
@@ -77,5 +80,26 @@ describe('PLACEHOLDERS_PADRAO_POR_TIPO', () => {
     for (const lista of Object.values(PLACEHOLDERS_PADRAO_POR_TIPO)) {
       for (const ph of lista) expect(CAMPOS_CLIENTE[ph]).toBeDefined()
     }
+  })
+})
+
+describe('camposFaltantes — bloco de endereço', () => {
+  it('template com SÓ {{endereco_cliente}} pede o endereço COMPLETO faltante', () => {
+    const cliente = { nome: 'Ana', endereco: 'Rua X, 1', bairro: '', cidade: null, estado: '', cep: undefined }
+    const faltantes = camposFaltantes(cliente, ['nome_cliente', 'endereco_cliente'])
+    const campos = faltantes.map((f) => f.campo)
+    // rua já preenchida não entra; o resto do bloco entra mesmo sem placeholder próprio
+    expect(campos).toEqual(['bairro', 'cidade', 'estado', 'cep'])
+  })
+
+  it('documento sem NENHUMA parte de endereço não puxa o bloco', () => {
+    const cliente = { nome: '', bairro: '', cidade: '', estado: '', cep: '' }
+    const faltantes = camposFaltantes(cliente, ['nome_cliente', 'cpf_cliente'])
+    expect(faltantes.map((f) => f.campo)).not.toContain('bairro')
+  })
+
+  it('endereço completo no cadastro não gera pendência mesmo com o bloco expandido', () => {
+    const cliente = { endereco: 'Rua X', bairro: 'Centro', cidade: 'Brasília', estado: 'DF', cep: '70000-000' }
+    expect(camposFaltantes(cliente, ['cep_cliente'])).toEqual([])
   })
 })

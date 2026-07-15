@@ -53,6 +53,27 @@ function vazio(v: unknown): boolean {
   return v == null || String(v).trim() === ''
 }
 
+// Endereço é um BLOCO (pedido do dono): documento jurídico não sai com endereço
+// pela metade. Se o modelo usa QUALQUER parte do endereço (muitos templates têm
+// só {{endereco_cliente}} e a rua sozinha é inútil), pedimos TODAS as partes
+// vazias — rua, bairro, cidade, UF e CEP.
+const GRUPO_ENDERECO = [
+  'endereco_cliente',
+  'bairro_cliente',
+  'cidade_cliente',
+  'estado_cliente',
+  'cep_cliente',
+] as const
+
+/** Expande os placeholders usados: qualquer parte do endereço puxa o bloco inteiro. */
+function expandirGrupos(placeholdersUsados: string[]): string[] {
+  const usaEndereco = placeholdersUsados.some((p) => (GRUPO_ENDERECO as readonly string[]).includes(p))
+  if (!usaEndereco) return placeholdersUsados
+  const expandido = [...placeholdersUsados]
+  for (const p of GRUPO_ENDERECO) if (!expandido.includes(p)) expandido.push(p)
+  return expandido
+}
+
 /**
  * Dentre os placeholders que o documento USA, retorna só os que são campos DO CLIENTE
  * e estão vazios no cadastro — ou seja, o que o atendente precisa completar antes de gerar.
@@ -64,7 +85,7 @@ export function camposFaltantes(
 ): CampoCliente[] {
   const faltantes: CampoCliente[] = []
   const jaIncluidos = new Set<string>()
-  for (const placeholder of placeholdersUsados) {
+  for (const placeholder of expandirGrupos(placeholdersUsados)) {
     if (jaIncluidos.has(placeholder)) continue
     const def = CAMPOS_CLIENTE[placeholder]
     if (!def) continue // não é campo do cliente (objeto, oab, nome_advogado, …)
