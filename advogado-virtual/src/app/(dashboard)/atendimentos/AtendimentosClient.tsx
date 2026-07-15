@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card'
 import { EnviarWhatsAppModal } from '@/components/atendimento/EnviarWhatsAppModal'
 import { cn, formatarData, formatarTelefone } from '@/lib/utils'
 import { apenasDigitos } from '@/lib/conversas/telefone'
+import { rotularArea } from '@/lib/tarefas/vinculo'
 import { Search, X, Loader2, Briefcase, AlertTriangle, ChevronRight, MessageSquare, ListFilter } from 'lucide-react'
 
 // Lista global de atendimentos/casos (GET /api/atendimentos, já enriquecido).
@@ -21,6 +22,7 @@ interface AtendimentoItem {
   id: string
   numero: number
   titulo: string | null
+  area: string | null
   estagio: 'atendimento' | 'caso'
   status: string
   etiquetas: string[]
@@ -220,7 +222,9 @@ export function AtendimentosClient() {
         <>
           <div className="space-y-2">
             {visiveis.map(a => {
-              const titulo = (a.titulo ?? '').trim() || (a.estagio === 'atendimento' ? 'Atendimento' : 'Caso')
+              // Sem assunto (casos legados/importados): a ÁREA identifica melhor
+              // que repetir o rótulo do badge ("CASO Caso" era redundante).
+              const titulo = (a.titulo ?? '').trim() || rotularArea(a.area)
               const href = a.cliente ? `/clientes/${a.cliente.id}/casos/${a.id}` : null
               const encerrado = !!a.encerrado_em
 
@@ -299,22 +303,25 @@ export function AtendimentosClient() {
                           )}
                         </div>
 
-                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
+                        {/* Meta em LINHA ÚNICA: o nome trunca; data e nº nunca quebram
+                            (o dono apontou os dados "espremidos" quebrando em 3 linhas). */}
+                        <div className="mt-1 flex min-w-0 items-center gap-x-1.5 text-sm text-muted-foreground">
                           {a.cliente ? (
                             <Link
                               href={`/clientes/${a.cliente.id}`}
                               onClick={e => e.stopPropagation()}
-                              className="font-medium text-foreground hover:text-primary hover:underline"
+                              className="min-w-0 truncate font-medium text-foreground hover:text-primary hover:underline"
+                              title={a.cliente.nome || 'Cliente'}
                             >
                               {a.cliente.nome || 'Cliente'}
                             </Link>
                           ) : (
                             <span className="italic">Sem cliente</span>
                           )}
-                          <span aria-hidden>·</span>
-                          <span>{formatarData(a.created_at)}</span>
-                          <span aria-hidden>·</span>
-                          <span className="tabular-nums">#{a.numero}</span>
+                          <span aria-hidden className="shrink-0">·</span>
+                          <span className="shrink-0 whitespace-nowrap">{formatarData(a.created_at)}</span>
+                          <span aria-hidden className="shrink-0">·</span>
+                          <span className="shrink-0 tabular-nums">#{a.numero}</span>
                         </div>
                       </div>
 
@@ -323,8 +330,10 @@ export function AtendimentosClient() {
                     </div>
 
                     {/* Colunas: próximo passo · responsável · honorários */}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-6 sm:gap-y-2 lg:flex-nowrap lg:shrink-0 lg:gap-6">
-                      <Coluna label="Próximo passo" className="lg:w-48 xl:w-56">
+                    {/* Larguras enxutas + gap menor no lg: sobra espaço pra 1ª coluna
+                        (título/cliente) respirar em monitores médios. */}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-6 sm:gap-y-2 lg:flex-nowrap lg:shrink-0 lg:gap-4 xl:gap-6">
+                      <Coluna label="Próximo passo" className="lg:w-40 xl:w-52">
                         {a.proximoPasso ? (
                           <div className="flex items-center gap-1.5" title={a.proximoPasso.descricao}>
                             <span className={cn('h-2 w-2 shrink-0 rounded-full', corBolinha(a.proximoPasso.dueDate))} aria-hidden />
@@ -335,7 +344,7 @@ export function AtendimentosClient() {
                         )}
                       </Coluna>
 
-                      <Coluna label="Responsável" className="lg:w-36 xl:w-44">
+                      <Coluna label="Responsável" className="lg:w-32 xl:w-40">
                         {a.responsavel ? (
                           <div className="flex items-center gap-1.5">
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">

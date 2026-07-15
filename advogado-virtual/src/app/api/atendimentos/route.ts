@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
     // numero (058) + embeds to-one (cliente/responsável) e to-many (contratos):
     // tudo numa query só. proximoPasso vem em UM query em lote separado (abaixo).
     // String única (literal) — concatenar quebraria a inferência do PostgREST.
-    .select('id, numero, titulo, estagio, status, etiquetas, created_at, encerrado_em, clientes:cliente_id ( id, nome, status_cadastro, telefone ), responsavel:user_id ( id, nome ), contratos_honorarios ( valor_fixo )', { count: 'exact' })
+    .select('id, numero, titulo, area, estagio, status, etiquetas, created_at, encerrado_em, clientes:cliente_id ( id, nome, status_cadastro, telefone ), responsavel:user_id ( id, nome ), contratos_honorarios ( valor_fixo )', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -159,6 +159,7 @@ export async function GET(req: NextRequest) {
       id:                    a.id,
       numero:                a.numero,
       titulo:                a.titulo,
+      area:                  a.area,
       estagio:               a.estagio,
       status:                a.status,
       etiquetas:             a.etiquetas ?? [],
