@@ -52,13 +52,16 @@ export function Dialog({
         onClick={onClose}
       />
 
+      {/* max-h + coluna flex: modal mais alto que a tela (ex.: celular) rola o
+          MIOLO em vez de cortar título/rodapé sem scroll. dvh acompanha a barra
+          de URL do navegador móvel. */}
       <div
         className={cn(
-          'relative w-full rounded-xl bg-card shadow-xl',
+          'relative flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-xl bg-card shadow-xl',
           SIZES[size]
         )}
       >
-        <div className="flex items-start justify-between p-6 pb-4">
+        <div className="flex shrink-0 items-start justify-between p-6 pb-4">
           <div>
             <h2 id="dialog-title" className="text-xl font-semibold text-foreground">
               {title}
@@ -77,11 +80,11 @@ export function Dialog({
         </div>
 
         {children && (
-          <div className="px-6 pb-4">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4">{children}</div>
         )}
 
         {footer && (
-          <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+          <div className="flex shrink-0 justify-end gap-3 border-t border-border px-6 py-4">
             {footer}
           </div>
         )}
