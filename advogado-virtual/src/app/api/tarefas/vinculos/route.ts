@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { decryptClienteFields } from '@/lib/encryption'
-import { formatarCnj, rotularArea, sublabelCliente, type VinculoTipo } from '@/lib/tarefas/vinculo'
+import { ehVinculoTipo, formatarCnj, rotularArea, sublabelCliente, type VinculoTipo } from '@/lib/tarefas/vinculo'
 
 /**
- * GET /api/tarefas/vinculos?q=...
+ * GET /api/tarefas/vinculos?q=...&tipos=atendimento,processo
  * Busca unificada para o campo "Cliente, caso ou processo" da tarefa do Kanban.
  * Mistura até ~8 resultados dos 3 tipos, escopo do tenant. q < 2 chars → [].
  *   cliente     → label=nome,                     sublabel=CPF/telefone
  *   atendimento → label=área,                     sublabel=cliente (· nº processo)
  *   processo    → label=apelido/nº CNJ,           sublabel=cliente
+ * ?tipos= (opcional) restringe quais tipos buscar (CSV). Ausente = os 3 (legado).
  */
 
 interface Resultado {
@@ -43,8 +44,13 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
 
-  const q = (new URL(req.url).searchParams.get('q') ?? '').trim()
+  const sp = new URL(req.url).searchParams
+  const q = (sp.get('q') ?? '').trim()
   if (q.length < 2) return NextResponse.json({ resultados: [] })
+
+  // ?tipos= restringe a busca (CSV). Vazio/ausente = os 3 tipos (comportamento legado).
+  const pedidos = (sp.get('tipos') ?? '').split(',').map((s) => s.trim()).filter(ehVinculoTipo)
+  const tipos = new Set<VinculoTipo>(pedidos.length ? pedidos : ['cliente', 'atendimento', 'processo'])
 
   const tenantId = usuario.tenant_id
   const like = `%${q}%`
@@ -83,7 +89,13 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(POR_TIPO)
 
-  const [rCliente, rAtend, rProc] = await Promise.all([pCliente, pAtend, pProc])
+  // Só dispara a query dos tipos pedidos; os demais viram lista vazia.
+  const vazio = Promise.resolve({ data: [] as never[] })
+  const [rCliente, rAtend, rProc] = await Promise.all([
+    tipos.has('cliente')     ? pCliente : vazio,
+    tipos.has('atendimento') ? pAtend   : vazio,
+    tipos.has('processo')    ? pProc    : vazio,
+  ])
 
   const clientes: Resultado[] = (rCliente.data ?? []).map((c) => {
     const dec = decryptClienteFields(c as Record<string, unknown>) as { cpf?: string | null; telefone?: string | null }

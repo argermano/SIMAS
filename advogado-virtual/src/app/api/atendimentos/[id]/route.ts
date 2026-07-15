@@ -4,7 +4,8 @@ import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { encryptField, decryptTranscricaoFields } from '@/lib/encryption'
-import { etiquetasField } from '@/lib/atendimentos'
+import { etiquetasField, schemaVinculoAtendimento, vinculoAtendimentoParaColunas } from '@/lib/atendimentos'
+import { vinculoValido } from '@/lib/tarefas/validar-vinculo'
 import type { createClient } from '@/lib/supabase/server'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
@@ -57,6 +58,8 @@ const schemaUpdate = z.object({
   // Primeiro atendimento (056): organização leve.
   titulo:                       z.string().trim().max(200).nullable().optional(),
   etiquetas:                    etiquetasField.optional(),
+  // Vínculo com outro caso/atendimento ou processo (057): objeto altera, null limpa.
+  vinculo:                      schemaVinculoAtendimento.nullable().optional(),
   // Transições de ciclo de vida são explícitas (não via `status`/`estagio` crus)
   // para centralizar as validações (não encerrar já-encerrado; estágio one-way).
   acao:                         z.enum(['encerrar', 'reabrir', 'transformar_caso']).optional(),
@@ -106,6 +109,20 @@ export async function PATCH(
   if (dados.consentimento_confirmado_em !== undefined) dadosUpdate.consentimento_confirmado_em = dados.consentimento_confirmado_em
   if (dados.titulo !== undefined)              dadosUpdate.titulo              = dados.titulo || null
   if (dados.etiquetas !== undefined)           dadosUpdate.etiquetas           = dados.etiquetas
+
+  // Vínculo (057): objeto grava na coluna do tipo; null zera ambas.
+  if (dados.vinculo !== undefined) {
+    if (dados.vinculo) {
+      // Não pode vincular-se a si mesmo (o CHECK do banco também barra).
+      if (dados.vinculo.tipo === 'atendimento' && dados.vinculo.id === id) {
+        return jsonError('Um atendimento não pode ser vinculado a si mesmo', 400)
+      }
+      if (!(await vinculoValido(supabase, dados.vinculo, usuario.tenant_id))) {
+        return jsonError('Vínculo inválido', 400)
+      }
+    }
+    Object.assign(dadosUpdate, vinculoAtendimentoParaColunas(dados.vinculo ?? null))
+  }
 
   if (Object.keys(dadosUpdate).length === 0) {
     return jsonError('Nada para atualizar', 400)

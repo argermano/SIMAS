@@ -18,7 +18,9 @@ import { formatarData, formatarDataHora, formatarDataRelativa } from '@/lib/util
 import {
   Brain, ChevronLeft, ChevronDown, ScrollText, FilePlus, FileText, FileSignature,
   AlertTriangle, Clock, CheckCircle, ArrowRight, History, Briefcase, Tag, Lock,
+  Scale, Link2,
 } from 'lucide-react'
+import { rotularArea, formatarCnj } from '@/lib/tarefas/vinculo'
 import type { ResultadoAnaliseGeral } from '@/app/api/ia/analise-geral/route'
 
 export const metadata = { title: 'Caso' }
@@ -136,6 +138,44 @@ export default async function CasoPage({
   const relatoInicial =
     ((atDec.transcricao_editada as string | null)?.trim() || (atDec.transcricao_raw as string | null)?.trim()) || null
 
+  // Vínculo opcional (057) — outro caso/atendimento ou processo. Buscado à parte
+  // para não derrubar a página se a migration ainda não estiver aplicada (colunas
+  // ausentes → erro isolado nesta query, vinc = null, apenas sem o chip).
+  const { data: vinc } = await supabase
+    .from('atendimentos')
+    .select('vinculo_atendimento_id, vinculo_processo_id, alvoAtend:atendimentos!vinculo_atendimento_id(id, titulo, area, cliente_id), alvoProc:processos!vinculo_processo_id(id, apelido, numero_cnj, cliente_id)')
+    .eq('id', atendimentoId)
+    .eq('tenant_id', usuario.tenant_id)
+    .maybeSingle()
+
+  type AlvoAtend = { id: string; titulo: string | null; area: string | null; cliente_id: string | null }
+  type AlvoProc  = { id: string; apelido: string | null; numero_cnj: string | null; cliente_id: string | null }
+  let vinculoChip: { tipo: 'atendimento' | 'processo'; id: string; label: string; href: string | null } | null = null
+  if (vinc) {
+    const v = vinc as {
+      vinculo_atendimento_id?: string | null; vinculo_processo_id?: string | null
+      alvoAtend?: AlvoAtend | AlvoAtend[] | null; alvoProc?: AlvoProc | AlvoProc[] | null
+    }
+    if (v.vinculo_atendimento_id) {
+      const alvo = um(v.alvoAtend)
+      if (alvo) vinculoChip = {
+        tipo: 'atendimento', id: alvo.id,
+        label: (alvo.titulo ?? '').trim() || rotularArea(alvo.area),
+        href: alvo.cliente_id ? `/clientes/${alvo.cliente_id}/casos/${alvo.id}` : null,
+      }
+    } else if (v.vinculo_processo_id) {
+      const alvo = um(v.alvoProc)
+      if (alvo) vinculoChip = {
+        tipo: 'processo', id: alvo.id,
+        label: (alvo.apelido ?? '').trim() || formatarCnj(alvo.numero_cnj),
+        href: alvo.cliente_id ? `/clientes/${alvo.cliente_id}` : null,
+      }
+    }
+  }
+  const vinculoAtual = vinculoChip
+    ? { tipo: vinculoChip.tipo, id: vinculoChip.id, label: vinculoChip.label, sublabel: null }
+    : null
+
   // Linha do tempo do caso — andamento derivado dos eventos (estudo, peças, contratos, documentos)
   type Evento = { quando: string; tipo: 'estudo' | 'peca' | 'contrato' | 'documento'; titulo: string; href?: string }
   const eventos: Evento[] = [
@@ -192,6 +232,7 @@ export default async function CasoPage({
               clienteId={id}
               estagio={estagio}
               encerrado={!!encerradoEm}
+              vinculoAtual={vinculoAtual}
             />
           </div>
         }
@@ -223,6 +264,25 @@ export default async function CasoPage({
                 <Tag className="h-3 w-3" /> {et}
               </Badge>
             ))}
+            {/* Chip do vínculo (057): outro caso/atendimento ou processo relacionado */}
+            {vinculoChip && (() => {
+              const IconeVinc = vinculoChip.tipo === 'processo' ? Scale : Briefcase
+              const conteudo = (
+                <>
+                  <Link2 className="h-3 w-3 text-muted-foreground" />
+                  <IconeVinc className="h-3 w-3" />
+                  <span className="truncate max-w-[220px]">{vinculoChip.label}</span>
+                </>
+              )
+              const cls = 'inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground'
+              return vinculoChip.href ? (
+                <Link href={vinculoChip.href} className={`${cls} hover:bg-muted hover:text-foreground transition-colors`} title={`Vínculo: ${vinculoChip.label}`}>
+                  {conteudo}
+                </Link>
+              ) : (
+                <span className={cls} title={`Vínculo: ${vinculoChip.label}`}>{conteudo}</span>
+              )
+            })()}
           </div>
 
           {/* Capa do processo (nº CNJ + DataJud) */}

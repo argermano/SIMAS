@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, Settings, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
   KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter, BellRing, Newspaper, MessagesSquare,
-  CalendarDays, Wallet,
+  CalendarDays, Wallet, Briefcase,
 } from 'lucide-react'
 import { LogoMark } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils'
@@ -30,6 +30,12 @@ const MENU_ITEMS = [
     label:   'Clientes',
     icon:    Users,
     ativoSe: (p: string) => p.startsWith('/clientes'),
+  },
+  {
+    href:    '/atendimentos',
+    label:   'Atendimentos',
+    icon:    Briefcase,
+    ativoSe: (p: string) => p.startsWith('/atendimentos'),
   },
   {
     href:    '/funil',

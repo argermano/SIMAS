@@ -4,23 +4,29 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  MoreVertical, Loader2, Lock, Unlock, ArrowRightLeft, Printer, Trash2,
+  MoreVertical, Loader2, Lock, Unlock, ArrowRightLeft, Printer, Trash2, Link2,
 } from 'lucide-react'
+import { Dialog } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { VinculoPicker, type VinculoSelecionado } from '@/components/tarefas/VinculoPicker'
 
 interface AcoesAtendimentoProps {
   atendimentoId: string
   clienteId: string
   estagio: 'atendimento' | 'caso'
   encerrado: boolean
+  /** Vínculo atual (057) para pré-carregar o mini-modal de "Vincular…". */
+  vinculoAtual?: VinculoSelecionado | null
 }
 
 // Menu de ações do atendimento/caso (encerrar/reabrir, transformar em caso,
-// imprimir ficha, excluir). As transições passam pelo PATCH { acao } — o servidor
-// centraliza as validações (não encerrar já-encerrado, estágio one-way).
-export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado }: AcoesAtendimentoProps) {
+// vincular, imprimir ficha, excluir). As transições passam pelo PATCH { acao } — o
+// servidor centraliza as validações (não encerrar já-encerrado, estágio one-way).
+export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado, vinculoAtual }: AcoesAtendimentoProps) {
   const router = useRouter()
   const [aberto, setAberto] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [vincOpen, setVincOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   // Fecha ao clicar fora
@@ -69,6 +75,14 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado 
 
   return (
     <div className="relative" ref={ref}>
+      {vincOpen && (
+        <VincularModal
+          atendimentoId={atendimentoId}
+          vinculoAtual={vinculoAtual ?? null}
+          onClose={() => setVincOpen(false)}
+          onSaved={() => { setVincOpen(false); router.refresh() }}
+        />
+      )}
       <button
         onClick={() => setAberto((v) => !v)}
         disabled={busy}
@@ -103,6 +117,15 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado 
             </button>
           )}
 
+          {/* Vincular a outro caso/atendimento ou processo (057) */}
+          <button
+            className={itemCls}
+            disabled={busy}
+            onClick={() => { setAberto(false); setVincOpen(true) }}
+          >
+            <Link2 className="h-4 w-4 text-muted-foreground" /> {vinculoAtual ? 'Editar vínculo' : 'Vincular…'}
+          </button>
+
           {/* Imprimir ficha */}
           <Link
             href={`/clientes/${clienteId}/casos/${atendimentoId}/ficha`}
@@ -125,5 +148,76 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado 
         </div>
       )}
     </div>
+  )
+}
+
+// Mini-modal de vínculo (057): escolhe outro caso/atendimento ou processo e
+// aplica via PATCH { vinculo }. "Remover vínculo" envia null.
+function VincularModal({
+  atendimentoId, vinculoAtual, onClose, onSaved,
+}: {
+  atendimentoId: string
+  vinculoAtual: VinculoSelecionado | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [sel, setSel] = useState<VinculoSelecionado | null>(vinculoAtual)
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+
+  async function patch(vinculo: { tipo: string; id: string } | null) {
+    setSalvando(true)
+    setErro(null)
+    try {
+      const res = await fetch(`/api/atendimentos/${atendimentoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vinculo }),
+      })
+      if (res.ok) { onSaved(); return }
+      const j = await res.json().catch(() => null)
+      setErro(j?.error ?? 'Não foi possível salvar o vínculo.')
+    } catch {
+      setErro('Verifique a conexão e tente de novo.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      size="sm"
+      title="Vincular atendimento"
+      description="Relacione este caso a outro atendimento ou a um processo."
+      footer={
+        <>
+          {vinculoAtual && (
+            <Button variant="secondary" size="md" onClick={() => patch(null)} disabled={salvando}>
+              Remover vínculo
+            </Button>
+          )}
+          <Button
+            size="md"
+            loading={salvando}
+            disabled={salvando || !sel || (sel.tipo === vinculoAtual?.tipo && sel.id === vinculoAtual?.id)}
+            onClick={() => sel && patch({ tipo: sel.tipo, id: sel.id })}
+          >
+            Salvar
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-2">
+        <VinculoPicker
+          label="Caso, atendimento ou processo"
+          value={sel}
+          onChange={setSel}
+          tipos={['atendimento', 'processo']}
+        />
+        {erro && <p className="text-sm text-destructive">{erro}</p>}
+      </div>
+    </Dialog>
   )
 }

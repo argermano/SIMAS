@@ -37,15 +37,20 @@ interface VinculoPickerProps {
   label?:    string
   /** Chip discreto para vínculo cuja entidade foi removida (só rótulo, sem clear-desfoco). */
   removido?: boolean
+  /** Restringe os tipos buscados (repassado ao endpoint). Ausente = os 3 tipos. */
+  tipos?:    VinculoTipo[]
 }
 
-export function VinculoPicker({ value, onChange, label = 'Cliente, caso ou processo', removido }: VinculoPickerProps) {
+export function VinculoPicker({ value, onChange, label = 'Cliente, caso ou processo', removido, tipos }: VinculoPickerProps) {
   const [busca,      setBusca]      = useState('')
   const [resultados, setResultados] = useState<Resultado[]>([])
   const [buscando,   setBuscando]   = useState(false)
   const [aberto,     setAberto]     = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
   const seqRef = useRef(0) // ordem das buscas: descarta resposta que chegar fora de ordem
+
+  // Chave estável dos tipos p/ deps (array inline do pai muda de referência a cada render).
+  const tiposParam = tipos && tipos.length ? tipos.join(',') : ''
 
   // Busca assíncrona com debounce (~250ms). Mín. 2 chars.
   useEffect(() => {
@@ -54,7 +59,8 @@ export function VinculoPicker({ value, onChange, label = 'Cliente, caso ou proce
       const seq = ++seqRef.current
       setBuscando(true)
       try {
-        const r = await fetch(`/api/tarefas/vinculos?q=${encodeURIComponent(busca.trim())}`)
+        const qs = `q=${encodeURIComponent(busca.trim())}${tiposParam ? `&tipos=${tiposParam}` : ''}`
+        const r = await fetch(`/api/tarefas/vinculos?${qs}`)
         const d = await r.json().catch(() => ({}))
         if (seq !== seqRef.current) return // já saiu uma busca mais nova: ignora esta resposta obsoleta
         if (r.ok) { setResultados((d.resultados ?? []) as Resultado[]); setAberto(true) }
@@ -63,7 +69,7 @@ export function VinculoPicker({ value, onChange, label = 'Cliente, caso ou proce
       }
     }, 250)
     return () => clearTimeout(t)
-  }, [busca, value])
+  }, [busca, value, tiposParam])
 
   // Fecha o dropdown ao clicar fora.
   useEffect(() => {
