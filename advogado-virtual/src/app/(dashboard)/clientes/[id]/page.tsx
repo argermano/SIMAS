@@ -9,7 +9,6 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ClienteAcoesClient } from './ClienteAcoesClient'
 import { ProcessosCliente } from '@/components/processos/ProcessosCliente'
 import { BotaoExcluirAtendimento } from '@/components/atendimento/BotaoExcluirAtendimento'
-import { NovoAtendimentoButton } from '@/components/atendimento/NovoAtendimentoModal'
 import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
 import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
@@ -240,7 +239,12 @@ export default async function DossieClientePage({
               </Link>
             </Button>
             {/* Ação primária: nascimento leve (registra a conversa antes da peça) */}
-            <NovoAtendimentoButton clienteId={id} clienteNome={cliente.nome} />
+            <Button asChild size="md">
+              <Link href={`/atendimentos/novo?clienteId=${id}`}>
+                <Plus className="h-4 w-4" />
+                Novo Atendimento
+              </Link>
+            </Button>
           </div>
         }
         nomeUsuario={usuario.nome}

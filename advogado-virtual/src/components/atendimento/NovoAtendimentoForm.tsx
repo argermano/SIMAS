@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -10,17 +9,15 @@ import { useToast } from '@/components/ui/toast'
 import { VinculoPicker, type VinculoSelecionado } from '@/components/tarefas/VinculoPicker'
 import { Plus, X, User, Search, Loader2, UserPlus } from 'lucide-react'
 
-// Nascimento leve do atendimento (056): registrar a conversa inicial ANTES de
-// existir peça. Simples e leve — só Assunto, Etiquetas e o 1º Registro.
-// A partir do menu global (057) o cliente pode ser buscado ou pré-cadastrado
-// só pelo nome, e o atendimento pode ser vinculado a outro caso/processo.
+// Nascimento leve do atendimento (056/057) em PÁGINA própria — o dono rejeitou
+// o modal (formulário alto cortava em telas menores). Registra a conversa
+// inicial ANTES de existir peça: cliente (buscado ou pré-cadastrado só pelo
+// nome), Assunto, Etiquetas, 1º Registro e vínculo opcional a caso/processo.
 const MAX_ETIQUETAS = 8
 const MAX_TAG_LEN = 30
 
-interface NovoAtendimentoModalProps {
-  open: boolean
-  onClose: () => void
-  // Fixado a partir do dossiê do cliente. Ausente = modo global (busca o cliente).
+interface NovoAtendimentoFormProps {
+  // Fixado quando se chega pela página do cliente. Ausente = modo global.
   clienteId?: string
   clienteNome?: string
 }
@@ -28,7 +25,7 @@ interface NovoAtendimentoModalProps {
 // Cliente escolhido no modo global: id existente OU nome novo (pré-cadastro).
 type ClienteEscolhido = { id?: string; nome: string; novo?: boolean }
 
-export function NovoAtendimentoModal({ open, onClose, clienteId, clienteNome }: NovoAtendimentoModalProps) {
+export function NovoAtendimentoForm({ clienteId, clienteNome }: NovoAtendimentoFormProps) {
   const router = useRouter()
   const { error: toastError } = useToast()
 
@@ -47,14 +44,14 @@ export function NovoAtendimentoModal({ open, onClose, clienteId, clienteNome }: 
   const [buscaCli, setBuscaCli] = useState('')
   const [resultadosCli, setResultadosCli] = useState<{ id: string; nome: string }[]>([])
   const [buscandoCli, setBuscandoCli] = useState(false)
-  const [abertoCli, setAbertoCli] = useState(false)
   const seqCli = useRef(0)
   const cliBoxRef = useRef<HTMLDivElement>(null)
+  const [dropdownAberto, setDropdownAberto] = useState(true)
 
   // Fecha o dropdown do cliente ao clicar fora (evita sobrepor o Assunto).
   useEffect(() => {
     function onDoc(e: MouseEvent) {
-      if (cliBoxRef.current && !cliBoxRef.current.contains(e.target as Node)) setAbertoCli(false)
+      if (cliBoxRef.current && !cliBoxRef.current.contains(e.target as Node)) setDropdownAberto(false)
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
@@ -103,19 +100,6 @@ export function NovoAtendimentoModal({ open, onClose, clienteId, clienteNome }: 
     }
   }
 
-  function fechar() {
-    if (salvando) return
-    setTitulo('')
-    setEtiquetas([])
-    setTagInput('')
-    setRegistro('')
-    setCliente(clienteFixo ? { id: clienteId, nome: clienteNome ?? '' } : null)
-    setBuscaCli('')
-    setResultadosCli([])
-    setVinculo(null)
-    onClose()
-  }
-
   async function salvar() {
     if (!podeSalvar || !cliente) return
     setSalvando(true)
@@ -153,23 +137,7 @@ export function NovoAtendimentoModal({ open, onClose, clienteId, clienteNome }: 
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={fechar}
-      title="Novo atendimento"
-      description="Registre a conversa inicial com o cliente. Vira caso quando você quiser."
-      footer={
-        <>
-          <Button variant="secondary" size="md" onClick={fechar} disabled={salvando}>
-            Cancelar
-          </Button>
-          <Button size="md" onClick={salvar} loading={salvando} disabled={!podeSalvar}>
-            <Plus className="h-4 w-4" />
-            Criar atendimento
-          </Button>
-        </>
-      }
-    >
+    <div className="rounded-xl border border-border bg-card p-6 shadow-card">
       <div className="space-y-5">
         {/* Cliente — fixado (dossiê) ou buscado/pré-cadastrado (menu global) */}
         {clienteFixo ? (
@@ -192,7 +160,7 @@ export function NovoAtendimentoModal({ open, onClose, clienteId, clienteNome }: 
               </div>
               <button
                 type="button"
-                onClick={() => { setCliente(null); setBuscaCli('') }}
+                onClick={() => { setCliente(null); setBuscaCli(''); setDropdownAberto(true) }}
                 aria-label="Trocar cliente"
                 title="Trocar cliente"
                 className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -203,7 +171,7 @@ export function NovoAtendimentoModal({ open, onClose, clienteId, clienteNome }: 
           </div>
         ) : (
           // Busca do cliente + criar por nome
-          <div className="space-y-1.5">
+          <div className="space-y-1.5" ref={cliBoxRef}>
             <label className="block text-base font-medium text-foreground">Cliente <span className="text-destructive">*</span></label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
@@ -211,12 +179,12 @@ export function NovoAtendimentoModal({ open, onClose, clienteId, clienteNome }: 
               </span>
               <input
                 value={buscaCli}
-                onChange={e => setBuscaCli(e.target.value)}
+                onChange={e => { setBuscaCli(e.target.value); setDropdownAberto(true) }}
                 placeholder="Buscar cliente pelo nome…"
                 autoFocus
                 className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              {(resultadosCli.length > 0 || (termo.length >= 2 && !temExato)) && (
+              {dropdownAberto && (resultadosCli.length > 0 || (termo.length >= 2 && !temExato)) && (
                 <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-border bg-card shadow-lg">
                   {resultadosCli.map(c => (
                     <button
@@ -303,7 +271,7 @@ export function NovoAtendimentoModal({ open, onClose, clienteId, clienteNome }: 
           value={registro}
           onChange={e => setRegistro(e.target.value)}
           maxLength={8000}
-          rows={5}
+          rows={6}
           placeholder="Anotações da conversa com o cliente..."
         />
 
@@ -314,44 +282,17 @@ export function NovoAtendimentoModal({ open, onClose, clienteId, clienteNome }: 
           onChange={setVinculo}
           tipos={['atendimento', 'processo']}
         />
+
+        <div className="flex justify-end gap-3 border-t border-border pt-4">
+          <Button variant="secondary" size="md" onClick={() => router.back()} disabled={salvando}>
+            Cancelar
+          </Button>
+          <Button size="md" onClick={salvar} loading={salvando} disabled={!podeSalvar}>
+            <Plus className="h-4 w-4" />
+            Criar atendimento
+          </Button>
+        </div>
       </div>
-    </Dialog>
-  )
-}
-
-// Botão + modal auto-contidos: permite acionar o nascimento leve a partir de
-// um Server Component (a página do cliente) sem torná-la client.
-export function NovoAtendimentoButton({ clienteId, clienteNome }: { clienteId: string; clienteNome: string }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <>
-      <Button size="md" onClick={() => setOpen(true)}>
-        <Plus className="h-4 w-4" />
-        Novo Atendimento
-      </Button>
-      {open && (
-        <NovoAtendimentoModal
-          open={open}
-          onClose={() => setOpen(false)}
-          clienteId={clienteId}
-          clienteNome={clienteNome}
-        />
-      )}
-    </>
-  )
-}
-
-// Versão global (menu Atendimentos): sem cliente pré-fixado — o modal busca ou
-// pré-cadastra o cliente pelo nome.
-export function NovoAtendimentoGlobalButton() {
-  const [open, setOpen] = useState(false)
-  return (
-    <>
-      <Button size="md" onClick={() => setOpen(true)}>
-        <Plus className="h-4 w-4" />
-        Novo atendimento
-      </Button>
-      {open && <NovoAtendimentoModal open={open} onClose={() => setOpen(false)} />}
-    </>
+    </div>
   )
 }
