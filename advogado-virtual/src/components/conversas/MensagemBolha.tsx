@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import {
   Check,
+  Download,
   FileText,
   Forward,
   Image as ImageIcon,
@@ -43,21 +44,63 @@ function infoAnexo(tipo: string): { Icone: typeof FileText; rotulo: string } {
   }
 }
 
-/** Card de anexo (fallback dos tipos sem preview e das imagens que falham). */
+/** URL do proxy autenticado que serve os bytes do anexo (imagem/áudio/vídeo/
+ * arquivo) na mesma origem — PDF/imagem/vídeo abrem no navegador, tipos
+ * desconhecidos baixam (octet-stream). */
+function srcProxy(anexo: Anexo): string {
+  return `/api/conversas/anexos?url=${encodeURIComponent(anexo.url)}`
+}
+
+/** Localização/contato não têm binário (o relay manda url vazia); e sem url não
+ * há o que abrir — nesses casos o card fica estático. */
+function anexoAbrivel(anexo: Anexo): boolean {
+  return Boolean(anexo.url) && anexo.tipo !== 'location' && anexo.tipo !== 'contact'
+}
+
+/** Card de anexo (tipos sem preview inline, e fallback das imagens/áudios que
+ * falham). Clicável quando há binário: abre em nova aba via proxy (pdf/vídeo no
+ * navegador; desconhecido baixa). Localização/contato ficam estáticos. */
 function AnexoCard({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
   const { Icone, rotulo } = infoAnexo(anexo.tipo)
-  return (
-    <div
-      className={cn(
-        'inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs',
-        escuro
-          ? 'border-background/25 bg-background/10 text-background/90 dark:border-primary-foreground/25 dark:bg-primary-foreground/10 dark:text-primary-foreground/90'
-          : 'border-border bg-background/60 text-muted-foreground',
-      )}
-    >
+  const abrivel = anexoAbrivel(anexo)
+  const classe = cn(
+    'inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs',
+    escuro
+      ? 'border-background/25 bg-background/10 text-background/90 dark:border-primary-foreground/25 dark:bg-primary-foreground/10 dark:text-primary-foreground/90'
+      : 'border-border bg-background/60 text-muted-foreground',
+    // Hover só realça; na bolha de SAÍDA o texto é claro sobre fundo escuro, então
+    // hover:text-foreground o deixaria da cor do fundo (invisível) — brilha o próprio tom.
+    abrivel && 'transition-colors hover:border-ring',
+    abrivel && (escuro ? 'hover:text-background dark:hover:text-primary-foreground' : 'hover:text-foreground'),
+  )
+  const conteudo = (
+    <>
       <Icone className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span className="truncate font-medium">{rotulo}</span>
-    </div>
+      {abrivel && <Download className="h-3 w-3 shrink-0 opacity-70" aria-hidden />}
+    </>
+  )
+  if (!abrivel) return <div className={classe}>{conteudo}</div>
+  return (
+    <a href={srcProxy(anexo)} target="_blank" rel="noreferrer" title="Abrir ou baixar o anexo em nova aba" className={classe}>
+      {conteudo}
+    </a>
+  )
+}
+
+/** Áudio inline (player nativo) via proxy, nas duas direções. onError (proxy
+ * desligado/codec sem suporte) degrada para o card clicável com download. */
+function AnexoAudio({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
+  const [falhou, setFalhou] = useState(false)
+  if (falhou) return <AnexoCard anexo={anexo} escuro={escuro} />
+  return (
+    <audio
+      controls
+      preload="none"
+      src={srcProxy(anexo)}
+      onError={() => setFalhou(true)}
+      className="h-10 w-64 max-w-full"
+    />
   )
 }
 
@@ -67,7 +110,7 @@ function AnexoImagem({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
   const [falhou, setFalhou] = useState(false)
   if (falhou) return <AnexoCard anexo={anexo} escuro={escuro} />
 
-  const src = `/api/conversas/anexos?url=${encodeURIComponent(anexo.url)}`
+  const src = srcProxy(anexo)
   return (
     <a href={src} target="_blank" rel="noreferrer" title="Abrir a imagem em nova aba">
       {/* eslint-disable-next-line @next/next/no-img-element -- bytes vêm do proxy autenticado, sem otimização do Next */}
@@ -155,6 +198,8 @@ export function MensagemBolha({
                 <div key={i} className="flex flex-col gap-1">
                   {a.tipo === 'image' ? (
                     <AnexoImagem anexo={a} escuro={saidaEscura} />
+                  ) : a.tipo === 'audio' ? (
+                    <AnexoAudio anexo={a} escuro={saidaEscura} />
                   ) : (
                     <AnexoCard anexo={a} escuro={saidaEscura} />
                   )}
