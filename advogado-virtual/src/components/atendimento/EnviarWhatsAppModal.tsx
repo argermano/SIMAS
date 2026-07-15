@@ -17,9 +17,9 @@ import { Send, Paperclip, Search, X, FileText, ScrollText, Check } from 'lucide-
  * escreve aqui e dispara pelo canal do escritório. A mensagem vira um registro
  * no diário do atendimento (a rota grava; o refresh mostra na hora).
  *
- * Também permite ANEXAR documentos/peças do próprio cliente. Texto puro sai pelo
- * bot; com anexos, tudo vai pelo relay/Chatwoot (o texto vira legenda do primeiro
- * documento) — por isso exige conversa aberta e a conta do Chatwoot conectada.
+ * Também permite ANEXAR documentos/peças do próprio cliente. Tudo (texto e
+ * anexos) sai pelo canal do bot (Evolution) — funciona para qualquer número,
+ * mesmo cliente novo sem conversa aberta. O texto vira legenda do 1º documento.
  */
 
 const MAX_ANEXOS = 5
@@ -170,13 +170,9 @@ export function EnviarWhatsAppModal({
       })
       const d = (await r.json().catch(() => ({}))) as { error?: string; code?: string }
       if (!r.ok) {
-        if (r.status === 428 || d.code === 'AGENT_NOT_CONNECTED') {
-          toastError('Anexos não enviados', 'Conecte sua conta do Chatwoot (módulo Conversas) para enviar anexos.')
-        } else if (d.code === 'SEM_CONVERSA') {
-          toastError('Sem conversa aberta', d.error ?? 'O cliente ainda não tem conversa aberta no WhatsApp.')
-        } else {
-          toastError('Não enviado', d.error ?? 'Tente novamente.')
-        }
+        // Anexos saem pelo canal do bot (qualquer número) — sem exigência de
+        // conversa aberta nem conta conectada; erro aqui é falha real de envio.
+        toastError('Não enviado', d.error ?? 'Tente novamente.')
         return
       }
       success(

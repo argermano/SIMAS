@@ -75,3 +75,44 @@ export async function enviarAvisoWhatsApp(telefone: string, texto: string): Prom
   }
   return { ok: false }
 }
+
+/**
+ * Envia um DOCUMENTO/IMAGEM por WhatsApp pelo mesmo canal do bot (/notify com
+ * `media`) — funciona para QUALQUER número, mesmo sem conversa aberta no
+ * Chatwoot (caso "cliente novo": mandar procuração no primeiro contato).
+ * caption vira a legenda. SEM retry (mídia duplicada no WhatsApp é pior que
+ * pedir pro atendente reenviar); timeout maior (arquivo + base64).
+ */
+export async function enviarMediaWhatsApp(
+  telefone: string,
+  media: { base64: string; filename: string; mimetype: string },
+  caption?: string,
+): Promise<{ ok: boolean; id?: string }> {
+  const url = process.env.PROCESSOS_NOTIFY_URL
+  const token = process.env.PROCESSOS_NOTIFY_TOKEN
+  if (!url || !token) {
+    logger.error('processos.notificar.sem_config', { temUrl: !!url, temToken: !!token })
+    return { ok: false }
+  }
+
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 30_000)
+  try {
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Notify-Token': token },
+      body: JSON.stringify({ telefone, texto: caption ?? '', media }),
+      signal: ctrl.signal,
+    })
+    clearTimeout(timer)
+    if (r.ok) {
+      const d = (await r.json().catch(() => ({}))) as { id?: string }
+      return { ok: true, id: d.id }
+    }
+    logger.error('processos.notificar.media_http', { status: r.status })
+  } catch (err) {
+    clearTimeout(timer)
+    logger.error('processos.notificar.media_excecao', {}, err as Error)
+  }
+  return { ok: false }
+}

@@ -5,10 +5,8 @@ import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { logger } from '@/lib/logger'
 import { apenasDigitos } from '@/lib/conversas/telefone'
-import { enviarAvisoWhatsApp } from '@/lib/processos/notificar'
+import { enviarAvisoWhatsApp, enviarMediaWhatsApp } from '@/lib/processos/notificar'
 import { carregarBytesAnexo } from '@/lib/conversas/anexo-documento'
-import { relaySendAttachment } from '@/lib/conversas/relay'
-import { resolverConversaPorTelefone } from '@/lib/conversas/resolver-conversa'
 
 // POST /api/atendimentos/[id]/whatsapp — envia uma mensagem ao cliente pelo
 // canal de WhatsApp do escritório SEM sair da tela do atendimento (pedido do
@@ -16,16 +14,11 @@ import { resolverConversaPorTelefone } from '@/lib/conversas/resolver-conversa'
 // Ato HUMANO explícito (equipe toda), no padrão do comunicar do financeiro.
 // A mensagem enviada vira um REGISTRO no diário do atendimento.
 //
-// Dois caminhos, por decisão de arquitetura (NÃO regredir):
-//  • TEXTO PURO → canal do bot (enviarAvisoWhatsApp): funciona SEM conversa
-//    aberta no Chatwoot; é o comportamento histórico desta rota.
-//  • COM ANEXOS → tudo (texto + arquivos) vai pelo RELAY/Chatwoot para manter
-//    ordem e atribuição: o texto vira a LEGENDA do primeiro anexo. Isso exige
-//    conversa ABERTA (id numérico) e o agente com token pessoal conectado (428).
-
-// Mensagem única (rota + testes) para o cliente sem conversa aberta no Chatwoot.
-const MSG_SEM_CONVERSA =
-  'O cliente ainda não tem conversa aberta no WhatsApp do escritório — envie só texto ou peça que ele mande um oi'
+// TUDO vai pelo canal do bot (Evolution): texto via enviarAvisoWhatsApp e
+// anexos via enviarMediaWhatsApp (sendMedia) — funciona para QUALQUER número,
+// inclusive cliente novo SEM conversa aberta no Chatwoot (decisão do dono após
+// testar com número novo). O texto vira a legenda do primeiro anexo. A mensagem
+// aparece no Chatwoot pela sincronização do Evolution; a autoria fica no diário.
 
 // Cada anexo é exatamente um: documento do bucket XOR peça (exportada em .docx).
 const anexoSchema = z
@@ -131,12 +124,11 @@ export async function POST(
     }
   }
 
-  // Anexos exigem conversa ABERTA no Chatwoot (o relay posta nela).
-  const conversaId = await resolverConversaPorTelefone(email, telefone)
-  if (conversaId == null) {
-    return NextResponse.json({ error: MSG_SEM_CONVERSA, code: 'SEM_CONVERSA' }, { status: 409 })
-  }
-
+  // Envio pelo MESMO canal do bot que o texto usa (sendMedia do Evolution):
+  // funciona para QUALQUER número — inclusive cliente novo SEM conversa aberta
+  // no Chatwoot (caso real do dono: mandar a procuração no primeiro contato).
+  // A mensagem aparece na conversa do Chatwoot pela sincronização do Evolution;
+  // a autoria fica registrada no diário do atendimento.
   const enviados: string[] = []
   for (let i = 0; i < anexos!.length; i++) {
     const a = anexos![i]
@@ -153,27 +145,17 @@ export async function POST(
       return jsonError(`Enviei ${enviados.length} de ${anexos!.length}. O anexo seguinte falhou: ${anexo.erro}`, 502)
     }
 
-    const { status, data } = await relaySendAttachment({
-      email,
-      conversaId: String(conversaId),
-      bytes: anexo.bytes,
-      filename: anexo.filename,
-      contentType: anexo.contentType,
-      // Só o PRIMEIRO anexo leva o texto como legenda (mantém a ordem/atribuição).
-      caption: i === 0 ? texto ?? '' : '',
-    })
-
-    if (status < 200 || status >= 300) {
+    const r = await enviarMediaWhatsApp(
+      telefone,
+      { base64: anexo.bytes.toString('base64'), filename: anexo.filename, mimetype: anexo.contentType },
+      // Só o PRIMEIRO anexo leva o texto como legenda (mantém a ordem).
+      i === 0 ? texto ?? '' : '',
+    )
+    if (!r.ok) {
       if (enviados.length === 0) {
-        // Repassa o status/erro do relay (428 AGENTE_NAO_CONECTADO, 413, etc.),
-        // preservando `code` para o cliente mapear a mensagem.
-        const corpo = data && typeof data === 'object' ? data : {}
-        return NextResponse.json({ error: 'Falha ao enviar o anexo pelo WhatsApp', ...corpo }, { status })
+        return jsonError('Falha ao enviar o anexo pelo WhatsApp — tente novamente', 502)
       }
-      return NextResponse.json(
-        { error: `Enviei ${enviados.length} de ${anexos!.length}; "${anexo.filename}" falhou.` },
-        { status: 502 },
-      )
+      return jsonError(`Enviei ${enviados.length} de ${anexos!.length}; "${anexo.filename}" falhou.`, 502)
     }
     enviados.push(anexo.filename)
   }
