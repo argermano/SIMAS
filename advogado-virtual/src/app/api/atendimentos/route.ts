@@ -9,13 +9,39 @@ import { etiquetasField, schemaVinculoAtendimento, vinculoAtendimentoParaColunas
 import { vinculoValido } from '@/lib/tarefas/validar-vinculo'
 
 // Embed to-one pode vir como objeto ou array — normaliza para o 1º.
-// pre_cadastro sinaliza cliente nascido só com o nome (dossiê a completar).
-function umCliente(rel: unknown): { id: string; nome: string; pre_cadastro: boolean } | null {
+// Devolve o cru relevante (status_cadastro/telefone alimentam campos derivados).
+function umCliente(
+  rel: unknown,
+): { id: string; nome: string; status_cadastro?: string; telefone: string | null } | null {
   const r = Array.isArray(rel) ? rel[0] : rel
-  const c = r as { id?: string; nome?: string; status_cadastro?: string } | null
+  const c = r as { id?: string; nome?: string; status_cadastro?: string; telefone?: string | null } | null
   return c?.id
-    ? { id: c.id, nome: (c.nome ?? '').trim(), pre_cadastro: c.status_cadastro === 'pre_cadastro' }
+    ? { id: c.id, nome: (c.nome ?? '').trim(), status_cadastro: c.status_cadastro, telefone: c.telefone ?? null }
     : null
+}
+
+// Embed to-one do responsável (users). Avatar = inicial do nome no cliente.
+function umUsuario(rel: unknown): { id: string; nome: string } | null {
+  const r = Array.isArray(rel) ? rel[0] : rel
+  const u = r as { id?: string; nome?: string } | null
+  return u?.id ? { id: u.id, nome: (u.nome ?? '').trim() } : null
+}
+
+// Soma os valores fixos dos contratos do atendimento (embed to-many).
+// valor_fixo é DECIMAL(12,2) → REAIS (não centavos); devolvemos em reais, como o
+// resto do app formata (contratos/page.tsx, clientes). Sem valor fixo → null.
+function somaHonorarios(rel: unknown): number | null {
+  const arr = Array.isArray(rel) ? rel : rel ? [rel] : []
+  let soma = 0
+  let houve = false
+  for (const c of arr) {
+    const v = (c as { valor_fixo?: number | string | null })?.valor_fixo
+    if (v != null) {
+      soma += Number(v)
+      houve = true
+    }
+  }
+  return houve ? soma : null
 }
 
 // Sanitiza o termo para uso dentro de .or() do PostgREST (vírgula/parênteses
@@ -62,7 +88,10 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('atendimentos')
-    .select('id, titulo, estagio, status, etiquetas, created_at, encerrado_em, clientes:cliente_id ( id, nome, status_cadastro )', { count: 'exact' })
+    // numero (058) + embeds to-one (cliente/responsável) e to-many (contratos):
+    // tudo numa query só. proximoPasso vem em UM query em lote separado (abaixo).
+    // String única (literal) — concatenar quebraria a inferência do PostgREST.
+    .select('id, numero, titulo, estagio, status, etiquetas, created_at, encerrado_em, clientes:cliente_id ( id, nome, status_cadastro, telefone ), responsavel:user_id ( id, nome ), contratos_honorarios ( valor_fixo )', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -72,34 +101,77 @@ export async function GET(req: NextRequest) {
   if (estagio === 'atendimento' || estagio === 'caso') query = query.eq('estagio', estagio)
 
   if (q.length >= 2) {
-    // Busca no titulo (coluna própria) OU pelo nome do cliente (relação): resolve
-    // primeiro os clientes que batem e filtra por cliente_id.in — um único .or().
+    // Busca no titulo (coluna própria) OU pelo nome do CLIENTE OU do RESPONSÁVEL
+    // (relações): resolve os ids que batem em cada tabela e filtra por *_id.in —
+    // tudo num único .or(). As duas resoluções vão em paralelo (sem round-trip
+    // extra). users não tem deleted_at; RLS já restringe ao tenant (005).
     const ors = [`titulo.ilike.%${termoOr(q)}%`]
-    const { data: cs } = await supabase
-      .from('clientes')
-      .select('id')
-      .eq('tenant_id', usuario.tenant_id)
-      .is('deleted_at', null)
-      .ilike('nome', `%${q}%`)
-      .limit(50)
-    const ids = (cs ?? []).map((c) => c.id as string)
-    if (ids.length) ors.push(`cliente_id.in.(${ids.join(',')})`)
+    const [{ data: cs }, { data: us }] = await Promise.all([
+      supabase
+        .from('clientes')
+        .select('id')
+        .eq('tenant_id', usuario.tenant_id)
+        .is('deleted_at', null)
+        .ilike('nome', `%${q}%`)
+        .limit(50),
+      supabase
+        .from('users')
+        .select('id')
+        .eq('tenant_id', usuario.tenant_id)
+        .ilike('nome', `%${q}%`)
+        .limit(50),
+    ])
+    const ids  = (cs ?? []).map((c) => c.id as string)
+    const uids = (us ?? []).map((u) => u.id as string)
+    if (ids.length)  ors.push(`cliente_id.in.(${ids.join(',')})`)
+    if (uids.length) ors.push(`user_id.in.(${uids.join(',')})`)
     query = query.or(ors.join(','))
   }
 
   const { data, count, error } = await query.range(offset, offset + limit - 1)
   if (error) return jsonError(error.message, 500)
 
-  const atendimentos = (data ?? []).map((a) => ({
-    id:           a.id,
-    titulo:       a.titulo,
-    estagio:      a.estagio,
-    status:       a.status,
-    etiquetas:    a.etiquetas ?? [],
-    created_at:   a.created_at,
-    encerrado_em: a.encerrado_em,
-    cliente:      umCliente((a as { clientes?: unknown }).clientes),
-  }))
+  // ── PRÓXIMO PASSO: a próxima tarefa ABERTA de cada atendimento da página ─────
+  // Um único query em lote pelos ids da página. Ordem global (menor due_date
+  // primeiro, nulos por último, empate = mais antiga); o 1º visto por process_id
+  // é a "próxima" (dedupe abaixo). Bolinha/cor fica a cargo da UI (usa dueDate).
+  const idsPagina = (data ?? []).map((a) => a.id as string)
+  const proximoPasso = new Map<string, { descricao: string; dueDate: string | null }>()
+  if (idsPagina.length) {
+    const { data: tarefas } = await supabase
+      .from('tasks')
+      .select('process_id, description, due_date')
+      .eq('tenant_id', usuario.tenant_id)
+      .is('completed_at', null)
+      .in('process_id', idsPagina)
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .order('created_at', { ascending: true })
+    for (const t of tarefas ?? []) {
+      const pid = t.process_id as string | null
+      if (!pid || proximoPasso.has(pid)) continue // 1ª na ordem = a próxima
+      proximoPasso.set(pid, { descricao: (t.description as string) ?? '', dueDate: (t.due_date as string | null) ?? null })
+    }
+  }
+
+  const atendimentos = (data ?? []).map((a) => {
+    const cli = umCliente((a as { clientes?: unknown }).clientes)
+    return {
+      id:                    a.id,
+      numero:                a.numero,
+      titulo:                a.titulo,
+      estagio:               a.estagio,
+      status:                a.status,
+      etiquetas:             a.etiquetas ?? [],
+      created_at:            a.created_at,
+      encerrado_em:          a.encerrado_em,
+      cliente:               cli ? { id: cli.id, nome: cli.nome, pre_cadastro: cli.status_cadastro === 'pre_cadastro' } : null,
+      telefoneCliente:       cli?.telefone ?? null,
+      statusCadastroCliente: cli?.status_cadastro ?? null,
+      responsavel:           umUsuario((a as { responsavel?: unknown }).responsavel),
+      honorariosValor:       somaHonorarios((a as { contratos_honorarios?: unknown }).contratos_honorarios),
+      proximoPasso:          proximoPasso.get(a.id as string) ?? null,
+    }
+  })
 
   return NextResponse.json({
     atendimentos,
