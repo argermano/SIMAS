@@ -4,6 +4,10 @@ import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { encryptField, decryptTranscricaoFields } from '@/lib/encryption'
+import { etiquetasField } from '@/lib/atendimentos'
+import type { createClient } from '@/lib/supabase/server'
+
+type SupabaseServer = Awaited<ReturnType<typeof createClient>>
 
 // GET /api/atendimentos/[id] — retorna atendimento com documentos
 export async function GET(
@@ -42,12 +46,20 @@ export async function GET(
 const schemaUpdate = z.object({
   transcricao_editada:          z.string().optional(),
   pedidos_especificos:          z.string().optional(),
-  status:                       z.enum(['caso_novo', 'peca_gerada', 'finalizado']).optional(),
+  // 'finalizado' NÃO entra aqui: o encerramento é fonte única (status + encerrado_em)
+  // e só acontece pela ação 'encerrar' — evita status='finalizado' com encerrado_em=null.
+  status:                       z.enum(['caso_novo', 'peca_gerada']).optional(),
   modo_input:                   z.enum(['audio', 'texto']).optional(),
   tipo_servico:                 z.enum(['administrativo', 'judicial']).nullable().optional(),
   tipo_processo:                z.string().nullable().optional(),
   consentimento_gravacao:       z.boolean().optional(),
   consentimento_confirmado_em:  z.string().optional(), // ISO 8601
+  // Primeiro atendimento (056): organização leve.
+  titulo:                       z.string().trim().max(200).nullable().optional(),
+  etiquetas:                    etiquetasField.optional(),
+  // Transições de ciclo de vida são explícitas (não via `status`/`estagio` crus)
+  // para centralizar as validações (não encerrar já-encerrado; estágio one-way).
+  acao:                         z.enum(['encerrar', 'reabrir', 'transformar_caso']).optional(),
 }).partial()
 
 // PATCH /api/atendimentos/[id] — atualiza atendimento
@@ -68,10 +80,35 @@ export async function PATCH(
     return jsonError('Dados inválidos', 400, resultado.error.flatten())
   }
 
-  // Cifra a transcrição editada em repouso (dado pessoal/sensível).
-  const dadosUpdate = { ...resultado.data }
-  if (typeof dadosUpdate.transcricao_editada === 'string') {
-    dadosUpdate.transcricao_editada = encryptField(dadosUpdate.transcricao_editada)
+  const dados = resultado.data
+
+  // ── Transições de ciclo de vida (encerrar/reabrir/transformar_caso) ─────────
+  // Processadas de forma EXCLUSIVA: quando há `acao`, ignoramos os demais campos
+  // e aplicamos só a transição (evita estados inconsistentes num mesmo PATCH).
+  if (dados.acao) {
+    // Transições de ciclo de vida são consequentes (transformar_caso é one-way):
+    // exigem o mesmo papel do DELETE (admin/advogado), não só autenticação.
+    const semPermissao = requireRole(usuario, ['admin', 'advogado'])
+    if (semPermissao) return semPermissao
+    return await aplicarAcao(supabase, usuario, id, dados.acao)
+  }
+
+  // ── Atualização de campos comuns ────────────────────────────────────────────
+  const dadosUpdate: Record<string, unknown> = {}
+  if (dados.transcricao_editada !== undefined)
+    dadosUpdate.transcricao_editada = encryptField(dados.transcricao_editada) // cifra em repouso (dado sensível)
+  if (dados.pedidos_especificos !== undefined) dadosUpdate.pedidos_especificos = dados.pedidos_especificos
+  if (dados.status !== undefined)              dadosUpdate.status              = dados.status
+  if (dados.modo_input !== undefined)          dadosUpdate.modo_input          = dados.modo_input
+  if (dados.tipo_servico !== undefined)        dadosUpdate.tipo_servico        = dados.tipo_servico
+  if (dados.tipo_processo !== undefined)       dadosUpdate.tipo_processo       = dados.tipo_processo
+  if (dados.consentimento_gravacao !== undefined) dadosUpdate.consentimento_gravacao = dados.consentimento_gravacao
+  if (dados.consentimento_confirmado_em !== undefined) dadosUpdate.consentimento_confirmado_em = dados.consentimento_confirmado_em
+  if (dados.titulo !== undefined)              dadosUpdate.titulo              = dados.titulo || null
+  if (dados.etiquetas !== undefined)           dadosUpdate.etiquetas           = dados.etiquetas
+
+  if (Object.keys(dadosUpdate).length === 0) {
+    return jsonError('Nada para atualizar', 400)
   }
 
   const { data: atendimento, error } = await supabase
@@ -79,12 +116,76 @@ export async function PATCH(
     .update(dadosUpdate)
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .select('id, status')
     .single()
 
   if (error || !atendimento) {
     return jsonError('Atendimento não encontrado', 404)
   }
+
+  return NextResponse.json({ atendimento })
+}
+
+type Acao = 'encerrar' | 'reabrir' | 'transformar_caso'
+
+// Executa uma transição de ciclo de vida com as validações do contrato.
+async function aplicarAcao(
+  supabase: SupabaseServer,
+  usuario: { id: string; tenant_id: string },
+  id: string,
+  acao: Acao,
+): Promise<NextResponse> {
+  const { data: atual } = await supabase
+    .from('atendimentos')
+    .select('id, status, estagio, encerrado_em')
+    .eq('id', id)
+    .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
+    .single()
+
+  if (!atual) return jsonError('Atendimento não encontrado', 404)
+
+  let update: Record<string, unknown>
+  let action: string
+
+  if (acao === 'encerrar') {
+    if (atual.encerrado_em) return jsonError('Atendimento já encerrado', 409)
+    update = { status: 'finalizado', encerrado_em: new Date().toISOString() }
+    action = 'atendimento.encerrado'
+  } else if (acao === 'reabrir') {
+    if (!atual.encerrado_em) return jsonError('Atendimento não está encerrado', 409)
+    // Volta ao status coerente: 'peca_gerada' se já existe peça, senão 'caso_novo'.
+    const { count } = await supabase
+      .from('pecas')
+      .select('id', { count: 'exact', head: true })
+      .eq('atendimento_id', id)
+    update = { status: (count ?? 0) > 0 ? 'peca_gerada' : 'caso_novo', encerrado_em: null }
+    action = 'atendimento.reaberto'
+  } else {
+    // transformar_caso — one-way: só de 'atendimento' para 'caso'.
+    if (atual.estagio !== 'atendimento') return jsonError('Só é possível transformar um atendimento em caso', 409)
+    update = { estagio: 'caso' }
+    action = 'atendimento.transformado_caso'
+  }
+
+  const { data: atendimento, error } = await supabase
+    .from('atendimentos')
+    .update(update)
+    .eq('id', id)
+    .eq('tenant_id', usuario.tenant_id)
+    .select('id, status, estagio, encerrado_em')
+    .single()
+
+  if (error || !atendimento) return jsonError('Atendimento não encontrado', 404)
+
+  await logAudit({
+    tenantId: usuario.tenant_id,
+    userId: usuario.id,
+    action,
+    resourceType: 'atendimento',
+    resourceId: id,
+  })
 
   return NextResponse.json({ atendimento })
 }

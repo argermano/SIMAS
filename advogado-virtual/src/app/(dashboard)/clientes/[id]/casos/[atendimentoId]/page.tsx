@@ -7,13 +7,17 @@ import { Badge } from '@/components/ui/badge'
 import { PecasPorArea } from '@/components/atendimento/PecasPorArea'
 import { OutraPecaChip } from '@/components/atendimento/OutraPecaChip'
 import { CapaProcesso, type DadosProcesso } from '@/components/atendimento/CapaProcesso'
+import { RegistrosAtendimento, type RegistroItem } from '@/components/atendimento/RegistrosAtendimento'
+import { AcoesAtendimento } from '@/components/atendimento/AcoesAtendimento'
+import { TarefasDoCaso, type TarefaDoCaso } from '@/components/atendimento/TarefasDoCaso'
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
+import { decryptTranscricaoFields } from '@/lib/encryption'
 import { AREAS } from '@/lib/constants/areas'
 import { MODELOS_PRONTOS, TIPOS_PECA } from '@/lib/constants/tipos-peca'
-import { formatarDataHora, formatarDataRelativa } from '@/lib/utils'
+import { formatarData, formatarDataHora, formatarDataRelativa } from '@/lib/utils'
 import {
   Brain, ChevronLeft, ChevronDown, ScrollText, FilePlus, FileText, FileSignature,
-  AlertTriangle, Clock, CheckCircle, ArrowRight, History,
+  AlertTriangle, Clock, CheckCircle, ArrowRight, History, Briefcase, Tag, Lock,
 } from 'lucide-react'
 import type { ResultadoAnaliseGeral } from '@/app/api/ia/analise-geral/route'
 
@@ -48,14 +52,14 @@ export default async function CasoPage({
 
   const { data: usuario } = await supabase
     .from('users')
-    .select('nome, tenant_id')
+    .select('id, nome, tenant_id')
     .eq('auth_user_id', user.id)
     .single()
   if (!usuario) redirect('/login')
 
   const { data: at } = await supabase
     .from('atendimentos')
-    .select('id, area, status, created_at, numero_processo, dados_processo, clientes(id, nome), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at), documentos(id, file_name, tipo, created_at)')
+    .select('id, area, status, created_at, numero_processo, dados_processo, titulo, etiquetas, estagio, encerrado_em, transcricao_raw, transcricao_editada, clientes(id, nome), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at), documentos(id, file_name, tipo, created_at)')
     .eq('id', atendimentoId)
     .eq('cliente_id', id)
     .eq('tenant_id', usuario.tenant_id)
@@ -65,10 +69,51 @@ export default async function CasoPage({
 
   const { data: contratos } = await supabase
     .from('contratos_honorarios')
-    .select('id, titulo, status, area, created_at')
+    .select('id, titulo, status, area, valor_fixo, percentual_exito, created_at')
     .eq('atendimento_id', atendimentoId)
     .eq('tenant_id', usuario.tenant_id)
     .order('created_at', { ascending: false })
+
+  // Diário do atendimento (056) — busca server-side p/ hidratar a timeline sem flicker.
+  type PessoaEmbed = { id: string; nome: string | null }
+  const um = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null))
+  const { data: registrosRaw } = await supabase
+    .from('atendimento_registros')
+    .select('id, texto, created_at, user_id, users(id, nome)')
+    .eq('atendimento_id', atendimentoId)
+    .eq('tenant_id', usuario.tenant_id)
+    .order('created_at', { ascending: true })
+  const registros: RegistroItem[] = ((registrosRaw ?? []) as Array<{ id: string; texto: string; created_at: string; user_id: string | null; users: PessoaEmbed | PessoaEmbed[] | null }>).map((r) => ({
+    id: r.id,
+    texto: r.texto,
+    created_at: r.created_at,
+    autor: um(r.users) ?? (r.user_id ? { id: r.user_id, nome: null } : null),
+  }))
+
+  // Tarefas do caso: vínculo 054 = tasks.process_id → atendimentos(id).
+  const { data: tarefasRaw } = await supabase
+    .from('tasks')
+    .select('id, description, due_date, priority, completed_at, assignee:users!tasks_assignee_id_fkey(id, nome), coluna:kanban_columns!tasks_kanban_column_id_fkey(id, name)')
+    .eq('process_id', atendimentoId)
+    .eq('tenant_id', usuario.tenant_id)
+  const tarefas: TarefaDoCaso[] = ((tarefasRaw ?? []) as Array<{ id: string; description: string; due_date: string | null; priority: string; completed_at: string | null; assignee: PessoaEmbed | PessoaEmbed[] | null; coluna: { id: string; name: string } | { id: string; name: string }[] | null }>).map((t) => ({
+    id: t.id,
+    description: t.description,
+    due_date: t.due_date,
+    priority: t.priority,
+    completed_at: t.completed_at,
+    assignee: um(t.assignee),
+    coluna: um(t.coluna),
+  }))
+
+  // Equipe (p/ o TaskFormModal pré-vinculado a este caso).
+  const { data: membros } = await supabase
+    .from('users')
+    .select('id, nome')
+    .eq('tenant_id', usuario.tenant_id)
+    .eq('status', 'ativo')
+    .order('nome')
+  const teamMembers = (membros ?? []) as Array<{ id: string; nome: string }>
 
   const cliente = at.clientes as unknown as { id: string; nome: string } | null
   const analiseRow = (at.analises as Array<{ id: string; plano_a: ResultadoAnaliseGeral; created_at: string }> | null)?.[0] ?? null
@@ -78,6 +123,18 @@ export default async function CasoPage({
   const documentos = (at.documentos ?? []) as Array<{ id: string; file_name: string; tipo: string; created_at: string }>
   const status = at.status as string
   const badge = BADGE_STATUS[status] ?? BADGE_STATUS.caso_novo
+
+  // Cabeçalho leve (056): título com fallback, estágio, encerramento e etiquetas.
+  const estagio = ((at as { estagio?: string }).estagio ?? 'caso') as 'atendimento' | 'caso'
+  const encerradoEm = (at as { encerrado_em?: string | null }).encerrado_em ?? null
+  const etiquetas = ((at as { etiquetas?: string[] | null }).etiquetas ?? []) as string[]
+  const tituloCaso = ((at as { titulo?: string | null }).titulo ?? '').trim()
+    || areaMeta(at.area)?.nome
+    || (estagio === 'atendimento' ? 'Atendimento' : 'Caso')
+  // Relato inicial da timeline — decifrado no servidor (nunca no client).
+  const atDec = decryptTranscricaoFields(at as Record<string, unknown>)
+  const relatoInicial =
+    ((atDec.transcricao_editada as string | null)?.trim() || (atDec.transcricao_raw as string | null)?.trim()) || null
 
   // Linha do tempo do caso — andamento derivado dos eventos (estudo, peças, contratos, documentos)
   type Evento = { quando: string; tipo: 'estudo' | 'peca' | 'contrato' | 'documento'; titulo: string; href?: string }
@@ -121,25 +178,66 @@ export default async function CasoPage({
   return (
     <>
       <Header
-        titulo="Caso"
+        titulo={tituloCaso}
         subtitulo={`Cliente: ${cliente?.nome ?? '—'} · ${badge.label} · ${formatarDataHora(at.created_at)}`}
         nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
         acoes={
-          <Link href={`/clientes/${id}`} className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
-            <ChevronLeft className="h-4 w-4" />
-            Cliente
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href={`/clientes/${id}`} className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+              <ChevronLeft className="h-4 w-4" />
+              Cliente
+            </Link>
+            <AcoesAtendimento
+              atendimentoId={atendimentoId}
+              clienteId={id}
+              estagio={estagio}
+              encerrado={!!encerradoEm}
+            />
+          </div>
         }
       />
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-3xl space-y-5">
 
+          {/* Cabeçalho leve: estágio, encerramento e etiquetas */}
+          <div className="flex flex-wrap items-center gap-2">
+            {estagio === 'atendimento' ? (
+              <Badge variant="default" className="gap-1 px-2 py-0.5 text-xs">
+                <Briefcase className="h-3.5 w-3.5" /> Atendimento
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
+                <Briefcase className="h-3.5 w-3.5" /> Caso
+              </Badge>
+            )}
+            {encerradoEm ? (
+              <Badge variant="success" className="gap-1 px-2 py-0.5 text-xs">
+                <Lock className="h-3.5 w-3.5" /> Encerrado em {formatarData(encerradoEm)}
+              </Badge>
+            ) : (
+              <Badge variant={badge.variant} className="px-2 py-0.5 text-xs">{badge.label}</Badge>
+            )}
+            {etiquetas.map((et) => (
+              <Badge key={et} variant="secondary" className="gap-1 px-2 py-0.5 text-xs">
+                <Tag className="h-3 w-3" /> {et}
+              </Badge>
+            ))}
+          </div>
+
           {/* Capa do processo (nº CNJ + DataJud) */}
           <CapaProcesso
             atendimentoId={atendimentoId}
             numeroInicial={(at as { numero_processo?: string | null }).numero_processo ?? null}
             dadosIniciais={(at as { dados_processo?: DadosProcesso | null }).dados_processo ?? null}
+          />
+
+          {/* Registros do atendimento (diário) — 1ª seção do corpo, antes do Estudo */}
+          <RegistrosAtendimento
+            atendimentoId={atendimentoId}
+            registrosIniciais={registros}
+            relatoInicial={relatoInicial}
+            relatoData={at.created_at as string}
           />
 
           {/* Estudo de Caso */}
@@ -290,25 +388,54 @@ export default async function CasoPage({
             </Card>
           )}
 
-          {/* Contratos */}
-          {contratos && contratos.length > 0 && (
+          {/* Tarefas do caso (vínculo 054: tasks.process_id → este atendimento) */}
+          <TarefasDoCaso
+            atendimentoId={atendimentoId}
+            vinculoLabel={tituloCaso}
+            vinculoSublabel={cliente?.nome ?? null}
+            teamMembers={teamMembers}
+            currentUserId={usuario.id}
+            currentUserName={usuario.nome ?? user.email ?? 'Você'}
+            tarefas={tarefas}
+          />
+
+          {/* Honorários (contratos deste caso + atalho p/ o financeiro do cliente) */}
+          {cliente && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <FileSignature className="h-5 w-5 text-blue-500" />
-                  Contratos
+                  Honorários
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-1.5">
-                {contratos.map((c) => (
-                  <Link key={c.id} href={`/contratos/${c.id}`} className="flex items-center justify-between rounded-lg border bg-card px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors group">
-                    <span className="flex items-center gap-2 min-w-0">
-                      <FileSignature className="h-4 w-4 text-blue-500 shrink-0" />
-                      <span className="truncate font-medium text-foreground">{c.titulo}</span>
-                    </span>
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary shrink-0" />
-                  </Link>
-                ))}
+                {(contratos ?? []).length > 0 ? (
+                  (contratos as Array<{ id: string; titulo: string; status: string; valor_fixo: number | null; percentual_exito: number | null }>).map((c) => {
+                    const valor = [
+                      c.valor_fixo != null ? `R$ ${Number(c.valor_fixo).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+                      c.percentual_exito != null ? `${Number(c.percentual_exito)}% de êxito` : null,
+                    ].filter(Boolean).join(' + ')
+                    const aprovado = c.status === 'aprovado' || c.status === 'exportado'
+                    const statusLabel = c.status === 'aprovado' ? 'Aprovado' : c.status === 'exportado' ? 'Exportado' : c.status === 'em_revisao' ? 'Em revisão' : 'Rascunho'
+                    return (
+                      <Link key={c.id} href={`/contratos/${c.id}`} className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm hover:bg-muted/50 transition-colors group">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <FileSignature className="h-4 w-4 shrink-0 text-blue-500" />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium text-foreground">{c.titulo}</span>
+                            {valor && <span className="block text-xs text-muted-foreground">{valor}</span>}
+                          </span>
+                        </span>
+                        <Badge variant={aprovado ? 'success' : 'secondary'} className="shrink-0 px-1.5 py-0 text-[10px]">{statusLabel}</Badge>
+                      </Link>
+                    )
+                  })
+                ) : (
+                  <p className="text-sm italic text-muted-foreground">Nenhum contrato de honorários neste caso.</p>
+                )}
+                <Link href={`/financeiro?clienteId=${cliente.id}`} className="inline-flex items-center gap-1 pt-1 text-sm font-semibold text-primary hover:underline">
+                  Ver financeiro do cliente <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
               </CardContent>
             </Card>
           )}

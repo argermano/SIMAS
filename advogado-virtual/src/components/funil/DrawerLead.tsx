@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { LABELS_AREA } from '@/types'
 import { LABELS_ETAPA, ORDEM_ETAPAS, type EtapaFunil } from '@/lib/funil/regras'
 import type { LeadData } from './tipos'
 import {
   X, MessageCircle, Calendar, Video, User, UserCheck, AlertCircle,
-  FileSignature, FileText, ScrollText, ExternalLink,
+  FileSignature, FileText, ScrollText, ExternalLink, ClipboardList,
 } from 'lucide-react'
 
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
@@ -23,6 +24,8 @@ interface Detalhes {
 
 // ≥ proposta_enviada → pode gerar contrato de honorários.
 const IDX_PROPOSTA = ORDEM_ETAPAS.indexOf('proposta_enviada')
+// ≥ consulta_realizada → já houve conversa; atalho p/ abrir o atendimento (pré-peça).
+const IDX_CONSULTA_REALIZADA = ORDEM_ETAPAS.indexOf('consulta_realizada')
 
 export function DrawerLead({
   lead, chatwootUrl, onFechar,
@@ -33,8 +36,10 @@ export function DrawerLead({
   onFechar: () => void
   onMudou: () => void
 }) {
+  const router = useRouter()
   const [det, setDet] = useState<Detalhes | null>(null)
   const [carregando, setCarregando] = useState(true)
+  const [abrindoAtendimento, setAbrindoAtendimento] = useState(false)
 
   useEffect(() => {
     let vivo = true
@@ -56,6 +61,37 @@ export function DrawerLead({
   const podeGerarContrato = ORDEM_ETAPAS.indexOf(lead.etapa) >= IDX_PROPOSTA
   const podeGerarProcuracao = lead.etapa === 'contrato_fechado'
   const areaSlug = lead.area || 'civel'
+  // Atalho (não obrigatório): a partir da consulta realizada, abrir o atendimento.
+  const podeAbrirAtendimento = clienteId != null && ORDEM_ETAPAS.indexOf(lead.etapa) >= IDX_CONSULTA_REALIZADA
+
+  // Cria um atendimento (estágio "atendimento") a partir do lead e navega até ele.
+  // Sem dedup rígido — é só uma conveniência; a criação repetida não quebra nada.
+  async function abrirAtendimento() {
+    if (!clienteId || abrindoAtendimento) return
+    setAbrindoAtendimento(true)
+    try {
+      const partes = [`Aberto pelo funil comercial (etapa: ${LABELS_ETAPA[lead.etapa]}).`]
+      if (lead.consulta_data) {
+        partes.push(`Consulta em ${dataHora(lead.consulta_data)}${lead.consulta_formato ? ` · ${lead.consulta_formato}` : ''}.`)
+      }
+      const res = await fetch('/api/atendimentos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cliente_id: clienteId,
+          area: areaSlug,
+          titulo: `Consulta — ${area ?? 'atendimento'}`,
+          estagio: 'atendimento',
+          primeiro_registro: partes.join(' '),
+        }),
+      })
+      if (!res.ok) throw new Error('falha ao abrir atendimento')
+      const { id: atendimentoId } = await res.json()
+      router.push(`/clientes/${clienteId}/casos/${atendimentoId}`)
+    } catch {
+      setAbrindoAtendimento(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -103,6 +139,22 @@ export function DrawerLead({
                 className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
                 <ExternalLink className="h-3.5 w-3.5" /> {cadastroCompleto ? 'Abrir cadastro' : 'Completar cadastro'}
               </Link>
+            </section>
+          )}
+
+          {/* Atendimento — atalho para abrir o atendimento (pré-peça) a partir do lead */}
+          {podeAbrirAtendimento && (
+            <section className="space-y-2 border-t border-border/60 pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Atendimento</p>
+              <button
+                type="button"
+                onClick={abrirAtendimento}
+                disabled={abrindoAtendimento}
+                className="flex w-full items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-60"
+              >
+                <ClipboardList className="h-4 w-4 text-primary" />
+                {abrindoAtendimento ? 'Abrindo…' : 'Abrir atendimento'}
+              </button>
             </section>
           )}
 

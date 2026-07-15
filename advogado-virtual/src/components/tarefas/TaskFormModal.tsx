@@ -34,6 +34,8 @@ interface TaskFormModalProps {
   defaultColumnId?:   string
   /** Se presente, cria a tarefa como subtarefa (filha) desta tarefa-mãe. */
   parentTaskId?:      string
+  /** Pré-vincula a nova tarefa a um cliente/caso/processo (ex.: página do caso). */
+  defaultVinculo?:    VinculoSelecionado | null
 }
 
 const PRIORITY_OPTIONS = [
@@ -46,7 +48,7 @@ const PRIORITY_OPTIONS = [
 export function TaskFormModal({
   open, onClose, onSaved,
   currentUserId, currentUserName, teamMembers,
-  defaultBoardId, defaultColumnId, parentTaskId,
+  defaultBoardId, defaultColumnId, parentTaskId, defaultVinculo,
 }: TaskFormModalProps) {
   const { success, error: toastError } = useToast()
 
@@ -62,7 +64,7 @@ export function TaskFormModal({
   const [showNewList,   setShowNewList]    = useState(false)
   const [selectedTags,  setSelectedTags]   = useState<string[]>([])
   const [showTags,      setShowTags]       = useState(false)
-  const [vinculo,       setVinculo]        = useState<VinculoSelecionado | null>(null)
+  const [vinculo,       setVinculo]        = useState<VinculoSelecionado | null>(defaultVinculo ?? null)
   const [saving,        setSaving]         = useState(false)
   const [savingList,    setSavingList]     = useState(false)
 
@@ -177,7 +179,7 @@ export function TaskFormModal({
     setSelectedTags([])
     setShowTags(false)
     setExtraAssignees([])
-    setVinculo(null)
+    setVinculo(defaultVinculo ?? null) // mantém o pré-vínculo ao reabrir (página do caso)
     onClose()
   }
 

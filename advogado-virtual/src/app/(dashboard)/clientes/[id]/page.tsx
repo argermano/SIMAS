@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { ClienteAcoesClient } from './ClienteAcoesClient'
 import { ProcessosCliente } from '@/components/processos/ProcessosCliente'
 import { BotaoExcluirAtendimento } from '@/components/atendimento/BotaoExcluirAtendimento'
+import { NovoAtendimentoButton } from '@/components/atendimento/NovoAtendimentoModal'
 import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
 import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
@@ -21,7 +22,7 @@ import {
   Calendar, User, StickyNote, ChevronRight, ChevronLeft,
   Brain, ScrollText, Paperclip, Download,
   CheckCircle2, Clock, Edit3, FileCheck, Briefcase, Heart,
-  FileSignature,
+  FileSignature, Tag,
 } from 'lucide-react'
 import { formatarData, formatarDataRelativa, formatarDataHora, mascaraCPF, cn } from '@/lib/utils'
 import type { AtendimentoStatus } from '@/types'
@@ -44,7 +45,7 @@ export async function generateMetadata({
 const BADGE_STATUS: Record<AtendimentoStatus, { variant: 'success' | 'warning' | 'secondary'; label: string }> = {
   caso_novo:   { variant: 'warning',   label: 'Caso Novo'   },
   peca_gerada: { variant: 'secondary', label: 'Peça Gerada' },
-  finalizado:  { variant: 'success',   label: 'Finalizado'  },
+  finalizado:  { variant: 'success',   label: 'Encerrado'   },
 }
 
 const BADGE_PECA_STATUS: Record<string, { variant: 'success' | 'warning' | 'secondary' | 'default'; label: string }> = {
@@ -137,8 +138,9 @@ export default async function DossieClientePage({
 
   const { data: atendimentos } = await supabase
     .from('atendimentos')
-    .select('id, status, area, tipo_peca_origem, created_at, pedidos_especificos, modo_input, audio_url')
+    .select('id, status, area, tipo_peca_origem, created_at, pedidos_especificos, modo_input, audio_url, titulo, etiquetas, estagio')
     .eq('cliente_id', id)
+    .is('deleted_at', null) // soft-delete (Excluir) some da lista — igual à GET /api/atendimentos e à página do caso
     .order('created_at', { ascending: false })
 
   const atendimentoIds = (atendimentos ?? []).map(a => a.id)
@@ -230,12 +232,15 @@ export default async function DossieClientePage({
               Clientes
             </Link>
             <ClienteAcoesClient clienteId={id} clienteNome={cliente.nome} />
-            <Button asChild size="md">
+            {/* Peça-first continua existindo, agora como ação secundária */}
+            <Button asChild variant="secondary" size="md">
               <Link href={`/clientes/${id}/atendimentos/novo`}>
-                <Plus className="h-4 w-4" />
-                Novo Atendimento
+                <ScrollText className="h-4 w-4" />
+                Gerar peça
               </Link>
             </Button>
+            {/* Ação primária: nascimento leve (registra a conversa antes da peça) */}
+            <NovoAtendimentoButton clienteId={id} clienteNome={cliente.nome} />
           </div>
         }
         nomeUsuario={usuario.nome}
@@ -301,7 +306,7 @@ export default async function DossieClientePage({
           {/* ── Barra de resumo + filtros ── */}
           {totalAtendimentos > 0 && (
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-              <ResumoCard href={`/clientes/${id}${filtro === 'atendimentos' ? '' : '?filtro=atendimentos'}`} icone={<FileText className="h-5 w-5" />} label="Casos" valor={totalAtendimentos} cor="primary" ativo={filtro === 'atendimentos'} />
+              <ResumoCard href={`/clientes/${id}${filtro === 'atendimentos' ? '' : '?filtro=atendimentos'}`} icone={<FileText className="h-5 w-5" />} label="Atendimentos" valor={totalAtendimentos} cor="primary" ativo={filtro === 'atendimentos'} />
               <ResumoCard href={`/clientes/${id}${filtro === 'analises'     ? '' : '?filtro=analises'}`}     icone={<Brain className="h-5 w-5" />}         label="Análises IA"    valor={totalAnalises}     cor="violet"  ativo={filtro === 'analises'}     />
               <ResumoCard href={`/clientes/${id}${filtro === 'pecas'        ? '' : '?filtro=pecas'}`}        icone={<ScrollText className="h-5 w-5" />}    label="Peças geradas"  valor={totalPecas}        cor="emerald" ativo={filtro === 'pecas'}        />
               <ResumoCard href={`/clientes/${id}${filtro === 'documentos'   ? '' : '?filtro=documentos'}`}   icone={<Paperclip className="h-5 w-5" />}     label="Documentos"     valor={totalDocumentos}   cor="amber"   ativo={filtro === 'documentos'}   />
@@ -315,7 +320,7 @@ export default async function DossieClientePage({
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
                   <FileText className="h-5 w-5 text-muted-foreground" />
-                  {filtro === 'atendimentos' ? 'Casos' :
+                  {filtro === 'atendimentos' ? 'Atendimentos' :
                    filtro === 'analises'     ? 'Análises IA' :
                    filtro === 'pecas'        ? 'Peças Geradas' : 'Dossiê Completo'}
                 </h2>
@@ -373,18 +378,37 @@ export default async function DossieClientePage({
                                   <div className="flex items-center justify-between gap-3">
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-base font-semibold text-foreground">{LABELS_AREA[at.area] ?? at.area}</span>
+                                        {/* Atendimento leve mostra o Assunto; caso mantém o rótulo da área */}
+                                        <span className="text-base font-semibold text-foreground">{at.titulo || LABELS_AREA[at.area] || at.area}</span>
                                         {at.tipo_peca_origem && (
                                           <span className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5">
                                             {TIPOS_PECA[at.tipo_peca_origem]?.nome ?? at.tipo_peca_origem}
                                           </span>
                                         )}
-                                        <Badge variant={badge.variant} className="text-xs px-2 py-0.5">{badge.label}</Badge>
+                                        {at.estagio === 'atendimento' ? (
+                                          <>
+                                            <Badge variant="default" className="text-xs px-2 py-0.5">Atendimento</Badge>
+                                            {status === 'finalizado' && (
+                                              <Badge variant="success" className="text-xs px-2 py-0.5">Encerrado</Badge>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <Badge variant={badge.variant} className="text-xs px-2 py-0.5">{badge.label}</Badge>
+                                        )}
                                       </div>
                                       <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                                         <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{formatarDataHora(at.created_at)}</span>
                                         {numDocs > 0 && <span className="flex items-center gap-1"><Paperclip className="h-3 w-3" />{numDocs} doc{numDocs > 1 ? 's' : ''}</span>}
                                       </div>
+                                      {Array.isArray(at.etiquetas) && at.etiquetas.length > 0 && (
+                                        <div className="mt-1.5 flex flex-wrap gap-1">
+                                          {at.etiquetas.map((tag: string) => (
+                                            <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                                              <Tag className="h-3 w-3" />{tag}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
                                       {at.pedidos_especificos && <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2">{at.pedidos_especificos}</p>}
                                       {at.audio_url && <PlayerAudio atendimentoId={at.id} />}
                                     </div>

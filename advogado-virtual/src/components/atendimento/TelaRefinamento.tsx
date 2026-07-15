@@ -166,12 +166,13 @@ export function TelaRefinamento({
   async function gerarRefinamento() {
     if (!atendimentoId || !pecaOriginal.trim()) return
 
-    // Salvar transcrição editada (a peça original como referência)
+    // Registra as instruções do refino. NÃO tocar em transcricao_editada: ela guarda
+    // o RELATO do cliente (lida como relato inicial na timeline/ficha e como fonte pelas
+    // rotas de IA); o refino usa `instrucoes`/`pecaOriginal` do corpo, não este campo.
     await fetch(`/api/atendimentos/${atendimentoId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        transcricao_editada: `[REFINAMENTO] Instruções: ${instrucoes || '(nenhuma)'}`,
         pedidos_especificos: instrucoes,
       }),
     })
