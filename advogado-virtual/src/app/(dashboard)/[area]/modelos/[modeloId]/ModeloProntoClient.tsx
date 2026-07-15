@@ -176,10 +176,13 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
     }
   }
 
-  // Anexa o documento (markdown do editor) a "Documentos do Caso"
-  async function salvarNoCaso(conteudo: string) {
+  // Anexa o documento (markdown do editor) a "Documentos do Caso" — chamado
+  // pelo botão Salvar E pelo AUTOSAVE do editor (silencioso: sem toasts, senão
+  // cada alteração viraria notificação). O anexo grava atendimento_id e
+  // cliente_id: o documento aparece no caso e no dossiê do cliente.
+  async function salvarNoCaso(conteudo: string, opts?: { silencioso?: boolean }) {
     if (!atendimentoId) {
-      toastError('Sem caso vinculado', 'Abra a geração a partir de um atendimento para anexar ao caso.')
+      if (!opts?.silencioso) toastError('Sem caso vinculado', 'Abra a geração a partir de um atendimento para anexar ao caso.')
       return
     }
     setSalvandoCaso(true)
@@ -191,13 +194,13 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
-        toastError('Erro', d.error ?? 'Falha ao anexar ao caso')
+        if (!opts?.silencioso) toastError('Erro', d.error ?? 'Falha ao anexar ao caso')
         return
       }
       if (d.documento?.id) setDocumentoIdSalvo(d.documento.id)
-      success('Anexado ao caso!', 'O documento está em Documentos do Caso.')
+      if (!opts?.silencioso) success('Anexado ao caso!', 'O documento está em Documentos do Caso e no dossiê do cliente.')
     } catch {
-      toastError('Erro', 'Falha de rede')
+      if (!opts?.silencioso) toastError('Erro', 'Falha de rede')
     } finally {
       setSalvandoCaso(false)
     }
@@ -210,7 +213,14 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
       <EditorDocumentoPronto
         titulo={tipoNome}
         conteudo={documentoGerado}
-        onVoltar={() => { if (clienteIdInicial) router.push(`/clientes/${clienteIdInicial}`); else setModoEditor(false) }}
+        onVoltar={() => {
+          // Round-trip (pedido do dono): quem veio do atendimento VOLTA pro
+          // atendimento — o editor descarrega o autosave antes de chamar aqui,
+          // então o documento já está anexado ao sair.
+          if (atendimentoId && clienteIdInicial) router.push(`/clientes/${clienteIdInicial}/casos/${atendimentoId}`)
+          else if (clienteIdInicial) router.push(`/clientes/${clienteIdInicial}`)
+          else setModoEditor(false)
+        }}
         onSalvar={atendimentoId ? salvarNoCaso : undefined}
         salvando={salvandoCaso}
         exportOpts={
