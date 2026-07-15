@@ -170,6 +170,7 @@ export function CartaoContatoCliente({ clienteId, atendimentoId, nome, telefoneI
               aberto={modalWhatsApp}
               onFechar={() => setModalWhatsApp(false)}
               atendimentoId={atendimentoId}
+              clienteId={clienteId}
               clienteNome={nome}
               telefoneExibicao={exibirTelefone(telefone)}
             />
