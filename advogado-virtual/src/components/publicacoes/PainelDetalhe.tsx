@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { cn, formatarData } from '@/lib/utils'
+import { cn, formatarData, formatarDataRelativa } from '@/lib/utils'
 import {
   Ban,
   CheckCheck,
@@ -15,11 +15,15 @@ import {
   ClipboardPlus,
   ExternalLink,
   Gavel,
+  History,
   Info,
+  Link2,
+  RefreshCw,
   RotateCcw,
   User,
 } from 'lucide-react'
 import { PainelTratamento, type TratamentoPayload } from './PainelTratamento'
+import { VincularProcessoPublicacao } from './VincularProcessoPublicacao'
 import { PrioridadeBadge, StatusPill } from './Pills'
 import {
   prioridadeDaPublicacao,
@@ -82,32 +86,33 @@ export function PainelDetalhe({ id, teamMembers, partesFallback, modo, onFechar,
   const [modalDescarte, setModalDescarte] = useState(false)
   const [motivo, setMotivo] = useState('')
   const [criandoTarefa, setCriandoTarefa] = useState(false)
+  const [buscandoAndamentos, setBuscandoAndamentos] = useState(false)
+
+  // Busca (ou re-busca, após vincular) o detalhe. O painel remonta por `key={id}`
+  // no pai, então não há corrida entre ids diferentes na mesma instância.
+  const carregarDetalhe = useCallback(async () => {
+    setLoading(true)
+    try {
+      const r = await fetch(`/api/publicacoes/${id}`)
+      if (r.ok) {
+        const d = await r.json()
+        setPub((d.publicacao ?? null) as PublicacaoDetalhe | null)
+      } else {
+        setPub(null)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
 
   useEffect(() => {
-    // Ao trocar de publicação (fila), zera o estado de descarte/tarefa.
+    // Ao trocar de publicação (fila), zera o estado de descarte/tarefa/andamentos.
     setModalDescarte(false)
     setMotivo('')
     setCriandoTarefa(false)
-    let vivo = true
-    ;(async () => {
-      setLoading(true)
-      try {
-        const r = await fetch(`/api/publicacoes/${id}`)
-        if (!vivo) return
-        if (r.ok) {
-          const d = await r.json()
-          setPub((d.publicacao ?? null) as PublicacaoDetalhe | null)
-        } else {
-          setPub(null)
-        }
-      } finally {
-        if (vivo) setLoading(false)
-      }
-    })()
-    return () => {
-      vivo = false
-    }
-  }, [id])
+    setBuscandoAndamentos(false)
+    void carregarDetalhe()
+  }, [carregarDetalhe])
 
   // Escape fecha o overlay (mobile). No inline não há o que fechar.
   useEffect(() => {
@@ -200,8 +205,55 @@ export function PainelDetalhe({ id, teamMembers, partesFallback, modo, onFechar,
     }
   }
 
+  // Buscar andamentos: ressincroniza o processo VINCULADO com o DataJud (mesma
+  // rota do botão do dossiê — PATCH /api/processos/[id] {ressincronizar:true}).
+  // A rota exige só autenticação do tenant (a página já é restrita a admin/advogado),
+  // então não há papel a degradar. Atualiza o rótulo com a nova data de sync.
+  async function buscarAndamentos() {
+    const procId = pub?.processoVinculado?.id
+    if (!procId) return
+    setBuscandoAndamentos(true)
+    try {
+      const r = await fetch(`/api/processos/${procId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ressincronizar: true }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        toastError('Não foi possível buscar andamentos', d.error ?? 'Tente novamente.')
+        return
+      }
+      if (d.sincronizado === false) {
+        toastError('DataJud indisponível', 'A consulta pública oscilou. Tente novamente em alguns instantes.')
+        return
+      }
+      const n = d.novosMovimentos ?? 0
+      success('Andamentos atualizados', n > 0 ? `${n} nova(s) movimentação(ões).` : 'Nenhuma nova movimentação.')
+      const nova = (d.processo?.ultima_sincronizacao as string | null | undefined) ?? new Date().toISOString()
+      setPub((p) =>
+        p && p.processoVinculado
+          ? { ...p, processoVinculado: { ...p.processoVinculado, ultimaSincronizacao: nova } }
+          : p,
+      )
+    } finally {
+      setBuscandoAndamentos(false)
+    }
+  }
+
+  // Após vincular o processo órfão: re-busca o detalhe (traz processoVinculado) e
+  // pede ao pai para recarregar a lista + contadores (o card ganha o cliente).
+  async function aoVincular() {
+    await carregarDetalhe()
+    onReaberto()
+  }
+
   const destinatarios = pub ? normalizarDestinatarios(pub.destinatarios) : []
   const podeTratar = pub?.status === 'nova'
+  // Órfã vinculável: sem processo cadastrado e com CNJ de 20 dígitos (a única
+  // forma de o POST /processos casar). Se não tiver 20 dígitos, não oferecemos.
+  const ehOrfaVinculavel =
+    !!pub && !pub.processo_id && (pub.numero_processo?.replace(/\D/g, '').length === 20)
   const numero = pub?.numero_mascara || pub?.numero_processo || 'Sem número'
   const tipo = pub ? pub.tipo_documento || pub.tipo_comunicacao || 'Publicação' : ''
   const prioridade = pub
@@ -322,6 +374,45 @@ export function PainelDetalhe({ id, teamMembers, partesFallback, modo, onFechar,
                 <Gavel className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 Aviso ao cliente já gerado pela Fase 5 (acompanhamento processual).
               </p>
+            )}
+
+            {/* Andamentos do processo vinculado: rótulo da última sincronização +
+                botão para buscar agora no DataJud (mesma ação do dossiê). */}
+            {pv?.id && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3.5 py-3">
+                <div className="flex items-start gap-2 text-sm">
+                  <History className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">Andamentos do processo</p>
+                    <p className="text-xs text-muted-foreground">
+                      {pv.ultimaSincronizacao
+                        ? `Atualizados ${formatarDataRelativa(pv.ultimaSincronizacao)}`
+                        : 'Nunca sincronizados'}
+                    </p>
+                  </div>
+                </div>
+                <Button variant="secondary" size="sm" onClick={buscarAndamentos} loading={buscandoAndamentos}>
+                  <RefreshCw className="h-4 w-4" /> Buscar andamentos
+                </Button>
+              </div>
+            )}
+
+            {/* Publicação órfã: vincular a um cliente (importa movimentos + religa
+                as publicações irmãs do mesmo número ao processo/cliente). */}
+            {ehOrfaVinculavel && (
+              <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3.5">
+                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Link2 className="h-4 w-4 text-primary" aria-hidden /> Vincular a um cliente
+                </p>
+                <p className="mb-2.5 mt-1 text-xs text-muted-foreground">
+                  Este processo ainda não está vinculado. Ao vincular, importamos as movimentações
+                  e religamos as publicações deste número ao cliente.
+                </p>
+                <VincularProcessoPublicacao
+                  numeroProcesso={(pub.numero_processo ?? '').replace(/\D/g, '')}
+                  onVinculado={aoVincular}
+                />
+              </div>
             )}
 
             {/* Inteiro teor — texto plano seguro (NUNCA innerHTML) */}

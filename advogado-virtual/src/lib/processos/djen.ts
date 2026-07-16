@@ -603,11 +603,25 @@ async function processarTenantDjen(
     return { ...semMatch, casadas: 0 }
   }
 
+  // IDs distintos dos processos casados (reusado na marcação da fila e no dedup).
+  const procIds = [...new Set(casadasTenant.map((it) => porNumero.get(it.numero)!.id))]
+
+  // Fila durável de sync (059): TODA publicação casada marca o processo como
+  // pendente — publicação é sinal de atividade, então a passada pós-DJEN do cron
+  // traz os andamentos do DataJud mesmo que nenhum movimento NOVO entre agora (o
+  // dedup pode pular todos). Best-effort: erro loga e segue (nunca derruba a
+  // captura) e não consome o deadline do DJEN (é 1 UPDATE .in()).
+  try {
+    const { error: pendErr } = await admin.from('processos').update({ sync_pendente: true }).in('id', procIds)
+    if (pendErr) logger.error('djen.sync_pendente', { tenant: t.id }, pendErr)
+  } catch (err) {
+    logger.error('djen.sync_pendente.excecao', { tenant: t.id }, err as Error)
+  }
+
   // 3) Dedup contra o banco (raw_hash determinístico pelo id da comunicação).
   // Chunked (URL do PostgREST tem limite) e com erro TRATADO: dedup falho não
   // pode virar "tudo é novo" (regeraria resumos e travaria o cap p/ sempre).
   const comHash = casadasTenant.map((it) => ({ it, hash: hashMovimento({ djen: it.id }) }))
-  const procIds = [...new Set(casadasTenant.map((it) => porNumero.get(it.numero)!.id))]
   const jaTem = new Set<string>()
   let dedupFalhou = false
   const hashes = comHash.map((x) => x.hash)

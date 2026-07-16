@@ -6,16 +6,17 @@ import { sincronizarPublicacoesDjen } from '@/lib/processos/djen'
 import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
 import { rodarSentinela, type SentinelaResultado } from '@/lib/processos/sentinela'
 
-export const maxDuration = 60
+export const maxDuration = 300
 
 // GET /api/cron/funil-consultas — job diário (Vercel Cron). Marca as consultas
 // cujo horário já passou como "aguardando confirmação" (spec §5) — o humano
 // confirma presença (→ consulta realizada) ou não (→ novo lead). Fail-closed
 // por CRON_SECRET (a Vercel injeta o Bearer automaticamente).
 export async function GET(req: Request) {
-  // Âncora do orçamento de tempo do handler: os deadlines somados (30s sync +
-  // 18s DJEN + 8s sentinela) encostam no maxDuration=60 — a última etapa nunca
-  // pode passar de t0+55s ou a Vercel mata a função no meio.
+  // Âncora do orçamento de tempo do handler (maxDuration=300). Etapas sob o teto:
+  // 60s sync VIP + 60s DJEN + drain SÓ-pendentes (deadline clampado a t0+270s) + 8s
+  // sentinela (cap t0+290s) — cada tail respeita um teto relativo a t0, então o
+  // handler nunca é morto pela Vercel no meio.
   const t0 = Date.now()
   const secret = process.env.CRON_SECRET
   if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
@@ -62,11 +63,11 @@ export async function GET(req: Request) {
     logger.error('cron.processos_orfaos.falha', {}, e as Error)
   }
 
-  // Fase 5 — sincroniza processos de clientes VIP com o DataJud (isolado: uma
-  // falha aqui não derruba o job do funil). Orçamento repartido no maxDuration=60.
+  // Fase 5 — sincroniza processos de clientes VIP (e a fila de pendentes deixada
+  // por ciclos anteriores) com o DataJud. Isolado: falha aqui não derruba o funil.
   let processos: { processos: number; novosMovimentos: number; consultados: number } | null = null
   try {
-    processos = await sincronizarProcessos(admin, { deadlineMs: 30_000 })
+    processos = await sincronizarProcessos(admin, { deadlineMs: 60_000 })
   } catch (e) {
     logger.error('cron.processos_sync.falha', {}, e as Error)
   }
@@ -75,7 +76,7 @@ export async function GET(req: Request) {
   // Também isolado; 1ª execução por tenant = backfill silencioso (não notifica).
   let djen: { tenants: number; casadas: number; novas: number; enviados: number; pendentes: number } | null = null
   try {
-    djen = await sincronizarPublicacoesDjen(admin, { deadlineMs: 18_000 })
+    djen = await sincronizarPublicacoesDjen(admin, { deadlineMs: 60_000 })
   } catch (e) {
     logger.error('cron.djen_sync.falha', {}, e as Error)
     // Alerta a operação (e-mail + Sentry). alertarFalhaPublicacoes nunca lança.
@@ -83,6 +84,21 @@ export async function GET(req: Request) {
       assunto: 'exceção na sincronização de publicações (DJEN)',
       detalhes: `A rodada de captura do DJEN no cron funil-consultas lançou uma exceção:\n\n${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`,
     })
+  }
+
+  // Passada pós-DJEN: drena SÓ a fila sync_pendente (059) que o DJEN acabou de marcar
+  // nos processos casados — assim a publicação do dia reflete nos ANDAMENTOS no MESMO
+  // ciclo (não espera o cron de amanhã). `somentePendentes` evita re-consultar os VIPs
+  // (já sincronizados acima) e dobrar o polling no DataJud. Deadline COM TETO relativo
+  // a t0 (≤ t0+270s): o drain nunca empurra o handler além do maxDuration=300 (a Vercel
+  // mataria a função). O que não couber fica marcado (fila durável) e é drenado no
+  // próximo cron — nada se perde. Isolado.
+  let processosDrain: { processos: number; novosMovimentos: number; consultados: number } | null = null
+  try {
+    const drainMs = Math.max(0, Math.min(120_000, t0 + 270_000 - Date.now()))
+    processosDrain = await sincronizarProcessos(admin, { deadlineMs: drainMs, somentePendentes: true })
+  } catch (e) {
+    logger.error('cron.processos_drain.falha', {}, e as Error)
   }
 
   // Sentinela DataJud × DJEN — cruza movimentos de publicação (DataJud) sem
@@ -93,7 +109,7 @@ export async function GET(req: Request) {
   let sentinela: SentinelaResultado | null = null
   try {
     sentinela = await rodarSentinela(admin, {
-      deadline: Math.min(Date.now() + 8_000, t0 + 55_000),
+      deadline: Math.min(Date.now() + 8_000, t0 + 290_000),
     })
     logger.info('cron.sentinela', { ...sentinela })
   } catch (e) {
@@ -101,5 +117,5 @@ export async function GET(req: Request) {
     logger.error('cron.sentinela.falha', {}, e as Error)
   }
 
-  return NextResponse.json({ ok: true, marcados: n, processos, djen, sentinela })
+  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela })
 }

@@ -67,6 +67,7 @@ interface ProcessoVinculadoLista {
   id: string
   clienteId: string
   clienteNome: string | null
+  ultimaSincronizacao: string | null // rótulo "Andamentos atualizados …" (059)
 }
 
 export async function GET(req: Request) {
@@ -180,10 +181,10 @@ export async function GET(req: Request) {
   if (processoIds.length) {
     const { data: procs } = await supabase
       .from('processos')
-      .select('id, cliente_id')
+      .select('id, cliente_id, ultima_sincronizacao')
       .eq('tenant_id', usuario.tenant_id) // defesa em profundidade (RLS já isola)
       .in('id', processoIds)
-    const procsList = (procs ?? []) as { id: string; cliente_id: string }[]
+    const procsList = (procs ?? []) as { id: string; cliente_id: string; ultima_sincronizacao: string | null }[]
 
     const clienteIds = [...new Set(procsList.map((p) => p.cliente_id).filter(Boolean))]
     const nomePorCliente = new Map<string, string | null>()
@@ -202,6 +203,7 @@ export async function GET(req: Request) {
         id: p.id,
         clienteId: p.cliente_id,
         clienteNome: nomePorCliente.get(p.cliente_id) ?? null,
+        ultimaSincronizacao: p.ultima_sincronizacao ?? null,
       })
     }
   }

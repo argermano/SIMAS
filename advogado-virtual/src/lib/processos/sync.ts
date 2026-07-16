@@ -297,6 +297,7 @@ async function syncUmProcesso(
     datajud_atualizado_em: dados.dataHoraUltimaAtualizacao,
     dados_capa: dados.dadosCapa,
     ultima_sincronizacao: new Date().toISOString(),
+    sync_pendente: false, // limpa a fila durável (059) em QUALQUER via: cron, botão, vínculo
   }
   if (encerrou && proc.situacao !== 'encerrado') patch.situacao = 'encerrado'
   const { error: upErr } = await admin.from('processos').update(patch).eq('id', proc.id)
@@ -436,30 +437,45 @@ export async function simularMovimento(
  * concorrência ≤ 3 e teto de tempo — o que não couber fica para a próxima. */
 export async function sincronizarProcessos(
   admin: Admin,
-  opts?: { deadlineMs?: number; max?: number },
+  opts?: { deadlineMs?: number; max?: number; somentePendentes?: boolean },
 ): Promise<{ processos: number; novosMovimentos: number; consultados: number; pendentes: number; enviados: number }> {
   const deadline = Date.now() + (opts?.deadlineMs ?? 45_000)
   const max = opts?.max ?? 60
 
-  // Arquitetura on-demand: o cron só sincroniza processos de clientes VIP (com
-  // aviso proativo ligado, aviso_movimentacao != 'desligado'). Os demais só são
-  // sincronizados no cadastro, no botão de refresh, ou quando o próprio cliente
-  // pergunta pelo WhatsApp. Isso limita o polling no DataJud público (teto VIP_MAX).
-  const { data: vips } = await admin
-    .from('clientes')
-    .select('id')
-    .neq('aviso_movimentacao', 'desligado')
-    .is('deleted_at', null)
-  const vipIds = (vips ?? []).map((c: { id: string }) => c.id)
-  if (vipIds.length === 0) {
-    return { processos: 0, novosMovimentos: 0, consultados: 0, pendentes: 0, enviados: 0 }
-  }
+  // Arquitetura on-demand: o cron sincroniza processos de clientes VIP (aviso
+  // proativo ligado, aviso_movimentacao != 'desligado') OU marcados na fila
+  // durável sync_pendente (059 — publicação do DJEN casada = sinal de atividade).
+  // Os demais só são sincronizados no cadastro, no botão de refresh, ou quando o
+  // próprio cliente pergunta pelo WhatsApp. Isso limita o polling no DataJud público.
+  //
+  // `somentePendentes` (drain pós-DJEN): NÃO re-inclui os VIPs — eles já foram
+  // sincronizados na 1ª passada deste mesmo cron; reconsultá-los aqui só DOBRARIA o
+  // polling no DataJud (o dedup não traria nada novo). O drain existe só p/ escoar a
+  // fila 059 que o DJEN acabou de marcar. Nesse modo nem buscamos os VIPs.
+  const vipIds = opts?.somentePendentes
+    ? []
+    : ((await admin
+        .from('clientes')
+        .select('id')
+        .neq('aviso_movimentacao', 'desligado')
+        .is('deleted_at', null)).data ?? []).map((c: { id: string }) => c.id)
 
-  const { data: pend, error } = await admin
+  let query = admin
     .from('processos')
     .select(COLS)
     .eq('situacao', 'ativo')
-    .in('cliente_id', vipIds)
+  // União VIP + fila de pendentes. COM VIPs: or(sync_pendente OU cliente_id in);
+  // os UUIDs vão CITADOS para não quebrarem a expressão do or() do PostgREST. SEM
+  // VIPs (ou somentePendentes): só a fila de pendentes — evita o `in.()` vazio (que
+  // o PostgREST rejeita) e mantém o drain focado na 059.
+  if (vipIds.length > 0) {
+    const lista = vipIds.map((id: string) => `"${id}"`).join(',')
+    query = query.or(`sync_pendente.is.true,cliente_id.in.(${lista})`)
+  } else {
+    query = query.eq('sync_pendente', true)
+  }
+
+  const { data: pend, error } = await query
     .order('ultima_sincronizacao', { ascending: true, nullsFirst: true })
     .limit(max)
   if (error) {

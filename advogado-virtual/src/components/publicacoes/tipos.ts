@@ -20,6 +20,9 @@ export interface ProcessoVinculado {
   situacao: string | null
   clienteId: string | null
   clienteNome: string | null
+  /** Data do último sync de andamentos com o DataJud (processos.ultima_sincronizacao);
+   * null = nunca sincronizado. Base do rótulo "Andamentos atualizados …". */
+  ultimaSincronizacao: string | null
 }
 
 /** Item da lista paginada — shape de GET /api/publicacoes.

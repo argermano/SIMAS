@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { classificarMovimento, sugereEncerramento, CATEGORIAS_NOTIFICAVEIS_DEFAULT, categoriasNotificaveis } from './categorias'
-import { hashMovimento } from './sync'
+import { hashMovimento, sincronizarProcessos } from './sync'
 import { montarTextoAviso } from './notificar'
 import { datajudDataParaISO } from '@/lib/jurisprudencia/datajud'
 import { validarNumeroCNJ, aliasDataJud } from '@/lib/jurisprudencia/verificador-citacoes'
@@ -140,5 +140,52 @@ describe('CNJ — validação e alias (caso Marta)', () => {
 
   it('rejeita número com DV inválido', () => {
     expect(validarNumeroCNJ('0009008-99.2025.8.16.0026')).toBe(false)
+  })
+})
+
+// Mock de admin Supabase que captura os filtros do SELECT de processos e devolve
+// fila vazia (sem rede, sem syncUmProcesso): isola a lógica de SELEÇÃO da 059.
+function mockAdminSync(vipIds: string[], cap: { eq: [string, unknown][]; or?: string }) {
+  const clientes = {
+    select() { return clientes },
+    neq() { return clientes },
+    is() { return Promise.resolve({ data: vipIds.map((id) => ({ id })), error: null }) },
+  }
+  const processos = {
+    select() { return processos },
+    eq(col: string, val: unknown) { cap.eq.push([col, val]); return processos },
+    or(expr: string) { cap.or = expr; return processos },
+    order() { return processos },
+    limit() { return Promise.resolve({ data: [], error: null }) },
+  }
+  return { from(table: string) { return table === 'clientes' ? clientes : processos } } as never
+}
+
+describe('sync — seleção da fila (união VIP + sync_pendente, 059)', () => {
+  it('com VIPs: usa or(sync_pendente OU cliente_id in) com UUIDs citados', async () => {
+    const cap: { eq: [string, unknown][]; or?: string } = { eq: [] }
+    const r = await sincronizarProcessos(mockAdminSync(['c1', 'c2'], cap))
+    expect(cap.or).toContain('sync_pendente.is.true')
+    expect(cap.or).toContain('cliente_id.in.("c1","c2")')
+    expect(cap.eq).toContainEqual(['situacao', 'ativo'])
+    expect(r).toEqual({ processos: 0, novosMovimentos: 0, consultados: 0, pendentes: 0, enviados: 0 })
+  })
+
+  it('sem VIPs: cai só na fila de pendentes (sync_pendente=true), sem or()', async () => {
+    const cap: { eq: [string, unknown][]; or?: string } = { eq: [] }
+    await sincronizarProcessos(mockAdminSync([], cap))
+    expect(cap.or).toBeUndefined()
+    expect(cap.eq).toContainEqual(['situacao', 'ativo'])
+    expect(cap.eq).toContainEqual(['sync_pendente', true])
+  })
+
+  it('somentePendentes (drain pós-DJEN): ignora os VIPs e usa só a fila 059', async () => {
+    // Mesmo COM VIPs cadastrados, o drain não pode re-consultá-los (dobraria o
+    // polling DataJud): sem or(), só sync_pendente=true.
+    const cap: { eq: [string, unknown][]; or?: string } = { eq: [] }
+    await sincronizarProcessos(mockAdminSync(['c1', 'c2'], cap), { somentePendentes: true })
+    expect(cap.or).toBeUndefined()
+    expect(cap.eq).toContainEqual(['situacao', 'ativo'])
+    expect(cap.eq).toContainEqual(['sync_pendente', true])
   })
 })

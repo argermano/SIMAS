@@ -56,11 +56,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     situacao: string | null
     clienteId: string | null
     clienteNome: string | null
+    ultimaSincronizacao: string | null
   } | null = null
   if (processoId) {
     const { data: proc } = await supabase
       .from('processos')
-      .select('id, numero_cnj, classe, situacao, cliente:clientes(id, nome)')
+      .select('id, numero_cnj, classe, situacao, ultima_sincronizacao, cliente:clientes(id, nome)')
       .eq('id', processoId)
       .eq('tenant_id', usuario.tenant_id) // defesa em profundidade (RLS já isola)
       .single()
@@ -70,6 +71,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         numero_cnj: string | null
         classe: string | null
         situacao: string | null
+        ultima_sincronizacao: string | null
         cliente:
           | { id: string; nome: string | null }
           | { id: string; nome: string | null }[]
@@ -83,6 +85,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         situacao: p.situacao ?? null,
         clienteId: cli?.id ?? null,
         clienteNome: cli?.nome ?? null,
+        ultimaSincronizacao: p.ultima_sincronizacao ?? null,
       }
     }
   }
