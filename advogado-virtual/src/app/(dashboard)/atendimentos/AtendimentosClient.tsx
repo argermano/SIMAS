@@ -107,6 +107,9 @@ export function AtendimentosClient() {
   const [qDebounced, setQDebounced] = useState('')
   const [status, setStatus] = useState<Status>('andamento')
   const [estagio, setEstagio] = useState<EstagioFiltro>('')
+  // Filtro por responsável (pedido do dono): '' = todos.
+  const [respFiltro, setRespFiltro] = useState('')
+  const [pessoas, setPessoas] = useState<{ id: string; nome: string }[]>([])
 
   const [items, setItems] = useState<AtendimentoItem[]>([])
   const [total, setTotal] = useState(0)
@@ -121,6 +124,14 @@ export function AtendimentosClient() {
     return () => clearTimeout(t)
   }, [q])
 
+  // Equipe para o filtro de responsável (mesma fonte do transferir da agenda).
+  useEffect(() => {
+    fetch('/api/agenda/pessoas')
+      .then(r => r.json())
+      .then(d => setPessoas((d.pessoas ?? []) as { id: string; nome: string }[]))
+      .catch(() => { /* filtro fica só com "Todos" */ })
+  }, [])
+
   const carregar = useCallback(async (page: number, replace: boolean) => {
     const seq = ++reqSeq.current
     setCarregando(true)
@@ -128,6 +139,7 @@ export function AtendimentosClient() {
       const params = new URLSearchParams({ page: String(page) })
       if (status !== 'todos') params.set('status', status) // 'todos' = sem filtro no servidor
       if (estagio) params.set('estagio', estagio)
+      if (respFiltro) params.set('responsavel', respFiltro)
       const termo = qDebounced.trim()
       if (termo.length >= 2) params.set('q', termo)
       const r = await fetch(`/api/atendimentos?${params}`)
@@ -141,7 +153,7 @@ export function AtendimentosClient() {
     } finally {
       if (seq === reqSeq.current) setCarregando(false)
     }
-  }, [status, estagio, qDebounced])
+  }, [status, estagio, respFiltro, qDebounced])
 
   // Refaz a partir da página 1 sempre que busca/filtros mudam.
   useEffect(() => { carregar(1, true) }, [carregar])
@@ -194,6 +206,22 @@ export function AtendimentosClient() {
           {/* Toggle: clicar no chip aceso volta a "todos os estágios" (estado neutro). */}
           <Chip ativo={estagio === 'atendimento'} onClick={() => setEstagio(estagio === 'atendimento' ? '' : 'atendimento')}>Atendimentos</Chip>
           <Chip ativo={estagio === 'caso'} onClick={() => setEstagio(estagio === 'caso' ? '' : 'caso')}>Casos</Chip>
+          <span className="mx-1 h-5 w-px bg-border" />
+          {/* Filtro por responsável (servidor: ?responsavel=) */}
+          <select
+            value={respFiltro}
+            onChange={e => setRespFiltro(e.target.value)}
+            aria-label="Filtrar por responsável"
+            className={cn(
+              'h-8 rounded-full border bg-card px-3 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-ring',
+              respFiltro ? 'border-primary/50 font-medium text-foreground' : 'border-border text-muted-foreground',
+            )}
+          >
+            <option value="">Responsável: todos</option>
+            {pessoas.map(p => (
+              <option key={p.id} value={p.id}>{p.nome}</option>
+            ))}
+          </select>
         </div>
         <div className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
           <ListFilter className="h-4 w-4" aria-hidden />
@@ -303,15 +331,14 @@ export function AtendimentosClient() {
                           )}
                         </div>
 
-                        {/* Meta em LINHA ÚNICA: o nome trunca; data e nº nunca quebram
-                            (o dono apontou os dados "espremidos" quebrando em 3 linhas). */}
-                        <div className="mt-1 flex min-w-0 items-center gap-x-1.5 text-sm text-muted-foreground">
+                        {/* Meta em linha única, com o NOME INTEIRO (pedido do dono: o nome
+                            do cliente manda; as outras colunas se ajustam). */}
+                        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm text-muted-foreground">
                           {a.cliente ? (
                             <Link
                               href={`/clientes/${a.cliente.id}`}
                               onClick={e => e.stopPropagation()}
-                              className="min-w-0 truncate font-medium text-foreground hover:text-primary hover:underline"
-                              title={a.cliente.nome || 'Cliente'}
+                              className="font-medium text-foreground hover:text-primary hover:underline"
                             >
                               {a.cliente.nome || 'Cliente'}
                             </Link>
@@ -323,6 +350,15 @@ export function AtendimentosClient() {
                           <span aria-hidden className="shrink-0">·</span>
                           <span className="shrink-0 tabular-nums">#{a.numero}</span>
                         </div>
+
+                        {/* Próximo passo (da próxima tarefa aberta) vira linha discreta —
+                            saiu de coluna fixa: a coluna vazia ("—") só espremia o nome. */}
+                        {a.proximoPasso && (
+                          <div className="mt-1 flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground" title={a.proximoPasso.descricao}>
+                            <span className={cn('h-2 w-2 shrink-0 rounded-full', corBolinha(a.proximoPasso.dueDate))} aria-hidden />
+                            <span className="truncate">{a.proximoPasso.descricao || 'Tarefa sem descrição'}</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* WhatsApp no mobile (nas ações no desktop) */}
@@ -330,44 +366,33 @@ export function AtendimentosClient() {
                     </div>
 
                     {/* Colunas: próximo passo · responsável · honorários */}
-                    {/* Larguras enxutas + gap menor no lg: sobra espaço pra 1ª coluna
-                        (título/cliente) respirar em monitores médios. */}
-                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-6 sm:gap-y-2 lg:flex-nowrap lg:shrink-0 lg:gap-4 xl:gap-6">
-                      <Coluna label="Próximo passo" className="lg:w-40 xl:w-52">
-                        {a.proximoPasso ? (
-                          <div className="flex items-center gap-1.5" title={a.proximoPasso.descricao}>
-                            <span className={cn('h-2 w-2 shrink-0 rounded-full', corBolinha(a.proximoPasso.dueDate))} aria-hidden />
-                            <span className="truncate">{a.proximoPasso.descricao || 'Tarefa sem descrição'}</span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </Coluna>
-
-                      <Coluna label="Responsável" className="lg:w-32 xl:w-40">
+                    {/* Colunas em LARGURA NATURAL (pedido do dono: os campos seguem o
+                        conteúdo; quem manda no espaço é o nome do cliente à esquerda). */}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-8 sm:gap-y-2 lg:flex-nowrap lg:shrink-0">
+                      <Coluna label="Responsável" className="lg:text-right">
                         {a.responsavel ? (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 lg:justify-end">
+                            <span className="whitespace-nowrap">{a.responsavel.nome}</span>
                             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
                               {inicialResponsavel(a.responsavel.nome)}
                             </span>
-                            <span className="truncate">{a.responsavel.nome}</span>
                           </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </Coluna>
 
-                      <Coluna label="Honorários" className="lg:w-28 lg:text-right">
+                      <Coluna label="Honorários" className="lg:text-right">
                         {a.honorariosValor != null ? (
-                          <span className="font-semibold text-foreground">{formatarHonorarios(a.honorariosValor)}</span>
+                          <span className="whitespace-nowrap font-semibold text-foreground">{formatarHonorarios(a.honorariosValor)}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </Coluna>
                     </div>
 
-                    {/* Ações (desktop): WhatsApp + chevron */}
-                    <div className="hidden shrink-0 items-center gap-1.5 lg:flex">
+                    {/* Ações (desktop): divisor fino + WhatsApp + chevron (como no mock) */}
+                    <div className="hidden shrink-0 items-center gap-2.5 border-l border-border pl-4 lg:flex">
                       {botaoWhats}
                       {href && <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />}
                     </div>

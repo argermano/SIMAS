@@ -55,6 +55,7 @@ function termoOr(q: string): string {
 //   (sem cliente_id)           → lista GLOBAL do tenant com filtros e paginação:
 //     ?status=andamento|encerrados  (andamento = status != 'finalizado')
 //     ?estagio=atendimento|caso
+//     ?responsavel=<userId>  (filtra pelo responsável — pedido do dono)
 //     ?q=  (busca em titulo e no nome do cliente)
 //     ?page=
 export async function GET(req: NextRequest) {
@@ -99,6 +100,12 @@ export async function GET(req: NextRequest) {
   if (status === 'andamento')  query = query.neq('status', 'finalizado')
   if (status === 'encerrados') query = query.eq('status', 'finalizado')
   if (estagio === 'atendimento' || estagio === 'caso') query = query.eq('estagio', estagio)
+
+  // Filtro por responsável (uuid do usuário do tenant; RLS + tenant já limitam).
+  const responsavel = (sp.get('responsavel') ?? '').trim()
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(responsavel)) {
+    query = query.eq('user_id', responsavel)
+  }
 
   if (q.length >= 2) {
     // Busca no titulo (coluna própria) OU pelo nome do CLIENTE OU do RESPONSÁVEL
