@@ -5,6 +5,7 @@ import { sincronizarProcessos } from '@/lib/processos/sync'
 import { sincronizarPublicacoesDjen } from '@/lib/processos/djen'
 import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
 import { rodarSentinela, type SentinelaResultado } from '@/lib/processos/sentinela'
+import { repararResumos, type ReparoResultado } from '@/lib/processos/reparo'
 
 export const maxDuration = 300
 
@@ -117,5 +118,15 @@ export async function GET(req: Request) {
     logger.error('cron.sentinela.falha', {}, e as Error)
   }
 
-  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela })
+  // Reparo de resumos IA na FOLGA do dia (plano Hobby: sem cron próprio — limite
+  // de 2 crons diários). Num dia normal as etapas acima terminam bem antes dos
+  // tetos, sobrando minutos aqui; num dia cheio o teto t0+285s reduz o reparo a
+  // quase nada e o restante fica para amanhã. repararResumos nunca lança.
+  let reparo: ReparoResultado | null = null
+  const reparoDeadline = Math.min(Date.now() + 180_000, t0 + 285_000)
+  if (reparoDeadline > Date.now() + 5_000) {
+    reparo = await repararResumos(admin, { deadline: reparoDeadline })
+  }
+
+  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo })
 }
