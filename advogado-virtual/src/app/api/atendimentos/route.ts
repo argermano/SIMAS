@@ -70,7 +70,7 @@ export async function GET(req: NextRequest) {
   if (clienteId) {
     const { data } = await supabase
       .from('atendimentos')
-      .select('id, area, tipo_peca_origem, status, created_at')
+      .select('id, titulo, area, tipo_peca_origem, status, created_at')
       .eq('cliente_id', clienteId)
       .eq('tenant_id', usuario.tenant_id)
       .is('deleted_at', null)

@@ -11,7 +11,8 @@ import { RegistrosAtendimento, type RegistroItem } from '@/components/atendiment
 import { AcoesAtendimento } from '@/components/atendimento/AcoesAtendimento'
 import { CartaoContatoCliente } from '@/components/atendimento/CartaoContatoCliente'
 import { TarefasDoCaso, type TarefaDoCaso } from '@/components/atendimento/TarefasDoCaso'
-import { DocumentoLink } from '@/components/clientes/DocumentoLink'
+import { AnexosDoCaso } from '@/components/atendimento/AnexosDoCaso'
+import { documentoNasceuNoCadastro } from '@/lib/documentos/origem'
 import { decryptTranscricaoFields } from '@/lib/encryption'
 import { AREAS } from '@/lib/constants/areas'
 import { MODELOS_PRONTOS, TIPOS_PECA } from '@/lib/constants/tipos-peca'
@@ -62,7 +63,7 @@ export default async function CasoPage({
 
   const { data: at } = await supabase
     .from('atendimentos')
-    .select('id, area, status, created_at, numero_processo, dados_processo, titulo, etiquetas, estagio, encerrado_em, transcricao_raw, transcricao_editada, clientes(id, nome, telefone, email), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at), documentos(id, file_name, tipo, created_at)')
+    .select('id, area, status, created_at, numero_processo, dados_processo, titulo, etiquetas, estagio, encerrado_em, transcricao_raw, transcricao_editada, clientes(id, nome, telefone, email), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at), documentos(id, file_name, tipo, created_at, file_url)')
     .eq('id', atendimentoId)
     .eq('cliente_id', id)
     .eq('tenant_id', usuario.tenant_id)
@@ -124,7 +125,15 @@ export default async function CasoPage({
   const analise = analiseRow?.plano_a ?? null
   const areasIdent = analise?.areas_identificadas ?? []
   const pecas = (at.pecas ?? []) as Array<{ id: string; tipo: string; area: string; versao: number; status: string; created_at: string }>
-  const documentos = (at.documentos ?? []) as Array<{ id: string; file_name: string; tipo: string; created_at: string }>
+  const documentos = (at.documentos ?? []) as Array<{ id: string; file_name: string; tipo: string; created_at: string; file_url: string | null }>
+  // Anexos do caso p/ o card (d): docs que nasceram no dossiê e foram vinculados
+  // ganham o rótulo "do cadastro" (X desvincula); os do caso, X exclui.
+  const anexosDoCaso = documentos.map((d) => ({
+    id: d.id,
+    file_name: d.file_name,
+    created_at: d.created_at,
+    de_cadastro: documentoNasceuNoCadastro(d.file_url),
+  }))
   const status = at.status as string
   const badge = BADGE_STATUS[status] ?? BADGE_STATUS.caso_novo
 
@@ -503,17 +512,13 @@ export default async function CasoPage({
                 </div>
               )}
 
-              {/* Anexos */}
-              {documentos.length > 0 ? (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Documentos anexados</p>
-                  {documentos.map((d) => (
-                    <DocumentoLink key={d.id} docId={d.id} fileName={d.file_name} dataRelativa={formatarDataRelativa(d.created_at)} />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">Nenhum documento anexado.</p>
-              )}
+              {/* Anexos — inclui "Adicionar do cadastro" (vincula um doc geral do
+                  cliente) e distingue docs "do cadastro" (X desvincula) dos do caso. */}
+              <AnexosDoCaso
+                clienteId={id}
+                atendimentoId={atendimentoId}
+                documentosIniciais={anexosDoCaso}
+              />
             </CardContent>
           </Card>
 

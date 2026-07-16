@@ -137,10 +137,12 @@ export async function POST(
   )
 }
 
-// GET /api/clientes/[id]/documentos — lista TODOS os docs do cliente (diretos +
+// GET /api/clientes/[id]/documentos — lista os docs do cliente (diretos +
 // herdados de atendimentos via cliente_id) com signed URLs curtas para abrir.
+// ?gerais=1 → só os GERAIS (sem vínculo de caso nem de processo) — usado pelo
+// picker "Adicionar do cadastro" na tela do caso.
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id: clienteId } = await params
@@ -148,13 +150,17 @@ export async function GET(
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
 
-  const { data, error } = await supabase
+  const soGerais = new URL(req.url).searchParams.get('gerais') === '1'
+
+  let query = supabase
     .from('documentos')
-    .select('id, file_name, tipo, mime_type, tamanho_bytes, created_at, atendimento_id, file_url, atendimentos(titulo)')
+    .select('id, file_name, tipo, mime_type, tamanho_bytes, created_at, atendimento_id, processo_id, file_url, atendimentos(titulo), processos(numero_cnj, apelido)')
     .eq('tenant_id', usuario.tenant_id)
     .eq('cliente_id', clienteId)
     .not('file_url', 'is', null)
-    .order('created_at', { ascending: false })
+  if (soGerais) query = query.is('atendimento_id', null).is('processo_id', null)
+
+  const { data, error } = await query.order('created_at', { ascending: false })
   if (error) return jsonError(error.message, 500)
 
   const linhas = data ?? []
@@ -167,6 +173,7 @@ export async function GET(
 
   const documentos = linhas.map((d, i) => {
     const at = Array.isArray(d.atendimentos) ? d.atendimentos[0] : d.atendimentos
+    const pr = Array.isArray(d.processos) ? d.processos[0] : d.processos
     return {
       id:            d.id,
       file_name:     d.file_name,
@@ -174,8 +181,12 @@ export async function GET(
       mime_type:     d.mime_type,
       tamanho_bytes: d.tamanho_bytes,
       created_at:    d.created_at,
-      atendimento_id: d.atendimento_id, // null = doc direto do dossiê (excluível aqui)
+      // atendimento_id/processo_id null (ambos) = doc GERAL (excluível aqui).
+      atendimento_id: d.atendimento_id,
       atendimento_titulo: (at as { titulo?: string } | null)?.titulo ?? null,
+      processo_id:    d.processo_id,
+      processo_numero_cnj: (pr as { numero_cnj?: string } | null)?.numero_cnj ?? null,
+      processo_apelido:    (pr as { apelido?: string } | null)?.apelido ?? null,
       url:           urls[i]?.data?.signedUrl ?? null,
     }
   })
