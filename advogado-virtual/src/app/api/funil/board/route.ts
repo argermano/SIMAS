@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthContext } from '@/lib/auth'
+import { getAuthContext, requireRole } from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +8,11 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
+  // Funil é gestão comercial: SÓ administrador (decisão do dono, 2026-07-16).
+  {
+    const semRole = requireRole(auth.usuario, ['admin'])
+    if (semRole) return semRole
+  }
   const { supabase, usuario } = auth
 
   const { data: leads } = await supabase

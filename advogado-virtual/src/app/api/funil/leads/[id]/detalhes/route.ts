@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthContext } from '@/lib/auth'
+import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { cadastroCompleto } from '@/lib/funil/regras'
 
@@ -10,6 +10,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
+  // Funil é gestão comercial: SÓ administrador (decisão do dono, 2026-07-16).
+  {
+    const semRole = requireRole(auth.usuario, ['admin'])
+    if (semRole) return semRole
+  }
   const { supabase, usuario } = auth
 
   const { data: lead } = await supabase

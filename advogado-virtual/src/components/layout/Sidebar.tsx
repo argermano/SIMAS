@@ -158,6 +158,9 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
       ativoSe: (p: string) => p.startsWith('/configuracoes/equipe'),
     }] : []),
   ]
+    // Funil é ferramenta de gestão comercial: SÓ o administrador vê
+    // (decisão do dono, 2026-07-16 — a equipe trabalha pelos Atendimentos).
+    .filter(item => item.href !== '/funil' || roleRaw === 'admin')
 
   const isConfigAtivo = pathname.startsWith('/configuracoes') && !pathname.startsWith('/configuracoes/equipe')
 

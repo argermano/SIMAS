@@ -8,7 +8,7 @@ export async function GET(req: Request) {
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
-  const semRole = requireRole(usuario, ['admin', 'advogado'])
+  const semRole = requireRole(usuario, ['admin'])
   if (semRole) return semRole
 
   const periodo = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('periodo')) || 30))

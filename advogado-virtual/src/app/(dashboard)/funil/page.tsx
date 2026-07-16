@@ -15,6 +15,8 @@ export default async function FunilPage() {
   const { data: usuario } = await supabase
     .from('users').select('id, nome, role, tenant_id').eq('auth_user_id', user.id).single()
   if (!usuario) redirect('/login')
+  // Funil é gestão comercial: SÓ administrador (decisão do dono, 2026-07-16).
+  if (usuario.role !== 'admin') redirect('/dashboard')
 
   const { data: leads } = await supabase
     .from('funil_leads')

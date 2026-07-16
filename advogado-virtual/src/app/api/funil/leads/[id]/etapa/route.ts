@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthContext } from '@/lib/auth'
+import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { registrarEvento } from '@/lib/funil/leads'
@@ -13,6 +13,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params
   const auth = await getAuthContext()
   if (!auth.ok) return auth.response
+  // Funil é gestão comercial: SÓ administrador (decisão do dono, 2026-07-16).
+  {
+    const semRole = requireRole(auth.usuario, ['admin'])
+    if (semRole) return semRole
+  }
   const { supabase, usuario } = auth
 
   const body = (await req.json().catch(() => ({}))) as {
