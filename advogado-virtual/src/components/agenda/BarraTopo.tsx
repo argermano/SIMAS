@@ -13,7 +13,6 @@ import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import type { FiltroAgenda, FonteAgenda, Vista, Pessoa } from '@/lib/agenda/tipos'
 import { TIPO_META, ORDEM_CHIPS } from './tipoMeta'
-import { fonteDisplay } from './fonteDisplay'
 import { PainelFiltros } from './PainelFiltros'
 
 const VISTAS: { valor: Vista; label: string }[] = [
@@ -72,7 +71,8 @@ export function BarraTopo({
             <Scale className="h-3.5 w-3.5" aria-hidden />
             Escritório · Agenda
           </p>
-          <h1 className={cn(fonteDisplay.className, 'mt-1 text-4xl font-semibold leading-tight text-foreground sm:text-5xl')}>
+          {/* Mesma tipografia do Header padrão das páginas (pedido do dono, 2026-07-16). */}
+          <h1 className="mt-1 text-2xl font-bold text-foreground font-heading">
             Agenda<span className="text-accent">.</span>
           </h1>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
