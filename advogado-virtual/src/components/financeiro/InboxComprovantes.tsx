@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatarValor } from '@/lib/financeiro/parcelas'
 import { formatarDataRelativa } from '@/lib/utils'
+import { apenasDigitos } from '@/lib/conversas/telefone'
 import { AtribuirComprovanteModal } from './AtribuirComprovanteModal'
 import { DetalheComprovanteModal } from './DetalheComprovanteModal'
 
@@ -190,9 +191,12 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
                 <span className="inline-flex items-center gap-1">
                   <Phone className="h-3.5 w-3.5" aria-hidden /> {c.telefone}
                 </span>
-                {c.conversa_id && (
+                {/* Navega pelo TELEFONE (matcher canônico do /conversas), não pelo id do
+                    webhook: o id interno do Chatwoot pode divergir do id da lista do relay
+                    e levar à conversa errada (caso real do dono, 2026-07-16). */}
+                {apenasDigitos(c.telefone) && (
                   <Link
-                    href={`/conversas?conversa=${encodeURIComponent(c.conversa_id)}`}
+                    href={`/conversas?telefone=${apenasDigitos(c.telefone)}`}
                     onClick={(e) => e.stopPropagation()}
                     className="inline-flex items-center gap-1 text-primary hover:underline"
                   >
