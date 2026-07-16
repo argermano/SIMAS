@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ListaClientesClient } from './ListaClientesClient'
-import { Plus, Users } from 'lucide-react'
-import { formatarData, mascaraCPF, iniciais } from '@/lib/utils'
+import { Plus, Users, Mail, Phone, ChevronRight } from 'lucide-react'
+import { iniciais, formatarDataCurta, truncar } from '@/lib/utils'
+import { formatarCnj, rotularArea } from '@/lib/tarefas/vinculo'
 import { decryptClienteFields } from '@/lib/encryption'
 
 export const metadata = { title: 'Clientes' }
@@ -66,6 +67,41 @@ export default async function ClientesPage({
   const { data: clientesRaw, count } = await query
   const clientes = (clientesRaw ?? []).map(decryptClienteFields)
 
+  // Enriquecimento do card em 2 queries em lote (só os ids da página, sem N+1):
+  // (1) área do caso mais recente; (2) processo mais recente + seu último movimento.
+  const clienteIds = clientes.map(c => c.id)
+  const areaPorCliente = new Map<string, string>()
+  const processoPorCliente = new Map<string, { cnj: string; situacao: string; movimento: string | null }>()
+
+  if (clienteIds.length > 0) {
+    const [{ data: atends }, { data: procs }] = await Promise.all([
+      supabase
+        .from('atendimentos')
+        .select('cliente_id, area, created_at')
+        .eq('tenant_id', usuario.tenant_id)
+        .in('cliente_id', clienteIds)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('processos')
+        .select('cliente_id, numero_cnj, situacao, created_at, processo_movimentos(nome, data_hora)')
+        .eq('tenant_id', usuario.tenant_id)
+        .in('cliente_id', clienteIds)
+        .order('created_at', { ascending: false })
+        .order('data_hora', { referencedTable: 'processo_movimentos', ascending: false })
+        .limit(1, { referencedTable: 'processo_movimentos' }),
+    ])
+
+    // Listas já vêm desc: a 1ª ocorrência por cliente é a mais recente.
+    for (const a of atends ?? []) {
+      if (!areaPorCliente.has(a.cliente_id)) areaPorCliente.set(a.cliente_id, a.area)
+    }
+    for (const p of procs ?? []) {
+      if (processoPorCliente.has(p.cliente_id)) continue
+      const mov = Array.isArray(p.processo_movimentos) ? p.processo_movimentos[0] : null
+      processoPorCliente.set(p.cliente_id, { cnj: p.numero_cnj, situacao: p.situacao, movimento: mov?.nome ?? null })
+    }
+  }
+
   const totalPaginas = Math.ceil((count ?? 0) / limit)
 
   // Query string base para paginação
@@ -121,38 +157,96 @@ export default async function ClientesPage({
           ) : (
             <>
               <div className="space-y-2">
-                {clientes.map(cliente => (
+                {clientes.map(cliente => {
+                  const area = areaPorCliente.get(cliente.id)
+                  const proc = processoPorCliente.get(cliente.id)
+                  // Status do cadastro → badge (pre_cadastro fica fora da lista, mas mapeado por segurança)
+                  const status = cliente.status_cadastro === 'inativo'
+                    ? { label: 'INATIVO', cls: 'bg-muted text-muted-foreground' }
+                    : cliente.status_cadastro === 'pre_cadastro'
+                      ? { label: 'CADASTRO INCOMPLETO', cls: 'bg-warning/10 text-warning' }
+                      : { label: 'ATIVO', cls: 'bg-success/10 text-success' }
+                  return (
                   <Link key={cliente.id} href={`/clientes/${cliente.id}`}>
                     <Card className="transition-shadow hover:shadow-card-hover">
                       <CardContent className="flex items-center gap-4 py-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-bold text-primary">
+                        {/* Avatar de iniciais (quadrado arredondado) */}
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-lg font-bold text-primary">
                           {iniciais(cliente.nome)}
                         </div>
 
-                        <div className="flex-1 min-w-0">
-                          <p className="text-lg font-semibold text-foreground truncate">
-                            {cliente.nome}
-                          </p>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
-                            {cliente.cpf && (
-                              <span>CPF: {mascaraCPF(cliente.cpf)}</span>
-                            )}
-                            {cliente.telefone && (
-                              <span>{cliente.telefone}</span>
-                            )}
-                            <span className="text-muted-foreground">
-                              Cadastrado em {formatarData(cliente.created_at)}
-                            </span>
+                        {/* Empilha no mobile; vira colunas no desktop */}
+                        <div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center md:gap-4">
+                          {/* Identidade + badges + contato */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              {/* Nome INTEIRO (pedido do dono: o conteúdo manda; sem truncar). */}
+                              <p className="text-base font-semibold text-foreground">{cliente.nome}</p>
+                              {cliente.cpf && (
+                                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">PF</span>
+                              )}
+                            </div>
+
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.cls}`}>{status.label}</span>
+                              {area && (
+                                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                                  {rotularArea(area)}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm text-muted-foreground">
+                              {cliente.email && (
+                                <span className="inline-flex min-w-0 items-center gap-1.5">
+                                  <Mail className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="truncate">{cliente.email}</span>
+                                </span>
+                              )}
+                              {cliente.telefone && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Phone className="h-3.5 w-3.5 shrink-0" />
+                                  {cliente.telefone}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Colunas contextuais (lado a lado no mobile, à direita no desktop) */}
+                          <div className="flex gap-6 md:shrink-0">
+                            {/* Último processo */}
+                            <div className="min-w-0 flex-1 md:w-52 md:flex-none">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Último processo</p>
+                              {proc ? (
+                                <>
+                                  <p className="truncate text-sm font-medium text-foreground">{formatarCnj(proc.cnj)}</p>
+                                  {proc.movimento ? (
+                                    <p className="truncate text-xs text-blue-600 dark:text-blue-400">{truncar(proc.movimento, 40)}</p>
+                                  ) : proc.situacao === 'encerrado' ? (
+                                    <p className="text-xs text-muted-foreground">Encerrado</p>
+                                  ) : (
+                                    <p className="text-xs text-blue-600 dark:text-blue-400">Ativo</p>
+                                  )}
+                                </>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">—</p>
+                              )}
+                            </div>
+
+                            {/* Cadastrado */}
+                            <div className="shrink-0">
+                              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Cadastrado</p>
+                              <p className="text-sm text-foreground">{formatarDataCurta(cliente.created_at)}</p>
+                            </div>
                           </div>
                         </div>
 
-                        <svg className="h-5 w-5 shrink-0 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+                        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                       </CardContent>
                     </Card>
                   </Link>
-                ))}
+                  )
+                })}
               </div>
 
               {/* Paginação */}

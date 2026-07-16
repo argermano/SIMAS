@@ -50,6 +50,14 @@ export function formatarData(iso: string): string {
   return `${dia}/${mes}/${ano}`
 }
 
+// Data curta pt-BR: "2026-07-10" → "10 jul 2026" (usada no card de clientes)
+const MESES_CURTO = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+export function formatarDataCurta(iso: string): string {
+  if (!iso) return ''
+  const [ano, mes, dia] = iso.split('T')[0].split('-')
+  return `${dia} ${MESES_CURTO[parseInt(mes, 10) - 1] ?? mes} ${ano}`
+}
+
 // Formata data + hora: "2024-03-15T14:30:00" → "15/03/2024 às 14:30"
 export function formatarDataHora(iso: string): string {
   if (!iso) return ''
