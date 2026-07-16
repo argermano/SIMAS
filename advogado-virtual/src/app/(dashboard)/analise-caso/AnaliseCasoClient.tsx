@@ -13,15 +13,18 @@ import { TranscricaoActions } from '@/components/atendimento/TranscricaoActions'
 import type { ResultadoAnaliseGeral } from '@/app/api/ia/analise-geral/route'
 import { MicrofoneInline } from '@/components/atendimento/MicrofoneInline'
 import { UploadDocumentos } from '@/components/atendimento/UploadDocumentos'
+import { SeletorDocsDoCadastro, type DocGeral } from '@/components/atendimento/SeletorDocsDoCadastro'
 import { SeletorVersaoIA } from '@/components/atendimento/SeletorVersaoIA'
 import { VERSAO_IA_PADRAO, type VersaoIA } from '@/lib/anthropic/versoes'
+import { documentoNasceuNoCadastro } from '@/lib/documentos/origem'
+import { montarDocumentosContexto } from '@/lib/documentos/contexto'
 import { Select } from '@/components/ui/select'
 import { AREAS } from '@/lib/constants/areas'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import {
   Users, MessageSquare, Mic, Keyboard, Brain, Loader2, Save,
   AlertTriangle, CheckCircle, Clock, ArrowRight, FileText, HelpCircle,
-  Printer, Mail, Paperclip,
+  Printer, Mail, Paperclip, FolderPlus, Unlink, Check,
 } from 'lucide-react'
 import { ChatDiagnostico } from '@/components/atendimento/ChatDiagnostico'
 
@@ -47,7 +50,7 @@ const AREAS_ATIVAS: string[] = Object.values(AREAS).filter((a) => a.ativo).map((
 export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInicial?: string }) {
   const router   = useRouter()
   const pathname = usePathname()
-  const { success, error: toastError } = useToast()
+  const { success, warning, error: toastError } = useToast()
 
   const [cliente,          setCliente]          = useState<{ id: string; nome: string } | null>(null)
   const [modoInput,        setModoInput]        = useState<'audio' | 'texto'>('audio')
@@ -63,6 +66,13 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
   const [carregando,       setCarregando]       = useState(!!atendimentoIdInicial)
   const [salvando,         setSalvando]         = useState(false)
   const [documentosExistentes, setDocumentosExistentes] = useState<Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string }>>([])
+  // Docs do CADASTRO do cliente trazidos ao estudo (via picker) — vinculados ao
+  // atendimento e usados como contexto da análise. X aqui DESVINCULA (não exclui).
+  const [docsDoCadastro, setDocsDoCadastro] = useState<Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string }>>([])
+  const [pickerAberto, setPickerAberto]       = useState(false)
+  const [removendoCadastro, setRemovendoCadastro] = useState<string | null>(null)
+  // docIds escolhidos ANTES de o atendimento existir — vinculados quando ele for criado.
+  const pendentesVinculoRef = useRef<Set<string>>(new Set())
   // Anexo de resumo/transcrição no modo "Digitar": o texto extraído entra no relato (e na análise)
   const arquivoTextoRef = useRef<HTMLInputElement>(null)
   const [extraindoArquivo, setExtraindoArquivo] = useState(false)
@@ -111,6 +121,75 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
     window.history.replaceState(null, '', url)
   }, [pathname])
 
+  // Vincula ao atendimento os docs do cadastro escolhidos antes de ele existir.
+  const vincularPendentes = useCallback((aid: string) => {
+    const ids = Array.from(pendentesVinculoRef.current)
+    pendentesVinculoRef.current.clear()
+    for (const docId of ids) {
+      fetch(`/api/documentos/${docId}/vinculo`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ atendimento_id: aid }),
+      }).catch(() => { /* best-effort */ })
+    }
+  }, [])
+
+  // Assim que o atendimento existe, vincula os docs do cadastro que ficaram na fila.
+  useEffect(() => {
+    if (atendimentoId && pendentesVinculoRef.current.size > 0) vincularPendentes(atendimentoId)
+  }, [atendimentoId, vincularPendentes])
+
+  // Escolha no picker "Adicionar do cadastro": extrai texto SOB DEMANDA (doc do
+  // dossiê não passou por extração) e vincula ao atendimento (ou adia). Falha de
+  // extração não impede anexar — entra sem texto (aí não vale como contexto).
+  const adicionarDoCadastro = useCallback(async (g: DocGeral): Promise<boolean> => {
+    let texto: string | undefined
+    try {
+      const r = await fetch(`/api/documentos/${g.id}/extrair`, { method: 'POST' })
+      if (r.ok) {
+        const d = await r.json()
+        texto = (d.documento?.texto_extraido as string | null) || undefined
+      }
+    } catch { /* segue sem texto */ }
+
+    if (atendimentoId) {
+      fetch(`/api/documentos/${g.id}/vinculo`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ atendimento_id: atendimentoId }),
+      }).catch(() => { /* best-effort; segue no estado local */ })
+    } else {
+      pendentesVinculoRef.current.add(g.id) // vincula quando o atendimento nascer
+    }
+
+    setDocsDoCadastro((prev) => prev.some((d) => d.id === g.id)
+      ? prev
+      : [...prev, { id: g.id, file_name: g.file_name, tipo: g.tipo, texto_extraido: texto }])
+
+    if (texto) success('Documento adicionado', 'Entrou no estudo e será usado na análise.')
+    else warning('Sem texto', 'Adicionado, mas sem texto para a análise.')
+    return true
+  }, [atendimentoId, success, warning])
+
+  // X do doc do cadastro no estudo: DESVINCULA (nunca exclui) e sai do contexto.
+  const removerDoCadastro = useCallback(async (docId: string) => {
+    setRemovendoCadastro(docId)
+    try {
+      if (pendentesVinculoRef.current.has(docId)) {
+        pendentesVinculoRef.current.delete(docId) // ainda não vinculado
+      } else {
+        await fetch(`/api/documentos/${docId}/vinculo`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ desvincular: true }),
+        }).catch(() => {})
+      }
+      setDocsDoCadastro((prev) => prev.filter((d) => d.id !== docId))
+    } finally {
+      setRemovendoCadastro(null)
+    }
+  }, [])
+
   // Carregar atendimento existente quando atendimentoIdInicial é fornecido
   useEffect(() => {
     if (!atendimentoIdInicial) return
@@ -131,8 +210,14 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
         }
         if (at.pedidos_especificos) setPedido(at.pedidos_especificos)
         setModoInput(at.modo_input === 'texto' ? 'texto' : 'audio')
-        // Carregar documentos existentes
-        if (at.documentos) setDocumentosExistentes(at.documentos)
+        // Carregar documentos: separa os do CADASTRO (nasceram no dossiê e foram
+        // vinculados) dos enviados no caso — o X de cada um se comporta diferente.
+        if (at.documentos) {
+          const todos = at.documentos as Array<{ id: string; file_name: string; tipo: string; texto_extraido?: string; file_url?: string }>
+          const mapear = (d: typeof todos[number]) => ({ id: d.id, file_name: d.file_name, tipo: d.tipo, texto_extraido: d.texto_extraido })
+          setDocumentosExistentes(todos.filter((d) => !documentoNasceuNoCadastro(d.file_url)).map(mapear))
+          setDocsDoCadastro(todos.filter((d) => documentoNasceuNoCadastro(d.file_url)).map(mapear))
+        }
         // Carregar diagnóstico salvo
         const analises = at.analises as Array<{ id: string; plano_a: ResultadoAnaliseGeral }> | undefined
         if (analises && analises.length > 0 && analises[0].plano_a) {
@@ -147,7 +232,11 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
 
   // Criar atendimento ao selecionar cliente (área 'geral')
   const handleClienteSelecionado = useCallback(async (c: { id: string; nome: string } | null) => {
-    if (!c) { setCliente(null); setAtendimentoId(null); return }
+    if (!c) {
+      setCliente(null); setAtendimentoId(null)
+      setDocsDoCadastro([]); pendentesVinculoRef.current.clear() // cadastro é por cliente
+      return
+    }
     setCliente(c)
     if (!atendimentoId) {
       try {
@@ -160,6 +249,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
         if (data.id) {
           setAtendimentoId(data.id)
           atualizarUrl(data.id)
+          // O flush dos docs pendentes acontece no efeito ligado a atendimentoId.
         }
       } catch {
         // Silencioso — análise funciona sem atendimento salvo
@@ -201,10 +291,16 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
         } catch { /* continua mesmo sem atendimento */ }
       }
 
+      // Garante o vínculo de qualquer doc do cadastro ainda pendente (backstop).
+      if (aidAtual) vincularPendentes(aidAtual)
+
+      // Documentos (enviados no caso + do cadastro) com texto viram contexto da IA.
+      const documentos = montarDocumentosContexto(documentosExistentes, docsDoCadastro)
+
       const res = await fetch('/api/ia/analise-geral', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcricao: texto, pedidoEspecifico: pedido, atendimentoId: aidAtual, versao: versaoIA }),
+        body: JSON.stringify({ transcricao: texto, pedidoEspecifico: pedido, documentos, atendimentoId: aidAtual, versao: versaoIA }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -469,29 +565,83 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
         </CardContent>
       </Card>
 
-      {/* Documentos (só quando há atendimento) */}
-      {atendimentoId && (
+      {/* Documentos — upload novo + "Adicionar do cadastro" (viram contexto da IA) */}
+      {(atendimentoId || cliente) && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <FileText className="h-5 w-5 text-muted-foreground" />
               Documentos
-              {documentosExistentes.length > 0 && (
-                <span className="ml-1 text-xs font-normal text-muted-foreground">({documentosExistentes.length} anexados)</span>
-              )}
-              {documentosExistentes.length === 0 && (
-                <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
-              )}
+              {(() => {
+                const total = documentosExistentes.length + docsDoCadastro.length
+                return total > 0
+                  ? <span className="ml-1 text-xs font-normal text-muted-foreground">({total} anexado{total > 1 ? 's' : ''})</span>
+                  : <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
+              })()}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-5">
             <UploadDocumentos
               atendimentoId={atendimentoId}
               tiposDocumento={['rg_cpf', 'comprovante_residencia', 'cnis', 'ctps', 'outro']}
               documentosIniciais={documentosExistentes}
             />
+
+            {/* Do cadastro do cliente — vincula um doc já cadastrado ao estudo */}
+            {cliente && (
+              <div className="space-y-2 border-t border-border pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-foreground">Documentos do cadastro do cliente</p>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => setPickerAberto(true)} className="gap-1.5">
+                    <FolderPlus className="h-4 w-4" /> Adicionar do cadastro
+                  </Button>
+                </div>
+                {docsDoCadastro.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Traga documentos já cadastrados do cliente para valerem como contexto da análise.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {docsDoCadastro.map((doc) => (
+                      <div key={doc.id} className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
+                        <FileText className="h-5 w-5 shrink-0 text-primary" />
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{doc.file_name}</p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              <FolderPlus className="h-3 w-3" /> do cadastro
+                            </span>
+                            {doc.texto_extraido
+                              ? <span className="flex items-center gap-1 text-xs text-success"><Check className="h-3 w-3" /> Texto extraído</span>
+                              : <span className="text-xs text-muted-foreground">sem texto para a análise</span>}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removerDoCadastro(doc.id)}
+                          disabled={removendoCadastro === doc.id}
+                          className="rounded p-1 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                          title="Remover do estudo (volta ao cadastro, não exclui)"
+                        >
+                          {removendoCadastro === doc.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unlink className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
+      )}
+
+      {cliente && (
+        <SeletorDocsDoCadastro
+          clienteId={cliente.id}
+          open={pickerAberto}
+          onClose={() => setPickerAberto(false)}
+          onEscolher={adicionarDoCadastro}
+        />
       )}
 
 
