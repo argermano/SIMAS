@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatarValor } from '@/lib/financeiro/parcelas'
+import { formatarDataRelativa } from '@/lib/utils'
 import { AtribuirComprovanteModal } from './AtribuirComprovanteModal'
 import { DetalheComprovanteModal } from './DetalheComprovanteModal'
 
@@ -157,7 +158,10 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
                 <span className="text-base font-bold tabular-nums text-foreground">
                   {formatarValor(c.dados?.valorCentavos ?? 0)}
                 </span>
-                <span className="text-sm text-muted-foreground">{dataPtBr(c.dados?.dataISO)}</span>
+                {/* Duas datas distintas: a do PAGAMENTO (extraída do documento — pode ser
+                    antiga, ex. comprovante de 2024 reenviado) e a de RECEBIMENTO no WhatsApp. */}
+                <span className="text-sm text-muted-foreground" title="Data do pagamento extraída do comprovante">pago em {dataPtBr(c.dados?.dataISO)}</span>
+                <span className="text-xs text-muted-foreground/80" title="Quando o comprovante chegou pelo WhatsApp">· recebido {formatarDataRelativa(c.criado_em)}</span>
                 {c.possivelDuplicado && (
                   <span
                     title="Mesmo comprovante recebido em outra mensagem — confira e descarte um dos dois."

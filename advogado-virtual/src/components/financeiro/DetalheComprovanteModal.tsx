@@ -6,6 +6,7 @@ import { Download, ExternalLink, FileText, HandCoins, Phone, Trash2, User } from
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { formatarValor } from '@/lib/financeiro/parcelas'
+import { formatarDataRelativa } from '@/lib/utils'
 import type { ComprovanteRecebido } from './InboxComprovantes'
 
 /** "2026-07-11T…" | "2026-07-11" -> "11/07/2026" (fallback: original). */
@@ -123,8 +124,12 @@ export function DetalheComprovanteModal({
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-xs text-muted-foreground">Data</p>
+                <p className="text-xs text-muted-foreground">Data do pagamento</p>
                 <p className="font-semibold tabular-nums text-foreground">{dataPtBr(dados?.dataISO)}</p>
+                {/* Data de chegada no WhatsApp — distinta da data do pagamento (comprovante pode ser antigo). */}
+                {c?.criado_em && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">recebido {formatarDataRelativa(c.criado_em)}</p>
+                )}
               </div>
             </div>
             {(dados?.pagadorNome || dados?.banco || dados?.endToEndId) && (
