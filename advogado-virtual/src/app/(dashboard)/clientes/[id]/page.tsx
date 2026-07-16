@@ -13,6 +13,7 @@ import { BotaoExcluirAtendimento } from '@/components/atendimento/BotaoExcluirAt
 import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
 import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
 import { DocumentoLink } from '@/components/clientes/DocumentoLink'
+import { DocumentosDossie } from '@/components/clientes/DocumentosDossie'
 import { PlayerAudio } from '@/components/atendimento/PlayerAudio'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import { AREAS } from '@/lib/constants/areas'
@@ -252,7 +253,9 @@ export default async function DossieClientePage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-5xl space-y-6">
+        {/* Duas colunas no desktop: dossiê à esquerda, aba Documentos à direita. */}
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-6">
 
           {/* Dados do cliente */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -629,6 +632,12 @@ export default async function DossieClientePage({
               </div>
             </section>
           )}
+          </div>
+
+          {/* Coluna direita: aba Documentos (anexar + lista + excluir diretos). */}
+          <aside className="space-y-4 lg:sticky lg:top-6">
+            <DocumentosDossie clienteId={id} />
+          </aside>
         </div>
       </main>
     </>

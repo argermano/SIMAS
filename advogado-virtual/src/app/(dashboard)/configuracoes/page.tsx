@@ -5,8 +5,9 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, CheckCircle, AlertTriangle, Info, Wallet } from 'lucide-react'
+import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, CheckCircle, AlertTriangle, Info, Wallet, HardDrive } from 'lucide-react'
 import { formatarData } from '@/lib/utils'
+import { formatarBytes } from '@/lib/documentos/tamanho'
 import { isEncryptionConfigured } from '@/lib/encryption'
 import { LABELS_ROLE } from '@/types'
 import { FormPerfilProfissional } from '@/components/configuracoes/FormPerfilProfissional'
@@ -54,6 +55,26 @@ export default async function ConfiguracoesPage() {
     telefone?: string; email_profissional?: string; endereco?: string; bairro?: string
     cidade?: string; estado?: string; cep?: string
   } | null
+
+  // Armazenamento: soma dos anexos/documentos do tenant (só metadados leves — sem
+  // nomes de arquivo, LGPD). Comprovantes do financeiro ficam em outra tabela e
+  // não entram nesta conta ainda.
+  const { data: docsTamanho } = await supabase
+    .from('documentos')
+    .select('tamanho_bytes, atendimento_id')
+    .eq('tenant_id', usuario.tenant_id)
+    .not('file_url', 'is', null)
+
+  let bytesTotal = 0
+  let bytesAnexados = 0   // docs diretos do dossiê (atendimento_id nulo)
+  let bytesDeCasos = 0    // docs vindos de atendimentos/gerados
+  const qtdDocs = (docsTamanho ?? []).length
+  for (const d of docsTamanho ?? []) {
+    const b = Number(d.tamanho_bytes ?? 0)
+    bytesTotal += b
+    if (d.atendimento_id) bytesDeCasos += b
+    else bytesAnexados += b
+  }
 
   const conteudoConfiguracoes = (
     <>
@@ -215,6 +236,31 @@ export default async function ConfiguracoesPage() {
           <ItemSeguranca>Isolamento total entre escritórios (Row Level Security)</ItemSeguranca>
           <ItemSeguranca>Chave de IA nunca exposta ao navegador</ItemSeguranca>
           <ItemSeguranca estado="info">Em conformidade com a LGPD (Lei 13.709/2018)</ItemSeguranca>
+        </CardContent>
+      </Card>
+
+      {/* Armazenamento — espaço usado pelos anexos/documentos do escritório */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <HardDrive className="h-5 w-5 text-muted-foreground" />
+            Armazenamento
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
+            <div>
+              <p className="text-2xl font-bold text-foreground">{formatarBytes(bytesTotal)}</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {qtdDocs} {qtdDocs === 1 ? 'documento armazenado' : 'documentos armazenados'}
+              </p>
+            </div>
+          </div>
+          <InfoItem label="Anexados no dossiê" valor={formatarBytes(bytesAnexados)} />
+          <InfoItem label="De atendimentos / gerados" valor={formatarBytes(bytesDeCasos)} />
+          <p className="pt-3 text-xs text-muted-foreground">
+            Comprovantes do financeiro ainda não entram nesta conta.
+          </p>
         </CardContent>
       </Card>
 
