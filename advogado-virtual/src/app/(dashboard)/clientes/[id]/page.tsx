@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ClienteAcoesClient } from './ClienteAcoesClient'
 import { ProcessosCliente } from '@/components/processos/ProcessosCliente'
+import { ConversasWhatsAppCliente } from '@/components/clientes/ConversasWhatsAppCliente'
 import { BotaoExcluirAtendimento } from '@/components/atendimento/BotaoExcluirAtendimento'
 import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
 import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
@@ -306,6 +307,9 @@ export default async function DossieClientePage({
             avisoInicial={(cliente.aviso_movimentacao as 'desligado' | 'fila' | 'automatico') ?? 'desligado'}
             podeGerenciar={['admin', 'advogado'].includes(usuario.role)}
           />
+
+          {/* ── Histórico das conversas no WhatsApp (relay Chatwoot, lazy) ── */}
+          <ConversasWhatsAppCliente clienteId={id} />
 
           {/* ── Barra de resumo + filtros ── */}
           {totalAtendimentos > 0 && (

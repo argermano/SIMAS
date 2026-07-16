@@ -130,6 +130,7 @@ export function MensagemBolha({
   conversaId,
   telefone,
   conectado = true,
+  somenteLeitura = false,
 }: {
   mensagem: Mensagem
   /** Id da conversa — habilita "Ler comprovante (IA)" nas imagens de entrada. */
@@ -138,6 +139,9 @@ export function MensagemBolha({
   telefone?: string | null
   /** Encaminhar exige token pessoal (escrita): desabilita quando não conectado. */
   conectado?: boolean
+  /** Leitura pura (ex.: histórico no dossiê): oculta ações de escrita
+   * (Encaminhar e "Ler comprovante"). Retrocompatível: default mantém tudo. */
+  somenteLeitura?: boolean
 }) {
   const { direcao, privada, conteudo, anexos, sender, timestamp } = mensagem
   const hora = horaCurta(timestamp)
@@ -170,7 +174,9 @@ export function MensagemBolha({
       : 'bg-foreground text-background dark:bg-primary/90'
 
   const primeiraImagem =
-    cliente && conversaId !== undefined ? (anexos ?? []).find((a) => a.tipo === 'image') : undefined
+    !somenteLeitura && cliente && conversaId !== undefined
+      ? (anexos ?? []).find((a) => a.tipo === 'image')
+      : undefined
 
   return (
     <div className={cn('flex w-full', alinhaDireita ? 'justify-end' : 'justify-start')}>
@@ -204,7 +210,7 @@ export function MensagemBolha({
                     <AnexoCard anexo={a} escuro={saidaEscura} />
                   )}
                   {/* Encaminhar: só no anexo RECEBIDO do cliente (imagem/arquivo). */}
-                  {cliente && podeEncaminhar(a) && (
+                  {!somenteLeitura && cliente && podeEncaminhar(a) && (
                     <button
                       type="button"
                       onClick={() => setEncaminharAnexo(a)}
