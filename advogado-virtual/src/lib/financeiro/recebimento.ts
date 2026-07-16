@@ -204,8 +204,9 @@ async function registrarComprovanteInbox(input: {
   dados: DadosComprovante
   buffer: Buffer
   contentType: string
+  contatoNome?: string | null // nome do contato no Chatwoot (best-effort); null se ausente
 }): Promise<void> {
-  const { db, tenantId, clienteId, telefone, conversaId, mensagemId, dados, buffer, contentType } = input
+  const { db, tenantId, clienteId, telefone, conversaId, mensagemId, dados, buffer, contentType, contatoNome } = input
   try {
     const ext = EXTENSOES[contentType] ?? 'bin'
     const path = `financeiro/${tenantId}/inbox/${mensagemId}.${ext}`
@@ -226,6 +227,7 @@ async function registrarComprovanteInbox(input: {
           tenant_id: tenantId,
           cliente_id: clienteId,
           telefone,
+          contato_nome: contatoNome ?? null,
           conversa_id: conversaId,
           mensagem_id: mensagemId,
           dados,
@@ -279,8 +281,14 @@ export async function processarAnexoRecebido(input: {
   mensagemId: string
   conversaId: string
   contentTypeHint?: string | null
+  contatoNome?: string | null // nome do contato no Chatwoot (best-effort); param opcional/retrocompatível
 }): Promise<void> {
   const { anexoUrl, mensagemId, conversaId } = input
+  // Normaliza o nome do contato (trim); vazio => null. Gravado no inbox p/ deixar
+  // a origem óbvia mesmo sem cadastro de cliente.
+  const contatoNome = typeof input.contatoNome === 'string' && input.contatoNome.trim()
+    ? input.contatoNome.trim()
+    : null
 
   try {
     // a) Normaliza o telefone; sem dígitos não há como casar cliente.
@@ -322,7 +330,7 @@ export async function processarAnexoRecebido(input: {
         return
       }
       await registrarComprovanteInbox({
-        db, tenantId, clienteId: null, telefone: input.telefone, conversaId, mensagemId,
+        db, tenantId, clienteId: null, telefone: input.telefone, conversaId, mensagemId, contatoNome,
         dados: extraido.dados, buffer: extraido.buffer, contentType: extraido.contentType,
       })
       return
@@ -393,7 +401,7 @@ export async function processarAnexoRecebido(input: {
     // i) CASO (a) — cliente casado SEM parcela aberta: vai para o inbox.
     if (!abertas || abertas.length === 0) {
       await registrarComprovanteInbox({
-        db, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId,
+        db, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId, contatoNome,
         dados, buffer, contentType,
       })
       return
@@ -405,7 +413,7 @@ export async function processarAnexoRecebido(input: {
     if (!sugestao) {
       logger.info('financeiro.recebimento.sem_sugestao', { mensagemId, conversaId, tenantId, abertas: abertas.length })
       await registrarComprovanteInbox({
-        db, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId,
+        db, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId, contatoNome,
         dados, buffer, contentType,
       })
       return
@@ -455,7 +463,7 @@ export async function processarAnexoRecebido(input: {
       const curDados = (cur?.comprovante_recebido_dados ?? {}) as Record<string, unknown>
       if (curDados.mensagemId !== mensagemId) {
         await registrarComprovanteInbox({
-          db, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId,
+          db, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId, contatoNome,
           dados, buffer, contentType,
         })
       }

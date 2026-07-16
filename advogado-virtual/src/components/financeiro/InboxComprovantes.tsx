@@ -36,6 +36,7 @@ export interface ComprovanteRecebido {
   id: string
   cliente_id: string | null
   cliente_nome: string | null
+  contato_nome: string | null // nome do contato no Chatwoot (best-effort); deixa a origem óbvia sem cadastro
   telefone: string
   conversa_id: string | null
   dados: DadosComprovante
@@ -183,6 +184,15 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
                   <Link href={`/clientes/${c.cliente_id}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 font-medium text-foreground hover:text-primary hover:underline">
                     <User className="h-3.5 w-3.5" aria-hidden /> {c.cliente_nome ?? 'Cliente'}
                   </Link>
+                ) : c.contato_nome ? (
+                  // Sem cadastro de cliente, mas o Chatwoot conhece o contato: mostra o
+                  // nome (ex.: colaborador do escritório) em vez do genérico + tooltip.
+                  <span
+                    title="Contato do Chatwoot — sem cadastro de cliente"
+                    className="inline-flex items-center gap-1 font-medium text-foreground"
+                  >
+                    <User className="h-3.5 w-3.5" aria-hidden /> {c.contato_nome}
+                  </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 italic">
                     <User className="h-3.5 w-3.5" aria-hidden /> Cliente não identificado

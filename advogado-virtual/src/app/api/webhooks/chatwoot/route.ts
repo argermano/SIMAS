@@ -80,6 +80,10 @@ export async function POST(req: NextRequest) {
   const telefone = strOuVazio(metaSender.phone_number) || strOuVazio(sender.phone_number)
   if (!telefone) return NextResponse.json({ ok: true }) // sem telefone não há como casar cliente
 
+  // Nome do contato no Chatwoot (best-effort): deixa a origem óbvia no inbox
+  // mesmo sem cadastro de cliente. Vazio => null (retrocompatível). LGPD: não loga.
+  const contatoNome = strOuVazio(metaSender.name) || strOuVazio(sender.name) || null
+
   // id da mensagem é a chave de dedup do recebimento — sem ele, ignora.
   const idMensagem = payload.id
   if (idMensagem == null) return NextResponse.json({ ok: true })
@@ -109,6 +113,7 @@ export async function POST(req: NextRequest) {
         mensagemId: idAnexo,
         conversaId,
         contentTypeHint: null,
+        contatoNome,
       })
     }
   })

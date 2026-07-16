@@ -165,6 +165,14 @@ export function DetalheComprovanteModal({
               >
                 <User className="h-4 w-4 text-muted-foreground" aria-hidden /> {c.cliente_nome ?? 'Cliente'}
               </Link>
+            ) : c.contato_nome ? (
+              // Sem cadastro, mas o Chatwoot conhece o contato: mostra o nome + tooltip.
+              <span
+                title="Contato do Chatwoot — sem cadastro de cliente"
+                className="inline-flex items-center gap-1.5 font-medium text-foreground"
+              >
+                <User className="h-4 w-4 text-muted-foreground" aria-hidden /> {c.contato_nome}
+              </span>
             ) : (
               <span className="inline-flex items-center gap-1.5 italic text-muted-foreground">
                 <User className="h-4 w-4" aria-hidden /> Cliente não identificado
