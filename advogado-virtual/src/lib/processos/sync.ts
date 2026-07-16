@@ -53,8 +53,16 @@ const complementoTexto = (c: Array<Record<string, unknown>> | undefined): string
     .filter(Boolean)
     .join('; ')
 
-/** Gera resumos em linguagem natural para os movimentos novos (Haiku, em lote). */
-async function gerarResumos(movs: MovimentoBruto[]): Promise<(string | null)[]> {
+/** Item mínimo para resumir um movimento (nome técnico + complementos brutos). */
+export interface ResumoItem {
+  nome: string
+  complementos?: Array<Record<string, unknown>>
+}
+
+/** Gera resumos em linguagem natural para os movimentos (Haiku, em lotes de 30).
+ * Best-effort por chunk: falha de rede deixa aquele item com null (não derruba os
+ * demais). Exportada para reuso pelo cron de reparo (movimentos sem resumo_ia). */
+export async function gerarResumos(movs: ResumoItem[]): Promise<(string | null)[]> {
   const out: (string | null)[] = new Array(movs.length).fill(null)
   const CHUNK = 30
   for (let i = 0; i < movs.length; i += CHUNK) {
