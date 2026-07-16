@@ -6,7 +6,7 @@
 
 import { useState } from 'react'
 import {
-  Scale, ChevronLeft, ChevronRight, Plus, Search, X, Filter, Loader2,
+  ChevronLeft, ChevronRight, Plus, Search, X, Filter, Loader2,
   CalendarPlus, MapPin,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -67,12 +67,8 @@ export function BarraTopo({
       {/* Linha 1 — cabeçalho editorial + navegação de período */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            <Scale className="h-3.5 w-3.5" aria-hidden />
-            Escritório · Agenda
-          </p>
           {/* Mesma tipografia do Header padrão das páginas (pedido do dono, 2026-07-16). */}
-          <h1 className="mt-1 text-2xl font-bold text-foreground font-heading">
+          <h1 className="text-2xl font-bold text-foreground font-heading">
             Agenda<span className="text-accent">.</span>
           </h1>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
