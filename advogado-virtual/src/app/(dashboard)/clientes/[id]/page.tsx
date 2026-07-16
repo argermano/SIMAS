@@ -12,7 +12,6 @@ import { ConversasWhatsAppCliente } from '@/components/clientes/ConversasWhatsAp
 import { BotaoExcluirAtendimento } from '@/components/atendimento/BotaoExcluirAtendimento'
 import { BotaoExcluirPeca } from '@/components/pecas/BotaoExcluirPeca'
 import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
-import { DocumentoLink } from '@/components/clientes/DocumentoLink'
 import { DocumentosDossie } from '@/components/clientes/DocumentosDossie'
 import { PlayerAudio } from '@/components/atendimento/PlayerAudio'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
@@ -98,7 +97,7 @@ function hrefCaso(clienteId: string, atendimentoId: string): string {
   return `/clientes/${clienteId}/casos/${atendimentoId}`
 }
 
-type Filtro = 'atendimentos' | 'analises' | 'pecas' | 'documentos' | 'contratos' | null
+type Filtro = 'atendimentos' | 'analises' | 'pecas' | 'contratos' | null
 
 export default async function DossieClientePage({
   params,
@@ -146,7 +145,7 @@ export default async function DossieClientePage({
 
   const atendimentoIds = (atendimentos ?? []).map(a => a.id)
 
-  const [analises, pecas, documentos, todosDocumentosCliente, contratos] = await Promise.all([
+  const [analises, pecas, documentos, contratos] = await Promise.all([
     atendimentoIds.length > 0
       ? supabase
           .from('analises')
@@ -166,11 +165,6 @@ export default async function DossieClientePage({
           .select('id, atendimento_id, tipo, file_name')
           .in('atendimento_id', atendimentoIds)
       : Promise.resolve({ data: [] }),
-    supabase
-      .from('documentos')
-      .select('id, atendimento_id, tipo, file_name, created_at')
-      .eq('cliente_id', id)
-      .order('created_at', { ascending: false }),
     supabase
       .from('contratos_honorarios')
       .select('id, titulo, status, area, atendimento_id, valor_fixo, percentual_exito, created_at')
@@ -212,7 +206,6 @@ export default async function DossieClientePage({
   const totalAtendimentos = atendimentos?.length ?? 0
   const totalPecas        = pecas.data?.length ?? 0
   const totalAnalises     = analises.data?.length ?? 0
-  const totalDocumentos   = documentos.data?.length ?? 0
   const totalContratos    = contratosList.length
 
   // null = sem filtro (mostra tudo); filtro X = mostra só X
@@ -314,13 +307,13 @@ export default async function DossieClientePage({
           {/* ── Histórico das conversas no WhatsApp (relay Chatwoot, lazy) ── */}
           <ConversasWhatsAppCliente clienteId={id} />
 
-          {/* ── Barra de resumo + filtros ── */}
+          {/* ── Barra de resumo + filtros ──
+              Documentos saiu dos filtros: a aba da coluna direita é o lugar único deles (dono, 2026-07-16). */}
           {totalAtendimentos > 0 && (
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <ResumoCard href={`/clientes/${id}${filtro === 'atendimentos' ? '' : '?filtro=atendimentos'}`} icone={<FileText className="h-5 w-5" />} label="Atendimentos" valor={totalAtendimentos} cor="primary" ativo={filtro === 'atendimentos'} />
               <ResumoCard href={`/clientes/${id}${filtro === 'analises'     ? '' : '?filtro=analises'}`}     icone={<Brain className="h-5 w-5" />}         label="Análises IA"    valor={totalAnalises}     cor="violet"  ativo={filtro === 'analises'}     />
               <ResumoCard href={`/clientes/${id}${filtro === 'pecas'        ? '' : '?filtro=pecas'}`}        icone={<ScrollText className="h-5 w-5" />}    label="Peças geradas"  valor={totalPecas}        cor="emerald" ativo={filtro === 'pecas'}        />
-              <ResumoCard href={`/clientes/${id}${filtro === 'documentos'   ? '' : '?filtro=documentos'}`}   icone={<Paperclip className="h-5 w-5" />}     label="Documentos"     valor={totalDocumentos}   cor="amber"   ativo={filtro === 'documentos'}   />
               <ResumoCard href={`/clientes/${id}${filtro === 'contratos'    ? '' : '?filtro=contratos'}`}    icone={<FileSignature className="h-5 w-5" />} label="Contratos"      valor={totalContratos}    cor="blue"    ativo={filtro === 'contratos'}    />
             </div>
           )}
@@ -610,28 +603,6 @@ export default async function DossieClientePage({
             </section>
           )}
 
-          {/* ── Documentos ── */}
-          {mostrar('documentos') && (todosDocumentosCliente.data ?? []).length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-4">
-                <Paperclip className="h-5 w-5 text-muted-foreground" />
-                <h2 className="text-xl font-semibold text-foreground">Documentos do Cliente</h2>
-                <span className="ml-1 rounded-full bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
-                  {(todosDocumentosCliente.data ?? []).length}
-                </span>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {(todosDocumentosCliente.data ?? []).map((doc) => (
-                  <DocumentoLink
-                    key={doc.id}
-                    docId={doc.id}
-                    fileName={doc.file_name}
-                    dataRelativa={formatarDataRelativa(doc.created_at)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
           </div>
 
           {/* Coluna direita: aba Documentos (anexar + lista + excluir diretos). */}
@@ -665,12 +636,13 @@ function ResumoCard({
   }
   const { bg, text, ring } = cores[cor]
   return (
-    <Link href={href}>
+    <Link href={href} className="block h-full">
+      {/* h-full nos dois níveis: rótulo que quebra em 2 linhas não desalinha a fileira. */}
       <Card className={cn(
-        'cursor-pointer transition-all hover:shadow-md',
+        'h-full cursor-pointer transition-all hover:shadow-md',
         ativo && `ring-2 ${ring}`
       )}>
-        <CardContent className="flex items-center gap-3 py-3">
+        <CardContent className="flex h-full items-center gap-3 py-3">
           <div className={cn('rounded-lg p-2', bg, text)}>{icone}</div>
           <div>
             <p className="text-2xl font-bold text-foreground">{valor}</p>
