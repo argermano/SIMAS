@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  Inbox, FileText, ExternalLink, MessageSquare, HandCoins, Trash2, User, Phone, ScanLine,
+  Inbox, FileText, ExternalLink, MessageSquare, HandCoins, Trash2, User, Phone, ScanLine, AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatarValor } from '@/lib/financeiro/parcelas'
 import { AtribuirComprovanteModal } from './AtribuirComprovanteModal'
+import { DetalheComprovanteModal } from './DetalheComprovanteModal'
 
 // ─────────────────────────────────────────────────────────────
 // Contrato consumido (rota GET /api/financeiro/comprovantes):
@@ -38,8 +39,10 @@ export interface ComprovanteRecebido {
   dados: DadosComprovante
   content_type: string | null
   imagemUrl: string | null   // signed URL inline (nova aba / <img>); null se indisponível
+  downloadUrl: string | null // signed URL que força download (Content-Disposition attachment)
   criado_em: string
   status: string
+  possivelDuplicado?: boolean // rota marca quando outro item divide o mesmo E2E (ou valor+data+telefone)
 }
 
 /** "2026-07-11T…" | "2026-07-11" -> "11/07/2026" (fallback: original). */
@@ -62,6 +65,7 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
   const [total, setTotal]     = useState(0)
   const [loading, setLoading] = useState(true)
 
+  const [detalhe, setDetalhe]             = useState<ComprovanteRecebido | null>(null)
   const [atribuir, setAtribuir]           = useState<ComprovanteRecebido | null>(null)
   const [descartarAlvo, setDescartarAlvo] = useState<ComprovanteRecebido | null>(null)
   const [descartando, setDescartando]     = useState(false)
@@ -126,9 +130,26 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
 
       <ul className="divide-y divide-warning/20">
         {itens.map((c) => (
-          <li key={c.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+          // Linha inteira clicável = abre o detalhe. Os controles internos
+          // (miniatura, links, botões) chamam stopPropagation p/ agir sem abrir o
+          // detalhe. role/tabIndex/onKeyDown mantêm o acesso por teclado.
+          <li
+            key={c.id}
+            onClick={() => setDetalhe(c)}
+            // Só quando a PRÓPRIA linha está focada (target === li). Assim o
+            // keydown de Enter/Espaço num botão/link interno (que bolha até aqui)
+            // não abre o detalhe por cima da ação — o stopPropagation do onClick
+            // cobre só o clique, não o teclado.
+            onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setDetalhe(c) } }}
+            role="button"
+            tabIndex={0}
+            aria-label={`Ver detalhe do comprovante de ${formatarValor(c.dados?.valorCentavos ?? 0)}`}
+            className="flex cursor-pointer flex-col gap-3 p-3 transition-colors hover:bg-warning/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/40 sm:flex-row sm:items-center"
+          >
             {/* Miniatura clicável (nova aba). PDF/sem imagem -> ícone. */}
-            <Miniatura comprovante={c} />
+            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+              <Miniatura comprovante={c} />
+            </div>
 
             {/* Dados extraídos + origem */}
             <div className="min-w-0 flex-1 space-y-1">
@@ -137,6 +158,14 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
                   {formatarValor(c.dados?.valorCentavos ?? 0)}
                 </span>
                 <span className="text-sm text-muted-foreground">{dataPtBr(c.dados?.dataISO)}</span>
+                {c.possivelDuplicado && (
+                  <span
+                    title="Mesmo comprovante recebido em outra mensagem — confira e descarte um dos dois."
+                    className="inline-flex items-center gap-1 self-center rounded-full border border-warning/40 bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning"
+                  >
+                    <AlertTriangle className="h-3 w-3" aria-hidden /> Possível duplicado
+                  </span>
+                )}
               </div>
               {(c.dados?.pagadorNome || c.dados?.banco) && (
                 <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
@@ -146,7 +175,7 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
               )}
               <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                 {c.cliente_id ? (
-                  <Link href={`/clientes/${c.cliente_id}`} className="inline-flex items-center gap-1 font-medium text-foreground hover:text-primary hover:underline">
+                  <Link href={`/clientes/${c.cliente_id}`} onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1 font-medium text-foreground hover:text-primary hover:underline">
                     <User className="h-3.5 w-3.5" aria-hidden /> {c.cliente_nome ?? 'Cliente'}
                   </Link>
                 ) : (
@@ -160,6 +189,7 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
                 {c.conversa_id && (
                   <Link
                     href={`/conversas?conversa=${encodeURIComponent(c.conversa_id)}`}
+                    onClick={(e) => e.stopPropagation()}
                     className="inline-flex items-center gap-1 text-primary hover:underline"
                   >
                     <MessageSquare className="h-3.5 w-3.5" aria-hidden /> Ver conversa
@@ -168,8 +198,8 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
               </p>
             </div>
 
-            {/* Ações */}
-            <div className="flex shrink-0 items-center gap-2">
+            {/* Ações (stopPropagation: agir sem abrir o detalhe da linha) */}
+            <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
               <Button size="sm" onClick={() => setAtribuir(c)}>
                 <HandCoins className="h-4 w-4" /> Atribuir
               </Button>
@@ -180,6 +210,15 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
           </li>
         ))}
       </ul>
+
+      {/* Detalhe do comprovante: Atribuir/Descartar fecham o detalhe e reusam os
+          fluxos já montados abaixo (o modal de atribuição / o diálogo de descarte). */}
+      <DetalheComprovanteModal
+        comprovante={detalhe}
+        onClose={() => setDetalhe(null)}
+        onAtribuir={() => { const c = detalhe; setDetalhe(null); setAtribuir(c) }}
+        onDescartar={() => { const c = detalhe; setDetalhe(null); setDescartarAlvo(c) }}
+      />
 
       <AtribuirComprovanteModal
         comprovante={atribuir}

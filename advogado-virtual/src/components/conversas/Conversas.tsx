@@ -309,20 +309,46 @@ export function Conversas({ email }: { email: string }) {
     if (alvo.topo > 2) el.scrollTop = alvo.topo + (el.scrollHeight - alvo.altura)
   }, [conversas])
 
-  // Deep-link do toast de notificação: /conversas?conversa=<id> abre a conversa.
+  // Deep-link /conversas?conversa=<id> (toast de notificação e "Ver conversa" do
+  // inbox de comprovantes). Leio o param UMA vez do window.location.search num
+  // efeito de mount — assim NÃO preciso do useSearchParams (que exigiria um
+  // boundary de Suspense neste client component no App Router). O id gravado pelo
+  // webhook do Chatwoot é o display_id (push_event_data.id), o MESMO id que a
+  // lista do relay usa — então casa direto por c.id.
   const deepLinkRef = useRef<number | null>(null)
+  const deepLinkAvisouRef = useRef(false)
   useEffect(() => {
     const m = /[?&]conversa=(\d+)/.exec(window.location.search)
     if (m) deepLinkRef.current = Number(m[1])
   }, [])
   useEffect(() => {
-    if (deepLinkRef.current == null || conversas.length === 0) return
-    const alvo = conversas.find((c) => c.id === deepLinkRef.current)
+    const alvoId = deepLinkRef.current
+    if (alvoId == null || loading) return
+    const alvo = conversas.find((c) => c.id === alvoId)
     if (alvo) {
       setSelecionadaId(alvo.id)
+      setMobileAberto(true) // no mobile abre a thread; no desktop é ignorado
       deepLinkRef.current = null
+      // Limpa o param p/ um refresh não re-selecionar (preserva pathname/hash).
+      const url = new URL(window.location.href)
+      url.searchParams.delete('conversa')
+      window.history.replaceState(null, '', url.pathname + url.search + url.hash)
+      return
     }
-  }, [conversas])
+    // Não está nas páginas abertas: puxa mais (teto de 5 páginas ≈ 125 conversas)
+    // usando o próprio scroll infinito; cada página nova reavalia este efeito.
+    if (temMais && paginaMax < 5) {
+      void carregarMais()
+      return
+    }
+    // Esgotou sem casar: a lista abre em "open", então pode estar em Resolvidas.
+    // Avisa UMA vez e desiste (não fica em laço).
+    if (!deepLinkAvisouRef.current) {
+      deepLinkAvisouRef.current = true
+      info('Conversa não encontrada na lista atual', 'Verifique o filtro Resolvidas.')
+    }
+    deepLinkRef.current = null
+  }, [conversas, loading, temMais, paginaMax, carregarMais, info])
 
   // Deep-link por telefone (/conversas?telefone=<dígitos>) — usado pelo cartão de
   // contato do caso ("Chamar no Conversas"). Casa via mesmoTelefone (com/sem 9º

@@ -125,6 +125,38 @@ async function inboxJaRegistrado(
   return !!data
 }
 
+// DEDUP por endToEndId (E2E do Pix): o MESMO comprovante REENVIADO em mensagens
+// diferentes tem mensagem_id distinto — a UNIQUE (tenant_id, mensagem_id) NÃO o
+// pega —, mas o endToEndId é único por transação Pix. Só dá para checar DEPOIS
+// da extração (o e2e nasce na leitura da IA); por isso roda após baixarEExtrair
+// e ANTES de qualquer upload/insert/staging. Procura o mesmo e2e não-vazio já no
+// inbox (QUALQUER status) OU já grudado numa parcela (staging ativo). Achou =>
+// é reenvio do mesmo comprovante, ignora. Erro de query => false (não descarta
+// por falha transitória). LGPD: sem valores — só a existência.
+async function duplicadoPorEndToEnd(
+  db: SupabaseClient,
+  tenantId: string,
+  endToEndId: string,
+): Promise<boolean> {
+  const [inbox, staging] = await Promise.all([
+    db
+      .from('comprovantes_recebidos')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('dados->>endToEndId', endToEndId)
+      .limit(1)
+      .maybeSingle(),
+    db
+      .from('parcelas')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('comprovante_recebido_dados->>endToEndId', endToEndId)
+      .limit(1)
+      .maybeSingle(),
+  ])
+  return !!inbox.data || !!staging.data
+}
+
 // Baixa os bytes do anexo pelo relay e roda a MESMA extração IA da rota manual.
 // Devolve null (e loga) em qualquer falha OU quando a imagem NÃO é comprovante —
 // nunca lança. Compartilhado pelo fluxo com cliente casado e pelo inbox sem
@@ -284,6 +316,11 @@ export async function processarAnexoRecebido(input: {
         anexoUrl, mensagemId, conversaId, tenantId, contentTypeHint: input.contentTypeHint,
       })
       if (!extraido) return
+      // Dedup por E2E: reenvio do mesmo comprovante em nova mensagem → ignora.
+      if (extraido.dados.endToEndId && await duplicadoPorEndToEnd(db, tenantId, extraido.dados.endToEndId)) {
+        logger.info('financeiro.inbox.duplicado_e2e', { mensagemId, conversaId, tenantId })
+        return
+      }
       await registrarComprovanteInbox({
         db, tenantId, clienteId: null, telefone: input.telefone, conversaId, mensagemId,
         dados: extraido.dados, buffer: extraido.buffer, contentType: extraido.contentType,
@@ -343,6 +380,15 @@ export async function processarAnexoRecebido(input: {
     })
     if (!extraido) return
     const { buffer, contentType, dados } = extraido
+
+    // h.1) DEDUP por E2E, ANTES de qualquer upload/insert/staging: o mesmo
+    // comprovante reenviado em nova mensagem (mensagem_id diferente) já foi para
+    // o inbox ou já grudou numa parcela → ignora (vale para os caminhos a/b e o
+    // staging abaixo). Só possível aqui porque o e2e só existe após a extração.
+    if (dados.endToEndId && await duplicadoPorEndToEnd(db, tenantId, dados.endToEndId)) {
+      logger.info('financeiro.inbox.duplicado_e2e', { mensagemId, conversaId, tenantId })
+      return
+    }
 
     // i) CASO (a) — cliente casado SEM parcela aberta: vai para o inbox.
     if (!abertas || abertas.length === 0) {

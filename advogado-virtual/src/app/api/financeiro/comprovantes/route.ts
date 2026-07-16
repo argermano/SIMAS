@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { getAuthContext, requireRole } from '@/lib/auth'
 import { logger } from '@/lib/logger'
+import { marcarPossiveisDuplicados } from '@/lib/financeiro/duplicados'
 
 // GET /api/financeiro/comprovantes — INBOX de comprovantes recebidos no WhatsApp
 // que a IA leu como comprovante mas que NÃO viraram staging (sem cobrança
@@ -110,5 +111,10 @@ export async function GET(_req: NextRequest) {
     }),
   )
 
-  return NextResponse.json({ comprovantes, total: count ?? comprovantes.length })
+  // Marca POSSÍVEIS DUPLICADOS (retroativo, para a fila atual): o mesmo
+  // comprovante reenviado em mensagens diferentes gera linhas distintas (a
+  // UNIQUE tenant+mensagem_id não pega). Lógica pura em lib (testável sem rede).
+  const comDup = marcarPossiveisDuplicados(comprovantes)
+
+  return NextResponse.json({ comprovantes: comDup, total: count ?? comDup.length })
 }
