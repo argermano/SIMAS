@@ -540,8 +540,9 @@ export default async function DossieClientePage({
           {/* Contratos saíram do dossiê: viraram o botão "Contratos" no cabeçalho (dono, 2026-07-16). */}
           </div>
 
-          {/* Coluna direita: aba Documentos (anexar + lista + excluir diretos). */}
-          <aside className="space-y-4 lg:sticky lg:top-6">
+          {/* Coluna direita: aba Documentos. SEM sticky — grudado ao rolar desalinhava
+              do topo das caixas da esquerda (reclamação do dono, 2026-07-16). */}
+          <aside className="space-y-4">
             <DocumentosDossie clienteId={id} />
           </aside>
         </div>
