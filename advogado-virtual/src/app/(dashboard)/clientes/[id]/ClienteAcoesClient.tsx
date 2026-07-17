@@ -6,14 +6,16 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
+import { EnviarMensagemCliente } from '@/components/clientes/EnviarMensagemCliente'
 import { Pencil, Trash2, FileSignature } from 'lucide-react'
 
 interface ClienteAcoesClientProps {
   clienteId:   string
   clienteNome: string
+  telefone?:   string | null
 }
 
-export function ClienteAcoesClient({ clienteId, clienteNome }: ClienteAcoesClientProps) {
+export function ClienteAcoesClient({ clienteId, clienteNome, telefone }: ClienteAcoesClientProps) {
   const router  = useRouter()
   const { success, error } = useToast()
 
@@ -40,6 +42,16 @@ export function ClienteAcoesClient({ clienteId, clienteNome }: ClienteAcoesClien
 
   return (
     <>
+      {/* Enviar WhatsApp ao cliente (verde discreto) — disponível em toda tela com
+          cliente selecionado; anexa documentos do cliente pelo canal do bot. */}
+      <EnviarMensagemCliente
+        clienteId={clienteId}
+        clienteNome={clienteNome}
+        telefone={telefone}
+        variant="secondary"
+        className="text-success border-success/30 hover:bg-success/5"
+      />
+
       <Button asChild variant="secondary" size="md">
         <Link href={`/clientes/${clienteId}/editar`}>
           <Pencil className="h-4 w-4" />

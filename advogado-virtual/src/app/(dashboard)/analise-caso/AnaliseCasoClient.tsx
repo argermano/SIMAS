@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { SeletorCliente } from '@/components/atendimento/SeletorCliente'
+import { EnviarMensagemCliente } from '@/components/clientes/EnviarMensagemCliente'
 import { GravadorAudio } from '@/components/atendimento/GravadorAudio'
 import { UploadAudioTranscricao } from '@/components/atendimento/UploadAudioTranscricao'
 import { TranscricaoActions } from '@/components/atendimento/TranscricaoActions'
@@ -413,11 +414,25 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
             <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <SeletorCliente
             onSelecionado={handleClienteSelecionado}
             clienteSelecionado={cliente}
           />
+          {/* Com cliente selecionado: enviar WhatsApp/anexos direto daqui (só
+              auditoria — sem caso). Telefone vem do cadastro (buscado ao abrir). */}
+          {cliente && (
+            <div className="flex justify-end">
+              <EnviarMensagemCliente
+                clienteId={cliente.id}
+                clienteNome={cliente.nome}
+                variant="secondary"
+                size="sm"
+                label="Enviar WhatsApp"
+                className="text-success border-success/30 hover:bg-success/5"
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

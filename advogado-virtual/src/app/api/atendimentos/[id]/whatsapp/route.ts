@@ -4,9 +4,7 @@ import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { logger } from '@/lib/logger'
-import { apenasDigitos } from '@/lib/conversas/telefone'
-import { enviarAvisoWhatsApp, enviarMediaWhatsApp } from '@/lib/processos/notificar'
-import { carregarBytesAnexo } from '@/lib/conversas/anexo-documento'
+import { telefoneEnvioValido, validarAnexosDoCliente, despacharWhatsAppCliente } from '@/lib/conversas/whatsapp-cliente'
 
 // POST /api/atendimentos/[id]/whatsapp — envia uma mensagem ao cliente pelo
 // canal de WhatsApp do escritório SEM sair da tela do atendimento (pedido do
@@ -67,105 +65,43 @@ export async function POST(
 
   const cliente = atendimento.clientes as unknown as { id: string; nome: string | null; telefone: string | null } | null
   const telefone = cliente?.telefone ?? null
-  if (!telefone || apenasDigitos(telefone).length < 10) {
+  if (!telefoneEnvioValido(telefone)) {
     return jsonError('Cliente sem telefone cadastrado — informe o WhatsApp no cartão de contato', 400)
   }
 
   const temAnexos = (anexos?.length ?? 0) > 0
 
-  // ── Caminho SEM anexos: fluxo histórico intacto (canal do bot) ─────────────
-  if (!temAnexos) {
-    const r = await enviarAvisoWhatsApp(telefone, texto!)
-    if (!r.ok) return jsonError('Falha ao enviar pelo WhatsApp — tente novamente', 502)
-
-    await registrarNoDiario(supabase, { id, tenantId: usuario.tenant_id, userId: usuario.id, texto: texto!, anexos: [] })
-    await logAudit({
-      tenantId: usuario.tenant_id,
-      userId: usuario.id,
-      action: 'atendimento.whatsapp_enviado',
-      resourceType: 'atendimento',
-      resourceId: id,
-      metadata: { clienteId: cliente?.id, anexos: 0 },
-    })
-    return NextResponse.json({ ok: true })
-  }
-
-  // ── Caminho COM anexos: tudo pelo relay (texto = legenda do 1º anexo) ──────
-  const email = auth.user.email
-  if (!email) return jsonError('E-mail do usuário ausente na sessão', 400)
-
-  // LGPD/segurança: todo anexo tem de ser DESTE cliente. Sem isso, um id de
-  // documento/peça de OUTRO cliente do mesmo tenant vazaria para o WhatsApp deste
-  // (o helper só valida tenant). A UI já filtra por cliente; aqui é a checagem real.
-  const clienteId = atendimento.cliente_id as string
-  const docIds = [...new Set(anexos!.filter((a) => a.documentoId).map((a) => a.documentoId!))]
-  const pecaIds = [...new Set(anexos!.filter((a) => a.pecaId).map((a) => a.pecaId!))]
-  if (docIds.length > 0) {
-    const { data: docsOk } = await supabase
-      .from('documentos')
-      .select('id')
-      .eq('tenant_id', usuario.tenant_id)
-      .eq('cliente_id', clienteId)
-      .in('id', docIds)
-    if ((docsOk?.length ?? 0) !== docIds.length) {
-      return jsonError('Documento não pertence a este cliente', 403)
-    }
-  }
-  if (pecaIds.length > 0) {
-    // Peça não tem cliente_id direto: o vínculo é pecas → atendimentos.cliente_id.
-    const { data: pecasOk } = await supabase
-      .from('pecas')
-      .select('id, atendimentos!inner(cliente_id)')
-      .eq('tenant_id', usuario.tenant_id)
-      .eq('atendimentos.cliente_id', clienteId)
-      .in('id', pecaIds)
-    if ((pecasOk?.length ?? 0) !== pecaIds.length) {
-      return jsonError('Peça não pertence a este cliente', 403)
-    }
-  }
-
-  // Envio pelo MESMO canal do bot que o texto usa (sendMedia do Evolution):
-  // funciona para QUALQUER número — inclusive cliente novo SEM conversa aberta
-  // no Chatwoot (caso real do dono: mandar a procuração no primeiro contato).
-  // A mensagem aparece na conversa do Chatwoot pela sincronização do Evolution;
-  // a autoria fica registrada no diário do atendimento.
-  const enviados: string[] = []
-  for (let i = 0; i < anexos!.length; i++) {
-    const a = anexos![i]
-    const anexo = await carregarBytesAnexo({
+  // Posse dos anexos (LGPD): todo anexo tem de ser DESTE cliente — checagem real
+  // no servidor (a UI já filtra por cliente). Núcleo compartilhado com a rota
+  // POR CLIENTE — comportamento idêntico ao que esta rota já fazia.
+  if (temAnexos) {
+    const posse = await validarAnexosDoCliente({
       supabase,
       tenantId: usuario.tenant_id,
-      documentoId: a.documentoId,
-      pecaId: a.pecaId,
+      clienteId: atendimento.cliente_id as string,
+      anexos: anexos!,
     })
-    if (!anexo.ok) {
-      // Nada saiu ainda → erro "limpo" com o status do helper; algo já saiu →
-      // 502 de sucesso parcial (o cliente já recebeu parte — não fingir tudo ok).
-      if (enviados.length === 0) return jsonError(anexo.erro, anexo.status)
-      return jsonError(`Enviei ${enviados.length} de ${anexos!.length}. O anexo seguinte falhou: ${anexo.erro}`, 502)
-    }
-
-    const r = await enviarMediaWhatsApp(
-      telefone,
-      { base64: anexo.bytes.toString('base64'), filename: anexo.filename, mimetype: anexo.contentType },
-      // Só o PRIMEIRO anexo leva o texto como legenda (mantém a ordem).
-      i === 0 ? texto ?? '' : '',
-    )
-    if (!r.ok) {
-      if (enviados.length === 0) {
-        return jsonError('Falha ao enviar o anexo pelo WhatsApp — tente novamente', 502)
-      }
-      return jsonError(`Enviei ${enviados.length} de ${anexos!.length}; "${anexo.filename}" falhou.`, 502)
-    }
-    enviados.push(anexo.filename)
+    if (!posse.ok) return jsonError(posse.erro, posse.status)
   }
+
+  // Envio pelo canal do bot (texto e/ou anexos). Funciona para QUALQUER número —
+  // inclusive cliente novo SEM conversa aberta no Chatwoot (caso real do dono:
+  // mandar a procuração no primeiro contato). A autoria fica no diário do caso.
+  const envio = await despacharWhatsAppCliente({
+    supabase,
+    tenantId: usuario.tenant_id,
+    telefone: telefone!,
+    texto,
+    anexos,
+  })
+  if (!envio.ok) return jsonError(envio.erro, envio.status)
 
   await registrarNoDiario(supabase, {
     id,
     tenantId: usuario.tenant_id,
     userId: usuario.id,
     texto: texto ?? '',
-    anexos: enviados,
+    anexos: envio.enviados,
   })
   await logAudit({
     tenantId: usuario.tenant_id,
@@ -173,9 +109,9 @@ export async function POST(
     action: 'atendimento.whatsapp_enviado',
     resourceType: 'atendimento',
     resourceId: id,
-    metadata: { clienteId: cliente?.id, anexos: enviados.length },
+    metadata: { clienteId: cliente?.id, anexos: envio.enviados.length },
   })
-  return NextResponse.json({ ok: true, anexos: enviados.length })
+  return NextResponse.json(temAnexos ? { ok: true, anexos: envio.enviados.length } : { ok: true })
 }
 
 // Registro no diário (best-effort: o envio já aconteceu; falha aqui só loga).

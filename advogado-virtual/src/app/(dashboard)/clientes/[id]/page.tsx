@@ -224,7 +224,7 @@ export default async function DossieClientePage({
               <ChevronLeft className="h-4 w-4" />
               Clientes
             </Link>
-            <ClienteAcoesClient clienteId={id} clienteNome={cliente.nome} />
+            <ClienteAcoesClient clienteId={id} clienteNome={cliente.nome} telefone={cliente.telefone ?? null} />
             {/* Peça-first continua existindo, agora como ação secundária */}
             <Button asChild variant="secondary" size="md">
               <Link href={`/clientes/${id}/atendimentos/novo`}>
