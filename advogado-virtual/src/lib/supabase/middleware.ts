@@ -36,7 +36,11 @@ export async function updateSession(request: NextRequest) {
   // Bearer CRON_SECRET / getAuthContext interno). O middleware NÃO deve redirecioná-las
   // para /login — um redirect 307 para HTML não faz sentido para um cliente de API, e
   // quebra webhooks/crons. Cada rota devolve seu próprio 401 JSON quando não autorizada.
-  const rotasApiAutonomas = ['/api/funil', '/api/cron', '/api/webhooks', '/api/integracao']
+  // /api/agenda/ics/[token]: feed iCalendar PÚBLICO — o token na URL É a
+  // credencial. O Google/Outlook buscam SEM cookie; sem esta isenção o
+  // middleware devolvia a página de login (HTML 200) e o calendário externo
+  // recusava o feed ("não foi possível adicionar").
+  const rotasApiAutonomas = ['/api/funil', '/api/cron', '/api/webhooks', '/api/integracao', '/api/agenda/ics']
   if (rotasApiAutonomas.some(r => pathname.startsWith(r))) {
     return supabaseResponse
   }
