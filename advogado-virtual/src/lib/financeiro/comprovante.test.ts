@@ -12,8 +12,18 @@ describe('dadosComprovanteSchema — validação dos dados extraídos pela IA', 
     })
     expect(r.success).toBe(true)
   })
-  it('aceita só os obrigatórios', () => {
+  it('aceita só os obrigatórios (dados antigos sem recebedor seguem válidos)', () => {
     expect(dadosComprovanteSchema.safeParse({ valorCentavos: 1, dataISO: '2026-01-01' }).success).toBe(true)
+  })
+  it('aceita os novos campos de recebedor (opcionais)', () => {
+    const r = dadosComprovanteSchema.safeParse({
+      valorCentavos: 50000,
+      dataISO: '2026-07-11',
+      recebedorNome: 'Katlen Germano',
+      recebedorDoc: '***.456.789-**',
+      chaveDestino: 'katlen@adv.br',
+    })
+    expect(r.success).toBe(true)
   })
   it('rejeita valor não inteiro, valor <= 0 e data fora do ISO', () => {
     expect(dadosComprovanteSchema.safeParse({ valorCentavos: 10.5, dataISO: '2026-01-01' }).success).toBe(false)
