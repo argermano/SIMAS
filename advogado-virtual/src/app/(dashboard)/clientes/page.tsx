@@ -127,7 +127,7 @@ export default async function ClientesPage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-4xl space-y-5">
+        <div className="space-y-5">
 
           {/* Barra de busca + índice alfabético */}
           <ListaClientesClient

@@ -38,7 +38,7 @@ export default async function FinanceiroPage() {
         nomeUsuario={usuario.nome}
       />
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-6xl">
+        <div>
           {/* Suspense exigido pelo useSearchParams (deep-link ?contrato=) no client component */}
           <Suspense fallback={<PageLoading label="Carregando financeiro..." />}>
             <FinanceiroClient />

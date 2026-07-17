@@ -66,7 +66,7 @@ export default async function ConsultoriaPage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl">
+        <div>
           <ConsultoriaClient
             area={area}
             tiposDocumento={[...areaConfig.tipos_documento]}

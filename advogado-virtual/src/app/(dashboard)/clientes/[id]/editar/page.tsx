@@ -58,7 +58,7 @@ export default async function EditarClientePage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-2xl">
+        <div>
           <Card>
             <CardContent className="pt-6">
               <FormCliente cliente={cliente} />

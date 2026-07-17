@@ -109,7 +109,7 @@ export default async function ContratoPage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-5xl">
+        <div>
           <EditorContratoClient
             contratoId={id}
             contrato={contrato as ContratoDetalhe}

@@ -55,7 +55,7 @@ export default async function NovoAtendimentoPage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-4xl space-y-6">
+        <div className="space-y-6">
           <p className="text-muted-foreground">
             Escolha a área jurídica e o tipo de peça para iniciar o atendimento de{' '}
             <strong className="text-foreground">{cliente.nome}</strong>.

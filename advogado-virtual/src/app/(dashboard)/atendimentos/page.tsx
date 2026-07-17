@@ -42,7 +42,7 @@ export default async function AtendimentosPage() {
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-4xl">
+        <div>
           <AtendimentosClient />
         </div>
       </main>

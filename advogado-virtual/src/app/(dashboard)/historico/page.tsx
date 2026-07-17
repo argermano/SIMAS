@@ -48,7 +48,7 @@ export default async function HistoricoPage() {
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-4xl">
+        <div>
           {!atendimentos || atendimentos.length === 0 ? (
             <EmptyState
               icon={<History className="h-10 w-10" />}

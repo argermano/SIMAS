@@ -54,7 +54,7 @@ export default async function AberturaPage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl">
+        <div>
           <AberturaClient area={area} areaNome={areaConfig.nome} />
         </div>
       </main>

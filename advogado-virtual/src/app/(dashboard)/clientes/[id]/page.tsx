@@ -246,7 +246,7 @@ export default async function DossieClientePage({
 
       <main className="flex-1 overflow-y-auto p-6">
         {/* Duas colunas no desktop: dossiê à esquerda, aba Documentos à direita. */}
-        <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0 space-y-6">
 
           {/* Dados do cliente */}

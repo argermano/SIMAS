@@ -37,7 +37,7 @@ export function MetricasFunil() {
   const maxEtapa = dados ? Math.max(1, ...dados.porEtapa.map((e) => e.count)) : 1
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="space-y-6">
       {/* Seletor de período */}
       <div className="flex gap-2">
         {PERIODOS.map((p) => (

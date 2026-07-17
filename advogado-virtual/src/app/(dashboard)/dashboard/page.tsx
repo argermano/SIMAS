@@ -84,7 +84,7 @@ export default async function DashboardPage() {
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-5xl space-y-10">
+        <div className="space-y-10">
 
           {/* Checklist de primeira configuração (some quando completo) */}
           {checklistConfig && (

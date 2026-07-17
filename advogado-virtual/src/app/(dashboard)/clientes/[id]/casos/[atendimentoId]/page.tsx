@@ -256,7 +256,7 @@ export default async function CasoPage({
         {/* Layout 2 colunas (inspirado no Astrea): à esquerda os detalhes do
             atendimento (diário como protagonista); à direita as ações e os
             complementos. No mobile empilha — principal primeiro, sidebar depois. */}
-        <div className="mx-auto grid max-w-6xl grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
 
           {/* ───────────── COLUNA PRINCIPAL — detalhes do atendimento ───────────── */}
           <div className="min-w-0 space-y-5">

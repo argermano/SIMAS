@@ -55,7 +55,7 @@ export default async function AreaPage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-5xl">
+        <div>
           <PainelArea area={config} />
         </div>
       </main>

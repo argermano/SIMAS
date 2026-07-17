@@ -56,7 +56,7 @@ export default async function RefinamentoPage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl">
+        <div>
           <TelaRefinamento
             area={area}
             areaNome={areaConfig.nome}

@@ -65,7 +65,7 @@ export default async function EquipePage() {
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-4xl space-y-6">
+        <div className="space-y-6">
 
           {/* Convidar novo membro */}
           <Card>

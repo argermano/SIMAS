@@ -38,7 +38,7 @@ export default async function NovoClientePage() {
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-2xl">
+        <div>
           <div className="mb-6 flex items-center gap-3 rounded-xl bg-primary/5 border border-primary/10 px-5 py-4">
             <UserPlus className="h-6 w-6 shrink-0 text-primary" />
             <div>

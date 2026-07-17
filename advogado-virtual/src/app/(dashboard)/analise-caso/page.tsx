@@ -43,7 +43,7 @@ export default async function AnaliseCasoPage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl">
+        <div>
           <AnaliseCasoClient atendimentoIdInicial={atendimentoId} />
         </div>
       </main>

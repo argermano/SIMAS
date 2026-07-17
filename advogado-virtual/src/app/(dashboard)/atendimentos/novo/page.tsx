@@ -60,7 +60,7 @@ export default async function NovoAtendimentoPage({
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-2xl">
+        <div>
           <NovoAtendimentoForm clienteId={clienteValido} clienteNome={clienteNome} />
         </div>
       </main>

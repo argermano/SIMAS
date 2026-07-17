@@ -31,7 +31,7 @@ export default async function BibliotecaPage() {
         nomeUsuario={usuario.nome ?? user.email ?? 'Usuário'}
       />
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-4xl">
+        <div>
           <BibliotecaTeses teses={(teses ?? []) as TeseRow[]} podeCurar={podeCurar} />
         </div>
       </main>

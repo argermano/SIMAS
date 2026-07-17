@@ -328,7 +328,7 @@ export default async function ConfiguracoesPage() {
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl">
+        <div>
           <ConfiguracoesTabs
             configuracoes={conteudoConfiguracoes}
             consumo={conteudoConsumo}

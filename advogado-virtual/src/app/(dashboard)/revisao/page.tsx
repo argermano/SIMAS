@@ -56,7 +56,7 @@ export default async function RevisaoPage() {
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-4xl">
+        <div>
           {(!pecas || pecas.length === 0) ? (
             <EmptyState
               icon={<ScrollText className="h-8 w-8" />}
