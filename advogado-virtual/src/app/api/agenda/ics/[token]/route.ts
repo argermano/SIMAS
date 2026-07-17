@@ -88,8 +88,10 @@ export async function GET(
     status: 200,
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
-      'Cache-Control': 'private, max-age=300',
-      'Content-Disposition': 'attachment; filename="simas-agenda.ics"',
+      // SEM Content-Disposition: attachment — o "Adicionar por URL" do Google
+      // Agenda FALHA quando o feed vem como anexo (trata como download, não
+      // como assinatura). É um feed de assinatura, então serve inline.
+      'Cache-Control': 'max-age=3600',
     },
   })
 }
