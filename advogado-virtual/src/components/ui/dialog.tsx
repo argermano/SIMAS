@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { X } from 'lucide-react'
 import { Button } from './button'
@@ -38,9 +39,16 @@ export function Dialog({
     return () => document.removeEventListener('keydown', handler)
   }, [open, onClose])
 
-  if (!open) return null
+  // Portal p/ o body: sem isso o `fixed` se ancora em qualquer ancestral com
+  // filter/backdrop-filter/transform (ex.: o <header> com backdrop-blur) em vez
+  // da viewport — o modal aberto de um botão do cabeçalho saía cortado no topo.
+  // Só após montar (evita mismatch de SSR).
+  const [montado, setMontado] = React.useState(false)
+  React.useEffect(() => { setMontado(true) }, [])
 
-  return (
+  if (!open || !montado) return null
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
@@ -89,7 +97,8 @@ export function Dialog({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
