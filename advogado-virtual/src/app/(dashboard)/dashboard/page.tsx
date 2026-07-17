@@ -118,29 +118,30 @@ export default async function DashboardPage() {
             </section>
           )}
 
-          {/* Card de acesso rápido — Análise de Caso */}
-          <section>
-            <Link href="/analise-caso" className="group block">
-              <div className="flex items-center gap-5 rounded-2xl border-2 border-primary/20 bg-card p-6 transition-all hover:border-primary/40 hover:shadow-card-hover">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl" style={{ background: 'var(--gradient-primary)' }}>
-                  <Brain className="h-7 w-7 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-bold text-foreground font-heading group-hover:text-primary">
-                    Análise de Caso com IA
-                  </h2>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    Descreva o relato do cliente — a IA identifica a área jurídica, avalia a urgência e orienta os próximos passos
-                  </p>
-                </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
-              </div>
-            </Link>
-          </section>
-
-          {/* Cards das áreas */}
+          {/* Cards das áreas (+ Análise de Caso com IA como card destacado no grid — dono, 2026-07-17) */}
           <section aria-label="Áreas do Direito">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <Link href="/analise-caso" className="group block animate-fade-in">
+                {/* Cor levemente diferente das áreas: fundo/borda tintados de primary. */}
+                <Card className="h-full border-primary/30 bg-primary/5 transition-all duration-200 hover:shadow-card-hover group-hover:border-primary/50">
+                  <CardContent className="flex flex-col gap-3 p-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: 'var(--gradient-primary)' }}>
+                      <Brain className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h2 className="text-lg font-bold text-foreground font-heading group-hover:text-primary">
+                        Análise de Caso com IA
+                      </h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Descreva o relato do cliente — a IA identifica a área, avalia a urgência e orienta os próximos passos
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm font-semibold text-primary">
+                      Acessar <ChevronRight className="h-4 w-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
               {areasOrdenadas.map((area, i) => {
                 const Icone = ICONE_AREA[area.icone] ?? Shield
 
