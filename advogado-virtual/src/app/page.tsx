@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { LogoMark } from '@/components/ui/Logo'
 import {
   Brain,
   FileText,
@@ -383,9 +382,11 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3.5 sm:px-8">
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-glow shadow-md shadow-primary/25 transition-shadow group-hover:shadow-lg group-hover:shadow-primary/30">
-              <LogoMark className="h-5 w-5 text-white" />
-            </div>
+            {/* Marca oficial (logo do dono, 2026-07-16): símbolo navy no claro, branco no escuro. */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- asset estático de public/ */}
+            <img src="/marca-s-navy.png" alt="" className="h-9 w-auto dark:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element -- asset estático de public/ */}
+            <img src="/marca-s-branca.png" alt="" className="hidden h-9 w-auto dark:block" />
             <span className="font-heading text-xl font-semibold tracking-tight">
               SIMAS
             </span>
@@ -815,9 +816,10 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
           <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-glow">
-                <LogoMark className="h-4 w-4 text-white" />
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element -- asset estático de public/ */}
+              <img src="/marca-s-navy.png" alt="" className="h-8 w-auto dark:hidden" />
+              {/* eslint-disable-next-line @next/next/no-img-element -- asset estático de public/ */}
+              <img src="/marca-s-branca.png" alt="" className="hidden h-8 w-auto dark:block" />
               <span className="font-heading text-base font-semibold">SIMAS</span>
             </div>
             <p className="text-xs text-muted-foreground">
