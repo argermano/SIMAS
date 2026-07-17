@@ -86,3 +86,36 @@ export async function PATCH(
 
   return NextResponse.json({ parcela: atualizadas[0] })
 }
+
+// DELETE /api/financeiro/parcelas/[id] — remove uma PREVISÃO de recebimento.
+// Estimativa: pode ser removida sem cerimônia (hard-delete). Gateado ao status
+// 'prevista' — parcela real (aberta/paga/cancelada) NUNCA é apagada por aqui
+// (cancele pela rota /cancelar); recusa com 409 claro.
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params
+
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const gate = requireRole(auth.usuario, ROLES)
+  if (gate) return gate
+  const { supabase, usuario } = auth
+
+  // Claim gateado por status='prevista': só apaga previsão. 0 linhas => a
+  // parcela não existe ou não é previsão → 409 (não é hard-delete de cobrança).
+  const { data: removidas, error } = await supabase
+    .from('parcelas')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', usuario.tenant_id)
+    .eq('status', 'prevista')
+    .select('id')
+  if (error) return jsonError(error.message, 500)
+  if (!removidas || removidas.length === 0) {
+    return jsonError('Só é possível remover parcelas previstas', 409)
+  }
+
+  return NextResponse.json({ ok: true })
+}

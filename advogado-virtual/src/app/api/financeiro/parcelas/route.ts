@@ -4,6 +4,7 @@ import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { pertenceAoTenant } from '@/lib/ownership'
 import { gerarSerie } from '@/lib/financeiro/parcelas'
+import { sincronizarPrevisaoContrato } from '@/lib/financeiro/previsao'
 import { hojeSaoPauloISO } from '@/lib/processos/util'
 
 // Financeiro L1 — parcelas (cobranças). Papel: TODA a equipe
@@ -104,7 +105,7 @@ export async function GET(req: NextRequest) {
   } else if (status === 'vencida') {
     query = query.eq('status', 'aberta').lt('vencimento', hojeSaoPauloISO())
   } else if (status) {
-    if (!['aberta', 'paga', 'cancelada'].includes(status)) return jsonError('Status inválido', 400)
+    if (!['aberta', 'paga', 'cancelada', 'prevista'].includes(status)) return jsonError('Status inválido', 400)
     query = query.eq('status', status)
   }
   if (de) query = query.gte('vencimento', de)
@@ -224,6 +225,12 @@ export async function POST(req: NextRequest) {
     })))
     .select(COLS)
   if (error) return jsonError(error.message, 500)
+
+  // Nasceu a série real do contrato → a previsão de recebimento deixa de fazer
+  // sentido (a estimativa foi substituída pelas parcelas de verdade). Remove-a.
+  if (dados.contratoId) {
+    await sincronizarPrevisaoContrato(supabase, dados.contratoId)
+  }
 
   return NextResponse.json({ parcelas: criadas ?? [] }, { status: 201 })
 }

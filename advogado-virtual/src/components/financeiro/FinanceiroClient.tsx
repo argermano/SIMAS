@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import {
   Wallet, CalendarClock, AlertTriangle, CheckCircle2, Copy, HandCoins,
-  XCircle, Plus, Search, ChevronLeft, ChevronRight, FilterX, MessageSquare, FileClock, Receipt
+  XCircle, Plus, Search, ChevronLeft, ChevronRight, FilterX, MessageSquare, FileClock, Receipt,
+  TrendingUp, Sparkles, Trash2, FileSignature
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -25,14 +26,14 @@ import { ModalNovaCobranca, type PrefillContrato } from './ModalNovaCobranca'
 import { ConferirComprovanteModal } from './ConferirComprovanteModal'
 import { InboxComprovantes } from './InboxComprovantes'
 import { PagamentoModal } from './PagamentoModal'
-import { type Parcela, type PixConfig, LABELS_MEIO, hojeISO, somarDiasISO, ehVencida, aguardandoBaixa } from './tipos'
+import { type Parcela, type PixConfig, LABELS_MEIO, hojeISO, somarDiasISO, ehVencida, aguardandoBaixa, ehPrevisao } from './tipos'
 
 // ─────────────────────────────────────────────────────────────
 // Tipos locais
 // ─────────────────────────────────────────────────────────────
 
 interface Indicador { count: number; somaCentavos: number }
-interface Resumo { aVencer7d: Indicador; vencidas: Indicador; recebidoMes: Indicador }
+interface Resumo { aVencer7d: Indicador; vencidas: Indicador; recebidoMes: Indicador; previsto: Indicador }
 
 interface Filtros {
   status: string       // '' | aberta | paga | cancelada
@@ -43,7 +44,7 @@ interface Filtros {
   q: string            // busca por cliente
 }
 
-type Preset = 'a_vencer' | 'vencidas' | 'recebido_mes' | null
+type Preset = 'a_vencer' | 'vencidas' | 'recebido_mes' | 'previsto' | null
 
 const FILTROS_VAZIOS: Filtros = { status: '', de: '', ate: '', pagoDe: '', pagoAte: '', q: '' }
 
@@ -109,6 +110,7 @@ export function FinanceiroClient() {
         aVencer7d:   parseIndicador(d.aVencer7d ?? d.a_vencer_7d ?? d.aVencer),
         vencidas:    parseIndicador(d.vencidas),
         recebidoMes: parseIndicador(d.recebidoMes ?? d.recebido_mes ?? d.recebido),
+        previsto:    parseIndicador(d.previsto),
       })
     } catch { /* resumo é decorativo — não bloqueia a lista */ }
   }, [])
@@ -216,6 +218,7 @@ export function FinanceiroClient() {
     // "Recebido no mês" filtra por DATA DO PAGAMENTO (pago_em) — igual ao
     // indicador do card, que soma por pago_em (não por vencimento).
     if (p === 'recebido_mes') setFiltros({ ...FILTROS_VAZIOS, status: 'paga', pagoDe: `${hoje.slice(0, 7)}-01`, pagoAte: fimDoMes(hoje) })
+    if (p === 'previsto')     setFiltros({ ...FILTROS_VAZIOS, status: 'prevista' })
   }
 
   function mudarFiltro(patch: Partial<Filtros>) {
@@ -272,6 +275,48 @@ export function FinanceiroClient() {
     }
   }
 
+  // Previsão → "Gerar parcelas": abre o modal de nova cobrança já com os dados do
+  // contrato (mesmo fluxo do deep-link da tarefa). A série real criada substitui
+  // a previsão (o POST de parcelas remove a previsão no servidor).
+  async function gerarParcelasPrevisao(p: Parcela) {
+    if (!p.contrato_id) { setPrefill(null); setNovaAberta(true); return }
+    try {
+      const r = await fetch(`/api/contratos/${p.contrato_id}`)
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok || !d.contrato) {
+        toastError('Contrato não encontrado', 'Abra a cobrança manualmente.')
+        setPrefill(null); setNovaAberta(true); return
+      }
+      const c = d.contrato as {
+        id: string; cliente_id: string | null; valor_fixo: number | null
+        forma_pagamento: string | null; clientes?: { nome?: string | null } | null
+      }
+      setPrefill({
+        contratoId:     c.id,
+        clienteId:      c.cliente_id ?? null,
+        clienteNome:    c.clientes?.nome ?? null,
+        valorCentavos:  c.valor_fixo != null ? Math.round(Number(c.valor_fixo) * 100) : null,
+        formaPagamento: c.forma_pagamento ?? null,
+      })
+      setNovaAberta(true)
+    } catch {
+      toastError('Falha ao carregar o contrato', 'Abra a cobrança manualmente.')
+    }
+  }
+
+  // Remove uma previsão (estimativa) — sem cerimônia; a rota gateia por 'prevista'.
+  async function removerPrevisao(p: Parcela) {
+    try {
+      const r = await fetch(`/api/financeiro/parcelas/${p.id}`, { method: 'DELETE' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { toastError('Não foi possível remover a previsão', d.error ?? 'Tente novamente.'); return }
+      success('Previsão removida', p.descricao)
+      aposMudanca()
+    } catch {
+      toastError('Falha de rede', 'Não foi possível falar com o servidor.')
+    }
+  }
+
   function aposMudanca() {
     carregarResumo()
     carregarAguardandoTotal()
@@ -297,7 +342,7 @@ export function FinanceiroClient() {
       <InboxComprovantes onChange={aposMudanca} />
 
       {/* Indicadores */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <IndicadorCard
           ativo={preset === 'a_vencer'}
           onClick={() => aplicarPreset('a_vencer')}
@@ -322,6 +367,16 @@ export function FinanceiroClient() {
           rotulo="Recebido no mês"
           indicador={resumo?.recebidoMes}
         />
+        {/* Previsto: soma das previsões de recebimento de contratos (estimativa,
+            separada de "em aberto"). Só aparece com clique quando há previsões. */}
+        <IndicadorCard
+          ativo={preset === 'previsto'}
+          onClick={() => aplicarPreset('previsto')}
+          icone={<TrendingUp className="h-5 w-5" />}
+          tom="accent"
+          rotulo="Previsto"
+          indicador={resumo?.previsto}
+        />
       </div>
 
       {/* Filtros + ação */}
@@ -336,6 +391,7 @@ export function FinanceiroClient() {
               { value: 'aberta',    label: 'Abertas' },
               { value: 'vencida',   label: 'Vencidas' },
               { value: 'paga',      label: 'Pagas' },
+              { value: 'prevista',  label: 'Previstas' },
               { value: 'cancelada', label: 'Canceladas' },
             ]}
           />
@@ -448,6 +504,10 @@ export function FinanceiroClient() {
                             <Badge variant="warning" className="gap-1 ring-1 ring-warning/40">
                               <FileClock className="h-3 w-3" /> Aguardando baixa
                             </Badge>
+                          ) : p.status === 'prevista' ? (
+                            <Badge variant="accent" className="gap-1">
+                              <Sparkles className="h-3 w-3" /> Previsão
+                            </Badge>
                           ) : p.status === 'paga' ? (
                             <Badge variant="success">Paga</Badge>
                           ) : p.status === 'cancelada' ? (
@@ -465,7 +525,26 @@ export function FinanceiroClient() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {p.status === 'aberta' ? (
+                          {ehPrevisao(p) ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => gerarParcelasPrevisao(p)}
+                                title="Gerar as parcelas reais deste contrato (substitui a previsão)"
+                                className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors"
+                              >
+                                <FileSignature className="h-3.5 w-3.5" /> Gerar parcelas
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removerPrevisao(p)}
+                                title="Remover a previsão (é só uma estimativa)"
+                                className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Remover previsão
+                              </button>
+                            </div>
+                          ) : p.status === 'aberta' ? (
                             <div className="flex items-center justify-end gap-1">
                               {aguardando && (
                                 <button
@@ -615,6 +694,7 @@ const TONS = {
   info:        { icone: 'bg-info/10 text-info',               ativo: 'ring-info/50' },
   destructive: { icone: 'bg-destructive/10 text-destructive', ativo: 'ring-destructive/50' },
   success:     { icone: 'bg-success/10 text-success',         ativo: 'ring-success/50' },
+  accent:      { icone: 'bg-primary-glow/10 text-primary-glow', ativo: 'ring-primary-glow/50' },
 } as const
 
 function IndicadorCard({

@@ -12,6 +12,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 import { formatarValor } from './parcelas'
+import { sincronizarPrevisaoContrato } from './previsao'
 
 type Db = SupabaseClient
 
@@ -150,6 +151,10 @@ export async function onContratoAssinado(
       createdBy: userId,
       priority: 'media',
     })
+
+    // Assinou → garante a previsão de recebimento no financeiro (até a série
+    // real ser lançada, que a substitui). Best-effort no próprio helper.
+    await sincronizarPrevisaoContrato(db, contratoId)
   } catch (err) {
     // Best-effort: o gancho jamais derruba a confirmação da assinatura.
     logger.error('financeiro.gancho_contrato.falha', { contratoId }, err as Error)

@@ -30,7 +30,7 @@ export async function GET() {
   const proxMes = mes === 12 ? `${ano + 1}-01` : `${ano}-${String(mes + 1).padStart(2, '0')}`
   const fimMes = `${proxMes}-01T00:00:00-03:00`
 
-  const [aVencer, vencidas, recebidas] = await Promise.all([
+  const [aVencer, vencidas, recebidas, previstas] = await Promise.all([
     supabase
       .from('parcelas')
       .select('valor_centavos')
@@ -51,9 +51,16 @@ export async function GET() {
       .eq('status', 'paga')
       .gte('pago_em', inicioMes)
       .lt('pago_em', fimMes),
+    // "Previsto": previsões de recebimento de contratos (status 'prevista') —
+    // estimativa, NÃO se mistura com "em aberto" (que é cobrança real).
+    supabase
+      .from('parcelas')
+      .select('valor_centavos')
+      .eq('tenant_id', usuario.tenant_id)
+      .eq('status', 'prevista'),
   ])
 
-  const erro = aVencer.error ?? vencidas.error ?? recebidas.error
+  const erro = aVencer.error ?? vencidas.error ?? recebidas.error ?? previstas.error
   if (erro) return jsonError(erro.message, 500)
 
   const soma = (linhas: { valor_centavos: number }[] | null) =>
@@ -68,6 +75,7 @@ export async function GET() {
     aVencer7d: { quantidade: (aVencer.data ?? []).length, somaCentavos: soma(aVencer.data) },
     vencidas: { quantidade: (vencidas.data ?? []).length, somaCentavos: soma(vencidas.data) },
     recebidoMes: { quantidade: (recebidas.data ?? []).length, somaCentavos: recebidoSoma },
+    previsto: { quantidade: (previstas.data ?? []).length, somaCentavos: soma(previstas.data) },
     hoje,
   })
 }

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { pertenceAoTenant } from '@/lib/ownership'
+import { sincronizarPrevisaoContrato } from '@/lib/financeiro/previsao'
 
 const schemaContrato = z.object({
   cliente_id:       z.string().uuid().optional().nullable(),
@@ -88,6 +89,10 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return jsonError(error.message, 500)
+
+  // Previsão de recebimento (best-effort): contrato com valor fixo já mostra
+  // uma parcela "prevista" no financeiro até a série real ser lançada.
+  await sincronizarPrevisaoContrato(supabase, contrato.id)
 
   return NextResponse.json({ contrato }, { status: 201 })
 }

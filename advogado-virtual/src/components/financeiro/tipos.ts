@@ -10,7 +10,9 @@ export interface Parcela {
   descricao: string
   valor_centavos: number
   vencimento: string            // YYYY-MM-DD
-  status: 'aberta' | 'paga' | 'cancelada'
+  // 'prevista' = previsão de recebimento do contrato (estimativa): não recebe
+  // aviso nem baixa; some quando a série real de parcelas é lançada (migr. 065).
+  status: 'aberta' | 'paga' | 'cancelada' | 'prevista'
   pago_em?: string | null
   pago_valor_centavos?: number | null
   meio?: 'pix' | 'boleto' | 'transferencia' | 'dinheiro' | 'outro' | null
@@ -25,6 +27,11 @@ export interface Parcela {
 /** Parcela aberta com comprovante recebido aguardando conferência humana. */
 export function aguardandoBaixa(p: Parcela): boolean {
   return p.status === 'aberta' && !!p.comprovante_recebido_em
+}
+
+/** Previsão de recebimento do contrato (estimativa, não é cobrança real). */
+export function ehPrevisao(p: Parcela): boolean {
+  return p.status === 'prevista'
 }
 
 export interface PixConfig {

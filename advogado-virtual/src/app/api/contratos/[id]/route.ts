@@ -4,6 +4,7 @@ import { jsonError } from '@/lib/api'
 import type { Usuario } from '@/lib/auth'
 import type { createClient } from '@/lib/supabase/server'
 import { decryptTranscricaoFields } from '@/lib/encryption'
+import { sincronizarPrevisaoContrato } from '@/lib/financeiro/previsao'
 import { z } from 'zod'
 
 const schemaUpdate = z.object({
@@ -119,6 +120,12 @@ export async function PATCH(
 
   if (error) return jsonError(error.message, 500)
 
+  // Editou o valor do contrato → mantém a previsão de recebimento em dia
+  // (cria/atualiza/remove conforme o novo valor). Best-effort no helper.
+  if (dados.valor_fixo !== undefined) {
+    await sincronizarPrevisaoContrato(supabase, id)
+  }
+
   return NextResponse.json({ contrato: atualizado })
 }
 
@@ -139,6 +146,16 @@ export async function DELETE(
   if (!['admin', 'advogado'].includes(acesso.usuario.role)) {
     return jsonError('Sem permissão', 403)
   }
+
+  // Remove a previsão de recebimento ANTES do hard-delete: a FK contrato_id usa
+  // ON DELETE SET NULL, então apagar o contrato deixaria a previsão órfã (sem
+  // contrato_id, inalcançável). Só previstas — nunca toca parcela real.
+  await supabase
+    .from('parcelas')
+    .delete()
+    .eq('tenant_id', usuario.tenant_id)
+    .eq('contrato_id', id)
+    .eq('status', 'prevista')
 
   const { error } = await supabase
     .from('contratos_honorarios')
