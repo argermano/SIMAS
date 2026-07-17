@@ -566,6 +566,9 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     )
   }
 
+  // Contratos com caso vivem na pasta do caso; a pasta "Contratos" é só dos órfãos.
+  const contratosSemCaso = contratos.filter((c) => !c.atendimento_id)
+
   // Total do cabeçalho: arquivos + contratos (cada contrato é único).
   const totalItens = documentos.length + contratos.length
   const temAlgum = totalItens > 0
@@ -653,13 +656,14 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
               </ul>,
             )}
 
-            {/* Contratos: pasta de 1º nível própria (some se não há nenhum). */}
-            {contratos.length > 0 && renderCategoria(
+            {/* Contratos: pasta de 1º nível SÓ para contratos sem caso (dono, 2026-07-16) —
+                os vinculados já aparecem dentro da pasta do próprio caso, sem duplicar. */}
+            {contratosSemCaso.length > 0 && renderCategoria(
               'c:contratos', 'Contratos',
               <FileSignature className="h-4 w-4 shrink-0 text-muted-foreground" />,
-              contratos.length,
+              contratosSemCaso.length,
               <ul className="space-y-0.5">
-                {contratos.map((c) => renderLinhaContrato(c))}
+                {contratosSemCaso.map((c) => renderLinhaContrato(c))}
               </ul>,
             )}
 
