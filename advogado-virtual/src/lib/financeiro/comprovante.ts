@@ -3,13 +3,18 @@
 
 import { z } from 'zod'
 
-/** Schema dos dados extraídos do comprovante pela IA (completionJSON). */
+/** Schema dos dados extraídos do comprovante pela IA (completionJSON).
+ * recebedorNome/recebedorDoc/chaveDestino são OPCIONAIS e novos (filtro por
+ * recebedor): comprovantes antigos sem eles seguem válidos. */
 export const dadosComprovanteSchema = z.object({
   valorCentavos: z.number().int().positive(),
   dataISO: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   pagadorNome: z.string().optional(),
   banco: z.string().optional(),
   endToEndId: z.string().optional(),
+  recebedorNome: z.string().optional(), // favorecido/beneficiário (quem RECEBE)
+  recebedorDoc: z.string().optional(),  // CPF/CNPJ do recebedor, como aparecer (mascarado ok)
+  chaveDestino: z.string().optional(),  // chave Pix de destino, se visível
 })
 
 export type DadosComprovante = z.infer<typeof dadosComprovanteSchema>

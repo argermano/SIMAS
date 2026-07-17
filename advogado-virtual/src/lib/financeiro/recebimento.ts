@@ -17,6 +17,7 @@ import { relayFetchBinario } from '@/lib/conversas/relay'
 import { apenasDigitos, mesmoTelefone } from '@/lib/conversas/telefone'
 import { extrairDadosComprovante } from '@/lib/financeiro/extracao'
 import { sugerirParcela, type DadosComprovante } from '@/lib/financeiro/comprovante'
+import { recebedorEhEscritorio } from '@/lib/financeiro/recebedor'
 
 // Mesmo mapa de extensões da rota de baixa manual (contentType → sufixo do path).
 const EXTENSOES: Record<string, string> = {
@@ -190,6 +191,30 @@ async function baixarEExtrair(input: {
   return { buffer: anexo.buffer, contentType, dados: extracao.dados }
 }
 
+// Filtro por RECEBEDOR (pedido do dono): só entram no financeiro os comprovantes
+// direcionados AO ESCRITÓRIO (recebedor = escritório ou conta pessoal da
+// titular). Um recibo de TERCEIRO que passou pelo WhatsApp não vira staging nem
+// inbox — segue na conversa p/ ser anexado ao caso/cliente por outro fluxo.
+// Só devolve true na CERTEZA de terceiro ('nao'); 'sim'/'desconhecido' entram
+// (na dúvida mantém — nunca perder recibo real do escritório). Erro ao ler a
+// config → cfg vazia → 'desconhecido' → mantém (não descarta por falha
+// transitória). LGPD: não loga nada dos dados.
+async function recebedorExterno(
+  db: SupabaseClient,
+  tenantId: string,
+  dados: DadosComprovante,
+): Promise<boolean> {
+  const { data } = await db.from('tenants').select('nome, config').eq('id', tenantId).maybeSingle()
+  const fin = ((data?.config as { financeiro?: { pix_chave?: string; pix_nome?: string } } | null)?.financeiro ?? {})
+  return (
+    recebedorEhEscritorio(dados, {
+      pixChave: fin.pix_chave ?? null,
+      pixNome: fin.pix_nome ?? null,
+      tenantNome: (data?.nome as string | null) ?? null,
+    }) === 'nao'
+  )
+}
+
 // Cria o registro de INBOX quando a imagem É comprovante mas não houve staging
 // automático (casos a–d). Sobe o arquivo em financeiro/<tenantId>/inbox/
 // <mensagemId>.<ext>, insere com ON CONFLICT (tenant_id, mensagem_id) DO NOTHING
@@ -324,6 +349,11 @@ export async function processarAnexoRecebido(input: {
         anexoUrl, mensagemId, conversaId, tenantId, contentTypeHint: input.contentTypeHint,
       })
       if (!extraido) return
+      // Filtro por recebedor: comprovante de terceiro não entra no inbox.
+      if (await recebedorExterno(db, tenantId, extraido.dados)) {
+        logger.info('financeiro.recebimento.recebedor_externo', { mensagemId, conversaId, tenantId })
+        return
+      }
       // Dedup por E2E: reenvio do mesmo comprovante em nova mensagem → ignora.
       if (extraido.dados.endToEndId && await duplicadoPorEndToEnd(db, tenantId, extraido.dados.endToEndId)) {
         logger.info('financeiro.inbox.duplicado_e2e', { mensagemId, conversaId, tenantId })
@@ -388,6 +418,14 @@ export async function processarAnexoRecebido(input: {
     })
     if (!extraido) return
     const { buffer, contentType, dados } = extraido
+
+    // h.0) Filtro por RECEBEDOR: vale para os DOIS caminhos (staging de parcela
+    // E inbox). Comprovante de terceiro não entra no financeiro; o anexo segue
+    // na conversa p/ ser anexado ao caso/cliente por outro fluxo.
+    if (await recebedorExterno(db, tenantId, dados)) {
+      logger.info('financeiro.recebimento.recebedor_externo', { mensagemId, conversaId, tenantId })
+      return
+    }
 
     // h.1) DEDUP por E2E, ANTES de qualquer upload/insert/staging: o mesmo
     // comprovante reenviado em nova mensagem (mensagem_id diferente) já foi para

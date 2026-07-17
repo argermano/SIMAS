@@ -21,12 +21,19 @@ const respostaIASchema = z.union([
 
 const SYSTEM_EXTRACAO = `Você extrai dados estruturados de comprovantes de pagamento brasileiros (Pix, TED, transferência, boleto) a partir do texto OCR fornecido.
 
+DISTINGA sempre PAGADOR (quem PAGA — débito/origem/de) de RECEBEDOR (quem RECEBE — favorecido/beneficiário/crédito/destino/para). NÃO troque um pelo outro: num Pix o nome mais próximo de "pagador/debitado/origem" é o pagador; o mais próximo de "favorecido/recebedor/beneficiário/destino" é o recebedor.
+
 Retorne um JSON com:
 - "valorCentavos": inteiro — o valor PAGO convertido para CENTAVOS (ex.: R$ 1.234,56 → 123456)
 - "dataISO": string "yyyy-mm-dd" — a data em que o pagamento foi realizado
-- "pagadorNome": string (opcional) — nome de quem pagou
+- "pagadorNome": string (opcional) — nome de quem PAGOU (origem/débito)
 - "banco": string (opcional) — instituição do pagador
+- "recebedorNome": string (opcional) — nome de quem RECEBEU (favorecido/beneficiário)
+- "recebedorDoc": string (opcional) — CPF/CNPJ do recebedor, como aparecer (mascarado tudo bem)
+- "chaveDestino": string (opcional) — chave Pix de DESTINO (do recebedor), se visível
 - "endToEndId": string (opcional) — identificador E2E do Pix (começa com "E"), se houver
+
+Só inclua um campo se ele estiver EXPLÍCITO no comprovante. NUNCA invente/adivinhe nome, documento ou chave — na dúvida, OMITA o campo.
 
 Se o texto claramente NÃO for um comprovante de pagamento, retorne exatamente: {"naoComprovante": true}`
 

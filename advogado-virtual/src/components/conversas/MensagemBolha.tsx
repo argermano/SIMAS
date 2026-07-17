@@ -5,6 +5,7 @@ import {
   Check,
   Download,
   FileText,
+  FolderPlus,
   Forward,
   Image as ImageIcon,
   MapPin,
@@ -19,11 +20,24 @@ import { horaCurta } from '@/lib/conversas/formato'
 import type { Anexo, Mensagem } from '@/lib/conversas/tipos'
 import { ComprovanteModal } from './ComprovanteModal'
 import { EncaminharModal } from './EncaminharModal'
+import { SalvarNoClienteModal } from './SalvarNoClienteModal'
 
-/** Só imagens e arquivos podem ser reencaminhados (a allowlist do relay recusa
- * áudio/vídeo/localização/contato de qualquer forma). */
+/** Imagem/arquivo (pdf/doc): mesma família aceita para encaminhar E para salvar
+ * no dossiê (áudio/vídeo/localização/contato ficam de fora — a allowlist de
+ * documento/relay os recusa de qualquer forma). */
 function podeEncaminhar(a: Anexo): boolean {
   return a.tipo === 'image' || a.tipo === 'file'
+}
+
+/** Nome default do arquivo ao salvar: último segmento da URL do anexo (o servidor
+ * cai em 'anexo' se vier vazio). */
+function nomeDoAnexo(a: Anexo): string {
+  try {
+    const p = new URL(a.url).pathname
+    return decodeURIComponent(p.split('/').filter(Boolean).pop() ?? '')
+  } catch {
+    return ''
+  }
 }
 
 /** Ícone + rótulo pt-BR por tipo de anexo (file_type do Chatwoot normalizado pelo relay). */
@@ -150,6 +164,10 @@ export function MensagemBolha({
   const [comprovanteUrl, setComprovanteUrl] = useState<string | null>(null)
   // Encaminhar: anexo recebido a reenviar para outra conversa.
   const [encaminharAnexo, setEncaminharAnexo] = useState<Anexo | null>(null)
+  // Salvar no cliente: anexo a guardar no dossiê (entrada ou saída).
+  const [salvarAnexo, setSalvarAnexo] = useState<Anexo | null>(null)
+  // URLs já salvas nesta sessão do componente — desabilita o botão pós-sucesso.
+  const [salvos, setSalvos] = useState<Set<string>>(() => new Set())
 
   // Atividade do sistema: linha central discreta.
   if (direcao === 'atividade') {
@@ -200,37 +218,78 @@ export function MensagemBolha({
           {conteudo && <p className="whitespace-pre-wrap break-words">{conteudo}</p>}
           {anexos && anexos.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {anexos.map((a, i) => (
-                <div key={i} className="flex flex-col gap-1">
-                  {a.tipo === 'image' ? (
-                    <AnexoImagem anexo={a} escuro={saidaEscura} />
-                  ) : a.tipo === 'audio' ? (
-                    <AnexoAudio anexo={a} escuro={saidaEscura} />
-                  ) : (
-                    <AnexoCard anexo={a} escuro={saidaEscura} />
-                  )}
-                  {/* Encaminhar: só no anexo RECEBIDO do cliente (imagem/arquivo). */}
-                  {!somenteLeitura && cliente && podeEncaminhar(a) && (
-                    <button
-                      type="button"
-                      onClick={() => setEncaminharAnexo(a)}
-                      disabled={!conectado}
-                      className={cn(
-                        'inline-flex items-center gap-1 self-start rounded-md border border-border bg-background/70 px-2 py-0.5',
-                        'text-[11px] font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground',
-                        'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground',
-                      )}
-                      title={
-                        conectado
-                          ? 'Encaminhar este anexo para outra conversa'
-                          : 'Conecte sua conta para encaminhar'
-                      }
-                    >
-                      <Forward className="h-3 w-3" aria-hidden /> Encaminhar
-                    </button>
-                  )}
-                </div>
-              ))}
+              {anexos.map((a, i) => {
+                // Ações de escrita por anexo, ocultas no modo leitura. Salvar no
+                // cliente vale para TODOS os anexos (dono, 2026-07-17) — áudio e
+                // vídeo inclusive; Encaminhar segue restrito a imagem/pdf/doc.
+                const podeSalvar = !somenteLeitura && conversaId !== undefined && !!a.url
+                const temAcoes = (!somenteLeitura && podeEncaminhar(a)) || podeSalvar
+                const salvo = salvos.has(a.url)
+                return (
+                  <div key={i} className="flex flex-col gap-1">
+                    {a.tipo === 'image' ? (
+                      <AnexoImagem anexo={a} escuro={saidaEscura} />
+                    ) : a.tipo === 'audio' ? (
+                      <AnexoAudio anexo={a} escuro={saidaEscura} />
+                    ) : (
+                      <AnexoCard anexo={a} escuro={saidaEscura} />
+                    )}
+                    {temAcoes && (
+                      <div className="flex flex-wrap items-center gap-1">
+                        {/* Encaminhar: só no anexo RECEBIDO do cliente (envio ao WhatsApp). */}
+                        {cliente && podeEncaminhar(a) && (
+                          <button
+                            type="button"
+                            onClick={() => setEncaminharAnexo(a)}
+                            disabled={!conectado}
+                            className={cn(
+                              'inline-flex items-center gap-1 self-start rounded-md border border-border bg-background/70 px-2 py-0.5',
+                              'text-[11px] font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground',
+                              'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border disabled:hover:text-muted-foreground',
+                            )}
+                            title={
+                              conectado
+                                ? 'Encaminhar este anexo para outra conversa'
+                                : 'Conecte sua conta para encaminhar'
+                            }
+                          >
+                            <Forward className="h-3 w-3" aria-hidden /> Encaminhar
+                          </button>
+                        )}
+                        {/* Salvar no cliente: vale para ENTRADA e SAÍDA (não exige token
+                            pessoal — grava no dossiê do SIMAS). Precisa da conversa. */}
+                        {podeSalvar && (
+                          <button
+                            type="button"
+                            onClick={() => setSalvarAnexo(a)}
+                            disabled={salvo}
+                            className={cn(
+                              'inline-flex items-center gap-1 self-start rounded-md border border-border bg-background/70 px-2 py-0.5',
+                              'text-[11px] font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground',
+                              'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:text-muted-foreground',
+                            )}
+                            title={
+                              salvo
+                                ? 'Já salvo no dossiê do cliente'
+                                : 'Salvar este anexo no dossiê do cliente'
+                            }
+                          >
+                            {salvo ? (
+                              <>
+                                <Check className="h-3 w-3" aria-hidden /> Salvo no cliente
+                              </>
+                            ) : (
+                              <>
+                                <FolderPlus className="h-3 w-3" aria-hidden /> Salvar no cliente
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
           {/* Imagem de ENTRADA: leitura de comprovante pela IA (só sugere;
@@ -279,6 +338,25 @@ export function MensagemBolha({
           anexo={encaminharAnexo}
           origemConversaId={conversaId}
           onFechar={() => setEncaminharAnexo(null)}
+        />
+      )}
+
+      {salvarAnexo && conversaId !== undefined && (
+        <SalvarNoClienteModal
+          aberto
+          conversaId={conversaId}
+          anexoUrl={salvarAnexo.url}
+          telefone={telefone ?? null}
+          nomeSugerido={nomeDoAnexo(salvarAnexo)}
+          onFechar={() => setSalvarAnexo(null)}
+          onSalvo={() => {
+            const url = salvarAnexo.url
+            setSalvos((prev) => {
+              const s = new Set(prev)
+              s.add(url)
+              return s
+            })
+          }}
         />
       )}
     </div>

@@ -132,12 +132,20 @@ export function DetalheComprovanteModal({
                 )}
               </div>
             </div>
-            {(dados?.pagadorNome || dados?.banco || dados?.endToEndId) && (
+            {(dados?.pagadorNome || dados?.recebedorNome || dados?.banco || dados?.endToEndId) && (
               <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border pt-3 text-sm">
                 {dados?.pagadorNome && (
                   <div className="col-span-2">
                     <dt className="text-xs text-muted-foreground">Pagador</dt>
                     <dd className="truncate font-medium text-foreground">{dados.pagadorNome}</dd>
+                  </div>
+                )}
+                {/* Recebedor (favorecido/beneficiário) — só quando a IA extraiu.
+                    Alimenta o filtro "só recibos do escritório" no inbox. */}
+                {dados?.recebedorNome && (
+                  <div className="col-span-2">
+                    <dt className="text-xs text-muted-foreground">Recebedor</dt>
+                    <dd className="truncate font-medium text-foreground">{dados.recebedorNome}</dd>
                   </div>
                 )}
                 {dados?.banco && (

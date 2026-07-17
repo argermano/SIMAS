@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  Inbox, FileText, ExternalLink, MessageSquare, HandCoins, Trash2, User, Phone, ScanLine, AlertTriangle,
+  Inbox, FileText, ExternalLink, MessageSquare, HandCoins, Trash2, User, Phone, ScanLine, AlertTriangle, HelpCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -29,6 +29,9 @@ export interface DadosComprovante {
   pagadorNome?: string
   banco?: string
   endToEndId?: string
+  recebedorNome?: string // favorecido/beneficiário (quem recebe)
+  recebedorDoc?: string  // CPF/CNPJ do recebedor, mascarado ok
+  chaveDestino?: string  // chave Pix de destino, se visível
   contentType?: string
 }
 
@@ -170,6 +173,16 @@ export function InboxComprovantes({ onChange }: { onChange?: () => void }) {
                     className="inline-flex items-center gap-1 self-center rounded-full border border-warning/40 bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning"
                   >
                     <AlertTriangle className="h-3 w-3" aria-hidden /> Possível duplicado
+                  </span>
+                )}
+                {/* Recebedor não veio no documento (nem nome nem chave de destino):
+                    tooltip discreto — o comprovante entrou "na dúvida". */}
+                {!c.dados?.recebedorNome && !c.dados?.chaveDestino && (
+                  <span
+                    title="Recebedor não identificado no comprovante"
+                    className="inline-flex items-center self-center text-muted-foreground/60"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5" aria-hidden />
                   </span>
                 )}
               </div>
