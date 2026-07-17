@@ -166,16 +166,18 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
   const sidebarContent = (isCollapsed: boolean) => (
     <div className="flex h-full flex-col" style={{ background: 'var(--gradient-sidebar)' }}>
       {/* Logo */}
-      <div className={cn('flex items-center gap-3 border-b border-sidebar-border px-4 py-5', isCollapsed && 'justify-center px-2')}>
-        {/* Marca oficial (logo do dono, 2026-07-16): símbolo S branco — a sidebar é escura nos 2 temas. */}
-        {/* eslint-disable-next-line @next/next/no-img-element -- asset estático de public/ */}
-        <img src="/marca-s-branca.png" alt="SIMAS" className="h-10 w-auto shrink-0" />
-        {!isCollapsed && (
-          <div className="flex-1 min-w-0 animate-in fade-in-0 duration-300">
-            <p className="truncate text-base font-bold text-white font-heading">SIMAS</p>
-            <p className="text-[11px] tracking-wider text-sidebar-muted leading-tight">Sistema Inteligente para Modernizar a Advocacia com Segurança</p>
-            <p className="mt-2 text-[11px] font-medium text-blue-300/80 leading-tight">{nomeEscritorio}</p>
-          </div>
+      <div className={cn('flex items-center justify-center border-b border-sidebar-border px-4 py-5', isCollapsed && 'px-2')}>
+        {/* Marca oficial no lugar dos textos (dono, 2026-07-16). Recolhida: só o símbolo. */}
+        {isCollapsed ? (
+          // eslint-disable-next-line @next/next/no-img-element -- asset estático de public/
+          <img src="/marca-s-branca.png" alt="SIMAS" className="h-10 w-auto" />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- asset estático de public/
+          <img
+            src="/logo-simas-branca.png"
+            alt="SIMAS — Sistema Inteligente para Modernizar a Advocacia com Segurança"
+            className="h-auto w-full max-w-[216px] animate-in fade-in-0 duration-300"
+          />
         )}
       </div>
 
