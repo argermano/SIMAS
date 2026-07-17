@@ -10,7 +10,6 @@ import {
   KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter, BellRing, Newspaper, MessagesSquare,
   CalendarDays, Wallet, Briefcase,
 } from 'lucide-react'
-import { LogoMark } from '@/components/ui/Logo'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { AREAS } from '@/lib/constants/areas'
@@ -168,9 +167,9 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
     <div className="flex h-full flex-col" style={{ background: 'var(--gradient-sidebar)' }}>
       {/* Logo */}
       <div className={cn('flex items-center gap-3 border-b border-sidebar-border px-4 py-5', isCollapsed && 'justify-center px-2')}>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: 'var(--gradient-primary)' }}>
-          <LogoMark className="h-5 w-5 text-white" />
-        </div>
+        {/* Marca oficial (logo do dono, 2026-07-16): símbolo S branco — a sidebar é escura nos 2 temas. */}
+        {/* eslint-disable-next-line @next/next/no-img-element -- asset estático de public/ */}
+        <img src="/marca-s-branca.png" alt="SIMAS" className="h-10 w-auto shrink-0" />
         {!isCollapsed && (
           <div className="flex-1 min-w-0 animate-in fade-in-0 duration-300">
             <p className="truncate text-base font-bold text-white font-heading">SIMAS</p>

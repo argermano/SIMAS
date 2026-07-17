@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Scale, Phone, User, Mail, Loader2, CheckCircle } from 'lucide-react'
+import { Phone, User, Mail, Loader2, CheckCircle } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useToast } from '@/components/ui/toast'
 
@@ -72,14 +72,12 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <div className="w-full max-w-md rounded-2xl bg-card px-8 py-10 shadow-lg">
-        {/* Logo */}
+        {/* Marca oficial (logo do dono, 2026-07-16): navy no tema claro, branca no escuro. */}
         <div className="mb-10 flex flex-col items-center gap-2">
-          <div className="flex items-center gap-2.5">
-            <Scale className="h-10 w-10 text-primary" />
-            <span className="font-heading text-4xl font-extrabold tracking-tight text-foreground">
-              SIMAS
-            </span>
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- asset estático de public/ */}
+          <img src="/logo-simas-navy.png" alt="SIMAS — Sistema Inteligente para Modernizar a Advocacia com Segurança" className="h-20 w-auto dark:hidden" />
+          {/* eslint-disable-next-line @next/next/no-img-element -- asset estático de public/ */}
+          <img src="/logo-simas-branca.png" alt="SIMAS — Sistema Inteligente para Modernizar a Advocacia com Segurança" className="hidden h-20 w-auto dark:block" />
         </div>
 
         {!mostrarContato ? (
