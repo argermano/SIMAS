@@ -253,32 +253,8 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
         </ul>
       </nav>
 
-      {/* Rodapé */}
+      {/* Rodapé — Configurações virou só a engrenagem, ao lado e ANTES do Sair (dono, 2026-07-16). */}
       <div className="border-t border-sidebar-border p-3">
-        {/* Configurações */}
-        <Link
-          href="/configuracoes"
-          onClick={() => setMobileOpen(false)}
-          className={cn(
-            'relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors mb-3',
-            isCollapsed && 'justify-center px-2',
-            isConfigAtivo
-              ? 'bg-sidebar-accent text-white'
-              : 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-white'
-          )}
-          title={isCollapsed ? 'Configurações' : undefined}
-        >
-          {isConfigAtivo && (
-            <div className="absolute left-0 top-1 bottom-1 w-[3px] rounded-full bg-card animate-in fade-in-0 duration-200" />
-          )}
-          <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
-          {!isCollapsed && (
-            <span className="overflow-hidden whitespace-nowrap animate-in fade-in-0 duration-300">
-              Configurações
-            </span>
-          )}
-        </Link>
-
         {/* Avatar / Perfil */}
         <div className={cn('rounded-lg bg-sidebar-accent/40 px-3 py-2.5', isCollapsed && 'px-2')}>
           <div className={cn('flex items-center gap-3', isCollapsed && 'justify-center')}>
@@ -299,27 +275,55 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
             )}
 
             {!isCollapsed && (
-              <button
-                onClick={sair}
-                className="shrink-0 rounded-md p-1.5 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors animate-in fade-in-0 duration-300"
-                aria-label="Sair do sistema"
-                title="Sair do sistema"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
+              <>
+                <Link
+                  href="/configuracoes"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'shrink-0 rounded-md p-1.5 transition-colors animate-in fade-in-0 duration-300',
+                    isConfigAtivo ? 'bg-sidebar-accent text-white' : 'text-sidebar-muted hover:text-white hover:bg-sidebar-accent'
+                  )}
+                  aria-label="Configurações"
+                  title="Configurações"
+                >
+                  <Settings className="h-4 w-4" />
+                </Link>
+                <button
+                  onClick={sair}
+                  className="shrink-0 rounded-md p-1.5 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors animate-in fade-in-0 duration-300"
+                  aria-label="Sair do sistema"
+                  title="Sair do sistema"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </>
             )}
           </div>
         </div>
 
         {isCollapsed && (
-          <button
-            onClick={sair}
-            className="mt-2 flex w-full items-center justify-center rounded-lg p-2 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors"
-            aria-label="Sair do sistema"
-            title="Sair do sistema"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+          <div className="mt-2 flex flex-col items-center gap-1">
+            <Link
+              href="/configuracoes"
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                'flex w-full items-center justify-center rounded-lg p-2 transition-colors',
+                isConfigAtivo ? 'bg-sidebar-accent text-white' : 'text-sidebar-muted hover:text-white hover:bg-sidebar-accent'
+              )}
+              aria-label="Configurações"
+              title="Configurações"
+            >
+              <Settings className="h-4 w-4" />
+            </Link>
+            <button
+              onClick={sair}
+              className="flex w-full items-center justify-center rounded-lg p-2 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors"
+              aria-label="Sair do sistema"
+              title="Sair do sistema"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         )}
       </div>
     </div>
