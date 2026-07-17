@@ -1,22 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { Paperclip, ExternalLink, Loader2, Trash2, Unlink, FolderPlus } from 'lucide-react'
+import { Paperclip, ExternalLink, Loader2, Trash2, Unlink, FolderPlus, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
 import { formatarDataRelativa } from '@/lib/utils'
 import { SeletorDocsDoCadastro, type DocGeral } from './SeletorDocsDoCadastro'
 
-// Lista de documentos anexados ao CASO (coluna direita da tela do caso). Além
-// dos docs que nasceram no caso, permite "Adicionar do cadastro" (vincular um
-// doc GERAL do cliente) — que aparece com o rótulo "do cadastro" e cujo X
-// DESVINCULA (volta ao dossiê), enquanto o X de um doc do caso EXCLUI.
+// Lista de documentos anexados ao CASO (coluna direita da tela do caso). Com os
+// vínculos N:N (063), o MESMO arquivo pode servir a vários casos/processos. Por
+// isso o X aqui REMOVE só o vínculo deste caso (o arquivo continua no cliente e
+// nas outras pastas) — EXCETO para um doc que NASCEU neste caso, que segue a
+// regra de sempre: é excluído de fato (só some se não estiver em outra pasta).
 
 export interface AnexoCaso {
   id: string
   file_name: string
   created_at: string
-  de_cadastro: boolean // nasceu no dossiê do cliente e foi vinculado a este caso
+  nascido_neste_caso: boolean // origem = este caso (senão é atalho de outra pasta)
 }
 
 interface Props {
@@ -47,27 +48,47 @@ export function AnexosDoCaso({ clienteId, atendimentoId, documentosIniciais }: P
     }
   }
 
+  // Remove só o vínculo deste caso (nunca exclui o arquivo).
+  async function removerVinculo(docId: string): Promise<Response> {
+    return fetch(`/api/documentos/${docId}/vinculo`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remover: { atendimento_id: atendimentoId } }),
+    })
+  }
+
   async function remover(doc: AnexoCaso) {
-    // X do doc "do cadastro" DESVINCULA (volta ao dossiê); do doc do caso, EXCLUI.
-    const msg = doc.de_cadastro
-      ? 'Remover deste caso? O documento volta ao cadastro do cliente (não é excluído).'
-      : 'Excluir este documento? Esta ação não pode ser desfeita.'
+    // Doc que NASCEU neste caso → regra de sempre: EXCLUIR. Como ele carrega o
+    // próprio vínculo N:N (063), tiramos esse vínculo e então tentamos excluir o
+    // arquivo — que só some se não estiver em outra pasta. Atalho de outra pasta
+    // → só REMOVE o vínculo deste caso (o arquivo continua no cliente).
+    const msg = doc.nascido_neste_caso
+      ? 'Excluir este documento? Se ele também estiver em outras pastas, será apenas removido deste caso.'
+      : 'Remover deste caso? O documento continua no cadastro do cliente (não é excluído).'
     if (!confirm(msg)) return
     setOcupado(doc.id)
     try {
-      const r = doc.de_cadastro
-        ? await fetch(`/api/documentos/${doc.id}/vinculo`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ desvincular: true }),
-          })
-        : await fetch(`/api/documentos/${doc.id}`, { method: 'DELETE' })
-      if (r.ok) {
+      if (doc.nascido_neste_caso) {
+        const rv = await removerVinculo(doc.id)
+        if (!rv.ok) {
+          const d = await rv.json().catch(() => ({}))
+          toastError('Não foi possível', d.error ?? 'Tente novamente.')
+          return
+        }
+        // Agora tenta excluir de fato (409 se ainda estiver em outras pastas).
+        const rd = await fetch(`/api/documentos/${doc.id}`, { method: 'DELETE' })
         setDocs((prev) => prev.filter((d) => d.id !== doc.id))
-        success(doc.de_cadastro ? 'Documento desvinculado' : 'Documento excluído')
+        if (rd.ok) success('Documento excluído')
+        else success('Removido do caso', 'Ele está em outras pastas, então não foi excluído.')
       } else {
-        const d = await r.json().catch(() => ({}))
-        toastError('Não foi possível', d.error ?? 'Tente novamente.')
+        const r = await removerVinculo(doc.id)
+        if (r.ok) {
+          setDocs((prev) => prev.filter((d) => d.id !== doc.id))
+          success('Removido do caso', 'Continua no cadastro do cliente.')
+        } else {
+          const d = await r.json().catch(() => ({}))
+          toastError('Não foi possível', d.error ?? 'Tente novamente.')
+        }
       }
     } catch {
       toastError('Não foi possível', 'Falha de rede. Tente novamente.')
@@ -76,21 +97,20 @@ export function AnexosDoCaso({ clienteId, atendimentoId, documentosIniciais }: P
     }
   }
 
-  // Vincula o doc escolhido no picker a este caso. Retorna true p/ o picker
-  // removê-lo da própria lista (na lista do caso ele passa a ser "do cadastro",
-  // cujo X DESVINCULA em vez de excluir).
+  // Vincula (adiciona) o doc escolhido no picker a este caso. Retorna true p/ o
+  // picker marcá-lo como "já está neste caso". Ele entra como atalho de outra
+  // pasta (nascido_neste_caso=false → X só remove o vínculo).
   async function vincularDoCadastro(g: DocGeral): Promise<boolean> {
     try {
       const r = await fetch(`/api/documentos/${g.id}/vinculo`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ atendimento_id: atendimentoId }),
+        body: JSON.stringify({ adicionar: { atendimento_id: atendimentoId } }),
       })
       if (r.ok) {
-        setDocs((prev) => [
-          { id: g.id, file_name: g.file_name, created_at: g.created_at, de_cadastro: true },
-          ...prev,
-        ])
+        setDocs((prev) => prev.some((d) => d.id === g.id)
+          ? prev
+          : [{ id: g.id, file_name: g.file_name, created_at: g.created_at, nascido_neste_caso: false }, ...prev])
         success('Adicionado ao caso', 'O documento do cadastro foi vinculado.')
         return true
       }
@@ -126,9 +146,9 @@ export function AnexosDoCaso({ clienteId, atendimentoId, documentosIniciais }: P
                 <span className="block truncate font-medium text-foreground transition-colors group-hover:text-primary">{doc.file_name}</span>
                 <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                   <span>{formatarDataRelativa(doc.created_at)}</span>
-                  {doc.de_cadastro && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground" title="Documento do cadastro do cliente, vinculado a este caso">
-                      <FolderPlus className="h-3 w-3" /> do cadastro
+                  {!doc.nascido_neste_caso && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground" title="Documento de outra pasta, vinculado a este caso (atalho)">
+                      <Link2 className="h-3 w-3" /> atalho
                     </span>
                   )}
                 </span>
@@ -142,11 +162,11 @@ export function AnexosDoCaso({ clienteId, atendimentoId, documentosIniciais }: P
                 onClick={() => remover(doc)}
                 disabled={ocupado === doc.id}
                 className="rounded p-1.5 text-muted-foreground hover:text-destructive disabled:opacity-50"
-                title={doc.de_cadastro ? 'Remover do caso (volta ao cadastro)' : 'Excluir documento'}
+                title={doc.nascido_neste_caso ? 'Excluir documento' : 'Remover do caso (continua no cadastro)'}
               >
                 {ocupado === doc.id
                   ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : doc.de_cadastro ? <Unlink className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                  : doc.nascido_neste_caso ? <Trash2 className="h-4 w-4" /> : <Unlink className="h-4 w-4" />}
               </button>
             </div>
           </div>
@@ -157,6 +177,7 @@ export function AnexosDoCaso({ clienteId, atendimentoId, documentosIniciais }: P
         clienteId={clienteId}
         open={pickerAberto}
         onClose={() => setPickerAberto(false)}
+        atendimentoAtual={atendimentoId}
         onEscolher={vincularDoCadastro}
       />
     </div>

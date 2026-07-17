@@ -10,6 +10,12 @@ import {
   mimePorNomeArquivo,
   extensaoPorMime,
 } from '@/lib/conversas/anexos'
+import {
+  agruparVinculosPorDoc,
+  derivarLegado,
+  type VinculoRow,
+  type VinculoDoc,
+} from '@/lib/documentos/vinculos'
 
 // Documentos anexados DIRETO ao dossiê do cliente (sem atendimento). Upload em 2
 // passos (mesmo padrão dos docs de atendimento): (1) POST { fileName, fileType,
@@ -139,8 +145,10 @@ export async function POST(
 
 // GET /api/clientes/[id]/documentos — lista os docs do cliente (diretos +
 // herdados de atendimentos via cliente_id) com signed URLs curtas para abrir.
-// ?gerais=1 → só os GERAIS (sem vínculo de caso nem de processo) — usado pelo
-// picker "Adicionar do cadastro" na tela do caso.
+// Cada doc traz `vinculos` (N:N, 063): as "pastas" (casos/processos) em que ele
+// aparece — join em lote, sem N+1. Mantém os campos legado (1º vínculo de cada
+// tipo) enquanto a UI atual não passa a consumir `vinculos` (fase UI).
+// ?gerais=1 → só os GERAIS (SEM nenhum vínculo) — picker "Adicionar do cadastro".
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -152,28 +160,43 @@ export async function GET(
 
   const soGerais = new URL(req.url).searchParams.get('gerais') === '1'
 
-  let query = supabase
+  const { data: docsRaw, error } = await supabase
     .from('documentos')
-    .select('id, file_name, tipo, mime_type, tamanho_bytes, created_at, atendimento_id, processo_id, file_url, atendimentos(titulo), processos(numero_cnj, apelido)')
+    // atendimento_id aqui é a ORIGEM (onde o doc nasceu — 063), não uma "pasta":
+    // a árvore do dossiê usa para não deixar "remover da pasta de origem" um doc
+    // que nasceu num caso (regra de origem.ts).
+    .select('id, file_name, tipo, mime_type, tamanho_bytes, created_at, file_url, atendimento_id')
     .eq('tenant_id', usuario.tenant_id)
     .eq('cliente_id', clienteId)
     .not('file_url', 'is', null)
-  if (soGerais) query = query.is('atendimento_id', null).is('processo_id', null)
-
-  const { data, error } = await query.order('created_at', { ascending: false })
+    .order('created_at', { ascending: false })
   if (error) return jsonError(error.message, 500)
+  const docs = docsRaw ?? []
 
-  const linhas = data ?? []
+  // Vínculos em lote (join de caso/processo) → mapa documento_id → pastas.
+  const ids = docs.map((d) => d.id)
+  let mapa = new Map<string, VinculoDoc[]>()
+  if (ids.length > 0) {
+    const { data: vincRaw } = await supabase
+      .from('documento_vinculos')
+      .select('documento_id, atendimento_id, processo_id, atendimentos(titulo), processos(numero_cnj, apelido)')
+      .eq('tenant_id', usuario.tenant_id)
+      .in('documento_id', ids)
+    mapa = agruparVinculosPorDoc((vincRaw ?? []) as VinculoRow[])
+  }
+
+  // ?gerais=1 = docs SEM nenhum vínculo (não estão em nenhuma pasta).
+  const selecionados = soGerais ? docs.filter((d) => !mapa.has(d.id)) : docs
+
   // URLs assinadas curtas (1 h) geradas em lote para render imediato na lista.
   const urls = await Promise.all(
-    linhas.map((d) =>
+    selecionados.map((d) =>
       supabase.storage.from('documentos').createSignedUrl(d.file_url as string, 3600),
     ),
   )
 
-  const documentos = linhas.map((d, i) => {
-    const at = Array.isArray(d.atendimentos) ? d.atendimentos[0] : d.atendimentos
-    const pr = Array.isArray(d.processos) ? d.processos[0] : d.processos
+  const documentos = selecionados.map((d, i) => {
+    const vinculos = mapa.get(d.id) ?? []
     return {
       id:            d.id,
       file_name:     d.file_name,
@@ -181,12 +204,14 @@ export async function GET(
       mime_type:     d.mime_type,
       tamanho_bytes: d.tamanho_bytes,
       created_at:    d.created_at,
-      // atendimento_id/processo_id null (ambos) = doc GERAL (excluível aqui).
-      atendimento_id: d.atendimento_id,
-      atendimento_titulo: (at as { titulo?: string } | null)?.titulo ?? null,
-      processo_id:    d.processo_id,
-      processo_numero_cnj: (pr as { numero_cnj?: string } | null)?.numero_cnj ?? null,
-      processo_apelido:    (pr as { apelido?: string } | null)?.apelido ?? null,
+      // Legado (compat DocumentosDossie atual): 1º vínculo de cada tipo. Sem
+      // vínculo = tudo null = doc GERAL (excluível aqui).
+      ...derivarLegado(vinculos),
+      // Contrato novo (árvore do dossiê): todas as pastas onde o doc está.
+      vinculos,
+      // Origem do doc (063): o caso onde ele nasceu (null se nasceu no dossiê).
+      // A árvore não deixa "remover da pasta de origem" um doc nascido no caso.
+      origem_atendimento_id: d.atendimento_id ?? null,
       url:           urls[i]?.data?.signedUrl ?? null,
     }
   })

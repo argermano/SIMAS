@@ -33,6 +33,28 @@ export async function GET(
     return jsonError('Atendimento não encontrado', 404)
   }
 
+  // O embed `documentos(*)` acima traz só os docs NASCIDOS aqui (FK
+  // documentos.atendimento_id). Com os vínculos N:N (063), docs do cadastro
+  // reaproveitados no caso entram como ATALHO (linha em documento_vinculos, sem
+  // atendimento_id) e não vêm no embed — o Estudo precisa deles ao recarregar
+  // (contexto da análise). Busca e mescla (dedupe por id: um doc pode nascer aqui
+  // E ter linha de vínculo). Mantém file_url/texto_extraido → o cliente separa
+  // "do cadastro" vs "do caso" e usa o texto como contexto.
+  const { data: vincRows } = await supabase
+    .from('documento_vinculos')
+    .select('documentos(*)')
+    .eq('atendimento_id', id)
+    .eq('tenant_id', usuario.tenant_id)
+  type DocRow = { id: string } & Record<string, unknown>
+  const embutidos = ((atendimento.documentos ?? []) as DocRow[])
+  const idsEmbutidos = new Set(embutidos.map((d) => d.id))
+  const atalhos = (vincRows ?? [])
+    .map((v) => (Array.isArray(v.documentos) ? v.documentos[0] : v.documentos) as DocRow | null)
+    .filter((d): d is DocRow => !!d && !idsEmbutidos.has(d.id))
+  if (atalhos.length > 0) {
+    ;(atendimento as unknown as { documentos: DocRow[] }).documentos = [...embutidos, ...atalhos]
+  }
+
   // Fetch contratos linked to this atendimento
   const { data: contratos } = await supabase
     .from('contratos_honorarios')

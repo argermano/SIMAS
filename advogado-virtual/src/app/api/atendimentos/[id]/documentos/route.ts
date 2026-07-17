@@ -82,6 +82,14 @@ export async function POST(
     return jsonError(insertError.message, 500)
   }
 
+  // Nasce já "na pasta" do caso: além da origem (atendimento_id), cria a linha de
+  // vínculo N:N (063) — é por ela que a tela do caso lista os documentos.
+  const { error: vincErr } = await supabase
+    .from('documento_vinculos')
+    .insert({ tenant_id: usuario.tenant_id, documento_id: documento.id, atendimento_id: id })
+  // LGPD: sem nome de arquivo no log — só id do doc e código do erro.
+  if (vincErr) console.error('[atendimentos documentos POST] vínculo falhou:', documento.id, vincErr.code)
+
   return NextResponse.json({
     documento,
     uploadUrl: signedData.signedUrl,

@@ -1,26 +1,30 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import Link from 'next/link'
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react'
 import {
   Paperclip, Upload, Loader2, FileText, Image as ImageIcon,
   FileSpreadsheet, File as FileIcon, Download, ExternalLink, Trash2, Link2,
-  Unlink, Scale, Briefcase,
+  Scale, Briefcase, ChevronRight, Folder, FolderOpen, MoreVertical, Unlink,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
+import { EmptyState } from '@/components/ui/empty-state'
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import { useToast } from '@/components/ui/toast'
 import { createClient } from '@/lib/supabase/client'
 import { formatarBytes } from '@/lib/documentos/tamanho'
 import { formatarDataRelativa } from '@/lib/utils'
 import { rotularArea, formatarCnj } from '@/lib/tarefas/vinculo'
+import type { VinculoDoc } from '@/lib/documentos/vinculos'
 
-// Aba "Documentos" do dossiê (coluna direita): anexa arquivos DIRETO ao cliente e
-// lista todos os docs dele (diretos + herdados de atendimentos). O dono pediu para
-// distinguir docs GERAIS de docs ESPECÍFICOS (de um caso e/ou processo): por isso
-// os docs vêm agrupados em "Gerais" e "Vinculados", com badge do caso/processo, e
-// dá para Vincular (doc geral) ou Desvincular (doc vinculado) sem sair do dossiê.
+// Aba "Documentos" do dossiê: o dono quer que ela SUBSTITUA o Google Drive — os
+// arquivos do cliente vistos como uma ÁRVORE de pastas. Nós de 1º nível: "Casos",
+// "Processos" e "Gerais". Dentro de Casos/Processos, uma pasta por caso/processo
+// que tenha documentos. O MESMO arquivo pode aparecer em VÁRIAS pastas (atalho —
+// vínculos N:N, 063): é sempre o mesmo doc, nunca uma cópia.
 
 interface DocumentoDossie {
   id: string
@@ -29,12 +33,9 @@ interface DocumentoDossie {
   mime_type: string | null
   tamanho_bytes: number | null
   created_at: string
-  atendimento_id: string | null
-  atendimento_titulo: string | null
-  processo_id: string | null
-  processo_numero_cnj: string | null
-  processo_apelido: string | null
   url: string | null
+  vinculos: VinculoDoc[]           // pastas (casos/processos) onde o doc aparece
+  origem_atendimento_id: string | null // caso onde nasceu (null = nasceu no dossiê)
 }
 
 interface ProgressoItem {
@@ -43,14 +44,25 @@ interface ProgressoItem {
   erro?: string
 }
 
-// Alvos de vínculo do cliente (carregados sob demanda no picker).
+// Alvos de vínculo do cliente (carregados sob demanda no picker "Vincular a…").
 interface CasoOpc { id: string; titulo: string | null; label: string }
 interface ProcOpc { id: string; numero_cnj: string | null; apelido: string | null; label: string }
+
+// Contexto de uma linha de doc na árvore: em qual pasta ela está sendo mostrada.
+// O MESMO doc aparece em várias pastas; a ação "Remover desta pasta" precisa saber
+// de qual. 'geral' = sem vínculo (só aqui o doc pode ser excluído de fato).
+type Contexto =
+  | { tipo: 'geral' }
+  | { tipo: 'atendimento'; id: string }
+  | { tipo: 'processo'; id: string }
+
+// Alvo de upload direcionado ("Anexar aqui" no cabeçalho de uma pasta).
+type AlvoUpload = { tipo: 'atendimento'; id: string } | { tipo: 'processo'; id: string } | null
 
 const TETO_BYTES = 25 * 1024 * 1024 // alinhado ao LIMITE_ANEXO_SERVIDOR_BYTES da API
 
 function IconeDoc({ mime }: { mime: string | null }) {
-  const cls = 'h-5 w-5 shrink-0'
+  const cls = 'h-4 w-4 shrink-0'
   if (mime?.startsWith('image/')) return <ImageIcon className={`${cls} text-blue-500`} />
   if (mime === 'application/pdf') return <FileText className={`${cls} text-rose-500`} />
   if (mime?.includes('spreadsheet') || mime?.includes('excel'))
@@ -59,7 +71,8 @@ function IconeDoc({ mime }: { mime: string | null }) {
   return <FileIcon className={`${cls} text-muted-foreground`} />
 }
 
-const temVinculo = (d: DocumentoDossie) => !!d.atendimento_id || !!d.processo_id
+// Chave estável de uma pasta/nó para o estado de expandir/colapsar.
+const ctxKey = (c: Contexto) => (c.tipo === 'geral' ? 'geral' : `${c.tipo}:${c.id}`)
 
 export function DocumentosDossie({ clienteId }: { clienteId: string }) {
   const { success, error: toastError } = useToast()
@@ -67,11 +80,24 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
   const [carregando, setCarregando] = useState(true)
   const [enviando, setEnviando]     = useState(false)
   const [progresso, setProgresso]   = useState<ProgressoItem[]>([])
-  const [excluindo, setExcluindo]   = useState<string | null>(null)
-  const [desvinculando, setDesvinculando] = useState<string | null>(null)
+  const [ocupado, setOcupado]       = useState<string | null>(null) // `${ctxKey}:${docId}` em ação
   const inputRef = useRef<HTMLInputElement>(null)
+  // Alvo do próximo upload: null = geral; senão vincula à pasta escolhida.
+  const alvoUploadRef = useRef<AlvoUpload>(null)
 
-  // Picker "Vincular a…" (caso ou processo deste cliente).
+  // Expandido: 1º nível (categorias) aberto por padrão; pastas fechadas.
+  const [expandido, setExpandido] = useState<Set<string>>(
+    () => new Set(['c:casos', 'c:processos', 'c:gerais']),
+  )
+  const toggle = (k: string) =>
+    setExpandido((prev) => {
+      const n = new Set(prev)
+      if (n.has(k)) n.delete(k)
+      else n.add(k)
+      return n
+    })
+
+  // Picker "Vincular a…" — ADICIONA o doc a mais um caso/processo (N:N).
   const [vinculando, setVinculando]     = useState<DocumentoDossie | null>(null)
   const [alvos, setAlvos]               = useState<{ casos: CasoOpc[]; processos: ProcOpc[] } | null>(null)
   const [carregandoAlvos, setCarregandoAlvos] = useState(false)
@@ -81,7 +107,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     try {
       const r = await fetch(`/api/clientes/${clienteId}/documentos`)
       const d = await r.json()
-      if (r.ok) setDocumentos(d.documentos ?? [])
+      if (r.ok) setDocumentos((d.documentos ?? []) as DocumentoDossie[])
     } catch {
       // silencioso — a lista fica vazia; o upload ainda funciona
     } finally {
@@ -91,7 +117,9 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
 
   useEffect(() => { carregar() }, [carregar])
 
-  async function enviarArquivos(files: FileList | null) {
+  // Upload em 2 passos (mesmo fluxo de antes). Se `alvo` vier preenchido, o doc
+  // nasce já vinculado àquela pasta (PATCH adicionar após confirmar).
+  async function enviarArquivos(files: FileList | null, alvo: AlvoUpload) {
     if (!files || files.length === 0) return
     const arquivos = Array.from(files)
     setEnviando(true)
@@ -145,6 +173,15 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
           falhar(confData.error ?? 'falhou')
           continue
         }
+        // 4) "Anexar aqui": vincula o doc recém-criado à pasta escolhida.
+        if (alvo && confData.documento?.id) {
+          const col = alvo.tipo === 'atendimento' ? 'atendimento_id' : 'processo_id'
+          await fetch(`/api/documentos/${confData.documento.id}/vinculo`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adicionar: { [col]: alvo.id } }),
+          }).catch(() => { /* segue: o doc já existe em Gerais */ })
+        }
         marcar({ status: 'concluido' })
       } catch {
         falhar('erro de rede')
@@ -154,14 +191,21 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     setEnviando(false)
     if (inputRef.current) inputRef.current.value = ''
     await carregar()
-    if (erros === 0) success('Documentos anexados', 'Já disponíveis no dossiê e nos anexos.')
+    if (erros === 0) success('Documentos anexados', alvo ? 'Já disponíveis nesta pasta.' : 'Já disponíveis no dossiê.')
     else toastError('Alguns arquivos falharam', `${erros} de ${arquivos.length} não foram enviados.`)
     setTimeout(() => setProgresso([]), 2500)
   }
 
+  function dispararUpload(alvo: AlvoUpload) {
+    alvoUploadRef.current = alvo
+    inputRef.current?.click()
+  }
+
+  // Excluir de fato — só em Gerais (doc sem nenhum vínculo). A API barra (409) se
+  // o doc ainda estiver em alguma pasta.
   async function excluir(doc: DocumentoDossie) {
     if (!confirm(`Excluir "${doc.file_name}"? Esta ação não pode ser desfeita.`)) return
-    setExcluindo(doc.id)
+    setOcupado(`geral:${doc.id}`)
     try {
       const r = await fetch(`/api/clientes/${clienteId}/documentos/${doc.id}`, { method: 'DELETE' })
       if (r.ok) {
@@ -174,36 +218,41 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     } catch {
       toastError('Não excluído', 'Falha de rede. Tente novamente.')
     } finally {
-      setExcluindo(null)
+      setOcupado(null)
     }
   }
 
-  async function desvincular(doc: DocumentoDossie) {
-    if (!confirm('Desvincular este documento? Ele volta a ser um documento geral do cliente (não é excluído).')) return
-    setDesvinculando(doc.id)
+  // Remove SÓ o vínculo desta pasta (o arquivo continua no cliente e nas outras
+  // pastas). Não é oferecido na pasta de ORIGEM de um doc nascido no caso.
+  async function removerDaPasta(doc: DocumentoDossie, ctx: Contexto) {
+    if (ctx.tipo === 'geral') return
+    setOcupado(`${ctxKey(ctx)}:${doc.id}`)
     try {
+      const col = ctx.tipo === 'atendimento' ? 'atendimento_id' : 'processo_id'
       const r = await fetch(`/api/documentos/${doc.id}/vinculo`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ desvincular: true }),
+        body: JSON.stringify({ remover: { [col]: ctx.id } }),
       })
       if (r.ok) {
+        // Tira o vínculo desta pasta do estado local (o doc pode continuar em
+        // outras — ou cair em "Gerais" se este era o último).
         setDocumentos((prev) => prev.map((d) => d.id === doc.id
-          ? { ...d, atendimento_id: null, atendimento_titulo: null, processo_id: null, processo_numero_cnj: null, processo_apelido: null }
+          ? { ...d, vinculos: d.vinculos.filter((v) => ctx.tipo === 'atendimento' ? v.atendimento_id !== ctx.id : v.processo_id !== ctx.id) }
           : d))
-        success('Documento desvinculado', 'Voltou para os documentos gerais.')
+        success('Removido da pasta', 'O documento continua no dossiê do cliente.')
       } else {
         const d = await r.json().catch(() => ({}))
-        toastError('Não desvinculado', d.error ?? 'Tente novamente.')
+        toastError('Não removido', d.error ?? 'Tente novamente.')
       }
     } catch {
-      toastError('Não desvinculado', 'Falha de rede. Tente novamente.')
+      toastError('Não removido', 'Falha de rede. Tente novamente.')
     } finally {
-      setDesvinculando(null)
+      setOcupado(null)
     }
   }
 
-  // Abre o picker e carrega (uma vez) os casos e processos do cliente.
+  // Abre o picker "Vincular a…" e carrega (uma vez) os casos e processos do cliente.
   async function abrirVincular(doc: DocumentoDossie) {
     setVinculando(doc)
     if (alvos || carregandoAlvos) return
@@ -227,6 +276,8 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     }
   }
 
+  // ADICIONA um vínculo (pode ter vários). Atualiza o estado local com a nova
+  // pasta para a árvore reagir sem recarregar tudo.
   async function aplicarVinculo(tipo: 'atendimento' | 'processo', caso?: CasoOpc, proc?: ProcOpc) {
     const doc = vinculando
     if (!doc) return
@@ -234,16 +285,18 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     if (!alvoId) return
     setSalvandoVinculo(alvoId)
     try {
+      const col = tipo === 'atendimento' ? 'atendimento_id' : 'processo_id'
       const r = await fetch(`/api/documentos/${doc.id}/vinculo`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tipo === 'atendimento' ? { atendimento_id: alvoId } : { processo_id: alvoId }),
+        body: JSON.stringify({ adicionar: { [col]: alvoId } }),
       })
       if (r.ok) {
+        const novo: VinculoDoc = tipo === 'atendimento'
+          ? { atendimento_id: alvoId, processo_id: null, titulo: caso?.label ?? null }
+          : { atendimento_id: null, processo_id: alvoId, numero_cnj: proc?.numero_cnj ?? null, apelido: proc?.apelido ?? null }
         setDocumentos((prev) => prev.map((d) => d.id === doc.id
-          ? tipo === 'atendimento'
-            ? { ...d, atendimento_id: alvoId, atendimento_titulo: caso?.label ?? null, processo_id: null, processo_numero_cnj: null, processo_apelido: null }
-            : { ...d, processo_id: alvoId, processo_numero_cnj: proc?.numero_cnj ?? null, processo_apelido: proc?.apelido ?? null, atendimento_id: null, atendimento_titulo: null }
+          ? { ...d, vinculos: d.vinculos.some((v) => tipo === 'atendimento' ? v.atendimento_id === alvoId : v.processo_id === alvoId) ? d.vinculos : [...d.vinculos, novo] }
           : d))
         setVinculando(null)
         success('Documento vinculado', tipo === 'atendimento' ? 'Agora aparece no caso.' : 'Agora aparece no processo.')
@@ -258,17 +311,44 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     }
   }
 
-  function renderDoc(doc: DocumentoDossie) {
-    const vinc = temVinculo(doc)
+  // ── Monta a árvore a partir dos vínculos (o mesmo doc entra em cada pasta) ────
+  const arvore = useMemo(() => {
+    const gerais: DocumentoDossie[] = []
+    const casos = new Map<string, { id: string; label: string; docs: DocumentoDossie[] }>()
+    const procs = new Map<string, { id: string; label: string; docs: DocumentoDossie[] }>()
+    for (const d of documentos) {
+      if (d.vinculos.length === 0) { gerais.push(d); continue }
+      for (const v of d.vinculos) {
+        if (v.atendimento_id) {
+          const cur = casos.get(v.atendimento_id) ?? { id: v.atendimento_id, label: v.titulo?.trim() || 'Caso sem título', docs: [] }
+          if (v.titulo?.trim() && cur.label === 'Caso sem título') cur.label = v.titulo.trim()
+          cur.docs.push(d)
+          casos.set(v.atendimento_id, cur)
+        } else if (v.processo_id) {
+          const cur = procs.get(v.processo_id) ?? { id: v.processo_id, label: v.apelido?.trim() || formatarCnj(v.numero_cnj) || 'Processo', docs: [] }
+          cur.docs.push(d)
+          procs.set(v.processo_id, cur)
+        }
+      }
+    }
+    const ordenar = <T extends { label: string }>(m: Map<string, T>) =>
+      [...m.values()].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
+    return { gerais, casos: ordenar(casos), procs: ordenar(procs) }
+  }, [documentos])
+
+  // ── Uma linha de documento (nível folha da árvore). Render-helpers (chamados
+  // como função, não como <Componente/>) para não remontar a subárvore — e fechar
+  // o menu — a cada re-render do card. ─────────────────────────────────────────
+  function renderLinhaDoc(doc: DocumentoDossie, ctx: Contexto) {
     const downloadUrl = doc.url
       ? doc.url + (doc.url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(doc.file_name)
       : null
-    const processoLabel = doc.processo_apelido?.trim() || formatarCnj(doc.processo_numero_cnj)
+    // Não deixa "remover da pasta de origem" um doc que nasceu neste caso (origem.ts).
+    const ehPastaOrigem = ctx.tipo === 'atendimento' && doc.origem_atendimento_id === ctx.id
+    const podeRemover = ctx.tipo !== 'geral' && !ehPastaOrigem
+    const emAcao = ocupado === `${ctxKey(ctx)}:${doc.id}`
     return (
-      <li
-        key={doc.id}
-        className="group flex items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2.5 text-sm hover:border-primary/30 hover:bg-muted/40 transition-colors"
-      >
+      <li key={`${ctxKey(ctx)}:${doc.id}`} className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors">
         <IconeDoc mime={doc.mime_type} />
         <div className="min-w-0 flex-1">
           {doc.url ? (
@@ -284,89 +364,116 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
           ) : (
             <span className="block truncate font-medium text-foreground">{doc.file_name}</span>
           )}
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-            <span>{formatarBytes(Number(doc.tamanho_bytes ?? 0))}</span>
-            <span>·</span>
-            <span>{formatarDataRelativa(doc.created_at)}</span>
-            {doc.atendimento_id && (
-              <Link
-                href={`/clientes/${clienteId}/casos/${doc.atendimento_id}`}
-                className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-primary"
-                title={doc.atendimento_titulo ? `Do caso: ${doc.atendimento_titulo}` : 'Do atendimento'}
-              >
-                <Briefcase className="h-3 w-3" /> do caso
-              </Link>
-            )}
-            {doc.processo_id && (
-              <span
-                className="inline-flex max-w-[180px] items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-                title={`Do processo: ${processoLabel}`}
-              >
-                <Scale className="h-3 w-3 shrink-0" /> <span className="truncate">processo {processoLabel}</span>
-              </span>
-            )}
-          </div>
+          <span className="block text-xs text-muted-foreground">
+            {formatarBytes(Number(doc.tamanho_bytes ?? 0))} · {formatarDataRelativa(doc.created_at)}
+            {ehPastaOrigem && <span className="ml-1.5 text-[10px] italic opacity-70">· origem</span>}
+          </span>
         </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {doc.url && (
-            <a
-              href={doc.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded p-1.5 text-muted-foreground hover:text-primary"
-              title="Abrir em nova aba"
+        {emAcao ? (
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:bg-muted hover:text-foreground group-hover:opacity-100"
+              title="Ações"
             >
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          )}
-          {downloadUrl && (
-            <a
-              href={downloadUrl}
-              className="rounded p-1.5 text-muted-foreground hover:text-primary"
-              title="Baixar"
-            >
-              <Download className="h-4 w-4" />
-            </a>
-          )}
-          {vinc ? (
-            <button
-              onClick={() => desvincular(doc)}
-              disabled={desvinculando === doc.id}
-              className="rounded p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
-              title="Desvincular (volta a documento geral)"
-            >
-              {desvinculando === doc.id
-                ? <Loader2 className="h-4 w-4 animate-spin" />
-                : <Unlink className="h-4 w-4" />}
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={() => abrirVincular(doc)}
-                className="rounded p-1.5 text-muted-foreground hover:text-primary"
-                title="Vincular a um caso ou processo"
-              >
-                <Link2 className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => excluir(doc)}
-                disabled={excluindo === doc.id}
-                className="rounded p-1.5 text-muted-foreground hover:text-destructive disabled:opacity-50"
-                title="Excluir"
-              >
-                {excluindo === doc.id
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <Trash2 className="h-4 w-4" />}
-              </button>
-            </>
-          )}
-        </div>
+              <MoreVertical className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {doc.url && (
+                <DropdownMenuItem asChild>
+                  <a href={doc.url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" /> Abrir
+                  </a>
+                </DropdownMenuItem>
+              )}
+              {downloadUrl && (
+                <DropdownMenuItem asChild>
+                  <a href={downloadUrl}>
+                    <Download className="h-4 w-4" /> Baixar
+                  </a>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onSelect={() => abrirVincular(doc)}>
+                <Link2 className="h-4 w-4" /> Vincular a…
+              </DropdownMenuItem>
+              {podeRemover && (
+                <DropdownMenuItem onSelect={() => removerDaPasta(doc, ctx)}>
+                  <Unlink className="h-4 w-4" /> Remover desta pasta
+                </DropdownMenuItem>
+              )}
+              {ctx.tipo === 'geral' && (
+                <DropdownMenuItem
+                  onSelect={() => excluir(doc)}
+                  className="text-destructive hover:bg-destructive/10 focus:bg-destructive/10"
+                >
+                  <Trash2 className="h-4 w-4" /> Excluir
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </li>
     )
   }
 
-  const gerais     = documentos.filter((d) => !temVinculo(d))
-  const vinculados = documentos.filter(temVinculo)
+  // ── Uma pasta (caso ou processo): cabeçalho colapsável + "Anexar aqui" ────────
+  function renderPasta(
+    nodeKey: string, label: string, docs: DocumentoDossie[], ctx: Contexto, alvo: AlvoUpload,
+  ) {
+    const aberta = expandido.has(nodeKey)
+    return (
+      <li key={nodeKey}>
+        <div className="group flex items-center gap-1 rounded-md pr-1 hover:bg-muted/40">
+          <button
+            onClick={() => toggle(nodeKey)}
+            className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1.5 pl-1 text-left text-sm"
+          >
+            <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${aberta ? 'rotate-90' : ''}`} />
+            {aberta ? <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" /> : <Folder className="h-4 w-4 shrink-0 text-amber-500" />}
+            <span className="min-w-0 flex-1 truncate font-medium text-foreground">{label}</span>
+            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{docs.length}</span>
+          </button>
+          <button
+            onClick={() => dispararUpload(alvo)}
+            disabled={enviando}
+            className="shrink-0 rounded p-1 text-muted-foreground opacity-0 hover:bg-muted hover:text-primary group-hover:opacity-100 disabled:opacity-40"
+            title="Anexar arquivo nesta pasta"
+          >
+            <Upload className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {aberta && (
+          <ul className="ml-[13px] space-y-0.5 border-l border-border pl-2">
+            {docs.map((d) => renderLinhaDoc(d, ctx))}
+          </ul>
+        )}
+      </li>
+    )
+  }
+
+  // ── Uma categoria de 1º nível (Casos / Processos / Gerais) ────────────────────
+  function renderCategoria(
+    nodeKey: string, titulo: string, icon: ReactNode, count: number, children: ReactNode,
+  ) {
+    const aberta = expandido.has(nodeKey)
+    return (
+      <li key={nodeKey}>
+        <button
+          onClick={() => toggle(nodeKey)}
+          className="flex w-full items-center gap-1.5 rounded-md py-1.5 pl-1 pr-2 text-left hover:bg-muted/40"
+        >
+          <ChevronRight className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${aberta ? 'rotate-90' : ''}`} />
+          {icon}
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{titulo}</span>
+          <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{count}</span>
+        </button>
+        {aberta && <div className="ml-[13px] mt-0.5 border-l border-border pl-2">{children}</div>}
+      </li>
+    )
+  }
+
+  const temAlgum = documentos.length > 0
 
   return (
     <Card>
@@ -387,10 +494,15 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
             multiple
             accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp,.gif"
             className="hidden"
-            onChange={(e) => enviarArquivos(e.target.files)}
+            onChange={(e) => {
+              const alvo = alvoUploadRef.current
+              alvoUploadRef.current = null
+              enviarArquivos(e.target.files, alvo)
+            }}
             disabled={enviando}
           />
-          <Button size="sm" variant="secondary" disabled={enviando} onClick={() => inputRef.current?.click()}>
+          {/* Botão geral: sobe para "Gerais" (sem vínculo). */}
+          <Button size="sm" variant="secondary" disabled={enviando} onClick={() => dispararUpload(null)}>
             {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {enviando ? 'Enviando…' : 'Anexar'}
           </Button>
@@ -419,39 +531,52 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
           <p className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Carregando documentos…
           </p>
-        ) : documentos.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            Nenhum documento ainda. Anexe contratos, procurações, laudos e outros arquivos deste cliente.
-          </p>
+        ) : !temAlgum ? (
+          <EmptyState
+            className="py-10"
+            icon={<Folder className="h-7 w-7" />}
+            title="Nenhum documento ainda"
+            description="Anexe contratos, procurações, laudos e outros arquivos. Organize-os por caso ou processo — o mesmo arquivo pode servir a vários."
+          />
         ) : (
-          <div className="space-y-3">
-            {/* Gerais: sem vínculo de caso/processo. Subtítulo só aparece se houver
-                também vinculados — senão a lista fala por si. */}
-            {gerais.length > 0 && (
-              <div className="space-y-1.5">
-                {vinculados.length > 0 && (
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Gerais</p>
-                )}
-                <ul className="space-y-1.5">{gerais.map(renderDoc)}</ul>
-              </div>
+          <ul className="space-y-0.5">
+            {arvore.casos.length > 0 && renderCategoria(
+              'c:casos', 'Casos',
+              <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />,
+              arvore.casos.length,
+              <ul className="space-y-0.5">
+                {arvore.casos.map((c) => renderPasta(`at:${c.id}`, c.label, c.docs, { tipo: 'atendimento', id: c.id }, { tipo: 'atendimento', id: c.id }))}
+              </ul>,
             )}
-            {/* Vinculados: específicos de um caso e/ou processo. */}
-            {vinculados.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Vinculados a caso ou processo</p>
-                <ul className="space-y-1.5">{vinculados.map(renderDoc)}</ul>
-              </div>
+
+            {arvore.procs.length > 0 && renderCategoria(
+              'c:processos', 'Processos',
+              <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />,
+              arvore.procs.length,
+              <ul className="space-y-0.5">
+                {arvore.procs.map((p) => renderPasta(`pr:${p.id}`, p.label, p.docs, { tipo: 'processo', id: p.id }, { tipo: 'processo', id: p.id }))}
+              </ul>,
             )}
-          </div>
+
+            {arvore.gerais.length > 0 && renderCategoria(
+              'c:gerais', 'Gerais',
+              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />,
+              arvore.gerais.length,
+              <ul className="space-y-0.5">
+                {arvore.gerais.map((d) => renderLinhaDoc(d, { tipo: 'geral' }))}
+              </ul>,
+            )}
+          </ul>
         )}
       </CardContent>
 
-      {/* Picker "Vincular a…" — casos e processos DESTE cliente */}
+      {/* Picker "Vincular a…" — casos e processos DESTE cliente. ADICIONA (N:N):
+          alvos onde o doc já está ficam desabilitados. */}
       <Dialog
         open={!!vinculando}
         onClose={() => setVinculando(null)}
         title="Vincular documento"
-        description={vinculando ? `Escolha um caso ou processo para "${vinculando.file_name}".` : undefined}
+        description={vinculando ? `Adicione "${vinculando.file_name}" a um caso ou processo (pode estar em vários).` : undefined}
         size="md"
       >
         {carregandoAlvos ? (
@@ -468,19 +593,24 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
               <div className="space-y-1.5">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Casos</p>
                 <ul className="space-y-1.5">
-                  {alvos.casos.map((c) => (
-                    <li key={c.id}>
-                      <button
-                        onClick={() => aplicarVinculo('atendimento', c)}
-                        disabled={salvandoVinculo === c.id}
-                        className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2.5 text-left text-sm hover:border-primary/30 hover:bg-muted/40 transition-colors disabled:opacity-50"
-                      >
-                        <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{c.label}</span>
-                        {salvandoVinculo === c.id && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
-                      </button>
-                    </li>
-                  ))}
+                  {alvos.casos.map((c) => {
+                    const jaEsta = !!vinculando?.vinculos.some((v) => v.atendimento_id === c.id)
+                    return (
+                      <li key={c.id}>
+                        <button
+                          onClick={() => aplicarVinculo('atendimento', c)}
+                          disabled={jaEsta || salvandoVinculo === c.id}
+                          className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2.5 text-left text-sm hover:border-primary/30 hover:bg-muted/40 transition-colors disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-card"
+                        >
+                          <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{c.label}</span>
+                          {jaEsta
+                            ? <span className="shrink-0 text-[10px] text-muted-foreground">já está</span>
+                            : salvandoVinculo === c.id && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )}
@@ -488,19 +618,24 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
               <div className="space-y-1.5">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Processos</p>
                 <ul className="space-y-1.5">
-                  {alvos.processos.map((p) => (
-                    <li key={p.id}>
-                      <button
-                        onClick={() => aplicarVinculo('processo', undefined, p)}
-                        disabled={salvandoVinculo === p.id}
-                        className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2.5 text-left text-sm hover:border-primary/30 hover:bg-muted/40 transition-colors disabled:opacity-50"
-                      >
-                        <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate font-medium text-foreground">{p.label}</span>
-                        {salvandoVinculo === p.id && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
-                      </button>
-                    </li>
-                  ))}
+                  {alvos.processos.map((p) => {
+                    const jaEsta = !!vinculando?.vinculos.some((v) => v.processo_id === p.id)
+                    return (
+                      <li key={p.id}>
+                        <button
+                          onClick={() => aplicarVinculo('processo', undefined, p)}
+                          disabled={jaEsta || salvandoVinculo === p.id}
+                          className="flex w-full items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2.5 text-left text-sm hover:border-primary/30 hover:bg-muted/40 transition-colors disabled:opacity-50 disabled:hover:border-border disabled:hover:bg-card"
+                        >
+                          <Scale className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate font-medium text-foreground">{p.label}</span>
+                          {jaEsta
+                            ? <span className="shrink-0 text-[10px] text-muted-foreground">já está</span>
+                            : salvandoVinculo === p.id && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             )}

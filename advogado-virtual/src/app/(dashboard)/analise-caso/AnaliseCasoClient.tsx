@@ -126,10 +126,11 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
     const ids = Array.from(pendentesVinculoRef.current)
     pendentesVinculoRef.current.clear()
     for (const docId of ids) {
+      // ADICIONA o vínculo N:N (063) — o doc pode estar em várias pastas.
       fetch(`/api/documentos/${docId}/vinculo`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ atendimento_id: aid }),
+        body: JSON.stringify({ adicionar: { atendimento_id: aid } }),
       }).catch(() => { /* best-effort */ })
     }
   }, [])
@@ -156,7 +157,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
       fetch(`/api/documentos/${g.id}/vinculo`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ atendimento_id: atendimentoId }),
+        body: JSON.stringify({ adicionar: { atendimento_id: atendimentoId } }),
       }).catch(() => { /* best-effort; segue no estado local */ })
     } else {
       pendentesVinculoRef.current.add(g.id) // vincula quando o atendimento nascer
@@ -171,24 +172,25 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
     return true
   }, [atendimentoId, success, warning])
 
-  // X do doc do cadastro no estudo: DESVINCULA (nunca exclui) e sai do contexto.
+  // X do doc do cadastro no estudo: remove SÓ o vínculo deste caso (nunca exclui;
+  // o doc pode estar em outras pastas — N:N, 063) e sai do contexto da análise.
   const removerDoCadastro = useCallback(async (docId: string) => {
     setRemovendoCadastro(docId)
     try {
       if (pendentesVinculoRef.current.has(docId)) {
         pendentesVinculoRef.current.delete(docId) // ainda não vinculado
-      } else {
+      } else if (atendimentoId) {
         await fetch(`/api/documentos/${docId}/vinculo`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ desvincular: true }),
+          body: JSON.stringify({ remover: { atendimento_id: atendimentoId } }),
         }).catch(() => {})
       }
       setDocsDoCadastro((prev) => prev.filter((d) => d.id !== docId))
     } finally {
       setRemovendoCadastro(null)
     }
-  }, [])
+  }, [atendimentoId])
 
   // Carregar atendimento existente quando atendimentoIdInicial é fornecido
   useEffect(() => {
@@ -640,6 +642,7 @@ export function AnaliseCasoClient({ atendimentoIdInicial }: { atendimentoIdInici
           clienteId={cliente.id}
           open={pickerAberto}
           onClose={() => setPickerAberto(false)}
+          atendimentoAtual={atendimentoId}
           onEscolher={adicionarDoCadastro}
         />
       )}

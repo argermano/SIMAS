@@ -3,8 +3,9 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 
 // DELETE /api/clientes/[id]/documentos/[docId] — remove um documento GERAL do
-// dossiê (sem vínculo de caso nem de processo) + seu arquivo do Storage. Docs
-// vinculados exigem DESVINCULAR antes (mais seguro: não some arquivo por engano).
+// dossiê (que NÃO está em nenhuma pasta) + seu arquivo do Storage. Docs em pastas
+// (vínculos N:N, 063) exigem DESVINCULAR antes (mais seguro: não some por engano
+// um arquivo que está servindo a um caso ou processo).
 export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string; docId: string }> },
@@ -16,18 +17,22 @@ export async function DELETE(
 
   const { data: doc } = await supabase
     .from('documentos')
-    .select('id, file_url, atendimento_id, processo_id, cliente_id')
+    .select('id, file_url, cliente_id')
     .eq('id', docId)
     .eq('cliente_id', clienteId)
     .eq('tenant_id', usuario.tenant_id)
     .single()
   if (!doc) return jsonError('Documento não encontrado', 404)
 
-  // Só docs GERAIS. Vinculado a caso/processo → desvincule primeiro (evita
-  // apagar por engano um arquivo que está servindo a um caso ou processo).
-  if (doc.atendimento_id || doc.processo_id) {
+  // Só docs GERAIS. Em qualquer pasta (caso/processo) → desvincule primeiro.
+  const { count: vinculos } = await supabase
+    .from('documento_vinculos')
+    .select('id', { count: 'exact', head: true })
+    .eq('documento_id', docId)
+    .eq('tenant_id', usuario.tenant_id)
+  if ((vinculos ?? 0) > 0) {
     return jsonError(
-      'Este documento está vinculado a um caso ou processo — desvincule antes de excluir.',
+      'Este documento está em uma ou mais pastas (casos/processos) — desvincule dessas pastas antes de excluir.',
       409,
     )
   }

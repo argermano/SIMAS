@@ -12,7 +12,6 @@ import { AcoesAtendimento } from '@/components/atendimento/AcoesAtendimento'
 import { CartaoContatoCliente } from '@/components/atendimento/CartaoContatoCliente'
 import { TarefasDoCaso, type TarefaDoCaso } from '@/components/atendimento/TarefasDoCaso'
 import { AnexosDoCaso } from '@/components/atendimento/AnexosDoCaso'
-import { documentoNasceuNoCadastro } from '@/lib/documentos/origem'
 import { decryptTranscricaoFields } from '@/lib/encryption'
 import { AREAS } from '@/lib/constants/areas'
 import { MODELOS_PRONTOS, TIPOS_PECA } from '@/lib/constants/tipos-peca'
@@ -63,7 +62,7 @@ export default async function CasoPage({
 
   const { data: at } = await supabase
     .from('atendimentos')
-    .select('id, area, status, created_at, numero_processo, dados_processo, titulo, etiquetas, estagio, encerrado_em, transcricao_raw, transcricao_editada, clientes(id, nome, telefone, email), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at), documentos(id, file_name, tipo, created_at, file_url)')
+    .select('id, area, status, created_at, numero_processo, dados_processo, titulo, etiquetas, estagio, encerrado_em, transcricao_raw, transcricao_editada, clientes(id, nome, telefone, email), analises(id, plano_a, created_at), pecas(id, tipo, area, versao, status, created_at)')
     .eq('id', atendimentoId)
     .eq('cliente_id', id)
     .eq('tenant_id', usuario.tenant_id)
@@ -125,14 +124,27 @@ export default async function CasoPage({
   const analise = analiseRow?.plano_a ?? null
   const areasIdent = analise?.areas_identificadas ?? []
   const pecas = (at.pecas ?? []) as Array<{ id: string; tipo: string; area: string; versao: number; status: string; created_at: string }>
-  const documentos = (at.documentos ?? []) as Array<{ id: string; file_name: string; tipo: string; created_at: string; file_url: string | null }>
-  // Anexos do caso p/ o card (d): docs que nasceram no dossiê e foram vinculados
-  // ganham o rótulo "do cadastro" (X desvincula); os do caso, X exclui.
+
+  // Documentos do caso (063): listados por VÍNCULO N:N — inclui os que nasceram
+  // aqui E os vinculados de outras pastas (atalho). Removê-los remove só a linha
+  // de vínculo; a coluna documentos.atendimento_id continua sendo a ORIGEM.
+  type DocCaso = { id: string; file_name: string; tipo: string; created_at: string; atendimento_id: string | null }
+  const { data: vincDocsRaw } = await supabase
+    .from('documento_vinculos')
+    .select('documentos(id, file_name, tipo, created_at, atendimento_id)')
+    .eq('atendimento_id', atendimentoId)
+    .eq('tenant_id', usuario.tenant_id)
+  const documentos = ((vincDocsRaw ?? []) as Array<{ documentos: DocCaso | DocCaso[] | null }>)
+    .map((v) => um(v.documentos))
+    .filter((d): d is DocCaso => !!d)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  // Anexos do caso p/ o card: doc cuja ORIGEM é este caso segue a regra de sempre
+  // (X exclui); atalho de outra pasta → X só remove o vínculo deste caso.
   const anexosDoCaso = documentos.map((d) => ({
     id: d.id,
     file_name: d.file_name,
     created_at: d.created_at,
-    de_cadastro: documentoNasceuNoCadastro(d.file_url),
+    nascido_neste_caso: d.atendimento_id === atendimentoId,
   }))
   const status = at.status as string
   const badge = BADGE_STATUS[status] ?? BADGE_STATUS.caso_novo

@@ -128,5 +128,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .single()
 
   if (error) return jsonError(error.message, 500)
+
+  // Nasce já "na pasta" do caso: cria a linha de vínculo N:N (063) além da origem
+  // (atendimento_id) — é por ela que a tela do caso lista os documentos. (O ramo
+  // de UPDATE acima não precisa: o doc já nasceu aqui, então já tem o vínculo.)
+  const { error: vincErr } = await supabase
+    .from('documento_vinculos')
+    .insert({ tenant_id: usuario.tenant_id, documento_id: documento.id, atendimento_id: id })
+  // LGPD: sem nome de arquivo no log — só id do doc e código do erro.
+  if (vincErr) console.error('[anexar-gerado] vínculo falhou:', documento.id, vincErr.code)
+
   return NextResponse.json({ documento }, { status: 201 })
 }
