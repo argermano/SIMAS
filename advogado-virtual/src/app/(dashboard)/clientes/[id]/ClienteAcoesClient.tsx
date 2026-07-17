@@ -57,10 +57,11 @@ export function ClienteAcoesClient({ clienteId, clienteNome }: ClienteAcoesClien
         Excluir
       </Button>
 
-      {/* Contratos saíram do corpo do dossiê (dono, 2026-07-16): a lista do cliente
-          vive em /contratos, filtrada pelo nome. */}
+      {/* Contratos saíram do corpo do dossiê (dono, 2026-07-16): o botão abre a
+          GERAÇÃO de novo contrato já com este cliente; a lista vive em /contratos
+          e os existentes aparecem na árvore de documentos. */}
       <Button asChild variant="secondary" size="md">
-        <Link href={`/contratos?q=${encodeURIComponent(clienteNome)}`}>
+        <Link href={`/contratos/novo?cliente_id=${clienteId}`}>
           <FileSignature className="h-4 w-4" />
           Contratos
         </Link>
