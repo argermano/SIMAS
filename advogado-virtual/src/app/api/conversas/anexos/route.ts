@@ -60,15 +60,60 @@ export async function GET(req: NextRequest) {
 
   const tipo = (contentType ?? '').split(';')[0].trim().toLowerCase()
   const inline = TIPOS_INLINE.has(tipo)
+  const total = buffer.length
+
+  const headersBase: Record<string, string> = {
+    'Content-Type': inline ? tipo : 'application/octet-stream',
+    ...(inline ? {} : { 'Content-Disposition': 'attachment' }),
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': 'sandbox',
+    'Cache-Control': 'private, max-age=300',
+    // <audio>/<video> pedem faixa (Range) para descobrir a duração e permitir
+    // seek; anunciamos suporte para o browser nem tentar baixar tudo de uma vez.
+    'Accept-Ranges': 'bytes',
+  }
+
+  // Range: o WebKit (Safari) EXIGE 206 quando envia `Range: bytes=...`; se
+  // respondermos 200 com o arquivo inteiro, ele recusa a mídia e dispara o
+  // onError do <audio> — que na UI cai no card de download. Servimos a fatia.
+  const range = req.headers.get('range')
+  const m = range ? /^bytes=(\d*)-(\d*)$/.exec(range.trim()) : null
+  if (m && (m[1] !== '' || m[2] !== '')) {
+    let start: number
+    let end: number
+    if (m[1] === '') {
+      // Sufixo `bytes=-N`: os últimos N bytes.
+      const n = Number(m[2])
+      start = Math.max(0, total - n)
+      end = total - 1
+    } else {
+      start = Number(m[1])
+      end = m[2] === '' ? total - 1 : Math.min(Number(m[2]), total - 1)
+    }
+    if (!Number.isFinite(start) || start > end || start >= total) {
+      return new NextResponse(null, {
+        status: 416,
+        headers: {
+          'Content-Range': `bytes */${total}`,
+          'Accept-Ranges': 'bytes',
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Security-Policy': 'sandbox',
+        },
+      })
+    }
+    const fatia = buffer.subarray(start, end + 1)
+    return new NextResponse(new Uint8Array(fatia), {
+      status: 206,
+      headers: {
+        ...headersBase,
+        'Content-Range': `bytes ${start}-${end}/${total}`,
+        'Content-Length': String(fatia.length),
+      },
+    })
+  }
 
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,
-    headers: {
-      'Content-Type': inline ? tipo : 'application/octet-stream',
-      ...(inline ? {} : { 'Content-Disposition': 'attachment' }),
-      'X-Content-Type-Options': 'nosniff',
-      'Content-Security-Policy': 'sandbox',
-      'Cache-Control': 'private, max-age=300',
-    },
+    headers: { ...headersBase, 'Content-Length': String(total) },
   })
 }
