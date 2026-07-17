@@ -216,5 +216,43 @@ export async function GET(
     }
   })
 
-  return NextResponse.json({ documentos })
+  // Contratos do cliente como itens da árvore do dossiê (pedido do dono). NÃO são
+  // linhas de `documentos` (contrato não é doc) — vão em campo próprio. Só no modo
+  // árvore: o picker ?gerais=1 (adicionar do cadastro) não os usa. Assina em lote
+  // (sem N+1) só os que têm PDF assinado importado no Storage; os demais ficam com
+  // arquivoUrl null (a árvore navega para /contratos/[id]).
+  let contratos: Array<{
+    id: string; titulo: string; status: string; area: string | null
+    atendimento_id: string | null; criado_em: string
+    arquivoUrl: string | null; arquivoNome: string | null
+  }> = []
+  if (!soGerais) {
+    const { data: contratosRaw } = await supabase
+      .from('contratos_honorarios')
+      .select('id, titulo, status, area, atendimento_id, created_at, arquivo_assinado_url, arquivo_assinado_nome')
+      .eq('tenant_id', usuario.tenant_id)
+      .eq('cliente_id', clienteId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+    const base = contratosRaw ?? []
+    const cUrls = await Promise.all(
+      base.map((c) =>
+        c.arquivo_assinado_url
+          ? supabase.storage.from('documentos').createSignedUrl(c.arquivo_assinado_url, 3600)
+          : Promise.resolve({ data: null }),
+      ),
+    )
+    contratos = base.map((c, i) => ({
+      id:             c.id,
+      titulo:         c.titulo,
+      status:         c.status,
+      area:           c.area,
+      atendimento_id: c.atendimento_id ?? null,
+      criado_em:      c.created_at,
+      arquivoUrl:     c.arquivo_assinado_url ? (cUrls[i]?.data?.signedUrl ?? null) : null,
+      arquivoNome:    c.arquivo_assinado_nome ?? null,
+    }))
+  }
+
+  return NextResponse.json({ documentos, contratos })
 }

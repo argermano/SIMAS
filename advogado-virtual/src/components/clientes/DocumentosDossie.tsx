@@ -5,8 +5,10 @@ import {
   Paperclip, Upload, Loader2, FileText, Image as ImageIcon,
   FileSpreadsheet, File as FileIcon, Download, ExternalLink, Trash2, Link2,
   Scale, Briefcase, ChevronRight, Folder, FolderOpen, MoreVertical, Unlink,
+  FileSignature,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -36,6 +38,30 @@ interface DocumentoDossie {
   url: string | null
   vinculos: VinculoDoc[]           // pastas (casos/processos) onde o doc aparece
   origem_atendimento_id: string | null // caso onde nasceu (null = nasceu no dossiê)
+}
+
+// Contrato de honorários como ITEM da árvore (pedido do dono). Somente leitura +
+// navegação: gestão é na tela de contratos. `arquivoUrl` só existe quando há PDF
+// assinado importado (status assinado); senão o item navega para /contratos/[id].
+interface ContratoDossie {
+  id: string
+  titulo: string
+  status: string
+  area: string | null
+  atendimento_id: string | null
+  criado_em: string
+  arquivoUrl: string | null
+  arquivoNome: string | null
+}
+
+// Copiado de BADGE_CONTRATO_STATUS da página do cliente (não exportado) + o estado
+// 'assinado' (migration 033), que a árvore trata de forma especial (abre o PDF).
+const BADGE_CONTRATO_STATUS: Record<string, { variant: 'success' | 'warning' | 'secondary' | 'default'; label: string }> = {
+  rascunho:   { variant: 'warning',   label: 'Rascunho'   },
+  em_revisao: { variant: 'secondary', label: 'Em revisão' },
+  aprovado:   { variant: 'success',   label: 'Aprovado'   },
+  exportado:  { variant: 'default',   label: 'Exportado'  },
+  assinado:   { variant: 'success',   label: 'Assinado'   },
 }
 
 interface ProgressoItem {
@@ -77,6 +103,7 @@ const ctxKey = (c: Contexto) => (c.tipo === 'geral' ? 'geral' : `${c.tipo}:${c.i
 export function DocumentosDossie({ clienteId }: { clienteId: string }) {
   const { success, error: toastError } = useToast()
   const [documentos, setDocumentos] = useState<DocumentoDossie[]>([])
+  const [contratos, setContratos]   = useState<ContratoDossie[]>([])
   const [carregando, setCarregando] = useState(true)
   const [enviando, setEnviando]     = useState(false)
   const [progresso, setProgresso]   = useState<ProgressoItem[]>([])
@@ -87,7 +114,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
 
   // Expandido: 1º nível (categorias) aberto por padrão; pastas fechadas.
   const [expandido, setExpandido] = useState<Set<string>>(
-    () => new Set(['c:casos', 'c:processos', 'c:gerais']),
+    () => new Set(['c:casos', 'c:processos', 'c:gerais', 'c:contratos']),
   )
   const toggle = (k: string) =>
     setExpandido((prev) => {
@@ -107,7 +134,10 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     try {
       const r = await fetch(`/api/clientes/${clienteId}/documentos`)
       const d = await r.json()
-      if (r.ok) setDocumentos((d.documentos ?? []) as DocumentoDossie[])
+      if (r.ok) {
+        setDocumentos((d.documentos ?? []) as DocumentoDossie[])
+        setContratos((d.contratos ?? []) as ContratoDossie[])
+      }
     } catch {
       // silencioso — a lista fica vazia; o upload ainda funciona
     } finally {
@@ -314,16 +344,21 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
   // ── Monta a árvore a partir dos vínculos (o mesmo doc entra em cada pasta) ────
   const arvore = useMemo(() => {
     const gerais: DocumentoDossie[] = []
-    const casos = new Map<string, { id: string; label: string; docs: DocumentoDossie[] }>()
+    const casos = new Map<string, { id: string; label: string; docs: DocumentoDossie[]; contratos: ContratoDossie[] }>()
     const procs = new Map<string, { id: string; label: string; docs: DocumentoDossie[] }>()
+    // Nó do caso, criando sob demanda. `label` melhora o rótulo se o atual ainda é
+    // o placeholder (docs trazem o título do caso; contratos, o rótulo da área).
+    const noCaso = (id: string, label?: string | null) => {
+      const cur = casos.get(id) ?? { id, label: label?.trim() || 'Caso sem título', docs: [], contratos: [] }
+      if (label?.trim() && cur.label === 'Caso sem título') cur.label = label.trim()
+      casos.set(id, cur)
+      return cur
+    }
     for (const d of documentos) {
       if (d.vinculos.length === 0) { gerais.push(d); continue }
       for (const v of d.vinculos) {
         if (v.atendimento_id) {
-          const cur = casos.get(v.atendimento_id) ?? { id: v.atendimento_id, label: v.titulo?.trim() || 'Caso sem título', docs: [] }
-          if (v.titulo?.trim() && cur.label === 'Caso sem título') cur.label = v.titulo.trim()
-          cur.docs.push(d)
-          casos.set(v.atendimento_id, cur)
+          noCaso(v.atendimento_id, v.titulo).docs.push(d)
         } else if (v.processo_id) {
           const cur = procs.get(v.processo_id) ?? { id: v.processo_id, label: v.apelido?.trim() || formatarCnj(v.numero_cnj) || 'Processo', docs: [] }
           cur.docs.push(d)
@@ -331,10 +366,15 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
         }
       }
     }
+    // Contrato com atendimento_id: atalho na pasta do caso (mesma lógica dos docs).
+    // Sem docs no caso? A pasta é criada mesmo assim, rotulada pela área do contrato.
+    for (const c of contratos) {
+      if (c.atendimento_id) noCaso(c.atendimento_id, rotularArea(c.area)).contratos.push(c)
+    }
     const ordenar = <T extends { label: string }>(m: Map<string, T>) =>
       [...m.values()].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
     return { gerais, casos: ordenar(casos), procs: ordenar(procs) }
-  }, [documentos])
+  }, [documentos, contratos])
 
   // ── Uma linha de documento (nível folha da árvore). Render-helpers (chamados
   // como função, não como <Componente/>) para não remontar a subárvore — e fechar
@@ -417,11 +457,63 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     )
   }
 
+  // ── Uma linha de contrato (folha). Somente leitura + navegação: nada de vínculo
+  // ou exclusão (a gestão é na tela de contratos). ASSINADO com PDF importado abre
+  // o arquivo (nova aba) e permite baixar; os demais navegam para /contratos/[id].
+  function renderLinhaContrato(c: ContratoDossie) {
+    const badge = BADGE_CONTRATO_STATUS[c.status] ?? BADGE_CONTRATO_STATUS.rascunho
+    const temPdf = c.status === 'assinado' && !!c.arquivoUrl
+    const href = temPdf ? c.arquivoUrl! : `/contratos/${c.id}`
+    const downloadUrl = temPdf && c.arquivoUrl
+      ? c.arquivoUrl + (c.arquivoUrl.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(c.arquivoNome ?? `${c.titulo}.pdf`)
+      : null
+    return (
+      <li key={`ct:${c.id}`} className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors">
+        <FileSignature className="h-4 w-4 shrink-0 text-blue-500" />
+        <div className="min-w-0 flex-1">
+          <a
+            href={href}
+            {...(temPdf ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            className="block truncate font-medium text-foreground hover:text-primary transition-colors"
+            title={c.titulo}
+          >
+            {c.titulo}
+          </a>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Badge variant={badge.variant} className="px-1.5 py-0 text-[10px]">{badge.label}</Badge>
+            {formatarDataRelativa(c.criado_em)}
+          </div>
+        </div>
+        {/* Ação principal: baixar o PDF assinado, senão abrir o contrato. */}
+        {downloadUrl ? (
+          <a
+            href={downloadUrl}
+            className="shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:bg-muted hover:text-primary group-hover:opacity-100"
+            title="Baixar contrato assinado"
+          >
+            <Download className="h-4 w-4" />
+          </a>
+        ) : (
+          <a
+            href={href}
+            className="shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:bg-muted hover:text-primary group-hover:opacity-100"
+            title="Abrir contrato"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        )}
+      </li>
+    )
+  }
+
   // ── Uma pasta (caso ou processo): cabeçalho colapsável + "Anexar aqui" ────────
+  // `contratosDaPasta` só é preenchido em pastas de caso (contrato tem atendimento).
   function renderPasta(
     nodeKey: string, label: string, docs: DocumentoDossie[], ctx: Contexto, alvo: AlvoUpload,
+    contratosDaPasta: ContratoDossie[] = [],
   ) {
     const aberta = expandido.has(nodeKey)
+    const total = docs.length + contratosDaPasta.length
     return (
       <li key={nodeKey}>
         <div className="group flex items-center gap-1 rounded-md pr-1 hover:bg-muted/40">
@@ -432,7 +524,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
             <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${aberta ? 'rotate-90' : ''}`} />
             {aberta ? <FolderOpen className="h-4 w-4 shrink-0 text-amber-500" /> : <Folder className="h-4 w-4 shrink-0 text-amber-500" />}
             <span className="min-w-0 flex-1 truncate font-medium text-foreground">{label}</span>
-            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{docs.length}</span>
+            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">{total}</span>
           </button>
           <button
             onClick={() => dispararUpload(alvo)}
@@ -445,6 +537,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
         </div>
         {aberta && (
           <ul className="ml-[13px] space-y-0.5 border-l border-border pl-2">
+            {contratosDaPasta.map((c) => renderLinhaContrato(c))}
             {docs.map((d) => renderLinhaDoc(d, ctx))}
           </ul>
         )}
@@ -473,7 +566,9 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     )
   }
 
-  const temAlgum = documentos.length > 0
+  // Total do cabeçalho: arquivos + contratos (cada contrato é único).
+  const totalItens = documentos.length + contratos.length
+  const temAlgum = totalItens > 0
 
   return (
     <Card>
@@ -481,9 +576,9 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
         <CardTitle className="flex items-center gap-2 text-base">
           <Paperclip className="h-4 w-4 text-amber-500" />
           Documentos
-          {documentos.length > 0 && (
+          {totalItens > 0 && (
             <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-semibold text-warning">
-              {documentos.length}
+              {totalItens}
             </span>
           )}
         </CardTitle>
@@ -545,7 +640,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
               <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />,
               arvore.casos.length,
               <ul className="space-y-0.5">
-                {arvore.casos.map((c) => renderPasta(`at:${c.id}`, c.label, c.docs, { tipo: 'atendimento', id: c.id }, { tipo: 'atendimento', id: c.id }))}
+                {arvore.casos.map((c) => renderPasta(`at:${c.id}`, c.label, c.docs, { tipo: 'atendimento', id: c.id }, { tipo: 'atendimento', id: c.id }, c.contratos))}
               </ul>,
             )}
 
@@ -555,6 +650,16 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
               arvore.procs.length,
               <ul className="space-y-0.5">
                 {arvore.procs.map((p) => renderPasta(`pr:${p.id}`, p.label, p.docs, { tipo: 'processo', id: p.id }, { tipo: 'processo', id: p.id }))}
+              </ul>,
+            )}
+
+            {/* Contratos: pasta de 1º nível própria (some se não há nenhum). */}
+            {contratos.length > 0 && renderCategoria(
+              'c:contratos', 'Contratos',
+              <FileSignature className="h-4 w-4 shrink-0 text-muted-foreground" />,
+              contratos.length,
+              <ul className="space-y-0.5">
+                {contratos.map((c) => renderLinhaContrato(c))}
               </ul>,
             )}
 
