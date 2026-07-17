@@ -140,7 +140,7 @@ export default async function DashboardPage() {
 
           {/* Cards das áreas */}
           <section aria-label="Áreas do Direito">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {areasOrdenadas.map((area, i) => {
                 const Icone = ICONE_AREA[area.icone] ?? Shield
 
