@@ -97,7 +97,7 @@ function hrefCaso(clienteId: string, atendimentoId: string): string {
   return `/clientes/${clienteId}/casos/${atendimentoId}`
 }
 
-type Filtro = 'atendimentos' | 'analises' | 'pecas' | 'contratos' | null
+type Filtro = 'atendimentos' | 'analises' | 'pecas' | null
 
 export default async function DossieClientePage({
   params,
@@ -206,7 +206,6 @@ export default async function DossieClientePage({
   const totalAtendimentos = atendimentos?.length ?? 0
   const totalPecas        = pecas.data?.length ?? 0
   const totalAnalises     = analises.data?.length ?? 0
-  const totalContratos    = contratosList.length
 
   // null = sem filtro (mostra tudo); filtro X = mostra só X
   const mostrar = (secao: Filtro) => !filtro || filtro === secao
@@ -314,12 +313,11 @@ export default async function DossieClientePage({
               <ResumoCard href={`/clientes/${id}${filtro === 'atendimentos' ? '' : '?filtro=atendimentos'}`} icone={<FileText className="h-5 w-5" />} label="Atendimentos" valor={totalAtendimentos} cor="primary" ativo={filtro === 'atendimentos'} />
               <ResumoCard href={`/clientes/${id}${filtro === 'analises'     ? '' : '?filtro=analises'}`}     icone={<Brain className="h-5 w-5" />}         label="Análises IA"    valor={totalAnalises}     cor="violet"  ativo={filtro === 'analises'}     />
               <ResumoCard href={`/clientes/${id}${filtro === 'pecas'        ? '' : '?filtro=pecas'}`}        icone={<ScrollText className="h-5 w-5" />}    label="Peças geradas"  valor={totalPecas}        cor="emerald" ativo={filtro === 'pecas'}        />
-              <ResumoCard href={`/clientes/${id}${filtro === 'contratos'    ? '' : '?filtro=contratos'}`}    icone={<FileSignature className="h-5 w-5" />} label="Contratos"      valor={totalContratos}    cor="blue"    ativo={filtro === 'contratos'}    />
             </div>
           )}
 
           {/* ── Atendimentos (e análises / peças como sub-items) ── */}
-          {mostrar('atendimentos') && !mostrar('contratos') || (mostrar('atendimentos') && mostrar('analises')) || (mostrar('atendimentos') && mostrar('pecas')) || (!filtro || filtro === 'atendimentos' || filtro === 'analises' || filtro === 'pecas') ? (
+          {(!filtro || filtro === 'atendimentos' || filtro === 'analises' || filtro === 'pecas') ? (
             <section>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
@@ -539,70 +537,7 @@ export default async function DossieClientePage({
             </section>
           ) : null}
 
-          {/* ── Contratos ── */}
-          {mostrar('contratos') && (
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                  <FileSignature className="h-5 w-5 text-muted-foreground" />
-                  Contratos de Honorários
-                  {contratosList.length > 0 && (
-                    <span className="ml-1 rounded-full bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300">
-                      {contratosList.length}
-                    </span>
-                  )}
-                </h2>
-                <Button asChild variant="secondary" size="md">
-                  <Link href={`/contratos/novo?cliente_id=${id}`}>
-                    <Plus className="h-4 w-4" />
-                    Novo Contrato
-                  </Link>
-                </Button>
-              </div>
-              {contratosList.length === 0 ? (
-                <EmptyState
-                  icon={<FileSignature className="h-8 w-8" />}
-                  title="Nenhum contrato"
-                  description="Este cliente ainda não possui contratos de honorários."
-                  action={{ label: '+ Novo Contrato', href: `/contratos/novo?cliente_id=${id}` }}
-                />
-              ) : (
-                <div className="space-y-2">
-                  {contratosList.map(contrato => {
-                    const ctBadge = BADGE_CONTRATO_STATUS[contrato.status] ?? BADGE_CONTRATO_STATUS.rascunho
-                    return (
-                      <Link
-                        key={contrato.id}
-                        href={`/contratos/${contrato.id}`}
-                        className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm hover:border-blue-200 dark:border-blue-900 hover:bg-blue-50 dark:bg-blue-950/40/40 transition-colors group"
-                      >
-                        <FileSignature className="h-5 w-5 shrink-0 text-blue-500" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-foreground group-hover:text-blue-900 dark:text-blue-200">{contrato.titulo}</span>
-                            <Badge variant={ctBadge.variant} className="text-xs px-1.5 py-0">{ctBadge.label}</Badge>
-                            {contrato.area && (
-                              <span className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5">
-                                {LABELS_AREA[contrato.area] ?? contrato.area}
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
-                            {contrato.valor_fixo && <span>R$ {Number(contrato.valor_fixo).toLocaleString('pt-BR')}</span>}
-                            {contrato.percentual_exito && <span>{contrato.percentual_exito}% êxito</span>}
-                            <span>{formatarDataRelativa(contrato.created_at)}</span>
-                          </div>
-                        </div>
-                        <BotaoExcluirContrato contratoId={contrato.id} />
-                        <ChevronRight className="h-4 w-4 text-border group-hover:text-blue-500 shrink-0" />
-                      </Link>
-                    )
-                  })}
-                </div>
-              )}
-            </section>
-          )}
-
+          {/* Contratos saíram do dossiê: viraram o botão "Contratos" no cabeçalho (dono, 2026-07-16). */}
           </div>
 
           {/* Coluna direita: aba Documentos (anexar + lista + excluir diretos). */}

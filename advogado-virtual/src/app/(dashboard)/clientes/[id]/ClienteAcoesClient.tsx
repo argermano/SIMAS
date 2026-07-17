@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, Trash2, FileSignature } from 'lucide-react'
 
 interface ClienteAcoesClientProps {
   clienteId:   string
@@ -55,6 +55,15 @@ export function ClienteAcoesClient({ clienteId, clienteNome }: ClienteAcoesClien
       >
         <Trash2 className="h-4 w-4" />
         Excluir
+      </Button>
+
+      {/* Contratos saíram do corpo do dossiê (dono, 2026-07-16): a lista do cliente
+          vive em /contratos, filtrada pelo nome. */}
+      <Button asChild variant="secondary" size="md">
+        <Link href={`/contratos?q=${encodeURIComponent(clienteNome)}`}>
+          <FileSignature className="h-4 w-4" />
+          Contratos
+        </Link>
       </Button>
 
       <ConfirmDialog
