@@ -145,13 +145,29 @@ export function FeedModal({ aberto, onFechar }: FeedModalProps) {
             </div>
           )}
 
+          {/* 1 clique: o deep-link cid= abre o "Adicionar agenda?" direto no Google —
+              contorna o formulário "Do URL", que falha com erro genérico em navegador
+              com várias contas Google logadas (caso real do dono). */}
+          {url && (
+            <a
+              href={`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Adicionar ao Google Agenda (1 clique)
+            </a>
+          )}
+
           <div className="space-y-3 text-sm text-muted-foreground">
             <div>
               <p className="font-semibold text-foreground">Google Agenda</p>
               <p>
-                Na barra lateral, em <span className="font-medium text-foreground">Outros calendários</span>,
+                Prefira o botão acima. Manualmente: em{' '}
+                <span className="font-medium text-foreground">Outros calendários</span>,
                 clique em <span className="font-medium text-foreground">+</span> →{' '}
-                <span className="font-medium text-foreground">Do URL</span> e cole o link acima.
+                <span className="font-medium text-foreground">Do URL</span> e cole o link acima
+                — de preferência numa janela com só uma conta Google logada.
               </p>
             </div>
             <div>
