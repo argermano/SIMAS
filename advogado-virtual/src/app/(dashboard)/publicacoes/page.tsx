@@ -43,7 +43,10 @@ export default async function PublicacoesPage() {
       />
       <main className="flex-1 overflow-y-auto p-6">
         <div>
-          <CaixaPublicacoes teamMembers={(membros ?? []) as { id: string; nome: string | null }[]} />
+          <CaixaPublicacoes
+            teamMembers={(membros ?? []) as { id: string; nome: string | null }[]}
+            currentUserId={usuario.id}
+          />
         </div>
       </main>
     </>

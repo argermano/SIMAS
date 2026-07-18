@@ -75,7 +75,7 @@ interface FiltroTile {
   triadaEm: string
 }
 
-export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] }) {
+export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: TeamMember[]; currentUserId: string }) {
   const { success, error: toastError } = useToast()
   const [concluindo, setConcluindo] = useState<string | null>(null)
   const [status, setStatus] = useState('nova')
@@ -648,6 +648,7 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
                 key={selecionada}
                 id={selecionada}
                 teamMembers={teamMembers}
+                currentUserId={currentUserId}
                 partesFallback={partesSelecionada}
                 modo="inline"
                 onConcluido={aoConcluir}
@@ -672,6 +673,7 @@ export function CaixaPublicacoes({ teamMembers }: { teamMembers: TeamMember[] })
           key={`overlay-${selecionada}`}
           id={selecionada}
           teamMembers={teamMembers}
+          currentUserId={currentUserId}
           partesFallback={partesSelecionada}
           modo="overlay"
           onFechar={() => setMobileAberto(false)}

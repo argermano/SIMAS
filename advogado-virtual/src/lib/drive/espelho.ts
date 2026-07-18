@@ -514,14 +514,26 @@ export async function processarFilaDrive(
 
   for (const row of (fila ?? []) as { cliente_id: string }[]) {
     if (Date.now() >= deadline) break
-    // CLAIM atômico: só o dreno cujo UPDATE condicional casa (livre OU claim velho)
-    // segue; o concorrente recebe 0 linhas e pula — sem espelhar o mesmo cliente 2x.
-    const { data: claim } = await admin
+    // CLAIM atômico em DOIS passos (livre; senão, claim velho). Empírico: o
+    // .or() com timestamp neste UPDATE falha no PostgREST ("column does not
+    // exist", com ou sem aspas) — dois UPDATEs condicionais simples são
+    // equivalentes e cada um é atômico; o concorrente recebe 0 linhas e pula.
+    const agoraIso = new Date().toISOString()
+    let { data: claim } = await admin
       .from('drive_sync_fila')
-      .update({ processando_em: new Date().toISOString() })
+      .update({ processando_em: agoraIso })
       .eq('cliente_id', row.cliente_id)
-      .or(`processando_em.is.null,processando_em.lt.${staleAntes}`)
+      .is('processando_em', null)
       .select('cliente_id')
+    if (!claim || claim.length === 0) {
+      const { data: claimStale } = await admin
+        .from('drive_sync_fila')
+        .update({ processando_em: agoraIso })
+        .eq('cliente_id', row.cliente_id)
+        .lt('processando_em', staleAntes)
+        .select('cliente_id')
+      claim = claimStale
+    }
     if (!claim || claim.length === 0) continue // outro dreno já pegou este cliente
     resumo.clientes++
     const r = await espelharCliente(admin, row.cliente_id)

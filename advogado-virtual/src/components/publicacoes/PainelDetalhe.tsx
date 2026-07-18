@@ -20,9 +20,12 @@ import {
   Link2,
   RefreshCw,
   RotateCcw,
+  Sparkles,
   User,
 } from 'lucide-react'
 import { PainelTratamento, type TratamentoPayload } from './PainelTratamento'
+import { PainelSugestoesIA, TeorDestacado } from './PainelSugestoesIA'
+import type { SugestoesIA } from '@/lib/publicacoes/sugestoes-prompt'
 import { VincularProcessoPublicacao } from './VincularProcessoPublicacao'
 import { PrioridadeBadge, StatusPill } from './Pills'
 import {
@@ -35,6 +38,8 @@ import {
 interface Props {
   id: string
   teamMembers: TeamMember[]
+  /** Usuário logado — default do responsável nos cards de sugestão da IA. */
+  currentUserId: string
   /** "Autor × Réu" vindo do item de LISTA (o detalhe não devolve `partes`, que é
    * derivado de `meta.destinatarios` só na rota de lista). Fallback do título. */
   partesFallback?: string | null
@@ -78,7 +83,7 @@ function nomePesquisado(pub: PublicacaoDetalhe, destinatarios: DestinatarioAdvog
  * e "Reabrir". Invariantes: nenhum countdown de prazo — só a data de publicação
  * PRESUMIDA como referência; inteiro teor sempre via textoPlano (nunca innerHTML).
  */
-export function PainelDetalhe({ id, teamMembers, partesFallback, modo, onFechar, onConcluido, onReaberto }: Props) {
+export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, modo, onFechar, onConcluido, onReaberto }: Props) {
   const { success, error: toastError } = useToast()
   const [pub, setPub] = useState<PublicacaoDetalhe | null>(null)
   const [loading, setLoading] = useState(true)
@@ -87,6 +92,12 @@ export function PainelDetalhe({ id, teamMembers, partesFallback, modo, onFechar,
   const [motivo, setMotivo] = useState('')
   const [criandoTarefa, setCriandoTarefa] = useState(false)
   const [buscandoAndamentos, setBuscandoAndamentos] = useState(false)
+  // Sugestões da IA (sob demanda + cache no servidor). `mostrarSugestoes` controla
+  // a estação de tratamento sugerido; `gerando`/`regenerando` os spinners.
+  const [sugestoes, setSugestoes] = useState<SugestoesIA | null>(null)
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false)
+  const [gerandoSugestoes, setGerandoSugestoes] = useState(false)
+  const [regenerandoSugestoes, setRegenerandoSugestoes] = useState(false)
 
   // Busca (ou re-busca, após vincular) o detalhe. O painel remonta por `key={id}`
   // no pai, então não há corrida entre ids diferentes na mesma instância.
@@ -111,19 +122,23 @@ export function PainelDetalhe({ id, teamMembers, partesFallback, modo, onFechar,
     setMotivo('')
     setCriandoTarefa(false)
     setBuscandoAndamentos(false)
+    setSugestoes(null)
+    setMostrarSugestoes(false)
+    setGerandoSugestoes(false)
+    setRegenerandoSugestoes(false)
     void carregarDetalhe()
   }, [carregarDetalhe])
 
   // Escape fecha o overlay (mobile). No inline não há o que fechar.
   useEffect(() => {
     if (modo !== 'overlay' || !onFechar) return
-    if (modalDescarte || criandoTarefa) return
+    if (modalDescarte || criandoTarefa || mostrarSugestoes) return
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onFechar()
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [modo, onFechar, modalDescarte, criandoTarefa])
+  }, [modo, onFechar, modalDescarte, criandoTarefa, mostrarSugestoes])
 
   async function tratar(payload: TratamentoPayload) {
     setOcupado(true)
@@ -156,6 +171,31 @@ export function PainelDetalhe({ id, teamMembers, partesFallback, modo, onFechar,
   function marcarTratada() {
     if (!confirm('Marcar esta publicação como TRATADA (sem tarefa)? Ela sai da fila de não tratadas.')) return
     void tratar({})
+  }
+
+  // Sugestões da IA (sob demanda): usa o cache do servidor; `regerar` força UMA
+  // re-geração. Sucesso abre a estação de tratamento sugerido.
+  async function gerarSugestoes(regerar = false) {
+    if (regerar) setRegenerandoSugestoes(true)
+    else setGerandoSugestoes(true)
+    try {
+      const r = await fetch(`/api/publicacoes/${id}/sugerir`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ regerar }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        toastError('Não foi possível gerar as sugestões', d.error ?? 'Tente novamente.')
+        return
+      }
+      setSugestoes((d.sugestoes ?? { trechos: [], tarefas: [], resumo: '' }) as SugestoesIA)
+      setCriandoTarefa(false)
+      setMostrarSugestoes(true)
+    } finally {
+      setGerandoSugestoes(false)
+      setRegenerandoSugestoes(false)
+    }
   }
 
   async function descartar() {
@@ -415,17 +455,42 @@ export function PainelDetalhe({ id, teamMembers, partesFallback, modo, onFechar,
               </div>
             )}
 
-            {/* Inteiro teor — texto plano seguro (NUNCA innerHTML) */}
+            {/* Inteiro teor — texto plano seguro (NUNCA innerHTML). Com sugestões,
+                os trechos importantes vêm realçados (destaque por texto, sem tags). */}
             <div>
-              <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Inteiro teor
+                {sugestoes && sugestoes.trechos.length > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium normal-case text-primary">
+                    <Sparkles className="h-3 w-3" aria-hidden /> IA
+                  </span>
+                )}
               </p>
-              <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/20 p-3.5 text-sm font-sans leading-relaxed text-foreground">
-                {pub.textoPlano || 'Sem texto disponível.'}
-              </pre>
+              {pub.textoPlano ? (
+                <TeorDestacado texto={pub.textoPlano} trechos={sugestoes?.trechos ?? []} />
+              ) : (
+                <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/20 p-3.5 text-sm font-sans leading-relaxed text-foreground">
+                  Sem texto disponível.
+                </pre>
+              )}
             </div>
 
-            {/* Estação de tratamento (Criar tarefa) */}
+            {/* Estação de tratamento SUGERIDO pela IA (sob demanda + cache) */}
+            {podeTratar && mostrarSugestoes && sugestoes && (
+              <PainelSugestoesIA
+                key={`${pub.id}-sugestoes`}
+                sugestoes={sugestoes}
+                teamMembers={teamMembers}
+                currentUserId={currentUserId}
+                ocupado={ocupado}
+                onConcluir={tratar}
+                onExcluir={() => setMostrarSugestoes(false)}
+                onRegerar={() => void gerarSugestoes(true)}
+                regenerando={regenerandoSugestoes}
+              />
+            )}
+
+            {/* Estação de tratamento (Criar tarefa manual) */}
             {podeTratar && criandoTarefa && (
               <PainelTratamento
                 key={`${pub.id}-tarefa`}
@@ -448,10 +513,20 @@ export function PainelDetalhe({ id, teamMembers, partesFallback, modo, onFechar,
       </div>
 
       {/* Rodapé de ações */}
-      {pub && !criandoTarefa && (
+      {pub && !criandoTarefa && !mostrarSugestoes && (
         <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
           {podeTratar ? (
             <>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="border-primary/40 text-primary hover:bg-primary/10"
+                onClick={() => (sugestoes ? setMostrarSugestoes(true) : void gerarSugestoes(false))}
+                loading={gerandoSugestoes}
+                disabled={ocupado}
+              >
+                <Sparkles className="h-4 w-4" /> Sugerir com IA
+              </Button>
               <Button size="sm" onClick={marcarTratada} loading={ocupado}>
                 <CheckCheck className="h-4 w-4" /> Marcar como tratada
               </Button>
