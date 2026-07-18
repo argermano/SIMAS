@@ -33,6 +33,10 @@ const serverSchema = z.object({
   D4SIGN_WEBHOOK_SECRET: z.string().optional(),
   RELAY_URL: z.string().optional(),
   RELAY_TOKEN: z.string().optional(),
+  // Espelho do dossiê no Google Drive (066): as DUAS presentes ligam a feature;
+  // ausentes → espelho INERTE e silencioso (driveDisponivel() === false).
+  GOOGLE_DRIVE_SA_KEY_BASE64: z.string().optional(),
+  GOOGLE_DRIVE_PASTA_RAIZ: z.string().optional(),
   CONTACT_REPLY_EMAIL: z.string().optional(),
   NEXT_PUBLIC_SITE_URL: z.string().optional(),
   NEXTAUTH_URL: z.string().optional(),

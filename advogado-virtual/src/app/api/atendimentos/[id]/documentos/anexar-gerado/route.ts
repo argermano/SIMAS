@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { markdownToDocx } from '@/lib/export/docx-generator'
 import { aplicarTimbrado } from '@/lib/export/aplicar-timbrado'
 import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
+import { enfileirarDriveSync } from '@/lib/drive/fila'
+
+// Client service-role só para o gatilho do espelho (drive_sync_fila é service-only).
+const driveAdmin = () =>
+  createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
@@ -107,6 +113,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (existente.file_url && existente.file_url !== path) {
         await supabase.storage.from('documentos').remove([existente.file_url])
       }
+      // Conteúdo/nome do doc mudou → reespelha o cliente (renomeia/reenvia no Drive).
+      await enfileirarDriveSync(driveAdmin(), usuario.tenant_id, atendimento.cliente_id)
       return NextResponse.json({ documento }, { status: 200 })
     }
   }
@@ -137,6 +145,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .insert({ tenant_id: usuario.tenant_id, documento_id: documento.id, atendimento_id: id })
   // LGPD: sem nome de arquivo no log — só id do doc e código do erro.
   if (vincErr) console.error('[anexar-gerado] vínculo falhou:', documento.id, vincErr.code)
+
+  // Documento gerado anexado ao caso → reespelha o cliente no Drive.
+  await enfileirarDriveSync(driveAdmin(), usuario.tenant_id, atendimento.cliente_id)
 
   return NextResponse.json({ documento }, { status: 201 })
 }

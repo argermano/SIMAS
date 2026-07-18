@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
+import { enfileirarDriveSync } from '@/lib/drive/fila'
+
+// Client service-role só para o gatilho do espelho (drive_sync_fila é service-only,
+// RLS sem policy — o client de sessão seria barrado). Ver 066 e src/lib/drive.
+const driveAdmin = () =>
+  createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 // PATCH /api/documentos/[docId]/vinculo — gere os vínculos N:N do doc (063). Um
 // doc pode estar em VÁRIOS casos/processos ao mesmo tempo (atalhos de "pasta");
@@ -107,6 +114,8 @@ export async function PATCH(
       action: 'documento.vincular', resourceType: 'documento', resourceId: docId,
       metadata: { cliente_id: doc.cliente_id, [col]: alvoAdd.id },
     })
+    // O conjunto de pastas do doc mudou → reespelha o cliente no Drive.
+    await enfileirarDriveSync(driveAdmin(), tenantId, doc.cliente_id)
     return NextResponse.json({ ok: true, jaExistia: false, vinculo: { [col]: alvoAdd.id } })
   }
 
@@ -123,6 +132,7 @@ export async function PATCH(
       action: 'documento.desvincular', resourceType: 'documento', resourceId: docId,
       metadata: { cliente_id: doc.cliente_id, [col]: alvoDel.id },
     })
+    await enfileirarDriveSync(driveAdmin(), tenantId, doc.cliente_id)
     return NextResponse.json({ ok: true })
   }
 
@@ -138,6 +148,7 @@ export async function PATCH(
       action: 'documento.desvincular', resourceType: 'documento', resourceId: docId,
       metadata: { cliente_id: doc.cliente_id, removidos: (removidas ?? []).length },
     })
+    await enfileirarDriveSync(driveAdmin(), tenantId, doc.cliente_id)
     return NextResponse.json({ ok: true, removidos: (removidas ?? []).length })
   }
 

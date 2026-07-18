@@ -16,6 +16,7 @@ import {
   type VinculoRow,
   type VinculoDoc,
 } from '@/lib/documentos/vinculos'
+import { enfileirarDriveSync } from '@/lib/drive/fila'
 
 // Documentos anexados DIRETO ao dossiê do cliente (sem atendimento). Upload em 2
 // passos (mesmo padrão dos docs de atendimento): (1) POST { fileName, fileType,
@@ -112,6 +113,8 @@ export async function POST(
       await admin().storage.from('documentos').remove([storagePath])
       return jsonError(insertError.message, 500)
     }
+    // Gatilho do espelho no Drive (barato, à prova de falha, no-op se inerte).
+    await enfileirarDriveSync(admin(), usuario.tenant_id, clienteId)
     return NextResponse.json({ documento }, { status: 201 })
   }
 

@@ -5,7 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, CheckCircle, AlertTriangle, Info, Wallet, HardDrive } from 'lucide-react'
+import { Building2, User, Shield, CreditCard, Users, ChevronLeft, Briefcase, CheckCircle, AlertTriangle, Info, Wallet, HardDrive, FolderSync } from 'lucide-react'
 import { formatarData } from '@/lib/utils'
 import { formatarBytes } from '@/lib/documentos/tamanho'
 import { isEncryptionConfigured } from '@/lib/encryption'
@@ -17,6 +17,7 @@ import { PainelConsumoIA } from '@/components/configuracoes/PainelConsumoIA'
 import { PadroesDocumentos } from '@/components/configuracoes/PadroesDocumentos'
 import { FormatacaoEscritorio } from '@/components/configuracoes/FormatacaoEscritorio'
 import { PapelTimbrado } from '@/components/configuracoes/PapelTimbrado'
+import { ConfigDrive } from '@/components/configuracoes/ConfigDrive'
 import { ConfiguracoesTabs } from '@/components/configuracoes/ConfiguracoesTabs'
 
 export const metadata = { title: 'Configurações' }
@@ -263,6 +264,21 @@ export default async function ConfiguracoesPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Google Drive — espelho do dossiê (066). Somente admin. */}
+      {usuario.role === 'admin' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FolderSync className="h-5 w-5 text-muted-foreground" />
+              Google Drive
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ConfigDrive />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Plano */}
       <Card>

@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { extractTextFromImage, extractTextFromPdf } from '@/lib/anthropic/client'
+import { enfileirarDriveSync } from '@/lib/drive/fila'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 
@@ -89,6 +90,11 @@ export async function POST(
     .insert({ tenant_id: usuario.tenant_id, documento_id: documento.id, atendimento_id: id })
   // LGPD: sem nome de arquivo no log — só id do doc e código do erro.
   if (vincErr) console.error('[atendimentos documentos POST] vínculo falhou:', documento.id, vincErr.code)
+
+  // Gatilho do espelho no Drive. O arquivo real ainda vai ser enviado pelo browser
+  // (URL assinada) — se a drenagem correr antes dos bytes chegarem, o item falha e a
+  // fila durável o retenta no próximo ciclo (a drenagem é diária / sob demanda).
+  await enfileirarDriveSync(adminSupabase, usuario.tenant_id, atendimento.cliente_id)
 
   return NextResponse.json({
     documento,

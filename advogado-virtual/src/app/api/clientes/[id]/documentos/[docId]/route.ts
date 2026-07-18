@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { enfileirarDriveSync } from '@/lib/drive/fila'
+
+// Client service-role só para o gatilho do espelho (drive_sync_fila é service-only).
+const driveAdmin = () =>
+  createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
 // DELETE /api/clientes/[id]/documentos/[docId] — remove um documento GERAL do
 // dossiê (que NÃO está em nenhuma pasta) + seu arquivo do Storage. Docs em pastas
@@ -54,6 +60,9 @@ export async function DELETE(
     .eq('id', docId)
     .eq('tenant_id', usuario.tenant_id)
   if (error) return jsonError(error.message, 500)
+
+  // Documento removido do dossiê → reespelha o cliente (órfão vira lixeira no Drive).
+  await enfileirarDriveSync(driveAdmin(), usuario.tenant_id, clienteId)
 
   return NextResponse.json({ ok: true })
 }

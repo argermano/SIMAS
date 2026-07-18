@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import { getAuthContext, requireRole } from '@/lib/auth'
@@ -6,6 +7,11 @@ import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { logger } from '@/lib/logger'
 import { relayFetchBinario } from '@/lib/conversas/relay'
+import { enfileirarDriveSync } from '@/lib/drive/fila'
+
+// Client service-role só para o gatilho do espelho (drive_sync_fila é service-only).
+const driveAdmin = () =>
+  createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 import {
   TIPOS_ANEXO_PERMITIDOS,
   LIMITE_ANEXO_SERVIDOR_BYTES,
@@ -170,6 +176,9 @@ export async function POST(
       tamanho: origem.buffer.length,
     },
   })
+
+  // Anexo virou documento do dossiê → reespelha o cliente no Drive.
+  await enfileirarDriveSync(driveAdmin(), tenantId, clienteId)
 
   return NextResponse.json({ documentoId: documento.id }, { status: 201 })
 }

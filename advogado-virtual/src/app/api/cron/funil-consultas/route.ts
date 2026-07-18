@@ -6,6 +6,7 @@ import { sincronizarPublicacoesDjen } from '@/lib/processos/djen'
 import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
 import { rodarSentinela, type SentinelaResultado } from '@/lib/processos/sentinela'
 import { repararResumos, type ReparoResultado } from '@/lib/processos/reparo'
+import { processarFilaDrive } from '@/lib/drive/espelho'
 
 export const maxDuration = 300
 
@@ -128,5 +129,22 @@ export async function GET(req: Request) {
     reparo = await repararResumos(admin, { deadline: reparoDeadline })
   }
 
-  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo })
+  // Espelho no Google Drive (066) — drena a fila na FOLGA que restar (DEPOIS do
+  // reparo). Sem cron próprio (Hobby limita a 2 crons/dia): pega os minutos que
+  // sobrarem. Teto duplo: min(90s, t0+295s) — nunca empurra o handler além do
+  // maxDuration=300 (a Vercel mataria a função). Só entra se sobrar tempo útil; o
+  // que não couber fica na fila durável e é drenado no próximo ciclo / pelo botão.
+  // processarFilaDrive é no-op se o espelho está inerte; isolado num try/catch.
+  let driveSync: { clientes: number; arquivos: number; erros: number } | null = null
+  try {
+    const driveDeadline = Math.min(Date.now() + 90_000, t0 + 295_000)
+    if (driveDeadline > Date.now() + 3_000) {
+      const r = await processarFilaDrive(admin, { deadline: driveDeadline })
+      driveSync = { clientes: r.clientes, arquivos: r.arquivos, erros: r.erros }
+    }
+  } catch (e) {
+    logger.error('cron.drive_sync.falha', {}, e as Error)
+  }
+
+  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo, driveSync })
 }
