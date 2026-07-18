@@ -51,7 +51,10 @@ export function pastaRaizId(): string | null {
 
 /** Monta e ASSINA (RS256, node:crypto) o JWT do bearer grant. Puro dado `agora` —
  *  testável sem rede (só depende da chave privada da SA). */
-export function montarJwtAssertion(sa: ServiceAccount, opts?: { agora?: number; scope?: string }): string {
+export function montarJwtAssertion(
+  sa: ServiceAccount,
+  opts?: { agora?: number; scope?: string; impersonar?: string },
+): string {
   const agora = Math.floor((opts?.agora ?? Date.now()) / 1000)
   const b64url = (obj: unknown) => Buffer.from(JSON.stringify(obj)).toString('base64url')
   const header = b64url({ alg: 'RS256', typ: 'JWT' })
@@ -61,6 +64,10 @@ export function montarJwtAssertion(sa: ServiceAccount, opts?: { agora?: number; 
     aud: sa.token_uri,
     iat: agora,
     exp: agora + 3600,
+    // Domain-wide delegation: agir COMO um usuário do Workspace (sub). Sem isso,
+    // arquivos criados pertencem à SA — que tem COTA ZERO no Drive, e o upload em
+    // "Meu Drive" falha (pastas passam por ocuparem 0 byte; caso real do piloto).
+    ...(opts?.impersonar ? { sub: opts.impersonar } : {}),
   })
   const entrada = `${header}.${claims}`
   const assinatura = createSign('RSA-SHA256')
@@ -84,7 +91,11 @@ function carregarSa(): ServiceAccount {
 export async function obterAccessToken(): Promise<string> {
   if (cacheToken && Date.now() < cacheToken.expiraEmMs) return cacheToken.valor
   const sa = carregarSa()
-  const assertion = montarJwtAssertion(sa)
+  // GOOGLE_DRIVE_IMPERSONATE (opcional): e-mail do usuário do Workspace dono da
+  // pasta raiz — exige domain-wide delegation autorizada no Admin Console.
+  const assertion = montarJwtAssertion(sa, {
+    impersonar: process.env.GOOGLE_DRIVE_IMPERSONATE || undefined,
+  })
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 10_000)
   try {
