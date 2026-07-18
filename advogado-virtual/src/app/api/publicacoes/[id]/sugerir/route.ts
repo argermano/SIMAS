@@ -9,7 +9,9 @@ import { logUsage } from '@/lib/anthropic/usage'
 import { extrairTextoPlano } from '@/lib/processos/djen'
 import {
   SYSTEM_SUGESTOES,
+  SUGESTOES_VERSAO,
   buildPromptSugestoes,
+  cacheAtual,
   sanitizarSugestoes,
   type SugestoesIA,
 } from '@/lib/publicacoes/sugestoes-prompt'
@@ -27,14 +29,14 @@ const schema = z.object({
   regerar: z.boolean().optional(),
 })
 
-const VAZIAS: SugestoesIA = { trechos: [], tarefas: [], resumo: '' }
+const VAZIAS: SugestoesIA = { v: SUGESTOES_VERSAO, trechos: [], tarefas: [], resumo: '' }
 
 /**
  * POST /api/publicacoes/[id]/sugerir — sugestões de IA para o tratamento
  * (admin/advogado). Devolve o CACHE (`sugestoes_ia`) se já existir; com
  * `{ regerar: true }` força uma re-geração. Gera via IA sobre o TEXTO PLANO do
- * inteiro teor; valida server-side (citações substring + rejeição de datas) e
- * persiste. LGPD: nunca loga o texto da publicação — só ids/contagens.
+ * inteiro teor; valida server-side (citações substring + data SUGERIDA por
+ * formato/janela + fundamento) e persiste. LGPD: nunca loga o texto — só ids/contagens.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await getAuthContext()
@@ -51,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const { data: pub } = await supabase
     .from('publicacoes')
-    .select('id, texto, sugestoes_ia, sugestoes_geradas_em')
+    .select('id, texto, data_disponibilizacao, data_publicacao_sugerida, sugestoes_ia, sugestoes_geradas_em')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id) // defesa em profundidade (RLS já isola)
     .single()
@@ -61,12 +63,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const row = pub as {
     id: string
     texto: string | null
+    data_disponibilizacao: string | null
+    data_publicacao_sugerida: string | null
     sugestoes_ia: SugestoesIA | null
     sugestoes_geradas_em: string | null
   }
 
-  // Cache: 1 geração por publicação. Só re-gera com `regerar: true`.
-  if (row.sugestoes_ia && !regerar) {
+  // Cache: 1 geração por publicação — mas SÓ se casar com a versão atual do payload
+  // (caches v1, sem data sugerida, contam como ausentes e regeneram). `regerar` força.
+  if (cacheAtual(row.sugestoes_ia) && !regerar) {
     return NextResponse.json({
       sugestoes: row.sugestoes_ia,
       geradasEm: row.sugestoes_geradas_em,
@@ -86,12 +91,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const { result, usage } = await completionJSON<unknown>({
       system: SYSTEM_SUGESTOES,
-      prompt: buildPromptSugestoes(textoPlano),
+      prompt: buildPromptSugestoes(textoPlano, {
+        dataDisponibilizacao: row.data_disponibilizacao,
+        dataPublicacaoSugerida: row.data_publicacao_sugerida,
+      }),
       model: MODELO_SUGESTOES,
       maxTokens: MAX_TOKENS,
     })
-    // Validação server-side: descarta citações que não casam (indexOf) e rejeita
-    // qualquer data nas tarefas — a data de prazo é SEMPRE humana.
+    // Validação server-side: descarta citações que não casam (indexOf); a data de
+    // prazo é SUGESTÃO (valida formato/janela, exige fundamento) e nunca vira tarefa
+    // sem confirmação humana no painel.
     sugestoes = sanitizarSugestoes(result, textoPlano)
     await logUsage({
       tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'publicacao_sugestoes',

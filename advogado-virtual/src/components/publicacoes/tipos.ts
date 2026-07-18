@@ -5,6 +5,7 @@ import {
   type CategoriaMovimento,
   type PrioridadeRelevancia,
 } from '@/lib/processos/categorias'
+import type { SugestoesIA } from '@/lib/publicacoes/sugestoes-prompt'
 
 /** Processo cadastrado no SIMAS (Fase 5) ao qual a publicação está vinculada.
  * DTO derivado do join publicacoes.processo_id → processos → clientes. Todos os
@@ -73,6 +74,9 @@ export interface PublicacaoDetalhe extends PublicacaoListItem {
   /** Movimento da Fase 5 gerado a partir desta publicação (se casou com processo
    * cadastrado). Presente ⇒ aviso ao cliente já foi gerado pela Fase 5. */
   movimento_id: string | null
+  /** Cache de sugestões da IA (JSONB da coluna `sugestoes_ia`), quando já geradas.
+   * A UI valida a VERSÃO com `cacheAtual` antes de usar (payloads antigos regeneram). */
+  sugestoes_ia?: SugestoesIA | null
 }
 
 export type PublicacaoStatus = 'nova' | 'triada' | 'tarefa_criada' | 'descartada'

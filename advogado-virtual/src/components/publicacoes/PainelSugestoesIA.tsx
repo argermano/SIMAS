@@ -83,9 +83,15 @@ interface CardSugestao {
   titulo: string
   prioridade: Prioridade
   assigneeId: string
-  dueDate: string // SEMPRE '' inicial — prazo é decisão humana, nunca pré-preenchido
+  /** PRÉ-PREENCHIDO com a `dataSugerida` da IA (quando houver); totalmente editável,
+   * limpar = tarefa sem due_date. Confirmar usa este valor FINAL (humano vê antes). */
+  dueDate: string
   temPrazoNoTexto: boolean
   trechoDoPrazo?: string
+  /** Data que a IA sugeriu (marca o selo "sugerida — confira" e o realce âmbar). */
+  dataSugerida?: string | null
+  /** Fundamento curto da contagem (ou da dúvida quando não sugeriu data). */
+  fundamentoPrazo?: string
 }
 
 let seq = 0
@@ -95,9 +101,11 @@ function cardsIniciais(sugestoes: SugestoesIA, assigneePadrao: string): CardSuge
     titulo: t.titulo,
     prioridade: t.prioridade, // 'alta' | 'media' | 'baixa' ⊂ Prioridade
     assigneeId: assigneePadrao,
-    dueDate: '',
+    dueDate: t.dataSugerida ?? '', // pré-preenche com a sugestão da IA (editável)
     temPrazoNoTexto: t.temPrazoNoTexto,
     trechoDoPrazo: t.trechoDoPrazo,
+    dataSugerida: t.dataSugerida ?? null,
+    fundamentoPrazo: t.fundamentoPrazo,
   }))
 }
 
@@ -117,10 +125,11 @@ interface Props {
 }
 
 /**
- * Estação de tratamento SUGERIDO pela IA (paridade com o Astrea): cards de tarefa
- * editáveis (título/prioridade/responsável), descartáveis (👎). Tarefa com prazo no
- * texto mostra a CITAÇÃO + um campo de data VAZIO ('Prazo (defina manualmente)') —
- * obrigatório digitar OU deixar sem data, NUNCA pré-preenchido. 'Confirmar
+ * Estação de tratamento SUGERIDO pela IA: cards de tarefa editáveis
+ * (título/prioridade/responsável), descartáveis (👎). Tarefa com prazo no texto
+ * mostra a CITAÇÃO, o FUNDAMENTO da contagem e um campo de data PRÉ-PREENCHIDO com a
+ * `dataSugerida` da IA + selo âmbar "Sugerida pela IA — confira"; o campo é totalmente
+ * editável (pode limpar = sem due_date) e Confirmar usa o valor FINAL. 'Confirmar
  * tratamento' cria as tarefas restantes; a nota ganha o resumo da IA (editável).
  */
 export function PainelSugestoesIA({
@@ -164,9 +173,16 @@ export function PainelSugestoesIA({
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Sparkles className="h-4 w-4 text-primary" aria-hidden /> Tratamento sugerido (IA)
         </h3>
-        <Button variant="ghost" size="sm" onClick={onRegerar} loading={regenerando} disabled={ocupado}>
-          <RefreshCw className="h-4 w-4" /> Regenerar
-        </Button>
+        {/* Ação discreta p/ resultado ruim (não é botão de disparo — a análise é automática). */}
+        <button
+          type="button"
+          onClick={onRegerar}
+          disabled={ocupado || regenerando}
+          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+        >
+          <RefreshCw className={cn('h-3.5 w-3.5', regenerando && 'animate-spin')} aria-hidden />
+          {regenerando ? 'Gerando…' : 'Gerar novamente'}
+        </button>
       </div>
 
       {/* Disclaimer (paridade com o Astrea) */}
@@ -244,22 +260,42 @@ export function PainelSugestoesIA({
                 />
               </div>
 
-              {/* Prazo mencionado no texto: mostra a CITAÇÃO + data VAZIA (manual) */}
+              {/* Prazo mencionado no texto: CITAÇÃO + fundamento + campo de data. Com
+                  data sugerida pela IA, o bloco ganha realce âmbar + selo "confira". */}
               {c.temPrazoNoTexto && (
-                <div className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-2.5">
+                <div
+                  className={cn(
+                    'space-y-2 rounded-md border p-2.5',
+                    c.dataSugerida ? 'border-warning/40 bg-warning/10' : 'border-destructive/30 bg-destructive/5',
+                  )}
+                >
+                  {c.dataSugerida && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-warning/20 px-2 py-0.5 text-[11px] font-semibold text-warning">
+                      <Sparkles className="h-3 w-3" aria-hidden /> Sugerida pela IA — confira
+                    </span>
+                  )}
                   {c.trechoDoPrazo && (
                     <p className="text-xs text-muted-foreground">
                       A publicação menciona prazo:{' '}
                       <span className="font-medium text-foreground">“{c.trechoDoPrazo}”</span>
                     </p>
                   )}
+                  {c.fundamentoPrazo && (
+                    <p className="text-xs text-muted-foreground">
+                      Contagem: <span className="text-foreground">{c.fundamentoPrazo}</span>
+                    </p>
+                  )}
                   <Input
-                    label="Prazo (defina manualmente)"
+                    label="Prazo"
                     type="date"
                     value={c.dueDate}
                     onChange={(e) => atualizar(c.key, { dueDate: e.target.value })}
                     leftIcon={<CalendarClock className="h-4 w-4" />}
-                    hint="A IA nunca calcula a data — digite o prazo ou deixe em branco."
+                    hint={
+                      c.dataSugerida
+                        ? 'Sugestão da IA — confira a contagem, edite ou limpe o campo.'
+                        : 'A IA não sugeriu data — digite o prazo ou deixe em branco.'
+                    }
                   />
                 </div>
               )}

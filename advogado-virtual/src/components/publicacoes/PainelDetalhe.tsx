@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import { PainelTratamento, type TratamentoPayload } from './PainelTratamento'
 import { PainelSugestoesIA, TeorDestacado } from './PainelSugestoesIA'
-import type { SugestoesIA } from '@/lib/publicacoes/sugestoes-prompt'
+import { cacheAtual, type SugestoesIA } from '@/lib/publicacoes/sugestoes-prompt'
 import { VincularProcessoPublicacao } from './VincularProcessoPublicacao'
 import { PrioridadeBadge, StatusPill } from './Pills'
 import {
@@ -92,12 +92,17 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
   const [motivo, setMotivo] = useState('')
   const [criandoTarefa, setCriandoTarefa] = useState(false)
   const [buscandoAndamentos, setBuscandoAndamentos] = useState(false)
-  // Sugestões da IA (sob demanda + cache no servidor). `mostrarSugestoes` controla
-  // a estação de tratamento sugerido; `gerando`/`regenerando` os spinners.
+  // Sugestões da IA (AUTO ao abrir uma NÃO tratada + cache no servidor).
+  // `mostrarSugestoes` controla a estação de tratamento sugerido; `gerando`/
+  // `regenerando` os spinners; `erroSugestoes` o aviso curto + "Tentar de novo".
   const [sugestoes, setSugestoes] = useState<SugestoesIA | null>(null)
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false)
   const [gerandoSugestoes, setGerandoSugestoes] = useState(false)
   const [regenerandoSugestoes, setRegenerandoSugestoes] = useState(false)
+  const [erroSugestoes, setErroSugestoes] = useState(false)
+  // Auto-geração: NO MÁXIMO 1 disparo por montagem (o painel remonta por `key={id}`
+  // no pai). Erro NÃO re-dispara sozinho — o usuário aciona "Tentar de novo".
+  const autoGerouRef = useRef(false)
 
   // Busca (ou re-busca, após vincular) o detalhe. O painel remonta por `key={id}`
   // no pai, então não há corrida entre ids diferentes na mesma instância.
@@ -126,8 +131,28 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
     setMostrarSugestoes(false)
     setGerandoSugestoes(false)
     setRegenerandoSugestoes(false)
+    setErroSugestoes(false)
+    autoGerouRef.current = false
     void carregarDetalhe()
   }, [carregarDetalhe])
+
+  // AUTO-GERAÇÃO: ao carregar a publicação, mostra a análise sozinha.
+  //  - Se o DETALHE já traz um cache da VERSÃO atual, usa-o sem gerar (vale para
+  //    tratada — só realça o teor — e para não tratada — abre a estação de tratamento).
+  //  - Sem cache, só a NÃO tratada dispara a geração (1 disparo por montagem); a
+  //    TRATADA nunca gera. Falha não re-dispara sozinha (só "Tentar de novo").
+  useEffect(() => {
+    if (!pub || sugestoes) return
+    if (cacheAtual(pub.sugestoes_ia)) {
+      setSugestoes(pub.sugestoes_ia as SugestoesIA)
+      if (pub.status === 'nova') setMostrarSugestoes(true)
+      return
+    }
+    if (pub.status !== 'nova' || autoGerouRef.current || erroSugestoes) return
+    autoGerouRef.current = true
+    void gerarSugestoes(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pub])
 
   // Escape fecha o overlay (mobile). No inline não há o que fechar.
   useEffect(() => {
@@ -173,11 +198,13 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
     void tratar({})
   }
 
-  // Sugestões da IA (sob demanda): usa o cache do servidor; `regerar` força UMA
-  // re-geração. Sucesso abre a estação de tratamento sugerido.
+  // Sugestões da IA: usa o cache do servidor; `regerar` força UMA re-geração.
+  // Sucesso abre a estação de tratamento sugerido. Falha ⇒ marca `erroSugestoes`
+  // (aviso curto + "Tentar de novo" inline) e NÃO re-dispara sozinha.
   async function gerarSugestoes(regerar = false) {
     if (regerar) setRegenerandoSugestoes(true)
     else setGerandoSugestoes(true)
+    setErroSugestoes(false)
     try {
       const r = await fetch(`/api/publicacoes/${id}/sugerir`, {
         method: 'POST',
@@ -186,12 +213,14 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
-        toastError('Não foi possível gerar as sugestões', d.error ?? 'Tente novamente.')
+        setErroSugestoes(true)
         return
       }
-      setSugestoes((d.sugestoes ?? { trechos: [], tarefas: [], resumo: '' }) as SugestoesIA)
+      setSugestoes((d.sugestoes ?? { v: 0, trechos: [], tarefas: [], resumo: '' }) as SugestoesIA)
       setCriandoTarefa(false)
       setMostrarSugestoes(true)
+    } catch {
+      setErroSugestoes(true)
     } finally {
       setGerandoSugestoes(false)
       setRegenerandoSugestoes(false)
@@ -517,16 +546,33 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
         <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
           {podeTratar ? (
             <>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="border-primary/40 text-primary hover:bg-primary/10"
-                onClick={() => (sugestoes ? setMostrarSugestoes(true) : void gerarSugestoes(false))}
-                loading={gerandoSugestoes}
-                disabled={ocupado}
-              >
-                <Sparkles className="h-4 w-4" /> Sugerir com IA
-              </Button>
+              {/* Sem botão de disparo: a análise é AUTOMÁTICA ao abrir. Aqui só o
+                  estado discreto — reabrir a análise, "Analisando…" ou "Tentar de novo". */}
+              {sugestoes ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-primary hover:bg-primary/10"
+                  onClick={() => setMostrarSugestoes(true)}
+                  disabled={ocupado}
+                >
+                  <Sparkles className="h-4 w-4" /> Ver análise da IA
+                </Button>
+              ) : gerandoSugestoes ? (
+                <span className="inline-flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
+                  <Spinner className="h-3.5 w-3.5" /> Analisando…
+                </span>
+              ) : erroSugestoes ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => void gerarSugestoes(false)}
+                  disabled={ocupado}
+                >
+                  <RefreshCw className="h-4 w-4" /> Tentar analisar de novo
+                </Button>
+              ) : null}
               <Button size="sm" onClick={marcarTratada} loading={ocupado}>
                 <CheckCheck className="h-4 w-4" /> Marcar como tratada
               </Button>
