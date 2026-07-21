@@ -102,6 +102,20 @@ function AnexoCard({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
   )
 }
 
+/** Extensões de áudio comuns do WhatsApp/encaminhamentos. Áudio enviado como
+ * ARQUIVO (documento) chega com tipo 'file' — pela extensão ainda ganha player
+ * (caso real: áudio da equipe encaminhado não reproduzia, só baixava). */
+const EXT_AUDIO = /\.(ogg|oga|opus|mp3|m4a|aac|amr|wav|weba|webm)(\?|$)/i
+function pareceAudio(a: Anexo): boolean {
+  if (a.tipo === 'audio') return true
+  if (a.tipo !== 'file' || !a.url) return false
+  try {
+    return EXT_AUDIO.test(new URL(a.url).pathname)
+  } catch {
+    return EXT_AUDIO.test(a.url)
+  }
+}
+
 /** Áudio inline (player nativo) via proxy, nas duas direções. onError (proxy
  * desligado/codec sem suporte) degrada para o card clicável com download. */
 function AnexoAudio({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
@@ -229,7 +243,7 @@ export function MensagemBolha({
                   <div key={i} className="flex flex-col gap-1">
                     {a.tipo === 'image' ? (
                       <AnexoImagem anexo={a} escuro={saidaEscura} />
-                    ) : a.tipo === 'audio' ? (
+                    ) : pareceAudio(a) ? (
                       <AnexoAudio anexo={a} escuro={saidaEscura} />
                     ) : (
                       <AnexoCard anexo={a} escuro={saidaEscura} />

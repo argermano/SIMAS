@@ -59,7 +59,12 @@ export async function GET(req: NextRequest) {
   }
 
   const tipo = (contentType ?? '').split(';')[0].trim().toLowerCase()
-  const inline = TIPOS_INLINE.has(tipo)
+  // Áudio/vídeo são mídia INERTE (não executam script) — qualquer subtipo pode
+  // tocar inline com nosniff+sandbox. A allowlist explícita segue valendo para o
+  // resto (nunca SVG/HTML/XML). Caso real: áudio encaminhado como arquivo chega
+  // como audio/webm|x-m4a etc. e caía em download — o player quebrava.
+  const inline =
+    TIPOS_INLINE.has(tipo) || tipo.startsWith('audio/') || tipo.startsWith('video/')
   const total = buffer.length
 
   const headersBase: Record<string, string> = {
