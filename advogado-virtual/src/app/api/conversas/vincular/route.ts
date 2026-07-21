@@ -94,9 +94,10 @@ export async function POST(req: NextRequest) {
     action: 'conversa.vinculada',
     resourceType: 'cliente',
     resourceId: cliente.id,
+    // LGPD: audit só com flags — nunca o número em claro (resourceId já
+    // identifica o cliente para reconstruir o contexto).
     metadata: {
-      telefone: telefone.trim(),
-      telefone_anterior: telefoneAtual || null,
+      tinhaTelefoneAnterior: Boolean(telefoneAtual),
       substituiu: Boolean(telefoneAtual && !mesmoTelefone(telefoneAtual, telefone)),
     },
   })

@@ -6,7 +6,15 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
 
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/definir-senha'
+
+  // Open redirect: `next` só pode ser um caminho relativo interno. Precisa
+  // começar com '/', não pode começar com '//' (URL protocol-relative) nem
+  // conter ':' (esquema/host absoluto). Caso contrário, cai no destino padrão.
+  const nextParam = searchParams.get('next') ?? '/definir-senha'
+  const next =
+    nextParam.startsWith('/') && !nextParam.startsWith('//') && !nextParam.includes(':')
+      ? nextParam
+      : '/definir-senha'
 
   if (code) {
     const supabase = await createClient()

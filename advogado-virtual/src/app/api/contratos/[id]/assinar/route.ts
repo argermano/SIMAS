@@ -12,6 +12,7 @@ import {
   d4signDelay,
 } from '@/lib/d4sign/client'
 import { taskService } from '@/services/task-service'
+import { logger } from '@/lib/logger'
 import type { D4SignSignerInput } from '@/lib/d4sign/types'
 
 // ─── Markdown → PDF (jsPDF) ──────────────────────────────────────────────────
@@ -273,9 +274,10 @@ export async function POST(
     const fileName = fileLabel ? `${fileLabel}.pdf` : 'contrato.pdf'
 
     // 2. Upload na D4Sign
-    console.log('[assinar] Fazendo upload do documento PDF:', fileName)
+    // LGPD: fileName carrega o nome do cliente — logamos só ids/contagens.
+    logger.info('contrato.assinar.upload_iniciado', { contratoId: id, tenantId: usuario.tenant_id, signatarios: signers.length })
     const { uuid: d4signUuid } = await d4signUploadDocument(safeUuid, fileBuffer, fileName, 'application/pdf')
-    console.log('[assinar] Upload ok, docUuid:', d4signUuid)
+    logger.info('contrato.assinar.upload_ok', { contratoId: id, d4signUuid })
 
     // Pausa para respeitar rate limit da D4Sign
     await d4signDelay(3000)
@@ -303,9 +305,10 @@ export async function POST(
     })
 
     // 4. Cadastrar signatários (chamada 2/4 à API D4Sign)
-    console.log('[assinar] Cadastrando signatários...')
+    // LGPD: signerResponses traz e-mails — logamos só a contagem.
+    logger.info('contrato.assinar.cadastrando_signatarios', { contratoId: id, signatarios: d4signSigners.length })
     const signerResponses = await d4signAddSigners(d4signUuid, d4signSigners)
-    console.log('[assinar] Signatários cadastrados:', JSON.stringify(signerResponses))
+    logger.info('contrato.assinar.signatarios_cadastrados', { contratoId: id, signatarios: signerResponses.length })
 
     await d4signDelay(3000)
 
@@ -319,21 +322,24 @@ export async function POST(
         positionX: String(Math.round((pos.xMm / 210) * 790)),
         positionY: String(Math.round((pos.yMm / 297) * 1097)),
       }))
-      console.log('[assinar] Posicionando assinaturas:', JSON.stringify(pins))
+      // LGPD: pins trazem e-mails — logamos só a contagem. Chave `qtdPins`
+      // (não `pins`) porque o logger redige a chave `pins` e comeria a contagem.
+      logger.info('contrato.assinar.posicionando', { contratoId: id, qtdPins: pins.length })
       await d4signAddPins(d4signUuid, pins)
       await d4signDelay(3000)
-    } catch (err) {
-      console.warn('[assinar] Falha ao posicionar assinaturas (não crítico):', err)
+    } catch {
+      // Não crítico; o erro pode conter payload cru da D4Sign (e-mails) — não logamos o corpo.
+      logger.warn('contrato.assinar.posicionar_falha', { contratoId: id })
     }
 
     // 5. Enviar para assinatura (chamada 4/4 à API D4Sign)
     // NOTA: D4Sign tem limite de 10 req/hora. Fluxo otimizado para 4 chamadas.
-    console.log('[assinar] Enviando para assinatura, docUuid:', d4signUuid)
-    const sendResult = await d4signSendToSign(d4signUuid, {
+    logger.info('contrato.assinar.enviando', { contratoId: id, d4signUuid })
+    await d4signSendToSign(d4signUuid, {
       message:  message ?? 'Por favor, assine o contrato de honorários advocatícios.',
       workflow: workflow ? '1' : '0',
     })
-    console.log('[assinar] Resultado sendToSign:', JSON.stringify(sendResult))
+    logger.info('contrato.assinar.enviado', { contratoId: id, d4signUuid })
 
     // Links de assinatura não buscados para economizar quota (D4Sign envia por email/whatsapp)
     const linksMap: Record<string, string> = {}

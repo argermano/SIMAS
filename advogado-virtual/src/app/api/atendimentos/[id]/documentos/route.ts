@@ -1,5 +1,6 @@
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { extractTextFromImage, extractTextFromPdf } from '@/lib/anthropic/client'
@@ -104,6 +105,12 @@ export async function POST(
   }, { status: 201 })
 }
 
+const schemaExtrair = z.object({
+  documentoId: z.string().uuid(),
+  // fileType é só uma dica de qual extrator usar; o path do Storage vem do banco.
+  fileType:    z.string().optional(),
+})
+
 // PATCH /api/atendimentos/[id]/documentos — extrai texto de documento já enviado
 export async function PATCH(
   req: Request,
@@ -114,16 +121,40 @@ export async function PATCH(
   if (!auth.ok) return auth.response
   const { supabase, usuario } = auth
 
-  const body = await req.json()
-  const { documentoId, storagePath, fileType } = body as {
-    documentoId: string
-    storagePath: string
-    fileType: string
-  }
-
-  if (!documentoId || !storagePath) {
+  const parsed = schemaExtrair.safeParse(await req.json().catch(() => null))
+  if (!parsed.success) {
     return jsonError('Dados obrigatórios ausentes', 400)
   }
+  const { documentoId } = parsed.data
+
+  // Confere a posse do atendimento pai no tenant (mesmo guard do POST).
+  const { data: atendimento } = await supabase
+    .from('atendimentos')
+    .select('id')
+    .eq('id', id)
+    .eq('tenant_id', usuario.tenant_id)
+    .single()
+  if (!atendimento) {
+    return jsonError('Atendimento não encontrado', 404)
+  }
+
+  // IDOR: o path do Storage NUNCA vem do cliente — o admin client abaixo ignora
+  // a RLS e baixaria arquivo de qualquer tenant. Resolve o documento por id +
+  // tenant (amarrado a este atendimento) e usa o file_url PERSISTIDO para baixar
+  // (padrão de documentos/[docId]/extrair).
+  const { data: documento } = await supabase
+    .from('documentos')
+    .select('id, file_url, mime_type')
+    .eq('id', documentoId)
+    .eq('tenant_id', usuario.tenant_id)
+    .eq('atendimento_id', id)
+    .single()
+  if (!documento?.file_url) {
+    return jsonError('Documento não encontrado', 404)
+  }
+
+  const storagePath = documento.file_url
+  const fileType = parsed.data.fileType ?? documento.mime_type ?? ''
 
   // Baixa o arquivo do storage para extração de texto
   const adminSupabase = createAdminClient(

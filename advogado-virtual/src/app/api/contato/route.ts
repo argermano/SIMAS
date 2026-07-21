@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     if (process.env.RESEND_API_KEY) {
       try {
         const { Resend } = await import('resend')
-        const { emailTemplate } = await import('@/lib/email')
+        const { emailTemplate, escaparHtml } = await import('@/lib/email')
         const resend = new Resend(process.env.RESEND_API_KEY)
         await resend.emails.send({
           from: 'SIMAS <contato@simas.app>',
@@ -85,9 +85,9 @@ export async function POST(req: NextRequest) {
             titulo: 'Novo contato via landing page',
             conteudo: `
               <table style="border-collapse:collapse;width:100%;">
-                <tr><td style="padding:8px 12px;font-weight:600;color:#1e293b;width:100px;">Nome</td><td style="padding:8px 12px;color:#475569;">${nome.trim()}</td></tr>
-                <tr style="background:#f8f9fc;"><td style="padding:8px 12px;font-weight:600;color:#1e293b;">E-mail</td><td style="padding:8px 12px;color:#475569;">${email.trim()}</td></tr>
-                <tr><td style="padding:8px 12px;font-weight:600;color:#1e293b;">Telefone</td><td style="padding:8px 12px;color:#475569;">${telefone?.trim() || '—'}</td></tr>
+                <tr><td style="padding:8px 12px;font-weight:600;color:#1e293b;width:100px;">Nome</td><td style="padding:8px 12px;color:#475569;">${escaparHtml(nome.trim())}</td></tr>
+                <tr style="background:#f8f9fc;"><td style="padding:8px 12px;font-weight:600;color:#1e293b;">E-mail</td><td style="padding:8px 12px;color:#475569;">${escaparHtml(email.trim())}</td></tr>
+                <tr><td style="padding:8px 12px;font-weight:600;color:#1e293b;">Telefone</td><td style="padding:8px 12px;color:#475569;">${escaparHtml(telefone?.trim() || '—')}</td></tr>
               </table>
             `,
             rodape: 'Enviado via formulário de contato da página de login do SIMAS.',

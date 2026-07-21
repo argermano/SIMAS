@@ -1,5 +1,6 @@
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { onContratoAssinado } from '@/lib/financeiro/gancho-contrato'
@@ -75,8 +76,17 @@ export async function PATCH(
     return jsonError('Sem permissão para importar o contrato assinado', 403)
   }
 
-  const { storagePath, fileName } = await req.json() as { storagePath: string; fileName?: string }
-  if (!storagePath) return jsonError('storagePath é obrigatório', 400)
+  const parsed = z
+    .object({ storagePath: z.string().min(1), fileName: z.string().optional() })
+    .safeParse(await req.json().catch(() => null))
+  if (!parsed.success) return jsonError('storagePath é obrigatório', 400)
+  const { storagePath, fileName } = parsed.data
+
+  // IDOR: o GET assina este path com service role (ignora RLS). Só aceita paths
+  // gerados pelo POST deste contrato/tenant — paridade com clientes/[id]/documentos.
+  if (!storagePath.startsWith(`${usuario.tenant_id}/contratos/${id}/`)) {
+    return jsonError('Caminho de arquivo inválido', 400)
+  }
 
   const { data: atualizado, error } = await supabase
     .from('contratos_honorarios')

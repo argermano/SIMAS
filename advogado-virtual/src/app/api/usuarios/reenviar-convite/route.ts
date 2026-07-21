@@ -9,7 +9,7 @@ const schema = z.object({
   email: z.string().email('E-mail inválido'),
 })
 
-import { emailTemplate } from '@/lib/email'
+import { emailTemplate, urlBaseApp } from '@/lib/email'
 
 async function enviarEmailAcesso(nome: string, email: string, link: string, isNovo: boolean) {
   if (!process.env.RESEND_API_KEY) {
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+  const baseUrl = urlBaseApp()
 
   // Se o usuário já tem conta, usa recovery (permite definir senha); senão, invite
   const linkType = pendente.auth_user_id ? 'recovery' : 'invite'

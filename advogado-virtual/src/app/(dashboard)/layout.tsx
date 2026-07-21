@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { usuarioAtivo } from '@/lib/auth'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TaskDueNotification } from '@/components/layout/TaskDueNotification'
 import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
@@ -20,9 +21,14 @@ export default async function DashboardLayout({
   // Busca perfil do usuário no banco
   const { data: usuario } = await supabase
     .from('users')
-    .select('nome, role, tenant_id, tenants(nome)')
+    .select('nome, role, tenant_id, status, tenants(nome)')
     .eq('auth_user_id', user.id)
     .single()
+
+  // Conta desativada perde o acesso às páginas mesmo com a sessão ainda válida. Vai para
+  // /logout (route handler) que limpa a sessão e cai no /login — redirecionar direto ao
+  // /login entraria em loop com o middleware, que devolve usuário autenticado ao dashboard.
+  if (usuario && !usuarioAtivo(usuario.status)) redirect('/logout')
 
   const nomeUsuario    = usuario?.nome ?? user.email ?? 'Usuário'
   const roleRaw        = usuario?.role ?? 'advogado'

@@ -67,14 +67,37 @@ export function emailTemplate({ titulo, conteudo, botao, rodape }: EmailTemplate
 }
 
 /** Escapa texto do usuário antes de interpolar no HTML do e-mail. */
-function escaparHtml(s: string): string {
+export function escaparHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
   ))
 }
 
+/**
+ * URL base pública do app para montar links absolutos em e-mails e feeds.
+ * Prioridade: NEXTAUTH_URL (config explícita) → em produção na Vercel o domínio
+ * canônico → VERCEL_URL (deploys de preview) → localhost (só em dev).
+ * Nunca cai em localhost em produção: um link localhost num e-mail de convite
+ * é inútil para quem recebe.
+ */
 function baseUrl(): string {
-  return process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL
+  if (process.env.VERCEL_ENV === 'production') return 'https://simas.app'
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return 'http://localhost:3000'
+}
+
+/**
+ * Mascara o destinatário para log. LGPD: o assunto costuma trazer nome de
+ * pessoa e o e-mail é dado pessoal — logamos só a inicial do local + domínio,
+ * ou 'ausente' quando não há destinatário.
+ */
+function mascararEmail(email: string | undefined): string {
+  const e = (email ?? '').trim()
+  if (!e) return 'ausente'
+  const at = e.indexOf('@')
+  if (at <= 0) return '***'
+  return `${e[0]}***@${e.slice(at + 1)}`
 }
 
 /**
@@ -84,7 +107,7 @@ function baseUrl(): string {
  */
 export async function enviarEmail(opts: { para: string; assunto: string; html: string }): Promise<boolean> {
   if (!process.env.RESEND_API_KEY) {
-    logger.warn('email.resend_ausente', { assunto: opts.assunto })
+    logger.warn('email.resend_ausente', { destinatario: mascararEmail(opts.para) })
     return false
   }
   try {
@@ -98,7 +121,7 @@ export async function enviarEmail(opts: { para: string; assunto: string; html: s
     })
     return true
   } catch (err) {
-    logger.error('email.envio_falha', { assunto: opts.assunto }, err)
+    logger.error('email.envio_falha', { destinatario: mascararEmail(opts.para) }, err)
     return false
   }
 }

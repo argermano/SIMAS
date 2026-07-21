@@ -148,7 +148,8 @@ export async function DELETE(
     action: 'cliente.delete',
     resourceType: 'cliente',
     resourceId: id,
-    metadata: { nome: (cliente as { nome?: string }).nome ?? null, soft: true },
+    // LGPD: audit só com flags — resourceId já identifica o cliente.
+    metadata: { soft: true },
   })
 
   return NextResponse.json({ ok: true })

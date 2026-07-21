@@ -11,7 +11,7 @@ const schema = z.object({
   role:  z.enum(['admin', 'advogado', 'colaborador']),
 })
 
-import { emailTemplate } from '@/lib/email'
+import { emailTemplate, urlBaseApp } from '@/lib/email'
 
 async function enviarEmailConvite(nome: string, email: string, link: string) {
   if (!process.env.RESEND_API_KEY) {
@@ -67,7 +67,8 @@ export async function POST(req: Request) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+  // Nunca usa localhost em produção — o link vai por e-mail para o convidado.
+  const baseUrl = urlBaseApp()
 
   // Gera link de convite sem enviar email (Supabase gera o token, nós enviamos via Resend)
   const { data: linkData, error: linkError } = await adminSupabase.auth.admin.generateLink({
