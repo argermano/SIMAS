@@ -96,6 +96,9 @@ export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: 
 
   const [dados, setDados] = useState<Resposta | null>(null)
   const [loading, setLoading] = useState(true)
+  // Falha REAL de carregamento — distinta de "sem resultados". Esta tela lista
+  // intimações com prazo: um falso-vazio aqui esconde publicações e faz perder prazo.
+  const [erro, setErro] = useState(false)
   const [tribunais, setTribunais] = useState<string[]>([]) // acumula siglas vistas
   const [oabs, setOabs] = useState<{ num: string; uf: string }[]>([]) // acumula OABs vistas
   const [tipos, setTipos] = useState<string[]>([]) // acumula tipos de documento vistos
@@ -162,6 +165,7 @@ export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: 
 
   const carregar = useCallback(async () => {
     setLoading(true)
+    setErro(false)
     try {
       const params = new URLSearchParams()
       // `statusIn` (união) tem precedência sobre `status` único no servidor.
@@ -205,7 +209,11 @@ export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: 
           }
           return Array.from(set).sort()
         })
+      } else {
+        setErro(true)
       }
+    } catch {
+      setErro(true)
     } finally {
       setLoading(false)
     }
@@ -560,7 +568,7 @@ export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: 
         <div className="min-w-0 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {loading && !dados ? 'Carregando…' : `${totalGeral} publicaç${totalGeral === 1 ? 'ão' : 'ões'}`}
+              {loading && !dados ? 'Carregando…' : erro ? 'Falha ao carregar' : `${totalGeral} publicaç${totalGeral === 1 ? 'ão' : 'ões'}`}
             </p>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Ordenar por</span>
@@ -580,6 +588,22 @@ export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: 
           {loading && !dados ? (
             <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
               <Spinner className="h-4 w-4" /> Carregando publicações…
+            </div>
+          ) : erro ? (
+            // Estado de ERRO distinto do vazio: falha de carregamento numa tela de
+            // intimações com prazo — deixa claro que a caixa NÃO está vazia.
+            <div className="flex flex-col items-center justify-center rounded-xl border border-destructive/40 bg-destructive/5 px-6 py-14 text-center">
+              <AlertTriangle className="h-8 w-8 text-destructive" aria-hidden />
+              <p className="mt-3 text-sm font-medium text-destructive">
+                Não foi possível carregar as publicações
+              </p>
+              <p className="mt-1 max-w-sm text-sm text-destructive/80">
+                Isto é uma falha de carregamento — a caixa NÃO está vazia. Tente de novo; se
+                persistir, confira as intimações no Astrea para não perder prazos.
+              </p>
+              <Button variant="secondary" size="sm" onClick={() => void carregar()} className="mt-4">
+                <RotateCcw className="h-4 w-4" /> Tentar de novo
+              </Button>
             </div>
           ) : itens.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 py-14 text-center">

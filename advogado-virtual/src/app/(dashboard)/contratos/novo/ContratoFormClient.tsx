@@ -15,7 +15,7 @@ import { CompletarDadosCliente } from '@/components/documentos/CompletarDadosCli
 import { camposFaltantes, type CampoCliente } from '@/lib/documentos/campos-cliente'
 import {
   Users, DollarSign, Brain, Loader2, Upload, FileText, ChevronRight,
-  FolderOpen, CheckCircle, Sparkles, Link2,
+  FolderOpen, CheckCircle, Sparkles, Link2, RotateCcw,
 } from 'lucide-react'
 
 const LABELS_AREA_AT: Record<string, string> = {
@@ -85,6 +85,8 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
   const [gerando,           setGerando]           = useState(false)
   const [conteudoGerado,    setConteudoGerado]    = useState('')
   const [contratoId,        setContratoId]        = useState<string | null>(null)
+  const [salvandoConteudo,  setSalvandoConteudo]  = useState(false)
+  const [erroSalvar,        setErroSalvar]        = useState(false) // salvamento do texto gerado falhou → oferece "Salvar novamente"
   const [placeholders,      setPlaceholders]      = useState<string[]>([]) // {{campos}} do template de contrato
   const [faltantes,         setFaltantes]         = useState<CampoCliente[]>([]) // dados do cliente vazios que o contrato usa
 
@@ -218,6 +220,35 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
   // SEM_MODELO/none = gerar do zero com IA.
   const temModeloSelecionado = modeloSelecionadoId != null && modeloSelecionadoId !== SEM_MODELO
 
+  // Salva o texto gerado no contrato e, SÓ em caso de sucesso, abre o editor.
+  // Se o PATCH falhar, NÃO navega e mantém `conteudoGerado` no estado (o texto
+  // nunca pode ser perdido) — a UI oferece "Salvar novamente".
+  const salvarEConcluir = useCallback(async (id: string, conteudo: string) => {
+    setSalvandoConteudo(true)
+    setErroSalvar(false)
+    try {
+      const res = await fetch(`/api/contratos/${id}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ conteudo_markdown: conteudo }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setErroSalvar(true)
+        toastError('Contrato gerado, mas não salvo', d.error ?? 'O texto continua aqui — use "Salvar novamente".')
+        return
+      }
+      success('Contrato gerado!', temModeloSelecionado ? 'Gerado a partir do seu modelo.' : 'Gerado com IA.')
+      // replace() remove o formulário do histórico → "Voltar" no editor retorna ao caso.
+      router.replace(`/contratos/${id}`)
+    } catch {
+      setErroSalvar(true)
+      toastError('Contrato gerado, mas não salvo', 'Falha de rede ao salvar. O texto continua aqui — use "Salvar novamente".')
+    } finally {
+      setSalvandoConteudo(false)
+    }
+  }, [temModeloSelecionado, router, success, toastError])
+
   const criarEGerar = useCallback(async () => {
     if (!cliente) {
       toastError('Atenção', 'Selecione um cliente')
@@ -292,16 +323,9 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
       }
 
       if (conteudo) {
-        // 3. Salvar conteúdo no contrato
-        await fetch(`/api/contratos/${id}`, {
-          method:  'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ conteudo_markdown: conteudo }),
-        })
-        success('Contrato gerado!', temModeloSelecionado ? 'Gerado a partir do seu modelo.' : 'Gerado com IA.')
-        // 4. Abre o editor automaticamente (como nos demais documentos).
-        //    replace() remove o formulário do histórico → "Voltar" no editor retorna ao caso.
-        router.replace(`/contratos/${id}`)
+        // 3. Salvar o conteúdo e abrir o editor (verifica o salvamento; em falha,
+        //    avisa e preserva o texto para "Salvar novamente").
+        await salvarEConcluir(id, conteudo)
       }
     } catch (err) {
       console.error('[ContratoForm] Erro:', err)
@@ -309,7 +333,7 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
     } finally {
       setGerando(false)
     }
-  }, [cliente, atendimentoId, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, modeloSelecionadoId, temModeloSelecionado, faltantes, router, success, toastError, warning])
+  }, [cliente, atendimentoId, area, valorFixo, percentualExito, formaPagamento, instrucoes, modeloTexto, modeloSelecionadoId, faltantes, salvarEConcluir, toastError, warning])
 
   return (
     <div className="space-y-6">
@@ -577,6 +601,24 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
               <MarkdownPreview>{conteudoGerado}</MarkdownPreview>
               {gerando && <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary/70 ml-0.5 align-middle" />}
             </div>
+
+            {/* Salvamento do texto falhou: o conteúdo continua acima (não foi perdido).
+                Oferece nova tentativa sem regerar com a IA. */}
+            {erroSalvar && contratoId && !gerando && (
+              <div className="mt-3 flex flex-col gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+                <span>O contrato foi gerado, mas não foi salvo. O texto continua aqui — não recarregue a página.</span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void salvarEConcluir(contratoId, conteudoGerado)}
+                  disabled={salvandoConteudo}
+                  className="gap-2 shrink-0"
+                >
+                  {salvandoConteudo ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                  Salvar novamente
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -592,7 +634,9 @@ export function ContratoFormClient({ role: _role, clienteInicial, atendimentoIdI
 
       {/* Botões */}
       <div className="flex justify-end gap-3">
-        {contratoId && !gerando && (
+        {/* Não oferece "Abrir editor" enquanto o salvamento falhou: o editor lê do
+            banco (vazio) e o usuário perderia o texto. Primeiro "Salvar novamente". */}
+        {contratoId && !gerando && !erroSalvar && (
           <Button
             variant="secondary"
             onClick={() => router.replace(`/contratos/${contratoId}`)}

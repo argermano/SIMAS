@@ -4,6 +4,7 @@
  * Docs: https://docapi.d4sign.com.br/
  */
 
+import { logger } from '@/lib/logger'
 import type {
   D4SignUploadResponse,
   D4SignDocument,
@@ -28,6 +29,47 @@ export function d4signDelay(ms = 2000): Promise<void> {
   return new Promise(r => setTimeout(r, ms))
 }
 
+// Timeout obrigatório em cada chamada: sem ele uma conexão pendurada com a
+// D4Sign trava a função serverless até a Vercel encerrá-la à força.
+const D4SIGN_TIMEOUT_MS = 20_000
+
+/**
+ * Erro do cliente D4Sign com a origem classificada em `kind`, para o chamador
+ * diferenciar timeout/rede de erro HTTP da API sem casar substrings da mensagem.
+ */
+export class D4SignError extends Error {
+  constructor(
+    readonly kind: 'timeout' | 'http' | 'rede',
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message)
+    this.name = 'D4SignError'
+  }
+}
+
+/** fetch com timeout obrigatório; classifica falhas de timeout/rede como D4SignError. */
+async function d4signFetch(label: string, url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(D4SIGN_TIMEOUT_MS) })
+  } catch (err: unknown) {
+    // AbortSignal.timeout aborta com um erro cujo name é 'TimeoutError'.
+    const name = (err as { name?: unknown })?.name
+    if (name === 'TimeoutError' || name === 'AbortError') {
+      throw new D4SignError('timeout', `D4Sign ${label}: timeout após ${D4SIGN_TIMEOUT_MS / 1000}s`)
+    }
+    throw new D4SignError('rede', `D4Sign ${label}: falha de rede — ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+/**
+ * Monta o erro HTTP mantendo o corpo na mensagem: o rate limit da D4Sign chega
+ * como HTTP 401 com "tempo limite" no corpo, detectado em withRetry.
+ */
+async function d4signHttpError(label: string, res: Response): Promise<D4SignError> {
+  return new D4SignError('http', `D4Sign ${label}: HTTP ${res.status} — ${await res.text()}`, res.status)
+}
+
 async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   let delay = 5000
   for (let i = 0; i < retries; i++) {
@@ -41,7 +83,8 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
       if (isD4SignRateLimit) throw err
       const isServerError = /HTTP\s+5\d{2}/.test(msg)
       if (i === retries - 1 || !isServerError) throw err
-      console.warn(`[D4Sign] Retry ${i + 1}/${retries} após ${delay}ms: ${msg}`)
+      // LGPD: sem o corpo cru da resposta (pode conter e-mails) — só status/contagem.
+      logger.warn('d4sign.retry', { tentativa: i + 1, retries, delayMs: delay, status: msg.match(/HTTP\s+(\d{3})/)?.[1] })
       await new Promise(r => setTimeout(r, delay))
       delay *= 3
     }
@@ -52,10 +95,10 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
 // ─── Listar cofres (safes) ───────────────────────────────────────────────────
 export async function d4signListSafes(): Promise<{ uuid_safe: string; name_safe: string }[]> {
   return withRetry(async () => {
-    const res = await fetch(`${base()}/safes${auth()}`, {
+    const res = await d4signFetch('listSafes', `${base()}/safes${auth()}`, {
       headers: { Accept: 'application/json' },
     })
-    if (!res.ok) throw new Error(`D4Sign listSafes: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('listSafes', res)
     const data = await res.json()
     return Array.isArray(data) ? data : []
   })
@@ -75,11 +118,11 @@ export async function d4signUploadDocument(
     }), fileName)
     form.append('uuid_folder', '')
 
-    const res = await fetch(`${base()}/documents/${safeUuid}/upload${auth()}`, {
+    const res = await d4signFetch('upload', `${base()}/documents/${safeUuid}/upload${auth()}`, {
       method: 'POST',
       body:   form,
     })
-    if (!res.ok) throw new Error(`D4Sign upload: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('upload', res)
     const data = await res.json()
     if (!data?.uuid) throw new Error(`D4Sign upload: uuid não retornado — ${JSON.stringify(data)}`)
     return { uuid: data.uuid }
@@ -92,12 +135,12 @@ export async function d4signAddSigners(
   signers: D4SignSignerInput[],
 ): Promise<D4SignSignerResponse[]> {
   return withRetry(async () => {
-    const res = await fetch(`${base()}/documents/${docUuid}/createlist${auth()}`, {
+    const res = await d4signFetch('addSigners', `${base()}/documents/${docUuid}/createlist${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify({ signers }),
     })
-    if (!res.ok) throw new Error(`D4Sign addSigners: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('addSigners', res)
     const data = await res.json()
     // D4Sign retorna { message: [{email, key_signer}] } ou variações
     return Array.isArray(data?.message) ? data.message : (data?.signers ?? [])
@@ -130,27 +173,27 @@ export async function d4signAddPins(
         type:        p.type ?? '0',
       })),
     }
-    console.log('[D4Sign] addPins:', JSON.stringify(body, null, 2))
-    const res = await fetch(`${base()}/documents/${docUuid}/addpins${auth()}`, {
+    // LGPD: o corpo traz e-mails dos signatários — logar só ids/contagem, nunca o payload.
+    logger.info('d4sign.addpins.req', { docUuid, totalPins: pins.length })
+    const res = await d4signFetch('addPins', `${base()}/documents/${docUuid}/addpins${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify(body),
     })
-    const responseText = await res.text()
-    console.log('[D4Sign] addPins response:', res.status, responseText)
-    if (!res.ok) throw new Error(`D4Sign addPins: HTTP ${res.status} — ${responseText}`)
+    logger.info('d4sign.addpins.res', { docUuid, status: res.status, ok: res.ok })
+    if (!res.ok) throw await d4signHttpError('addPins', res)
   })
 }
 
 // ─── Registrar webhook ────────────────────────────────────────────────────────
 export async function d4signRegisterWebhook(docUuid: string, url: string): Promise<void> {
   return withRetry(async () => {
-    const res = await fetch(`${base()}/documents/${docUuid}/webhooks${auth()}`, {
+    const res = await d4signFetch('webhook', `${base()}/documents/${docUuid}/webhooks${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify({ url }),
     })
-    if (!res.ok) throw new Error(`D4Sign webhook: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('webhook', res)
   })
 }
 
@@ -165,15 +208,16 @@ export async function d4signSendToSign(
       skip_email: options?.skip_email ?? '0',
       workflow:   options?.workflow   ?? '0',
     }
-    console.log('[D4Sign] sendToSign request:', { docUuid, body })
-    const res = await fetch(`${base()}/documents/${docUuid}/sendtosigner${auth()}`, {
+    logger.info('d4sign.sendtosign.req', { docUuid })
+    const res = await d4signFetch('sendToSign', `${base()}/documents/${docUuid}/sendtosigner${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify(body),
     })
+    // Corpo lido uma única vez: serve tanto para o retorno quanto para o erro.
     const responseText = await res.text()
-    console.log('[D4Sign] sendToSign response:', res.status, responseText)
-    if (!res.ok) throw new Error(`D4Sign sendToSign: HTTP ${res.status} — ${responseText}`)
+    logger.info('d4sign.sendtosign.res', { docUuid, status: res.status, ok: res.ok })
+    if (!res.ok) throw new D4SignError('http', `D4Sign sendToSign: HTTP ${res.status} — ${responseText}`, res.status)
     try { return JSON.parse(responseText) } catch { return responseText }
   })
 }
@@ -181,10 +225,10 @@ export async function d4signSendToSign(
 // ─── Consultar status ─────────────────────────────────────────────────────────
 export async function d4signGetStatus(docUuid: string): Promise<D4SignDocument> {
   return withRetry(async () => {
-    const res = await fetch(`${base()}/documents/${docUuid}${auth()}`, {
+    const res = await d4signFetch('getStatus', `${base()}/documents/${docUuid}${auth()}`, {
       headers: { Accept: 'application/json' },
     })
-    if (!res.ok) throw new Error(`D4Sign getStatus: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('getStatus', res)
     return res.json()
   })
 }
@@ -192,10 +236,10 @@ export async function d4signGetStatus(docUuid: string): Promise<D4SignDocument> 
 // ─── Listar signatários ───────────────────────────────────────────────────────
 export async function d4signListSigners(docUuid: string) {
   return withRetry(async () => {
-    const res = await fetch(`${base()}/documents/${docUuid}/list${auth()}`, {
+    const res = await d4signFetch('listSigners', `${base()}/documents/${docUuid}/list${auth()}`, {
       headers: { Accept: 'application/json' },
     })
-    if (!res.ok) throw new Error(`D4Sign listSigners: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('listSigners', res)
     return res.json()
   })
 }
@@ -203,12 +247,12 @@ export async function d4signListSigners(docUuid: string) {
 // ─── Obter link individual de assinatura ─────────────────────────────────────
 export async function d4signGetSigningLink(docUuid: string, signerEmail: string): Promise<string> {
   return withRetry(async () => {
-    const res = await fetch(`${base()}/documents/${docUuid}/signinglink${auth()}`, {
+    const res = await d4signFetch('signingLink', `${base()}/documents/${docUuid}/signinglink${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify({ email: signerEmail }),
     })
-    if (!res.ok) throw new Error(`D4Sign signingLink: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('signingLink', res)
     const data = await res.json()
     return data?.link ?? data?.url ?? ''
   })
@@ -217,12 +261,12 @@ export async function d4signGetSigningLink(docUuid: string, signerEmail: string)
 // ─── Download do documento assinado ──────────────────────────────────────────
 export async function d4signDownloadDocument(docUuid: string): Promise<string> {
   return withRetry(async () => {
-    const res = await fetch(`${base()}/documents/${docUuid}/download${auth()}`, {
+    const res = await d4signFetch('download', `${base()}/documents/${docUuid}/download${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify({}),
     })
-    if (!res.ok) throw new Error(`D4Sign download: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('download', res)
     const data = await res.json()
     return data?.url ?? data?.link ?? ''
   })
@@ -231,23 +275,23 @@ export async function d4signDownloadDocument(docUuid: string): Promise<string> {
 // ─── Cancelar documento ───────────────────────────────────────────────────────
 export async function d4signCancelDocument(docUuid: string, comment = ''): Promise<void> {
   return withRetry(async () => {
-    const res = await fetch(`${base()}/documents/${docUuid}/cancel${auth()}`, {
+    const res = await d4signFetch('cancel', `${base()}/documents/${docUuid}/cancel${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify({ comment }),
     })
-    if (!res.ok) throw new Error(`D4Sign cancel: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('cancel', res)
   })
 }
 
 // ─── Reenviar notificação ─────────────────────────────────────────────────────
 export async function d4signResendNotification(docUuid: string, signerKey: string): Promise<void> {
   return withRetry(async () => {
-    const res = await fetch(`${base()}/documents/${docUuid}/resend${auth()}`, {
+    const res = await d4signFetch('resend', `${base()}/documents/${docUuid}/resend${auth()}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body:    JSON.stringify({ key_signer: signerKey }),
     })
-    if (!res.ok) throw new Error(`D4Sign resend: HTTP ${res.status} — ${await res.text()}`)
+    if (!res.ok) throw await d4signHttpError('resend', res)
   })
 }

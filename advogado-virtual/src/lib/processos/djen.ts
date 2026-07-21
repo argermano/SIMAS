@@ -266,6 +266,15 @@ export function janelaConsultaDjen(
 
 /* ── consulta HTTP ─────────────────────────────────────────────────────── */
 
+/** Erro HTTP do DJEN carregando o status — permite ao chamador distinguir um
+ * bloqueio do WAF (403) de outros erros para o circuit breaker entre OABs. */
+class DjenHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`DJEN HTTP ${status}`)
+    this.name = 'DjenHttpError'
+  }
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /** Consulta paginada por OAB. Lança em erro HTTP; devolve `completo:false` quando
@@ -296,7 +305,7 @@ async function consultarPorOab(
         const res = await fetch(url, { signal: ctrl.signal, headers: DJEN_HEADERS })
         if (!res.ok) {
           const transitorio = res.status === 403 || res.status === 429 || res.status >= 500
-          if (!transitorio || tentativa === 3) throw new Error(`DJEN HTTP ${res.status}`)
+          if (!transitorio || tentativa === 3) throw new DjenHttpError(res.status)
         } else {
           const data = await res.json()
           raws = (data?.items as Array<Record<string, unknown>>) ?? []
@@ -496,11 +505,33 @@ async function processarTenantDjen(
   let falhouConsulta = false // qualquer cobertura incompleta ⇒ marca não avança
   const porId = new Map<number, ItemDjen>()
 
+  // Circuit breaker: WAF_MAX_CONSECUTIVO bloqueios WAF (403) consecutivos ⇒ o WAF do
+  // DJEN está bloqueando o IP da Vercel (visto em produção 2026-07-10). Seguir para as
+  // OABs restantes só queima o orçamento do cron em sleeps de backoff que voltarão a
+  // receber 403; ao atingir o teto, aborta as OABs restantes DESTE ciclo.
+  const WAF_MAX_CONSECUTIVO = 3
+  let wafConsecutivos = 0
+  let abortadoPorWaf = false
+  let oabsPuladas = 0
+
   // 1) Consulta OAB a OAB. Persiste TODAS as parseadas em `publicacoes` e grava
   // a trilha de auditoria por (tenant, oab), inclusive quando não achou nada.
   for (let i = 0; i < oabs.length; i++) {
     const oab = oabs[i]
     const iniciadaEm = new Date().toISOString()
+
+    // Breaker acionado: registra a OAB restante como não coberta (parcial) e segue,
+    // sem consultar. Cobertura incompleta ⇒ marca não avança (recobre no próximo ciclo).
+    if (abortadoPorWaf) {
+      falhouConsulta = true
+      oabsPuladas++
+      await gravarCaptura(admin, {
+        tenantId: t.id, oab, inicio, fim, iniciadaEm,
+        status: 'parcial', encontradas: 0, novas: 0, duplicadas: 0,
+        erro: `WAF: OAB pulada (circuit breaker após ${WAF_MAX_CONSECUTIVO} bloqueios consecutivos)`,
+      })
+      continue
+    }
 
     // Sem tempo para consultar esta OAB: registra 'parcial' (não coberta) e segue.
     if (Date.now() > deadline) {
@@ -515,6 +546,7 @@ async function processarTenantDjen(
     let itens: ItemDjen[] = []
     let completo = false
     let erro: string | null = null
+    let wafBloqueio = false
     try {
       const r = await consultarPorOab(oab.numero, oab.uf, inicio, fim, deadline)
       itens = r.itens
@@ -522,9 +554,19 @@ async function processarTenantDjen(
     } catch (err) {
       falhouConsulta = true
       erro = (err as Error).message
+      wafBloqueio = err instanceof DjenHttpError && err.status === 403
       logger.error('djen.consulta', { tenant: t.id, oab: `${oab.numero}/${oab.uf}` }, err as Error)
     }
     if (!completo && !erro) falhouConsulta = true // deadline no meio / teto de páginas
+
+    // Contabiliza bloqueios WAF (403) consecutivos p/ o circuit breaker. Qualquer OAB
+    // que NÃO terminou em 403 zera a contagem (só a sequência ininterrupta conta).
+    if (wafBloqueio) {
+      wafConsecutivos++
+      if (wafConsecutivos >= WAF_MAX_CONSECUTIVO) abortadoPorWaf = true
+    } else {
+      wafConsecutivos = 0
+    }
 
     // Dedup por id DENTRO da OAB (a API não deveria repetir, mas garante o upsert).
     const unicos = new Map<number, ItemDjen>()
@@ -575,7 +617,13 @@ async function processarTenantDjen(
       })
     }
 
-    if (i < oabs.length - 1) await sleep(RATE_DELAY_MS) // rate também ENTRE OABs
+    // rate também ENTRE OABs — mas não gasta o sleep se o breaker já abortou o ciclo.
+    if (i < oabs.length - 1 && !abortadoPorWaf) await sleep(RATE_DELAY_MS)
+  }
+
+  // Visibilidade p/ o vigia: quantas OABs o breaker pulou neste ciclo (só contagens).
+  if (oabsPuladas > 0) {
+    logger.warn('djen.circuit_breaker', { tenant: t.id, puladas: oabsPuladas, apos: WAF_MAX_CONSECUTIVO })
   }
 
   const semMatch: TenantCounters = {

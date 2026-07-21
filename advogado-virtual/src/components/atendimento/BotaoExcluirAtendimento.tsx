@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Trash2, Loader2 } from 'lucide-react'
+import { useToast } from '@/components/ui/toast'
 
 interface BotaoExcluirAtendimentoProps {
   atendimentoId: string
@@ -10,6 +11,7 @@ interface BotaoExcluirAtendimentoProps {
 
 export function BotaoExcluirAtendimento({ atendimentoId }: BotaoExcluirAtendimentoProps) {
   const router = useRouter()
+  const { error: toastError } = useToast()
   const [confirmando, setConfirmando] = useState(false)
   const [excluindo, setExcluindo] = useState(false)
 
@@ -19,14 +21,17 @@ export function BotaoExcluirAtendimento({ atendimentoId }: BotaoExcluirAtendimen
       const res = await fetch(`/api/atendimentos/${atendimentoId}`, {
         method: 'DELETE',
       })
-      if (res.ok) {
-        router.refresh()
+      if (!res.ok) {
+        // Falha real: avisa e mantém a confirmação aberta (botão reabilitado).
+        const d = await res.json().catch(() => ({}))
+        toastError('Não foi possível excluir', d.error ?? 'Tente novamente.')
+        setExcluindo(false)
+        return
       }
+      router.refresh()
     } catch {
-      // silently fail
-    } finally {
+      toastError('Não foi possível excluir', 'Falha de rede. Tente novamente.')
       setExcluindo(false)
-      setConfirmando(false)
     }
   }
 

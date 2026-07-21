@@ -2,13 +2,45 @@ import Anthropic from '@anthropic-ai/sdk'
 
 let _client: Anthropic | null = null
 
+/**
+ * Timeout global do cliente (ms). Sem timeout explícito, um stall da API da
+ * Anthropic fica pendurado até o default do SDK (10 min) e — somado aos retries —
+ * trava o handler do cron inteiro (ex.: os resumos DJEN em Haiku). Este piso curto
+ * limita o stall das chamadas curtas (cron/OCR); as gerações longas (peça em
+ * streaming, documento pronto) recebem um timeout por requisição MAIOR via
+ * `timeoutSaida`, senão este piso as cortaria no meio.
+ */
+const CLIENT_TIMEOUT_MS = 120_000
+
+/**
+ * Piso do timeout por requisição das chamadas de TEXTO/JSON NÃO-streaming. Uma
+ * reescrita/extração de peça inteira (refinar-peca, teses/extrair) roda numa rota
+ * com maxDuration=300 e leva até ~275s (medido) com o teto padrão de 8.192 tokens
+ * (cuja escala daria só ~230s). Um piso de 120s cortaria essas gerações ANTES do
+ * orçamento da rota — o default de 10 min do SDK não as cortava. 300s = o maior
+ * teto de rota: a maxDuration volta a ser o limite (as chamadas curtas do cron
+ * seguem limitadas pela maxDuration=60 do handler, não por este piso).
+ */
+const COMPLETION_TIMEOUT_MS = 5 * 60_000
+
+/**
+ * Timeout por requisição (ms) escalado pelo teto de saída — mesma fórmula do SDK
+ * (60 min para 128k tokens), com um piso. O construtor fixa um timeout global curto;
+ * este override restitui folga às gerações grandes sem afrouxar as chamadas curtas
+ * (o piso segura o teto de stall). Não altera modelos nem prompts.
+ */
+function timeoutSaida(maxTokens: number, pisoMs: number): number {
+  return Math.max(pisoMs, Math.ceil((60 * 60_000 * maxTokens) / 128_000))
+}
+
 export function getAnthropicClient(): Anthropic {
   if (!_client) {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey || apiKey.includes('PREENCHA')) {
       throw new Error('ANTHROPIC_API_KEY não configurada no .env.local')
     }
-    _client = new Anthropic({ apiKey })
+    // timeout + maxRetries explícitos: bounda um stall de IA (ver CLIENT_TIMEOUT_MS).
+    _client = new Anthropic({ apiKey, timeout: CLIENT_TIMEOUT_MS, maxRetries: 2 })
   }
   return _client
 }
@@ -120,9 +152,12 @@ export async function streamCompletion(params: {
     max_tokens: maxTokens,
     system: comGuardrail(params.system),
     messages: [{ role: 'user', content: params.prompt }],
-  }, maxTokens > 16384 ? {
-    headers: { 'anthropic-beta': 'output-128k-2025-02-19' },
-  } : undefined)
+  }, {
+    // Piso de 10 min (default de streaming do SDK) + escala p/ peças grandes: sem
+    // este override, o timeout global curto do cliente cortaria a geração no meio.
+    timeout: timeoutSaida(maxTokens, 10 * 60_000),
+    ...(maxTokens > 16384 ? { headers: { 'anthropic-beta': 'output-128k-2025-02-19' } } : {}),
+  })
 
   const readable = new ReadableStream({
     async start(controller) {
@@ -200,7 +235,7 @@ export async function extractTextFromImage(params: {
         },
       ],
     }],
-  })
+  }, { timeout: timeoutSaida(MAX_TOKENS_EXTRACAO, CLIENT_TIMEOUT_MS) })
 
   return message.content
     .filter((b) => b.type === 'text')
@@ -236,7 +271,7 @@ export async function extractTextFromPdf(params: {
         },
       ],
     }],
-  })
+  }, { timeout: timeoutSaida(MAX_TOKENS_EXTRACAO, CLIENT_TIMEOUT_MS) })
 
   return message.content
     .filter((b) => b.type === 'text')
@@ -258,12 +293,13 @@ export async function completionText(params: {
   const client = getAnthropicClient()
   assertPromptSize(params.system, params.prompt)
 
+  const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS
   const message = await client.messages.create({
     model: params.model ?? DEFAULT_MODEL,
-    max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
+    max_tokens: maxTokens,
     system: comGuardrail(params.system),
     messages: [{ role: 'user', content: params.prompt }],
-  })
+  }, { timeout: timeoutSaida(maxTokens, COMPLETION_TIMEOUT_MS) })
 
   const text = message.content
     .filter((b) => b.type === 'text')
@@ -290,12 +326,13 @@ export async function completionJSON<T = unknown>(params: {
   const client = getAnthropicClient()
   assertPromptSize(params.system, params.prompt)
 
+  const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS
   const message = await client.messages.create({
     model: params.model ?? DEFAULT_MODEL,
-    max_tokens: params.maxTokens ?? DEFAULT_MAX_TOKENS,
+    max_tokens: maxTokens,
     system: comGuardrail(params.system) + JSON_ONLY,
     messages: [{ role: 'user', content: params.prompt }],
-  })
+  }, { timeout: timeoutSaida(maxTokens, COMPLETION_TIMEOUT_MS) })
 
   const text = message.content
     .filter((b) => b.type === 'text')
