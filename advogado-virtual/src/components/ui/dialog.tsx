@@ -31,6 +31,13 @@ export function Dialog({
   footer,
   size = 'md',
 }: DialogProps) {
+  // ids únicos por instância: sem isso dois diálogos empilhados (ConfirmDialog
+  // sobre Dialog) teriam o mesmo id de título e o leitor de tela anunciaria o
+  // título de trás (aria-labelledby resolve para o primeiro id igual no DOM).
+  const uid = React.useId()
+  const titleId = `${uid}-title`
+  const descId = `${uid}-desc`
+
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -53,7 +60,8 @@ export function Dialog({
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="dialog-title"
+      aria-labelledby={titleId}
+      aria-describedby={description ? descId : undefined}
     >
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -71,11 +79,11 @@ export function Dialog({
       >
         <div className="flex shrink-0 items-start justify-between p-6 pb-4">
           <div>
-            <h2 id="dialog-title" className="text-xl font-semibold text-foreground">
+            <h2 id={titleId} className="text-xl font-semibold text-foreground">
               {title}
             </h2>
             {description && (
-              <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+              <p id={descId} className="mt-1 text-sm text-muted-foreground">{description}</p>
             )}
           </div>
           <button

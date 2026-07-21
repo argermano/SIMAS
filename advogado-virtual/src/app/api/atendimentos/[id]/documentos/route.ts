@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { extractTextFromImage, extractTextFromPdf } from '@/lib/anthropic/client'
+import { extrairTexto, MAX_EXTRACT_BYTES } from '@/lib/documentos/extrair-texto'
 import { enfileirarDriveSync } from '@/lib/drive/fila'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
@@ -171,42 +171,13 @@ export async function PATCH(
   }
 
   const arrayBuffer = await fileData.arrayBuffer()
-  let textoExtraido = ''
-  const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-
-  if (fileType === 'application/pdf') {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string }>
-      const pdfData = await pdfParse(Buffer.from(arrayBuffer))
-      textoExtraido = pdfData.text ?? ''
-
-      if (textoExtraido.replace(/\s+/g, '').length < 50) {
-        textoExtraido = ''
-      }
-    } catch {
-      textoExtraido = ''
-    }
-  }
-
-  if (IMAGE_TYPES.includes(fileType)) {
-    try {
-      const base64 = Buffer.from(arrayBuffer).toString('base64')
-      textoExtraido = await extractTextFromImage({
-        imageBase64: base64,
-        mediaType: fileType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-      })
-    } catch {
-      textoExtraido = ''
-    }
-  } else if (fileType === 'application/pdf' && !textoExtraido) {
-    try {
-      const base64 = Buffer.from(arrayBuffer).toString('base64')
-      textoExtraido = await extractTextFromPdf({ pdfBase64: base64 })
-    } catch {
-      textoExtraido = ''
-    }
-  }
+  // Teto único de extração + fallback OCR (PDF→Claude, imagens via Claude) centralizados.
+  const { texto: textoExtraido } = await extrairTexto(Buffer.from(arrayBuffer), {
+    mime:     fileType,
+    fileName: '',
+    maxBytes: MAX_EXTRACT_BYTES,
+    ocr:      true,
+  })
 
   // Atualiza o documento com o texto extraído
   if (textoExtraido) {

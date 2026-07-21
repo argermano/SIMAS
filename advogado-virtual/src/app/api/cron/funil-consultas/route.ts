@@ -51,17 +51,54 @@ export async function GET(req: Request) {
   logger.info('cron.funil_consultas', { aguardandoConfirmacao: n })
 
   // Fase 5 — recupera avisos ÓRFÃOS: se a função morreu entre o claim
-  // (pendente→aprovada) e o envio, a linha ficaria presa em 'aprovada' (invisível
-  // na fila). Devolve para 'pendente' → aparece em Movimentações p/ aprovação.
+  // (pendente→aprovada) e a marca de envio, a linha ficaria presa em 'aprovada'
+  // com notif_enviada_em=null (invisível na fila). Devolvê-la a 'pendente' a
+  // reabre em Movimentações p/ aprovação.
+  // ACHADO 7: 'aprovada'+null NÃO significa "não enviado" — o envio pode ter
+  // COMPLETADO e só o UPDATE de status ter falhado/morrido. Reenfileirar cego faz
+  // o cliente receber o MESMO aviso 2x. Antes de reenfileirar, reconferimos o
+  // registro INDEPENDENTE de entrega na auditoria (logAudit grava
+  // 'processo.notificacao_enviada' com metadata.movimento_id LOGO após o envio) e
+  // PULAMOS os que já constam entregues — esses ficam como estão.
   try {
-    const { data: orfaos } = await admin
+    const corteOrfaos = new Date(Date.now() - 30 * 60_000).toISOString()
+    const { data: candidatos } = await admin
       .from('processo_movimentos')
-      .update({ notif_status: 'pendente' })
+      .select('id')
       .eq('notif_status', 'aprovada')
       .is('notif_enviada_em', null)
-      .lt('created_at', new Date(Date.now() - 30 * 60_000).toISOString())
-      .select('id')
-    if (orfaos?.length) logger.info('cron.processos_orfaos_recuperados', { n: orfaos.length })
+      .lt('created_at', corteOrfaos)
+    const ids = (candidatos ?? []).map((c) => c.id as string)
+    if (ids.length) {
+      // Sinal de entrega independente do status: linhas de auditoria de envio.
+      const { data: entregasLog } = await admin
+        .from('audit_log')
+        .select('metadata')
+        .eq('action', 'processo.notificacao_enviada')
+        .in('metadata->>movimento_id', ids)
+      const jaEntregues = new Set(
+        (entregasLog ?? [])
+          .map((e) => (e.metadata as { movimento_id?: string } | null)?.movimento_id)
+          .filter((v): v is string => !!v),
+      )
+      const reenfileirar = ids.filter((id) => !jaEntregues.has(id))
+      let recuperados = 0
+      if (reenfileirar.length) {
+        // Guarda atômica: só reverte quem AINDA está aprovada+não-enviada (um
+        // envio concorrente pode ter marcado 'enviada' nesse meio-tempo).
+        const { data: orfaos } = await admin
+          .from('processo_movimentos')
+          .update({ notif_status: 'pendente' })
+          .in('id', reenfileirar)
+          .eq('notif_status', 'aprovada')
+          .is('notif_enviada_em', null)
+          .select('id')
+        recuperados = orfaos?.length ?? 0
+      }
+      if (recuperados || jaEntregues.size) {
+        logger.info('cron.processos_orfaos_recuperados', { n: recuperados, jaEntregues: jaEntregues.size })
+      }
+    }
   } catch (e) {
     logger.error('cron.processos_orfaos.falha', {}, e as Error)
   }

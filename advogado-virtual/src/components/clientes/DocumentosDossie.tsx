@@ -10,7 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, ConfirmDialog } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -108,6 +108,9 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
   const [enviando, setEnviando]     = useState(false)
   const [progresso, setProgresso]   = useState<ProgressoItem[]>([])
   const [ocupado, setOcupado]       = useState<string | null>(null) // `${ctxKey}:${docId}` em ação
+  // Confirmação de exclusão no ConfirmDialog temático (padrão da casa), no lugar
+  // do confirm() nativo do navegador.
+  const [confirmExcluir, setConfirmExcluir] = useState<DocumentoDossie | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   // Alvo do próximo upload: null = geral; senão vincula à pasta escolhida.
   const alvoUploadRef = useRef<AlvoUpload>(null)
@@ -233,8 +236,11 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
 
   // Excluir de fato — só em Gerais (doc sem nenhum vínculo). A API barra (409) se
   // o doc ainda estiver em alguma pasta.
-  async function excluir(doc: DocumentoDossie) {
-    if (!confirm(`Excluir "${doc.file_name}"? Esta ação não pode ser desfeita.`)) return
+  function excluir(doc: DocumentoDossie) {
+    setConfirmExcluir(doc)
+  }
+
+  async function executarExcluir(doc: DocumentoDossie) {
     setOcupado(`geral:${doc.id}`)
     try {
       const r = await fetch(`/api/clientes/${clienteId}/documentos/${doc.id}`, { method: 'DELETE' })
@@ -249,6 +255,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
       toastError('Não excluído', 'Falha de rede. Tente novamente.')
     } finally {
       setOcupado(null)
+      setConfirmExcluir(null)
     }
   }
 
@@ -751,6 +758,18 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
           </div>
         )}
       </Dialog>
+
+      {/* Confirmação de exclusão (só em Gerais) — padrão da casa */}
+      <ConfirmDialog
+        open={confirmExcluir !== null}
+        onClose={() => setConfirmExcluir(null)}
+        onConfirm={() => { if (confirmExcluir) void executarExcluir(confirmExcluir) }}
+        title={confirmExcluir ? `Excluir "${confirmExcluir.file_name}"?` : 'Excluir documento?'}
+        description="Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        variant="danger"
+        loading={confirmExcluir !== null && ocupado === `geral:${confirmExcluir.id}`}
+      />
     </Card>
   )
 }

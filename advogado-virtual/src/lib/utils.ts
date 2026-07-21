@@ -26,6 +26,20 @@ export function formatarTelefone(tel: string): string {
   return apenas.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3')
 }
 
+// Exibe o telefone formatado só quando são 10/11 dígitos (BR local); com DDI
+// (12/13) devolve como veio, para não sair torto no formatarTelefone.
+export function exibirTelefone(tel: string): string {
+  const d = tel.replace(/\D/g, '')
+  return d.length === 10 || d.length === 11 ? formatarTelefone(tel) : tel
+}
+
+// Formata um valor em reais como moeda: 1234.5 → "R$ 1.234,50".
+// Espelha o formato de formatarValor(centavos) do financeiro (mesmo separador e
+// espaço comum, sempre 2 casas) — use quando o valor já está em reais.
+export function formatarReais(reais: number): string {
+  return `R$ ${reais.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
 // Máscara de moeda (R$) a partir dos dígitos digitados: "150000" → "R$ 1.500,00".
 // Use em onChange de campos de valor para o usuário ver o valor formatado.
 export function formatarMoedaInput(valor: string): string {
@@ -62,7 +76,10 @@ export function formatarDataCurta(iso: string): string {
 export function formatarDataHora(iso: string): string {
   if (!iso) return ''
   const data = new Date(iso)
+  // timeZone fixo: em Server Components o render roda em UTC (Vercel) e a hora
+  // sairia 3h adiantada — o "quando" jurídico precisa ser sempre BRT.
   return data.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
     day:    '2-digit',
     month:  '2-digit',
     year:   'numeric',

@@ -15,7 +15,7 @@ import { AnexosDoCaso } from '@/components/atendimento/AnexosDoCaso'
 import { decryptTranscricaoFields } from '@/lib/encryption'
 import { AREAS } from '@/lib/constants/areas'
 import { MODELOS_PRONTOS, TIPOS_PECA } from '@/lib/constants/tipos-peca'
-import { formatarData, formatarDataHora, formatarDataRelativa } from '@/lib/utils'
+import { formatarData, formatarDataHora, formatarDataRelativa, formatarReais } from '@/lib/utils'
 import {
   Brain, ChevronLeft, ChevronDown, ScrollText, FilePlus, FileText, FileSignature,
   AlertTriangle, Clock, CheckCircle, ArrowRight, History, Briefcase, Tag, Lock,
@@ -558,7 +558,7 @@ export default async function CasoPage({
                 {(contratos ?? []).length > 0 ? (
                   (contratos as Array<{ id: string; titulo: string; status: string; valor_fixo: number | null; percentual_exito: number | null }>).map((c) => {
                     const valor = [
-                      c.valor_fixo != null ? `R$ ${Number(c.valor_fixo).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : null,
+                      c.valor_fixo != null ? formatarReais(Number(c.valor_fixo)) : null,
                       c.percentual_exito != null ? `${Number(c.percentual_exito)}% de êxito` : null,
                     ].filter(Boolean).join(' + ')
                     const aprovado = c.status === 'aprovado' || c.status === 'exportado'

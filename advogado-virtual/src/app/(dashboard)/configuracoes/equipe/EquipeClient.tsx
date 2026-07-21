@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { UserPlus, Save, UserX, UserCheck, Star, RefreshCw } from 'lucide-react'
 
@@ -158,16 +159,17 @@ export function ToggleStatusUsuario({ usuarioId, nomeUsuario, statusAtual }: Tog
   const router = useRouter()
   const { success, error: toastError } = useToast()
   const [loading, setLoading] = useState(false)
+  // Confirmação no ConfirmDialog temático (padrão da casa), no lugar do confirm() nativo.
+  const [confirmar, setConfirmar] = useState(false)
 
   const isAtivo = statusAtual === 'ativo'
 
-  async function toggle() {
-    const novoStatus = isAtivo ? 'inativo' : 'ativo'
-    const msg = isAtivo
-      ? `Desativar ${nomeUsuario}? O usuário perderá acesso ao sistema.`
-      : `Reativar ${nomeUsuario}? O usuário voltará a ter acesso ao sistema.`
-    if (!confirm(msg)) return
+  function toggle() {
+    setConfirmar(true)
+  }
 
+  async function executarToggle() {
+    const novoStatus = isAtivo ? 'inativo' : 'ativo'
     setLoading(true)
     try {
       const res = await fetch(`/api/usuarios/${usuarioId}`, {
@@ -187,22 +189,35 @@ export function ToggleStatusUsuario({ usuarioId, nomeUsuario, statusAtual }: Tog
       router.refresh()
     } finally {
       setLoading(false)
+      setConfirmar(false)
     }
   }
 
   return (
-    <button
-      onClick={toggle}
-      disabled={loading}
-      className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
-        isAtivo
-          ? 'text-muted-foreground hover:bg-destructive/5 hover:text-destructive'
-          : 'text-muted-foreground hover:bg-success/5 hover:text-success'
-      }`}
-      title={isAtivo ? 'Desativar usuário' : 'Reativar usuário'}
-    >
-      {isAtivo ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
-    </button>
+    <>
+      <button
+        onClick={toggle}
+        disabled={loading}
+        className={`rounded-md p-1.5 transition-colors disabled:opacity-50 ${
+          isAtivo
+            ? 'text-muted-foreground hover:bg-destructive/5 hover:text-destructive'
+            : 'text-muted-foreground hover:bg-success/5 hover:text-success'
+        }`}
+        title={isAtivo ? 'Desativar usuário' : 'Reativar usuário'}
+      >
+        {isAtivo ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+      </button>
+      <ConfirmDialog
+        open={confirmar}
+        onClose={() => setConfirmar(false)}
+        onConfirm={() => void executarToggle()}
+        title={isAtivo ? `Desativar ${nomeUsuario}?` : `Reativar ${nomeUsuario}?`}
+        description={isAtivo ? 'O usuário perderá acesso ao sistema.' : 'O usuário voltará a ter acesso ao sistema.'}
+        confirmLabel={isAtivo ? 'Desativar' : 'Reativar'}
+        variant={isAtivo ? 'danger' : 'default'}
+        loading={loading}
+      />
+    </>
   )
 }
 

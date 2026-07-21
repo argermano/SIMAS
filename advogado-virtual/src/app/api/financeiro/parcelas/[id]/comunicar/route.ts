@@ -97,6 +97,11 @@ export async function GET(
 
 const schemaEnvio = z.object({ texto: z.string().min(10).max(2000) })
 
+// Janela do claim de idempotência (achado 31): dois envios manuais da MESMA
+// parcela dentro desta janela são tratados como a mesma corrida (o 2º é barrado).
+// Curta de propósito — o reenvio DELIBERADO depois dela continua permitido.
+const JANELA_COMUNICAR_MIN = 3
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -112,6 +117,41 @@ export async function POST(
   const ctx = await carregarContexto(auth.usuario.tenant_id, id)
   if ('erro' in ctx) return jsonError(ctx.erro, ctx.status)
   if (!ctx.cliente.telefone) return jsonError('Cliente sem telefone cadastrado', 400)
+
+  // ── Guarda de idempotência (achado 31) ──────────────────────────────────────
+  // Marca `comunicado_manual_em` ANTES de enviar, num claim atômico. Barra a
+  // CORRIDA (request repetida por retry de rede / reenvio automático pós-502),
+  // NÃO o reenvio consciente depois — por isso a janela é curta. Claim em 2
+  // UPDATEs SEM .or() com timestamp (bug PostgREST): (1) primeira comunicação
+  // (coluna nula); (2) janela já expirada (coluna < corte = reenvio deliberado).
+  // NÃO revertemos o marcador em caso de falha de envio: o timeout de 5s conta
+  // como falha mesmo tendo entregue (ver notificar.ts), então reverter reabriria
+  // a duplicata que o invariante "nunca 2x" proíbe — o reenvio fica liberado
+  // após a janela. Coluna própria: não consome os avisos automáticos D-3/D-0.
+  const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const agoraISO = new Date().toISOString()
+  const corteISO = new Date(Date.now() - JANELA_COMUNICAR_MIN * 60_000).toISOString()
+  const { data: claimNulo } = await admin
+    .from('parcelas')
+    .update({ comunicado_manual_em: agoraISO })
+    .eq('id', id)
+    .eq('tenant_id', auth.usuario.tenant_id)
+    .is('comunicado_manual_em', null)
+    .select('id')
+  let claimed = (claimNulo?.length ?? 0) > 0
+  if (!claimed) {
+    const { data: claimVelho } = await admin
+      .from('parcelas')
+      .update({ comunicado_manual_em: agoraISO })
+      .eq('id', id)
+      .eq('tenant_id', auth.usuario.tenant_id)
+      .lt('comunicado_manual_em', corteISO)
+      .select('id')
+    claimed = (claimVelho?.length ?? 0) > 0
+  }
+  if (!claimed) {
+    return jsonError('Uma cobrança desta parcela foi disparada agora há pouco. Para evitar mensagem duplicada, aguarde alguns minutos antes de reenviar.', 409)
+  }
 
   // Sequência: o texto editado pelo humano + as mensagens técnicas geradas no
   // servidor (copia-e-cola limpo e chave) — em ordem.

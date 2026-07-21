@@ -71,4 +71,4 @@ export function tempoRelativo(iso: string | null): string {
   return mes === 1 ? 'há 1 mês' : `há ${mes} meses`
 }
 
-export const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+export { formatarReais as brl } from '@/lib/utils'

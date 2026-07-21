@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Paperclip, ExternalLink, Loader2, Trash2, Unlink, FolderPlus, Link2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatarDataRelativa } from '@/lib/utils'
 import { SeletorDocsDoCadastro, type DocGeral } from './SeletorDocsDoCadastro'
@@ -31,6 +32,9 @@ export function AnexosDoCaso({ clienteId, atendimentoId, documentosIniciais }: P
   const [docs, setDocs]       = useState<AnexoCaso[]>(documentosIniciais)
   const [ocupado, setOcupado] = useState<string | null>(null) // id do doc em ação
   const [abrindo, setAbrindo] = useState<string | null>(null)
+  // Confirmação de remoção/exclusão no ConfirmDialog temático (padrão da casa),
+  // no lugar do confirm() nativo — guarda o doc alvo.
+  const [confirmRemover, setConfirmRemover] = useState<AnexoCaso | null>(null)
 
   // Picker "Adicionar do cadastro"
   const [pickerAberto, setPickerAberto] = useState(false)
@@ -57,15 +61,15 @@ export function AnexosDoCaso({ clienteId, atendimentoId, documentosIniciais }: P
     })
   }
 
-  async function remover(doc: AnexoCaso) {
-    // Doc que NASCEU neste caso → regra de sempre: EXCLUIR. Como ele carrega o
-    // próprio vínculo N:N (063), tiramos esse vínculo e então tentamos excluir o
-    // arquivo — que só some se não estiver em outra pasta. Atalho de outra pasta
-    // → só REMOVE o vínculo deste caso (o arquivo continua no cliente).
-    const msg = doc.nascido_neste_caso
-      ? 'Excluir este documento? Se ele também estiver em outras pastas, será apenas removido deste caso.'
-      : 'Remover deste caso? O documento continua no cadastro do cliente (não é excluído).'
-    if (!confirm(msg)) return
+  function remover(doc: AnexoCaso) {
+    setConfirmRemover(doc)
+  }
+
+  // Doc que NASCEU neste caso → regra de sempre: EXCLUIR. Como ele carrega o
+  // próprio vínculo N:N (063), tiramos esse vínculo e então tentamos excluir o
+  // arquivo — que só some se não estiver em outra pasta. Atalho de outra pasta
+  // → só REMOVE o vínculo deste caso (o arquivo continua no cliente).
+  async function executarRemover(doc: AnexoCaso) {
     setOcupado(doc.id)
     try {
       if (doc.nascido_neste_caso) {
@@ -94,6 +98,7 @@ export function AnexosDoCaso({ clienteId, atendimentoId, documentosIniciais }: P
       toastError('Não foi possível', 'Falha de rede. Tente novamente.')
     } finally {
       setOcupado(null)
+      setConfirmRemover(null)
     }
   }
 
@@ -179,6 +184,21 @@ export function AnexosDoCaso({ clienteId, atendimentoId, documentosIniciais }: P
         onClose={() => setPickerAberto(false)}
         atendimentoAtual={atendimentoId}
         onEscolher={vincularDoCadastro}
+      />
+
+      <ConfirmDialog
+        open={confirmRemover !== null}
+        onClose={() => setConfirmRemover(null)}
+        onConfirm={() => { if (confirmRemover) void executarRemover(confirmRemover) }}
+        title={confirmRemover?.nascido_neste_caso ? 'Excluir este documento?' : 'Remover deste caso?'}
+        description={
+          confirmRemover?.nascido_neste_caso
+            ? 'Se ele também estiver em outras pastas, será apenas removido deste caso.'
+            : 'O documento continua no cadastro do cliente (não é excluído).'
+        }
+        confirmLabel={confirmRemover?.nascido_neste_caso ? 'Excluir' : 'Remover'}
+        variant={confirmRemover?.nascido_neste_caso ? 'danger' : 'default'}
+        loading={confirmRemover !== null && ocupado === confirmRemover.id}
       />
     </div>
   )

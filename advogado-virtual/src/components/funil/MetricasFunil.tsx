@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { LABELS_AREA } from '@/types'
 import { LABELS_ETAPA, LABELS_MOTIVO_PERDA, type EtapaFunil, type MotivoPerda } from '@/lib/funil/regras'
+import { brl } from './estilos'
 import { Loader2, TrendingUp, Trophy, XCircle, Clock } from 'lucide-react'
 
 interface Metrics {
@@ -15,7 +16,6 @@ interface Metrics {
   tempoMedioPorEtapa: { etapa: EtapaFunil; dias: number | null }[]
 }
 
-const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 const PERIODOS = [7, 30, 90]
 const nomeArea = (a: string) => (a === '—' ? 'Sem área' : (LABELS_AREA[a as keyof typeof LABELS_AREA] ?? a))
 

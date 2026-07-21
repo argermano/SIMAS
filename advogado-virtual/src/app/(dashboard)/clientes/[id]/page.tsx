@@ -24,7 +24,7 @@ import {
   CheckCircle2, Clock, Edit3, FileCheck, Briefcase, Heart,
   FileSignature, Tag,
 } from 'lucide-react'
-import { formatarData, formatarDataRelativa, formatarDataHora, mascaraCPF, cn } from '@/lib/utils'
+import { formatarData, formatarDataRelativa, formatarDataHora, formatarReais, mascaraCPF, cn } from '@/lib/utils'
 import type { AtendimentoStatus } from '@/types'
 
 export async function generateMetadata({
@@ -499,7 +499,7 @@ export default async function DossieClientePage({
                                               </div>
                                               {(contrato.valor_fixo || contrato.percentual_exito) && (
                                                 <p className="text-xs text-blue-600 mt-0.5">
-                                                  {contrato.valor_fixo ? `R$ ${Number(contrato.valor_fixo).toLocaleString('pt-BR')}` : ''}
+                                                  {contrato.valor_fixo ? formatarReais(Number(contrato.valor_fixo)) : ''}
                                                   {contrato.valor_fixo && contrato.percentual_exito ? ' · ' : ''}
                                                   {contrato.percentual_exito ? `${contrato.percentual_exito}% êxito` : ''}
                                                 </p>

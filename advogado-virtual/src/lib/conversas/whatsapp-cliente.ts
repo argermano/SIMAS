@@ -97,8 +97,10 @@ export async function despacharWhatsAppCliente(args: {
   const temAnexos = (anexos?.length ?? 0) > 0
 
   // ── Caminho SEM anexos: um único texto ─────────────────────────────────────
+  // autor 'atendente': aqui SEMPRE é um humano escrevendo pelo modal — o bot
+  // pausa a IA daquela conversa (senão ele conversa por cima da atendente).
   if (!temAnexos) {
-    const r = await enviarAvisoWhatsApp(telefone, texto!, instancia)
+    const r = await enviarAvisoWhatsApp(telefone, texto!, instancia, 'atendente')
     if (!r.ok) return { ok: false, erro: 'Falha ao enviar pelo WhatsApp — tente novamente', status: 502 }
     return { ok: true, enviados: [] }
   }
@@ -127,6 +129,7 @@ export async function despacharWhatsAppCliente(args: {
       // Só o PRIMEIRO anexo leva o texto como legenda (mantém a ordem).
       i === 0 ? texto ?? '' : '',
       instancia,
+      'atendente',
     )
     if (!r.ok) {
       if (enviados.length === 0) {

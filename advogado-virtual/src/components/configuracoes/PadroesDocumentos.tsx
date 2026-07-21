@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import {
   FileText, Upload, Trash2, Loader2, Plus, Eye, X,
@@ -102,6 +103,9 @@ export function PadroesDocumentos() {
   const [showForm, setShowForm] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [excluindo, setExcluindo] = useState<string | null>(null)
+  // Confirmação de exclusão no ConfirmDialog temático (padrão da casa), no lugar
+  // do confirm() nativo — guarda o id + título do modelo alvo.
+  const [confirmExcluir, setConfirmExcluir] = useState<{ id: string; titulo: string } | null>(null)
   const [visualizando, setVisualizando] = useState<{ titulo: string; conteudo: string } | null>(null)
 
   // Form state
@@ -217,9 +221,11 @@ export function PadroesDocumentos() {
     }
   }
 
-  async function handleExcluir(id: string, tituloModelo: string) {
-    if (!confirm(`Excluir o modelo "${tituloModelo}"?`)) return
+  function handleExcluir(id: string, tituloModelo: string) {
+    setConfirmExcluir({ id, titulo: tituloModelo })
+  }
 
+  async function executarExcluir(id: string, tituloModelo: string) {
     setExcluindo(id)
     try {
       const res = await fetch(`/api/modelos-documento/${id}`, { method: 'DELETE' })
@@ -233,6 +239,7 @@ export function PadroesDocumentos() {
       toastError('Erro', 'Falha de rede')
     } finally {
       setExcluindo(null)
+      setConfirmExcluir(null)
     }
   }
 
@@ -530,6 +537,17 @@ export function PadroesDocumentos() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmExcluir !== null}
+        onClose={() => setConfirmExcluir(null)}
+        onConfirm={() => { if (confirmExcluir) void executarExcluir(confirmExcluir.id, confirmExcluir.titulo) }}
+        title={confirmExcluir ? `Excluir o modelo "${confirmExcluir.titulo}"?` : 'Excluir modelo?'}
+        description="A IA deixará de usar este modelo como referência ao gerar documentos deste tipo."
+        confirmLabel="Excluir"
+        variant="danger"
+        loading={confirmExcluir !== null && excluindo === confirmExcluir.id}
+      />
     </div>
   )
 }

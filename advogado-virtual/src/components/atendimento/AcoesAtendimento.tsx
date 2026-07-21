@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   MoreVertical, Loader2, Lock, Unlock, ArrowRightLeft, Printer, Trash2, Link2, Settings2,
 } from 'lucide-react'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, ConfirmDialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { VinculoPicker, type VinculoSelecionado } from '@/components/tarefas/VinculoPicker'
@@ -33,6 +33,10 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado,
   const [aberto, setAberto] = useState(false)
   const [busy, setBusy] = useState(false)
   const [vincOpen, setVincOpen] = useState(false)
+  // Confirmações no ConfirmDialog temático (padrão da casa), no lugar do
+  // window.confirm nativo. `confirmAcao` guarda a transição + o texto derivado.
+  const [confirmAcao, setConfirmAcao] = useState<{ acao: 'encerrar' | 'transformar_caso'; title: string; description: string } | null>(null)
+  const [confirmExcluir, setConfirmExcluir] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   // Fecha ao clicar fora
@@ -45,8 +49,21 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado,
     return () => document.removeEventListener('mousedown', onClick)
   }, [aberto])
 
-  async function acao(acao: 'encerrar' | 'reabrir' | 'transformar_caso', confirmMsg?: string) {
-    if (confirmMsg && !window.confirm(confirmMsg)) return
+  // `confirmMsg` só é passado pelas transições que exigem confirmação (encerrar,
+  // transformar). Reabrir não passa — executa direto. O texto do confirm nativo é
+  // dividido em título (até "? ") + descrição para o ConfirmDialog.
+  function acao(acao: 'encerrar' | 'reabrir' | 'transformar_caso', confirmMsg?: string) {
+    if (confirmMsg) {
+      const i = confirmMsg.indexOf('? ')
+      const title = i === -1 ? confirmMsg : confirmMsg.slice(0, i + 1)
+      const description = i === -1 ? '' : confirmMsg.slice(i + 2)
+      setConfirmAcao({ acao: acao as 'encerrar' | 'transformar_caso', title, description })
+      return
+    }
+    void executarAcao(acao)
+  }
+
+  async function executarAcao(acao: 'encerrar' | 'reabrir' | 'transformar_caso') {
     setBusy(true)
     try {
       const res = await fetch(`/api/atendimentos/${atendimentoId}`, {
@@ -60,11 +77,15 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado,
       }
     } catch { /* silencioso */ } finally {
       setBusy(false)
+      setConfirmAcao(null)
     }
   }
 
-  async function excluir() {
-    if (!window.confirm('Excluir este atendimento? Ele sairá das listagens (as peças, documentos e o áudio são preservados). Confirmar?')) return
+  function excluir() {
+    setConfirmExcluir(true)
+  }
+
+  async function executarExcluir() {
     setBusy(true)
     try {
       const res = await fetch(`/api/atendimentos/${atendimentoId}`, { method: 'DELETE' })
@@ -73,6 +94,7 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado,
       }
     } catch { /* silencioso */ } finally {
       setBusy(false)
+      setConfirmExcluir(false)
     }
   }
 
@@ -145,11 +167,38 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado,
     />
   )
 
+  // Confirmações (encerrar/transformar/excluir) — ConfirmDialog usa portal, então
+  // renderiza corretamente em ambas as variantes (menu e lista).
+  const dialogs = (
+    <>
+      <ConfirmDialog
+        open={confirmAcao !== null}
+        onClose={() => setConfirmAcao(null)}
+        onConfirm={() => { if (confirmAcao) void executarAcao(confirmAcao.acao) }}
+        title={confirmAcao?.title ?? ''}
+        description={confirmAcao?.description ?? ''}
+        confirmLabel="Confirmar"
+        loading={busy}
+      />
+      <ConfirmDialog
+        open={confirmExcluir}
+        onClose={() => setConfirmExcluir(false)}
+        onConfirm={() => void executarExcluir()}
+        title="Excluir este atendimento?"
+        description="Ele sairá das listagens (as peças, documentos e o áudio são preservados)."
+        confirmLabel="Excluir"
+        variant="danger"
+        loading={busy}
+      />
+    </>
+  )
+
   // Variant 'lista': card "Ações" com os itens em coluna (sidebar do caso).
   if (variant === 'lista') {
     return (
       <>
         {modal}
+        {dialogs}
         <Card className="overflow-hidden">
           <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
             <Settings2 className="h-4 w-4 text-muted-foreground" />
@@ -168,6 +217,7 @@ export function AcoesAtendimento({ atendimentoId, clienteId, estagio, encerrado,
   return (
     <div className="relative" ref={ref}>
       {modal}
+      {dialogs}
       <button
         onClick={() => setAberto((v) => !v)}
         disabled={busy}

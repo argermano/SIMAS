@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog } from '@/components/ui/dialog'
+import { Dialog, ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { cn, formatarData, formatarDataRelativa } from '@/lib/utils'
 import {
@@ -89,6 +89,9 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
   const [loading, setLoading] = useState(true)
   const [ocupado, setOcupado] = useState(false)
   const [modalDescarte, setModalDescarte] = useState(false)
+  // Confirmação (tratar/reabrir) no ConfirmDialog temático — padrão da casa, no
+  // lugar do confirm() nativo (que ignora o tema e é bloqueante).
+  const [confirmacao, setConfirmacao] = useState<'tratar' | 'reabrir' | null>(null)
   const [motivo, setMotivo] = useState('')
   const [criandoTarefa, setCriandoTarefa] = useState(false)
   const [buscandoAndamentos, setBuscandoAndamentos] = useState(false)
@@ -124,6 +127,7 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
   useEffect(() => {
     // Ao trocar de publicação (fila), zera o estado de descarte/tarefa/andamentos.
     setModalDescarte(false)
+    setConfirmacao(null)
     setMotivo('')
     setCriandoTarefa(false)
     setBuscandoAndamentos(false)
@@ -157,13 +161,13 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
   // Escape fecha o overlay (mobile). No inline não há o que fechar.
   useEffect(() => {
     if (modo !== 'overlay' || !onFechar) return
-    if (modalDescarte || criandoTarefa || mostrarSugestoes) return
+    if (modalDescarte || criandoTarefa || mostrarSugestoes || confirmacao !== null) return
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onFechar()
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [modo, onFechar, modalDescarte, criandoTarefa, mostrarSugestoes])
+  }, [modo, onFechar, modalDescarte, criandoTarefa, mostrarSugestoes, confirmacao])
 
   async function tratar(payload: TratamentoPayload) {
     setOcupado(true)
@@ -190,12 +194,12 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
       onConcluido(id)
     } finally {
       setOcupado(false)
+      setConfirmacao(null)
     }
   }
 
   function marcarTratada() {
-    if (!confirm('Marcar esta publicação como TRATADA (sem tarefa)? Ela sai da fila de não tratadas.')) return
-    void tratar({})
+    setConfirmacao('tratar')
   }
 
   // Sugestões da IA: usa o cache do servidor; `regerar` força UMA re-geração.
@@ -251,8 +255,6 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
   }
 
   async function reabrir() {
-    if (!confirm('Reabrir esta publicação? Ela volta para NÃO TRATADA. Uma tarefa já criada no Kanban permanece.'))
-      return
     setOcupado(true)
     try {
       const r = await fetch(`/api/publicacoes/${id}/triar`, {
@@ -271,6 +273,7 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
       onReaberto()
     } finally {
       setOcupado(false)
+      setConfirmacao(null)
     }
   }
 
@@ -602,7 +605,7 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
               <span className="text-xs text-muted-foreground">
                 {pub.status === 'descartada' ? 'Publicação descartada.' : 'Publicação tratada.'}
               </span>
-              <Button variant="secondary" size="sm" onClick={reabrir} loading={ocupado}>
+              <Button variant="secondary" size="sm" onClick={() => setConfirmacao('reabrir')} loading={ocupado}>
                 <RotateCcw className="h-4 w-4" /> Reabrir
               </Button>
             </div>
@@ -655,6 +658,24 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
           />
         </div>
       </Dialog>
+
+      {/* Confirmação tratar/reabrir (padrão da casa) */}
+      <ConfirmDialog
+        open={confirmacao !== null}
+        onClose={() => setConfirmacao(null)}
+        onConfirm={() => {
+          if (confirmacao === 'tratar') void tratar({})
+          else if (confirmacao === 'reabrir') void reabrir()
+        }}
+        title={confirmacao === 'reabrir' ? 'Reabrir esta publicação?' : 'Marcar esta publicação como TRATADA (sem tarefa)?'}
+        description={
+          confirmacao === 'reabrir'
+            ? 'Ela volta para NÃO TRATADA. Uma tarefa já criada no Kanban permanece.'
+            : 'Ela sai da fila de não tratadas.'
+        }
+        confirmLabel={confirmacao === 'reabrir' ? 'Reabrir' : 'Marcar como tratada'}
+        loading={ocupado}
+      />
     </>
   )
 }

@@ -6,12 +6,12 @@ import { useRouter } from 'next/navigation'
 import { LABELS_AREA } from '@/types'
 import { LABELS_ETAPA, ORDEM_ETAPAS, type EtapaFunil } from '@/lib/funil/regras'
 import type { LeadData } from './tipos'
+import { brl } from './estilos'
 import {
   X, MessageCircle, Calendar, Video, User, UserCheck, AlertCircle,
   FileSignature, FileText, ScrollText, ExternalLink, ClipboardList,
 } from 'lucide-react'
 
-const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })
 const dataCurta = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: '2-digit' })
 

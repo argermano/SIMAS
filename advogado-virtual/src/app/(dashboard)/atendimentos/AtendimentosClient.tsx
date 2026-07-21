@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Card } from '@/components/ui/card'
 import { EnviarWhatsAppModal } from '@/components/atendimento/EnviarWhatsAppModal'
-import { cn, formatarData, formatarTelefone } from '@/lib/utils'
+import { cn, formatarData, formatarReais, exibirTelefone } from '@/lib/utils'
 import { apenasDigitos } from '@/lib/conversas/telefone'
 import { rotularArea } from '@/lib/tarefas/vinculo'
 import { Search, X, Loader2, Briefcase, AlertTriangle, ChevronRight, MessageSquare, ListFilter } from 'lucide-react'
@@ -41,17 +41,6 @@ interface AtendimentoItem {
 type Status = 'andamento' | 'encerrados' | 'todos'
 type EstagioFiltro = '' | 'atendimento' | 'caso'
 
-// R$ 4.500,00 — mesmo formato que o resto do app usa para valor fixo (reais).
-function formatarHonorarios(v: number): string {
-  return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-// Exibe o telefone só quando são 10/11 dígitos (BR local); com DDI (12/13) fica
-// como veio, para alimentar o telefoneExibicao do modal sem sair torto.
-function exibirTelefone(tel: string): string {
-  const d = apenasDigitos(tel)
-  return d.length === 10 || d.length === 11 ? formatarTelefone(tel) : tel
-}
 
 // Inicial do avatar do responsável: ignora pronome de tratamento (Dr., Dra., …)
 // para "Dra. Katlen" virar "K", não "D".
@@ -384,7 +373,7 @@ export function AtendimentosClient() {
 
                       <Coluna label="Honorários" className="lg:text-right">
                         {a.honorariosValor != null ? (
-                          <span className="whitespace-nowrap font-semibold text-foreground">{formatarHonorarios(a.honorariosValor)}</span>
+                          <span className="whitespace-nowrap font-semibold text-foreground">{formatarReais(a.honorariosValor)}</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}

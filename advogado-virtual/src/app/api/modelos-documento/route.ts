@@ -4,6 +4,7 @@ import { jsonError } from '@/lib/api'
 import { extrairEstiloDocx } from '@/lib/modelos/extrair-estilo-docx'
 import { extrairTextoDocx, templatizarDocx } from '@/lib/modelos/templatizar-docx'
 import { detectarPlaceholders } from '@/lib/modelos/detectar-placeholders'
+import { extrairTexto, MAX_EXTRACT_BYTES } from '@/lib/documentos/extrair-texto'
 
 const TIPOS_VALIDOS = ['peca', 'contrato', 'procuracao', 'declaracao', 'substabelecimento']
 
@@ -104,28 +105,24 @@ export async function POST(req: NextRequest) {
     }
     fileUrl = path
 
-    // Extrair texto
-    try {
-      if (arquivo.type === 'application/pdf' || ext === 'pdf') {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string }>
-        const pdfData = await pdfParse(buffer)
-        conteudoMarkdown = pdfData.text?.trim() ?? ''
-      } else if (
-        arquivo.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-        ext === 'docx'
-      ) {
-        const mammoth = await import('mammoth')
-        const result = await mammoth.extractRawText({ buffer })
-        conteudoMarkdown = result.value?.trim() ?? ''
-        // Extrai o estilo real do .docx (fonte/margens/entrelinha/cabeçalho)
+    // Extrai texto pelo helper central (PDF via pdf-parse, DOCX cru, qualquer outro
+    // como texto puro). fallbackTxt preserva o comportamento antigo do `else`.
+    const { texto } = await extrairTexto(buffer, {
+      mime:        arquivo.type,
+      fileName:    arquivo.name,
+      maxBytes:    MAX_EXTRACT_BYTES,
+      docx:        'raw',
+      fallbackTxt: true,
+    })
+    conteudoMarkdown = texto
+
+    // Extrai o estilo real do .docx (fonte/margens/entrelinha/cabeçalho)
+    if (arquivo.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || ext === 'docx') {
+      try {
         estiloConfig = await extrairEstiloDocx(buffer)
-      } else {
-        // Texto puro
-        conteudoMarkdown = new TextDecoder().decode(buffer).trim()
+      } catch (err) {
+        console.error('[modelos-documento] Erro ao extrair estilo:', err)
       }
-    } catch (err) {
-      console.error('[modelos-documento] Erro na extração:', err)
     }
 
     // Cria o template automaticamente: a IA detecta os valores variáveis do .docx

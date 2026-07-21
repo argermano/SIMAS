@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/components/ui/toast'
-import { formatarTelefone } from '@/lib/utils'
+import { formatarTelefone, exibirTelefone } from '@/lib/utils'
 import { apenasDigitos } from '@/lib/conversas/telefone'
 import { EnviarWhatsAppModal } from './EnviarWhatsAppModal'
 import { UserRound, Phone, Mail, MessageSquare, Pencil, Check, X, Loader2 } from 'lucide-react'
@@ -15,13 +15,6 @@ interface CartaoContatoClienteProps {
   nome: string
   telefoneInicial: string | null
   email: string | null
-}
-
-// Formata p/ exibição só quando são 10/11 dígitos (BR local); um número com DDI
-// (12/13) fica como está para não sair torto no formatarTelefone.
-function exibirTelefone(tel: string): string {
-  const d = apenasDigitos(tel)
-  return d.length === 10 || d.length === 11 ? formatarTelefone(tel) : tel
 }
 
 /**

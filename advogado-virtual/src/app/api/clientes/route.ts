@@ -59,7 +59,13 @@ export async function GET(req: Request) {
   if (error) return jsonError(error.message, 500)
 
   return NextResponse.json({
-    clientes:   (data ?? []).map(decryptClienteFields),
+    // LGPD/minimização: a listagem NÃO decifra nem trafega cpf/rg — só um flag de
+    // existência (os pickers usam id/nome/email). O valor real só é decifrado no
+    // detalhe (GET /api/clientes/[id]).
+    clientes:   (data ?? []).map((row) => {
+      const { cpf, rg, ...resto } = row as Record<string, unknown>
+      return { ...resto, temCpf: !!cpf, temRg: !!rg }
+    }),
     total:      count ?? 0,
     pagina:     page,
     totalPaginas: Math.ceil((count ?? 0) / limit),

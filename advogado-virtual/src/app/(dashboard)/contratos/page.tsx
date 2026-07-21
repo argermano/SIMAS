@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/Header'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { formatarDataRelativa } from '@/lib/utils'
+import { formatarDataRelativa, formatarReais } from '@/lib/utils'
 import { FileSignature, Plus, ChevronRight } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { BotaoExcluirContrato } from '@/components/contratos/BotaoExcluirContrato'
@@ -147,7 +147,7 @@ export default async function ContratosPage({
                 {(contratos ?? []).map(c => {
                   const badge = BADGE_STATUS[c.status] ?? BADGE_STATUS.rascunho
                   const honorario = c.valor_fixo
-                    ? `R$ ${(c.valor_fixo as number).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                    ? formatarReais(c.valor_fixo as number)
                     : c.percentual_exito !== null
                       ? `${c.percentual_exito}% êxito`
                       : '—'

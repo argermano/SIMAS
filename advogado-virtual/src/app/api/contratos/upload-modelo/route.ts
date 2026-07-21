@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { detectarTipoReal } from '@/lib/file-validation'
+import { extrairTexto, MAX_EXTRACT_BYTES } from '@/lib/documentos/extrair-texto'
 
 // POST /api/contratos/upload-modelo — upload do modelo de contrato do advogado
 // Extrai texto do PDF/DOCX e salva no Storage
@@ -58,23 +59,13 @@ export async function POST(req: NextRequest) {
     return jsonError(`Upload falhou: ${uploadError.message}`, 500)
   }
 
-  // Extrai texto do arquivo
-  let textoExtraido = ''
-  try {
-    if (arquivo.type === 'application/pdf') {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string }>
-      const pdfData = await pdfParse(buffer)
-      textoExtraido = pdfData.text?.trim() ?? ''
-    } else {
-      // DOCX: extração com mammoth
-      const mammoth = await import('mammoth')
-      const result  = await mammoth.extractRawText({ buffer })
-      textoExtraido = result.value?.trim() ?? ''
-    }
-  } catch (err) {
-    console.error('[upload-modelo] Erro na extração de texto:', err)
-  }
+  // Extrai texto do arquivo (PDF via pdf-parse, DOCX cru) pelo helper central.
+  const { texto: textoExtraido } = await extrairTexto(buffer, {
+    mime:     arquivo.type,
+    fileName: arquivo.name,
+    maxBytes: MAX_EXTRACT_BYTES,
+    docx:     'raw',
+  })
 
   console.log('[upload-modelo] tipo:', ext, '| texto extraído length:', textoExtraido.length)
 

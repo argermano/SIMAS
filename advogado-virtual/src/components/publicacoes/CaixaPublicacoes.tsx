@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/toast'
+import { ConfirmDialog } from '@/components/ui/dialog'
 import { SaudeWidget } from './SaudeWidget'
 import { PainelDetalhe } from './PainelDetalhe'
 import { PrioridadeBadge, StatusPill } from './Pills'
@@ -78,6 +79,9 @@ interface FiltroTile {
 export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: TeamMember[]; currentUserId: string }) {
   const { success, error: toastError } = useToast()
   const [concluindo, setConcluindo] = useState<string | null>(null)
+  // Confirmação de ação (concluir/reabrir) via ConfirmDialog temático — padrão da
+  // casa, no lugar do confirm() nativo (que ignora o tema e é bloqueante).
+  const [confirmacao, setConfirmacao] = useState<{ id: string; acao: 'concluir' | 'reabrir' } | null>(null)
   const [status, setStatus] = useState('nova')
   const [statusIn, setStatusIn] = useState('')
   const [tribunal, setTribunal] = useState('')
@@ -318,9 +322,18 @@ export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: 
     setMobileAberto(true)
   }
 
-  /** Concluir direto da listagem: marca como tratada (sem tarefa) e recarrega. */
-  async function concluirNaLista(id: string) {
-    if (!confirm('Concluir esta publicação? Ela será marcada como TRATADA e sai da fila de não tratadas.')) return
+  /** Concluir direto da listagem: pede confirmação no ConfirmDialog temático. */
+  function concluirNaLista(id: string) {
+    setConfirmacao({ id, acao: 'concluir' })
+  }
+
+  /** Reabrir da listagem: pede confirmação no ConfirmDialog temático. */
+  function reabrirNaLista(id: string) {
+    setConfirmacao({ id, acao: 'reabrir' })
+  }
+
+  /** Concluir de fato: marca como tratada (sem tarefa) e recarrega. */
+  async function executarConcluir(id: string) {
     setConcluindo(id)
     try {
       const r = await fetch(`/api/publicacoes/${id}/triar`, {
@@ -337,12 +350,12 @@ export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: 
       await carregarSaude()
     } finally {
       setConcluindo(null)
+      setConfirmacao(null)
     }
   }
 
-  /** Reabrir da listagem: volta para 'não tratada' (mantém a tarefa criada, se houver). */
-  async function reabrirNaLista(id: string) {
-    if (!confirm('Reabrir esta publicação? Ela volta para NÃO TRATADA. Uma tarefa já criada no Kanban permanece.')) return
+  /** Reabrir de fato: volta para 'não tratada' (mantém a tarefa criada, se houver). */
+  async function executarReabrir(id: string) {
     setConcluindo(id)
     try {
       const r = await fetch(`/api/publicacoes/${id}/triar`, {
@@ -357,6 +370,7 @@ export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: 
       await carregarSaude()
     } finally {
       setConcluindo(null)
+      setConfirmacao(null)
     }
   }
 
@@ -705,6 +719,24 @@ export function CaixaPublicacoes({ teamMembers, currentUserId }: { teamMembers: 
           onReaberto={aoReabrir}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmacao !== null}
+        onClose={() => setConfirmacao(null)}
+        onConfirm={() => {
+          if (!confirmacao) return
+          if (confirmacao.acao === 'concluir') void executarConcluir(confirmacao.id)
+          else void executarReabrir(confirmacao.id)
+        }}
+        title={confirmacao?.acao === 'reabrir' ? 'Reabrir esta publicação?' : 'Concluir esta publicação?'}
+        description={
+          confirmacao?.acao === 'reabrir'
+            ? 'Ela volta para NÃO TRATADA. Uma tarefa já criada no Kanban permanece.'
+            : 'Ela será marcada como TRATADA e sai da fila de não tratadas.'
+        }
+        confirmLabel={confirmacao?.acao === 'reabrir' ? 'Reabrir' : 'Concluir'}
+        loading={concluindo !== null && confirmacao !== null}
+      />
     </div>
   )
 }

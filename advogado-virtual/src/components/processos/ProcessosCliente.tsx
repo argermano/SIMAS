@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
+import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatarData, formatarDataRelativa, cn } from '@/lib/utils'
 import {
@@ -78,6 +79,10 @@ export function ProcessosCliente({
   const [carregandoTl, setCarregandoTl] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [aviso, setAviso] = useState<ModoAviso>(avisoInicial)
+  // Confirmações no ConfirmDialog temático (padrão da casa), no lugar do confirm()
+  // nativo do navegador (bloqueante e fora do tema): guardam o id do processo alvo.
+  const [confirmSimular, setConfirmSimular] = useState<string | null>(null)
+  const [confirmExcluir, setConfirmExcluir] = useState<string | null>(null)
 
   async function salvarAviso(novo: ModoAviso) {
     const anterior = aviso
@@ -99,8 +104,14 @@ export function ProcessosCliente({
       : 'Movimentos importantes serão enviados automaticamente.')
   }
 
-  async function simular(processoId: string) {
-    if (aviso === 'automatico' && !confirm('Este cliente está em modo AUTOMÁTICO: simular vai ENVIAR uma mensagem real de teste ao WhatsApp dele. Deseja continuar?')) return
+  // Em modo AUTOMÁTICO simular ENVIA uma mensagem real ao cliente: confirma antes.
+  // Nos demais modos, executa direto (nada é enviado sem aprovação).
+  function simular(processoId: string) {
+    if (aviso === 'automatico') { setConfirmSimular(processoId); return }
+    void executarSimular(processoId)
+  }
+
+  async function executarSimular(processoId: string) {
     setOcupado(processoId)
     try {
       const r = await fetch(`/api/processos/${processoId}/simular-movimento`, {
@@ -116,6 +127,7 @@ export function ProcessosCliente({
       await recarregarTimeline(processoId)
     } finally {
       setOcupado(null)
+      setConfirmSimular(null)
     }
   }
 
@@ -233,8 +245,11 @@ export function ProcessosCliente({
     }
   }
 
-  async function excluir(id: string) {
-    if (!confirm('Desvincular este processo e apagar suas movimentações armazenadas?')) return
+  function excluir(id: string) {
+    setConfirmExcluir(id)
+  }
+
+  async function executarExcluir(id: string) {
     setOcupado(id)
     try {
       const r = await fetch(`/api/processos/${id}`, { method: 'DELETE' })
@@ -243,6 +258,7 @@ export function ProcessosCliente({
       await carregar()
     } finally {
       setOcupado(null)
+      setConfirmExcluir(null)
     }
   }
 
@@ -397,6 +413,27 @@ export function ProcessosCliente({
           </ul>
         )}
       </CardContent>
+
+      <ConfirmDialog
+        open={confirmSimular !== null}
+        onClose={() => setConfirmSimular(null)}
+        onConfirm={() => { if (confirmSimular) void executarSimular(confirmSimular) }}
+        title="Enviar mensagem real de teste?"
+        description="Este cliente está em modo AUTOMÁTICO: simular vai ENVIAR uma mensagem real de teste ao WhatsApp dele. Deseja continuar?"
+        confirmLabel="Enviar teste"
+        loading={confirmSimular !== null && ocupado === confirmSimular}
+      />
+
+      <ConfirmDialog
+        open={confirmExcluir !== null}
+        onClose={() => setConfirmExcluir(null)}
+        onConfirm={() => { if (confirmExcluir) void executarExcluir(confirmExcluir) }}
+        title="Desvincular este processo?"
+        description="As movimentações armazenadas deste processo serão apagadas."
+        confirmLabel="Desvincular"
+        variant="danger"
+        loading={confirmExcluir !== null && ocupado === confirmExcluir}
+      />
     </Card>
   )
 }
