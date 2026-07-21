@@ -6,6 +6,7 @@ import { pertenceAoTenant } from '@/lib/ownership'
 import { logAudit } from '@/lib/audit'
 import { vinculoParaColunas } from '@/lib/tarefas/vinculo'
 import { vinculoValido } from '@/lib/tarefas/validar-vinculo'
+import { calendarAdmin, agendarEspelhoUsuarios, coletarAfetadosTask } from '@/lib/calendar/fila'
 
 // Vínculo único (cliente | caso | processo) — ver migration 054 e lib/tarefas/vinculo.
 const schemaVinculo = z
@@ -214,6 +215,12 @@ export async function POST(req: NextRequest) {
       origin_reference: taskData.origin_reference ?? null,
     },
   })
+
+  // Espelho ativo no Google Calendar: enfileira responsável+extras+criador e
+  // dispara o dreno pós-resposta (a tarefa com due_date vira all-day no espelho).
+  // No-op se o espelho está inerte.
+  const calAdmin = calendarAdmin()
+  await agendarEspelhoUsuarios(calAdmin, usuario.tenant_id, await coletarAfetadosTask(calAdmin, task.id))
 
   return NextResponse.json({ task }, { status: 201 })
 }

@@ -248,3 +248,30 @@ export async function buscarEventosCalendario(
 
   return eventos
 }
+
+/**
+ * Filtro "eventos do usuário" (mesmo do feed ICS e da UI): responsável OU
+ * envolvido OU criador. Os 'particular' de terceiros já saíram na query (via
+ * `particularesDe`); aqui fica só o corte por atribuição. Puro — compartilhado
+ * entre o feed ICS e o espelho ativo do Google Calendar.
+ */
+export function filtrarEventosDoUsuario(
+  eventos: EventoCalendario[],
+  userId: string,
+): EventoCalendario[] {
+  return eventos.filter(
+    (ev) =>
+      ev.responsavel?.id === userId ||
+      ev.envolvidos.some((p) => p.id === userId) ||
+      ev.criadoPor === userId,
+  )
+}
+
+/** Janela padrão do calendário pessoal/espelho: [-60d, +180d] a partir de agora. */
+export function janelaPadrao(agoraMs: number = Date.now()): { de: string; ate: string } {
+  const DIA = 86_400_000
+  return {
+    de: new Date(agoraMs - 60 * DIA).toISOString(),
+    ate: new Date(agoraMs + 180 * DIA).toISOString(),
+  }
+}

@@ -3,6 +3,7 @@ import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { conviteAposMutacao } from '@/lib/agenda/convites'
+import { calendarAdmin, agendarEspelhoUsuarios, coletarAfetadosEvento } from '@/lib/calendar/fila'
 import {
   PAPEIS_AGENDA,
   schemaCriar,
@@ -81,6 +82,11 @@ export async function POST(req: Request) {
     eventoId: evento.id,
     metodo: 'REQUEST',
   })
+
+  // Espelho ativo no Google Calendar: enfileira os afetados (responsável+envolvidos+
+  // criador) e dispara o dreno pós-resposta. No-op se o espelho está inerte.
+  const admin = calendarAdmin()
+  await agendarEspelhoUsuarios(admin, usuario.tenant_id, await coletarAfetadosEvento(admin, evento.id))
 
   return NextResponse.json({ evento }, { status: 201 })
 }

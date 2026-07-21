@@ -6,7 +6,7 @@
 // token via POST /api/agenda/feed, com confirmação — o link antigo é invalidado).
 
 import { useCallback, useEffect, useState } from 'react'
-import { Check, Copy, Loader2, RefreshCw } from 'lucide-react'
+import { Check, Copy, Loader2, RefreshCw, CalendarCheck, Clock, RotateCw } from 'lucide-react'
 import { Dialog, ConfirmDialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
@@ -14,6 +14,15 @@ import { useToast } from '@/components/ui/toast'
 interface FeedModalProps {
   aberto: boolean
   onFechar: () => void
+}
+
+/** Estado do espelho ATIVO no Google Calendar do próprio usuário (068). */
+interface EstadoEspelho {
+  configurado: boolean
+  elegivel: boolean
+  delegacaoOk: boolean
+  email: string | null
+  pendentesFila: number
 }
 
 export function FeedModal({ aberto, onFechar }: FeedModalProps) {
@@ -25,6 +34,43 @@ export function FeedModal({ aberto, onFechar }: FeedModalProps) {
   const [copiado, setCopiado] = useState(false)
   const [confirmarRotacao, setConfirmarRotacao] = useState(false)
   const [rotacionando, setRotacionando] = useState(false)
+
+  // Espelho ATIVO no Google Calendar (seção principal).
+  const [espelho, setEspelho] = useState<EstadoEspelho | null>(null)
+  const [carregandoEspelho, setCarregandoEspelho] = useState(false)
+  const [sincronizando, setSincronizando] = useState(false)
+
+  const carregarEspelho = useCallback(async () => {
+    setCarregandoEspelho(true)
+    try {
+      const res = await fetch('/api/agenda/espelho-google')
+      if (!res.ok) throw new Error('estado indisponível')
+      setEspelho((await res.json()) as EstadoEspelho)
+    } catch {
+      setEspelho(null) // sem seção principal (cai só no ICS)
+    } finally {
+      setCarregandoEspelho(false)
+    }
+  }, [])
+
+  async function sincronizar() {
+    setSincronizando(true)
+    try {
+      const res = await fetch('/api/agenda/espelho-google', { method: 'POST' })
+      const dados = (await res.json().catch(() => ({}))) as { ok?: boolean; delegacaoPendente?: boolean }
+      if (!res.ok) throw new Error('falha')
+      if (dados.delegacaoPendente) {
+        toastErro('Aguardando autorização do administrador', 'A delegação do Google ainda não foi liberada.')
+      } else {
+        toastOk('Sincronizado', 'Seus compromissos já aparecem no calendário SIMAS do seu Google Agenda.')
+      }
+      await carregarEspelho()
+    } catch {
+      toastErro('Não foi possível sincronizar agora', 'Tente novamente em instantes.')
+    } finally {
+      setSincronizando(false)
+    }
+  }
 
   const carregar = useCallback(async () => {
     setCarregando(true)
@@ -46,8 +92,9 @@ export function FeedModal({ aberto, onFechar }: FeedModalProps) {
     if (aberto) {
       setCopiado(false)
       void carregar()
+      void carregarEspelho()
     }
-  }, [aberto, carregar])
+  }, [aberto, carregar, carregarEspelho])
 
   async function copiar() {
     if (!url) return
@@ -88,7 +135,7 @@ export function FeedModal({ aberto, onFechar }: FeedModalProps) {
         open={aberto}
         onClose={onFechar}
         title="Conectar ao meu calendário"
-        description="Assine este link no seu calendário para ver seus compromissos do SIMAS."
+        description="Veja seus compromissos do SIMAS no seu Google Agenda."
         size="md"
         footer={
           <>
@@ -108,6 +155,66 @@ export function FeedModal({ aberto, onFechar }: FeedModalProps) {
         }
       >
         <div className="space-y-4">
+          {/* PRINCIPAL — espelho ATIVO no Google Agenda do escritório (automático).
+              Só aparece quando o ambiente tem o espelho configurado; caso contrário
+              fica só o feed ICS. Estado por usuário logado (GET espelho-google). */}
+          {carregandoEspelho ? (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              Verificando seu Google Agenda...
+            </div>
+          ) : espelho?.configurado ? (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-foreground">Google Agenda do escritório (automático)</p>
+              {espelho.elegivel && espelho.delegacaoOk ? (
+                <div className="rounded-lg border border-success/30 bg-success/5 px-3 py-3">
+                  <div className="flex items-start gap-2 text-sm text-foreground">
+                    <CalendarCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+                    <span>
+                      <span className="font-medium">Ativo:</span> seus compromissos aparecem no calendário{' '}
+                      <span className="font-medium">SIMAS</span> do seu Google Agenda.
+                    </span>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => void sincronizar()}
+                    disabled={sincronizando}
+                    className="mt-3"
+                  >
+                    {sincronizando ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <RotateCw className="h-4 w-4" aria-hidden />
+                    )}
+                    Sincronizar meus eventos agora
+                  </Button>
+                  {espelho.pendentesFila > 0 && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {espelho.pendentesFila} evento(s) na fila — a sincronização automática já está em andamento.
+                    </p>
+                  )}
+                </div>
+              ) : espelho.elegivel ? (
+                <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <span>Aguardando autorização do administrador (delegação do Google Workspace).</span>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
+                  Seu e-mail{espelho.email ? ` (${espelho.email})` : ''} está fora do domínio do escritório —
+                  use o link de assinatura (ICS) abaixo.
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {espelho?.configurado && (
+            <p className="border-t border-border pt-3 text-sm font-semibold text-foreground">
+              Alternativa: link de assinatura (ICS)
+            </p>
+          )}
+
           {carregando ? (
             <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

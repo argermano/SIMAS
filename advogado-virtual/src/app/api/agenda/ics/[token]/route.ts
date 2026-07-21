@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { buscarEventosCalendario } from '@/lib/agenda/consulta'
+import { buscarEventosCalendario, filtrarEventosDoUsuario, janelaPadrao } from '@/lib/agenda/consulta'
 import { gerarICS } from '@/lib/agenda/ics'
 import { urlBaseApp } from '@/lib/email'
 import { logger } from '@/lib/logger'
@@ -13,8 +13,7 @@ import { logger } from '@/lib/logger'
 // Janela: [-60d, +180d]. Filtro "eventos do usuário": responsável OU
 // envolvido OU criador (inclui os 'particular' do PRÓPRIO usuário; consultas
 // do bot não têm responsável/criador, logo ficam fora do feed pessoal).
-
-const DIA_MS = 86_400_000
+// Janela e filtro vêm de consulta.ts (compartilhados com o espelho ativo).
 
 function naoEncontrado(): NextResponse {
   return new NextResponse('Not found', { status: 404 })
@@ -50,9 +49,7 @@ export async function GET(
     .maybeSingle()
   if (!dono) return naoEncontrado()
 
-  const agora = Date.now()
-  const de = new Date(agora - 60 * DIA_MS).toISOString()
-  const ate = new Date(agora + 180 * DIA_MS).toISOString()
+  const { de, ate } = janelaPadrao()
 
   let eventos
   try {
@@ -72,12 +69,7 @@ export async function GET(
 
   // Só eventos DO usuário (inclui particulares do próprio; o corte de
   // 'particular' de terceiros já veio da query via particularesDe).
-  const meus = eventos.filter(
-    (ev) =>
-      ev.responsavel?.id === dono.id ||
-      ev.envolvidos.some((p) => p.id === dono.id) ||
-      ev.criadoPor === dono.id,
-  )
+  const meus = filtrarEventosDoUsuario(eventos, dono.id)
 
   const ics = gerarICS(meus, {
     nomeCal: `SIMAS — ${dono.nome ?? 'Agenda'}`,

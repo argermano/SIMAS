@@ -3,6 +3,7 @@ import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { conviteAposMutacao } from '@/lib/agenda/convites'
+import { calendarAdmin, agendarEspelhoUsuarios, coletarAfetadosEvento } from '@/lib/calendar/fila'
 import { PAPEIS_AGENDA, schemaStatus, COLUNAS_EVENTO } from '../../_lib'
 
 // POST /api/agenda/eventos/[id]/status — concluir / cancelar / reabrir.
@@ -72,6 +73,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       incrementarSequence: true,
     })
   }
+
+  // Espelho: cancelar REMOVE do calendário; concluir/reabrir reconcilia (o evento
+  // permanece, só atualizado). Reconcilia idempotente. No-op se inerte.
+  const calAdmin = calendarAdmin()
+  await agendarEspelhoUsuarios(calAdmin, usuario.tenant_id, await coletarAfetadosEvento(calAdmin, id))
 
   return NextResponse.json({ evento })
 }

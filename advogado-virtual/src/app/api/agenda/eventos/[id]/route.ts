@@ -8,6 +8,7 @@ import {
   carregarDadosConvite,
   enviarConviteEvento,
 } from '@/lib/agenda/convites'
+import { calendarAdmin, agendarEspelhoUsuarios, coletarAfetadosEvento } from '@/lib/calendar/fila'
 import {
   PAPEIS_AGENDA,
   schemaEditar,
@@ -57,6 +58,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const guard = await carregarEEditavel(supabase, id, usuario)
   if (!guard.ok) return guard.response
+
+  // Espelho: quem estava no evento ANTES (a edição pode reatribuir/remover
+  // envolvidos — esses ex-usuários também precisam ser reconciliados).
+  const calAdmin = calendarAdmin()
+  const afetadosAntes = await coletarAfetadosEvento(calAdmin, id)
 
   const parsed = await validateBody(req, schemaEditar)
   if (!parsed.ok) return parsed.response
@@ -117,6 +123,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     incrementarSequence: true,
   })
 
+  // Espelho: união dos afetados ANTES e DEPOIS (novos + reatribuídos/removidos).
+  await agendarEspelhoUsuarios(calAdmin, usuario.tenant_id, [
+    ...afetadosAntes,
+    ...(await coletarAfetadosEvento(calAdmin, id)),
+  ])
+
   return NextResponse.json({ evento })
 }
 
@@ -135,6 +147,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   // Snapshot ANTES do delete (a linha some) p/ mandar o CANCEL depois.
   const convite = await carregarDadosConvite(supabase, usuario.tenant_id, id)
+  // Espelho: capturar os afetados ANTES do delete (some a linha e os envolvidos).
+  const calAdmin = calendarAdmin()
+  const afetados = await coletarAfetadosEvento(calAdmin, id)
 
   const { error } = await supabase
     .from('agenda_eventos')
@@ -160,6 +175,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       sequence: convite.sequence + 1,
     })
   }
+
+  // Espelho: reconcilia os ex-afetados (o evento sumiu → removido dos calendários).
+  await agendarEspelhoUsuarios(calAdmin, usuario.tenant_id, afetados)
 
   return NextResponse.json({ ok: true })
 }

@@ -7,6 +7,7 @@ import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
 import { rodarSentinela, type SentinelaResultado } from '@/lib/processos/sentinela'
 import { repararResumos, type ReparoResultado } from '@/lib/processos/reparo'
 import { processarFilaDrive } from '@/lib/drive/espelho'
+import { processarFilaCalendar } from '@/lib/calendar/espelho'
 
 export const maxDuration = 300
 
@@ -146,5 +147,21 @@ export async function GET(req: Request) {
     logger.error('cron.drive_sync.falha', {}, e as Error)
   }
 
-  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo, driveSync })
+  // Espelho ATIVO no Google Calendar (068) — drena a fila na folga que restar
+  // DEPOIS do Drive. Teto duplo: min(60s, t0+298s) — nunca empurra o handler além
+  // do maxDuration=300 (a Vercel mataria a função). processarFilaCalendar é no-op
+  // se o espelho está inerte; isolado num try/catch. O que não couber fica na fila
+  // durável e é drenado no próximo ciclo / pelo botão "Sincronizar agora".
+  let calendarSync: { usuarios: number; upserts: number; remocoes: number; erros: number; delegacaoPendente: number } | null = null
+  try {
+    const calDeadline = Math.min(Date.now() + 60_000, t0 + 298_000)
+    if (calDeadline > Date.now() + 3_000) {
+      const r = await processarFilaCalendar(admin, { deadline: calDeadline })
+      calendarSync = { usuarios: r.usuarios, upserts: r.upserts, remocoes: r.remocoes, erros: r.erros, delegacaoPendente: r.delegacaoPendente }
+    }
+  } catch (e) {
+    logger.error('cron.calendar_sync.falha', {}, e as Error)
+  }
+
+  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo, driveSync, calendarSync })
 }

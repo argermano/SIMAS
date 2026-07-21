@@ -4,6 +4,7 @@ import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { autorizadoIntegracao } from '@/lib/funil/auth-integracao'
 import { logger } from '@/lib/logger'
+import { agendarEspelhoUsuarios, coletarAfetadosEvento } from '@/lib/calendar/fila'
 import {
   schemaIntegracao,
   COLUNAS_EVENTO,
@@ -78,6 +79,10 @@ export async function POST(req: Request) {
       resourceId: evento.id,
       metadata: { tipo: d.tipo, origin: 'bot', origin_reference: d.origin_reference ?? null },
     })
+
+    // Espelho ativo: enfileira responsável+envolvidos (bot não tem criador).
+    // Reusa o mesmo admin service-role. No-op se o espelho está inerte.
+    await agendarEspelhoUsuarios(admin, tenantId, await coletarAfetadosEvento(admin, evento.id))
 
     return NextResponse.json({ evento }, { status: 201 })
   } catch (err) {

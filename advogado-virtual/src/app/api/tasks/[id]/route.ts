@@ -6,6 +6,7 @@ import { pertenceAoTenant } from '@/lib/ownership'
 import { z } from 'zod'
 import { vinculoParaColunas } from '@/lib/tarefas/vinculo'
 import { vinculoValido } from '@/lib/tarefas/validar-vinculo'
+import { calendarAdmin, agendarEspelhoUsuarios, coletarAfetadosTask } from '@/lib/calendar/fila'
 
 const schemaVinculo = z
   .object({ tipo: z.enum(['cliente', 'atendimento', 'processo']), id: z.string().uuid() })
@@ -61,6 +62,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
     }
   }
+
+  // Espelho: quem estava na tarefa ANTES (reatribuir/limpar due_date pode remover
+  // usuários que precisam ser reconciliados). Capturado antes da mutação.
+  const calAdmin = calendarAdmin()
+  const afetadosAntes = await coletarAfetadosTask(calAdmin, id)
 
   // Estado anterior (para o diff do histórico). Não altera o comportamento:
   // se a tarefa não existir/for de outro tenant, o update abaixo falha como antes.
@@ -133,6 +139,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     })
   }
 
+  // Espelho: união dos afetados ANTES e DEPOIS (novos responsáveis + os removidos).
+  await agendarEspelhoUsuarios(calAdmin, usuario.tenant_id, [
+    ...afetadosAntes,
+    ...(await coletarAfetadosTask(calAdmin, id)),
+  ])
+
   return NextResponse.json({ task })
 }
 
@@ -151,6 +163,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .eq('tenant_id', usuario.tenant_id)
     .maybeSingle()
 
+  // Espelho: capturar os afetados ANTES do delete (a linha e os assignees somem).
+  const calAdmin = calendarAdmin()
+  const afetados = await coletarAfetadosTask(calAdmin, id)
+
   const { error } = await supabase
     .from('tasks')
     .delete()
@@ -167,6 +183,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     resourceId: id,
     metadata: { description: alvo?.description ?? null },
   })
+
+  // Espelho: reconcilia os ex-afetados (a tarefa sumiu → removida dos calendários).
+  await agendarEspelhoUsuarios(calAdmin, usuario.tenant_id, afetados)
 
   return NextResponse.json({ ok: true })
 }
