@@ -8,7 +8,13 @@
 
 import { createSign, createPrivateKey } from 'node:crypto'
 
-const SCOPE = 'https://www.googleapis.com/auth/drive'
+// Escopo configurável (auditoria item 21 — estreitamento): a env permite alternar
+// para 'drive.file' (só arquivos criados pelo app) SEM deploy de código, e voltar
+// se algo quebrar. ATENÇÃO: 'drive.file' NÃO enxerga a pasta-raiz criada
+// MANUALMENTE (GOOGLE_DRIVE_PASTA_RAIZ) — estreitar aqui exige antes migrar a
+// raiz para uma pasta criada pelo próprio app. O escopo pedido precisa constar
+// do grant DWD no Admin Console (senão o token vira unauthorized_client).
+const SCOPE = process.env.GOOGLE_DRIVE_SCOPE || 'https://www.googleapis.com/auth/drive'
 // Renova o token com folga: melhor pedir de novo do que estourar no meio de um lote.
 const MARGEM_EXPIRACAO_S = 60
 

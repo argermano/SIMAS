@@ -13,7 +13,11 @@ import { createHash } from 'node:crypto'
 import { parseServiceAccount, montarJwtAssertion, type ServiceAccount } from '@/lib/drive/auth'
 
 const BASE = 'https://www.googleapis.com/calendar/v3'
-const SCOPE_CALENDAR = 'https://www.googleapis.com/auth/calendar'
+// Escopo configurável (auditoria item 21): 'calendar.app.created' restringe o
+// acesso aos calendários que O PRÓPRIO APP criou (o secundário "SIMAS" de cada
+// usuário) — a agenda pessoal fica invisível à SA. O escopo pedido precisa
+// constar do grant DWD no Admin Console.
+const SCOPE_CALENDAR = process.env.GOOGLE_CALENDAR_SCOPE || 'https://www.googleapis.com/auth/calendar'
 const NOME_CAL = 'SIMAS' // summary do calendário que representamos por usuário
 const TIMEOUT_MS = 20_000
 const MARGEM_EXPIRACAO_S = 60
