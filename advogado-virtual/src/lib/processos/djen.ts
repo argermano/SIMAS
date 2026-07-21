@@ -25,12 +25,12 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { classificarMovimento, categoriasNotificaveis, type CategoriaMovimento } from './categorias'
-import { hashMovimento } from './sync'
-import { montarTextoAviso, enviarAvisoWhatsApp } from './notificar'
+import { hashMovimento, cotaPermiteResumo, registrarUsoIaCron, type UsoIaCron } from './sync'
+import { montarTextoAviso } from './notificar'
+import { reivindicarEEnviarAviso } from './aviso-movimentacao'
 import { hojeSaoPauloISO, proximoDiaUtil, normalizarOab } from './util'
 import { alertarFalhaPublicacoes } from './alertas'
 import { completionJSON } from '@/lib/anthropic/client'
-import { logAudit } from '@/lib/audit'
 import { logger } from '@/lib/logger'
 
 type Admin = SupabaseClient
@@ -341,9 +341,13 @@ const RESUMO_SYSTEM =
   '"Um documento foi juntado ao processo e a advogada foi comunicada.").'
 
 /** Resumo IA em lote a partir do TEXTO real das publicações (Haiku). Best-effort;
- * para no deadline (itens sem resumo são inseridos com o nome técnico mesmo). */
-async function gerarResumosPublicacoes(itens: ItemDjen[], deadline?: number): Promise<(string | null)[]> {
+ * para no deadline (itens sem resumo são inseridos com o nome técnico mesmo).
+ * `ctx` instrumenta o uso no cron: registra o custo em api_usage_log e respeita a
+ * cota do tenant (se estourada, pula os resumos — nunca quebra a captura factual). */
+async function gerarResumosPublicacoes(itens: ItemDjen[], deadline?: number, ctx?: UsoIaCron): Promise<(string | null)[]> {
   const out: (string | null)[] = new Array(itens.length).fill(null)
+  if (itens.length === 0) return out
+  if (ctx && !(await cotaPermiteResumo(ctx))) return out // cota estourada → pula (captura segue)
   const CHUNK = 8
   for (let i = 0; i < itens.length; i += CHUNK) {
     if (deadline && Date.now() > deadline) break
@@ -352,7 +356,8 @@ async function gerarResumosPublicacoes(itens: ItemDjen[], deadline?: number): Pr
       .map((it, j) => `${j + 1}. [${it.tipoDocumento || it.tipoComunicacao}] ${it.textoPlano.slice(0, 1200)}`)
       .join('\n\n')
     try {
-      const { result } = await completionJSON<{ resumos: string[] }>({
+      const t0 = Date.now()
+      const { result, usage } = await completionJSON<{ resumos: string[] }>({
         model: 'claude-haiku-4-5-20251001',
         maxTokens: 1200,
         system: RESUMO_SYSTEM,
@@ -360,6 +365,7 @@ async function gerarResumosPublicacoes(itens: ItemDjen[], deadline?: number): Pr
           `Resuma cada publicação abaixo. Devolva JSON {"resumos": [...]} com EXATAMENTE ` +
           `${slice.length} itens, na mesma ordem.\n\n${lista}`,
       })
+      if (ctx) await registrarUsoIaCron(ctx, usage, Date.now() - t0)
       const rs = Array.isArray(result?.resumos) ? result.resumos : []
       for (let j = 0; j < slice.length; j++) {
         if (typeof rs[j] === 'string' && rs[j].trim()) out[i + j] = rs[j].trim()
@@ -702,7 +708,9 @@ async function processarTenantDjen(
   const novosItens = todosNovos.slice(0, CAP)
 
   // 4) Resumo IA (texto real) + montagem das linhas de processo_movimentos.
-  const resumos = await gerarResumosPublicacoes(novosItens.map((x) => x.it), deadline)
+  const resumos = await gerarResumosPublicacoes(novosItens.map((x) => x.it), deadline, {
+    admin, tenantId: t.id, endpoint: 'resumo_publicacao',
+  })
   const notificaveis = categoriasNotificaveis(t.config) as Set<string>
 
   const linhas = novosItens.map((x, i) => {
@@ -782,30 +790,18 @@ async function processarTenantDjen(
       continue
     }
     if (proc.cliente?.aviso_movimentacao === 'automatico' && proc.cliente?.telefone) {
-      const { data: claim } = await admin
-        .from('processo_movimentos')
-        .update({ notif_status: 'aprovada' })
-        .eq('id', r.id)
-        .eq('notif_status', 'pendente')
-        .select('id')
-      if (!claim || claim.length === 0) continue
-      const res = await enviarAvisoWhatsApp(proc.cliente.telefone, r.notif_texto)
-      if (res.ok) {
-        enviados++
-        await admin
-          .from('processo_movimentos')
-          .update({ notif_status: 'enviada', notif_enviada_em: new Date().toISOString() })
-          .eq('id', r.id)
-        await logAudit({
-          tenantId: t.id,
-          action: 'processo.notificacao_enviada',
-          resourceType: 'processo',
-          resourceId: proc.id,
-          metadata: { movimento_id: r.id, cliente_id: proc.cliente_id, origem: 'djen' },
-        })
-      } else {
-        await admin.from('processo_movimentos').update({ notif_status: 'erro' }).eq('id', r.id)
-      }
+      // Claim atômico + envio — lógica compartilhada com o caminho DataJud
+      // (fonte única em reivindicarEEnviarAviso; ver AUDITORIA-2026-07-21 §18).
+      const desfecho = await reivindicarEEnviarAviso(admin, {
+        movimentoId: r.id,
+        telefone: proc.cliente.telefone,
+        texto: r.notif_texto,
+        tenantId: t.id,
+        processoId: proc.id,
+        clienteId: proc.cliente_id,
+        origem: 'djen',
+      })
+      if (desfecho === 'enviado') enviados++
     } else {
       pendentes++
     }

@@ -7,12 +7,18 @@
 // corrigir) sobre estes helpers + o registro de prompts curados.
 
 import { after } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { logUsage } from '@/lib/anthropic/usage'
 import { formatarPeca } from '@/lib/format/formatar-peca'
+import { logger } from '@/lib/logger'
 import type { createClient } from '@/lib/supabase/server'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
+// Mesma instância de schema que createAdminClient(url, key) infere no call site
+// (schema 'public'); ReturnType sem args cairia no genérico default (never) e
+// faria .update() aceitar `never`.
+type SupabaseAdmin = ReturnType<typeof createAdminClient<any, 'public'>>
 
 /**
  * Rede de segurança pós-stream (B2): salva o conteúdo da peça NO SERVIDOR ao fim
@@ -29,14 +35,13 @@ export function salvarPecaPosStreamSeVazia(params: {
   atendimentoId: string
 }): void {
   after(async () => {
+    const admin = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    )
     try {
       const { text } = await params.getFinal()
       if (!text.trim()) return
-
-      const admin = createAdminClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      )
 
       const { data: atual } = await admin
         .from('pecas')
@@ -47,20 +52,90 @@ export function salvarPecaPosStreamSeVazia(params: {
       // Caminho feliz: o cliente já salvou — nada a fazer.
       if (atual?.conteudo_markdown) return
 
-      await admin
-        .from('pecas')
-        .update({ conteudo_markdown: formatarPeca(text) })
-        .eq('id', params.pecaId)
-      await admin
-        .from('atendimentos')
-        .update({ status: 'peca_gerada' })
-        .eq('id', params.atendimentoId)
+      // Última linha de defesa: um blip transitório no banco não pode custar a
+      // peça, então persiste com 1 retry (o builder do supabase-js não lança
+      // sozinho — o helper surfa o error do PostgREST para o retry/catch verem).
+      await gravarPecaComRetry(admin, {
+        pecaId: params.pecaId,
+        atendimentoId: params.atendimentoId,
+        conteudoMarkdown: formatarPeca(text),
+      })
 
-      console.warn(`[motor] rede de segurança salvou peça ${params.pecaId} (cliente não salvou).`)
+      logger.warn('ia.pecas.rede_seguranca.salvou', {
+        pecaId: params.pecaId,
+        atendimentoId: params.atendimentoId,
+      })
     } catch (e) {
-      console.error('[motor] rede de segurança pós-stream falhou:', e instanceof Error ? e.message : e)
+      // Falha do fallback do fallback: o usuário já recebeu "sucesso" e a peça
+      // se perderia em silêncio. Alerta estruturado + Sentry (perda de trabalho,
+      // não ruído) e marca a peça como recuperável para a UI oferecer regerar.
+      // LGPD: só ids no contexto — nunca o texto da peça, nome ou telefone.
+      logger.error('ia.pecas.rede_seguranca.falha', {
+        pecaId: params.pecaId,
+        atendimentoId: params.atendimentoId,
+      }, e)
+      Sentry.captureException(
+        e instanceof Error ? e : new Error('rede de segurança pós-stream de peça falhou'),
+        {
+          tags: { area: 'ia_pecas', efeito: 'rede_seguranca_pos_stream' },
+          extra: { pecaId: params.pecaId, atendimentoId: params.atendimentoId },
+        },
+      )
+      // Marca best-effort do estado recuperável (072). Se ISTO também falhar,
+      // não há mais o que fazer além de logar — não relança em after().
+      const { error: errMarca } = await admin
+        .from('pecas')
+        .update({ rede_seguranca_erro_at: new Date().toISOString() })
+        .eq('id', params.pecaId)
+      if (errMarca) {
+        logger.error('ia.pecas.rede_seguranca.marca_falha', { pecaId: params.pecaId }, errMarca)
+      }
     }
   })
+}
+
+/**
+ * Normaliza a falha de um UPDATE como Error de verdade: o `error` do supabase-js
+ * (sem .throwOnError()) é objeto simples, não instância de Error — sem isto,
+ * logger/Sentry veriam só "[object Object]" e um Error genérico, perdendo a causa.
+ * LGPD: carrega só tabela + status HTTP + código PostgREST/PG (classificadores),
+ * nunca `message`/`details`, que podem ecoar valores da linha.
+ */
+function erroPersistencia(tabela: 'pecas' | 'atendimentos', status: number, code: string): Error {
+  const err = new Error(`persistência da rede de segurança falhou (${tabela}, status=${status}, code=${code || '?'})`)
+  err.name = 'RedeSegurancaPersistError'
+  return err
+}
+
+/**
+ * Grava o conteúdo da peça e marca o atendimento como `peca_gerada`, checando o
+ * `error` de cada UPDATE (o query builder do supabase-js NÃO lança por conta
+ * própria) e refazendo AMBOS os UPDATEs uma vez em caso de falha — os dois são
+ * idempotentes, então repetir é seguro. Lança se a segunda tentativa também
+ * falhar: quem chama decide o alerta.
+ */
+async function gravarPecaComRetry(
+  admin: SupabaseAdmin,
+  params: { pecaId: string; atendimentoId: string; conteudoMarkdown: string },
+): Promise<void> {
+  const gravar = async () => {
+    const up = await admin
+      .from('pecas')
+      .update({ conteudo_markdown: params.conteudoMarkdown })
+      .eq('id', params.pecaId)
+    if (up.error) throw erroPersistencia('pecas', up.status, up.error.code)
+    const upAtend = await admin
+      .from('atendimentos')
+      .update({ status: 'peca_gerada' })
+      .eq('id', params.atendimentoId)
+    if (upAtend.error) throw erroPersistencia('atendimentos', upAtend.status, upAtend.error.code)
+  }
+  try {
+    await gravar()
+  } catch {
+    logger.warn('ia.pecas.rede_seguranca.retry', { pecaId: params.pecaId })
+    await gravar()
+  }
 }
 
 // A revisão automática NÃO roda mais no after() da geração — isso adicionava um

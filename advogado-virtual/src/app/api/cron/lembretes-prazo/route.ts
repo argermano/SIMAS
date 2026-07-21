@@ -4,6 +4,7 @@ import { enviarEmail, emailTemplate, urlBaseApp } from '@/lib/email'
 import { logger } from '@/lib/logger'
 import { logAudit } from '@/lib/audit'
 import { alertarFalhaPublicacoes } from '@/lib/processos/alertas'
+import { oabsDoTenant } from '@/lib/processos/djen'
 import { hojeSaoPauloISO } from '@/lib/processos/util'
 import { enviarAvisoWhatsApp } from '@/lib/processos/notificar'
 import { montarMensagensAvisoParcela } from '@/lib/financeiro/aviso'
@@ -65,7 +66,7 @@ export async function GET(req: Request) {
 
   const urlTarefas = `${urlBaseApp()}/tarefas`
   let enviados = 0
-  const idsLembrados: string[] = []
+  let marcados = 0
 
   for (const [email, { nome, tarefas: ts }] of porPessoa) {
     const linhas = ts
@@ -86,18 +87,22 @@ export async function GET(req: Request) {
         botao: { texto: 'Abrir o quadro de tarefas', url: urlTarefas },
       }),
     })
-    if (ok) {
-      enviados++
-      idsLembrados.push(...ts.map((t) => t.id))
-    }
+    if (!ok) continue
+    enviados++
+    // Marca as tarefas desta pessoa IMEDIATAMENTE após o envio bem-sucedido (não
+    // em lote no fim): um kill entre o envio e a marca reenviaria só os prazos
+    // desta pessoa amanhã, não os de todos. Checa o error para não reenviar em
+    // silêncio (LGPD: loga só contagem de ids).
+    const ids = ts.map((t) => t.id)
+    const { error: errMarca } = await admin
+      .from('tasks')
+      .update({ lembrete_enviado_em: new Date().toISOString() })
+      .in('id', ids)
+    if (errMarca) logger.error('cron.lembretes.marca_falhou', { tarefas: ids.length }, errMarca)
+    else marcados += ids.length
   }
 
-  // Marca as tarefas lembradas para não repetir amanhã.
-  if (idsLembrados.length > 0) {
-    await admin.from('tasks').update({ lembrete_enviado_em: new Date().toISOString() }).in('id', idsLembrados)
-  }
-
-  logger.info('cron.lembretes', { pessoas: porPessoa.size, emailsEnviados: enviados, tarefas: idsLembrados.length })
+  logger.info('cron.lembretes', { pessoas: porPessoa.size, emailsEnviados: enviados, tarefas: marcados })
 
   // Vigia cruzado das publicações (isolado: nunca derruba os lembretes acima).
   // Este cron roda às 10:00 UTC, ANTES do funil-consultas (11:00) que executa a
@@ -106,14 +111,19 @@ export async function GET(req: Request) {
   // (falha silenciosa) — alerta a operação. Janela de 26h (>24h) dá folga para
   // atraso do cron sem gerar falso positivo dentro do mesmo ciclo diário.
   try {
-    const { data: tenantsComOab, error: errOab } = await admin
+    // MESMA fonte de verdade da captura DJEN (oabsDoTenant): considera também as
+    // OABs extras em config.djen_oabs, não só tenants.oab_numero. Sem isso, um
+    // tenant que monitora publicações apenas via djen_oabs (oab_numero null)
+    // deixaria o vigia inerte e um funil-consultas morto não geraria alarme.
+    const { data: tenantsRaw, error: errOab } = await admin
       .from('tenants')
-      .select('id')
-      .not('oab_numero', 'is', null)
-      .limit(1)
+      .select('id, oab_numero, oab_estado, config')
     if (errOab) throw errOab
 
-    if ((tenantsComOab?.length ?? 0) > 0) {
+    const algumMonitorado = (tenantsRaw ?? []).some(
+      (t) => oabsDoTenant(t as { oab_numero: string | null; oab_estado: string | null; config: unknown }).length > 0,
+    )
+    if (algumMonitorado) {
       const limite26h = new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString()
       const { data: sucessos, error: errCap } = await admin
         .from('capturas_publicacoes')
@@ -155,7 +165,7 @@ export async function GET(req: Request) {
     logger.error('cron.avisos_parcelas.falha', {}, e as Error)
   }
 
-  return NextResponse.json({ ok: true, pessoas: porPessoa.size, enviados, tarefas: idsLembrados.length, avisosParcelas })
+  return NextResponse.json({ ok: true, pessoas: porPessoa.size, enviados, tarefas: marcados, avisosParcelas })
 }
 
 /** Soma `dias` a uma data YYYY-MM-DD ancorando no meio-dia UTC (imune a fuso/DST). */
@@ -258,8 +268,12 @@ async function enviarAvisosParcelas(admin: SupabaseClient, deadline: number) {
       .eq('id', p.id)
       .eq('status', 'aberta')
       .is(campo, null)
+      // Reconfere no CLAIM: entre a busca (paginada, até o deadline) e agora, o
+      // webhook de comprovante pode ter feito staging nesta parcela. Sem isto,
+      // cobraríamos quem ACABOU de enviar o comprovante. Fecha a janela busca→claim.
+      .is('comprovante_recebido_em', null)
       .select('id')
-    if (!claim || claim.length === 0) continue // outro worker já pegou
+    if (!claim || claim.length === 0) continue // outro worker já pegou OU comprovante recém-enviado
 
     const ten = porTenant.get(p.tenant_id)
     const fin = ((ten?.config as Record<string, unknown> | null)?.financeiro ?? {}) as {

@@ -6,6 +6,8 @@
  * POST https://api-publica.datajud.cnj.jus.br/api_publica_{alias}/_search
  */
 
+import { logger } from '@/lib/logger'
+
 const DATAJUD_BASE = 'https://api-publica.datajud.cnj.jus.br'
 // A API pública do DataJud usa uma chave pública compartilhada (documentada pelo CNJ).
 // Mesmo assim, mantida em env var para permitir rotação sem deploy e evitar hardcode.
@@ -270,7 +272,25 @@ export async function buscarProcessoCompletoPorNumero(
   // 0 hits definitivo (consulta respondeu) → não indexado; falhou tudo → inconclusivo.
   if (!src) return respondeu ? 'nao_encontrado' : null
 
-  const rawMovs = (src.movimentos as Array<Record<string, unknown>>) ?? []
+  // Contrato do DataJud: distinguir 'movimentos' AUSENTE/renomeado (anomalia de
+  // contrato) de array presente e vazio (zero movimentos de verdade). Um hit sem
+  // a chave 'movimentos' colapsando em [] seria reportado como sync bem-sucedido
+  // com 0 novos → congelamento silencioso da timeline (e, se o campo voltar, uma
+  // rajada de "novos" antigos). Tratamos ausência/tipo inesperado como falha
+  // TRANSITÓRIA (null): não zera/apaga nada, o retry diário reconsulta. Array []
+  // presente passa direto como zero legítimo. LGPD: só código/contagem do
+  // envelope — nunca o conteúdo (pode conter dados pessoais).
+  const movsRaw = src.movimentos
+  if (!Array.isArray(movsRaw)) {
+    logger.error('datajud.contrato.movimentos_ausente', {
+      alias,
+      presente: movsRaw !== undefined,
+      tipo: typeof movsRaw,
+      campos: Object.keys(src).length,
+    })
+    return null
+  }
+  const rawMovs = movsRaw as Array<Record<string, unknown>>
   const assuntos = (src.assuntos as Array<{ nome?: string }>) ?? []
   const orgao = (src.orgaoJulgador as { nome?: string }) ?? {}
   const classe = (src.classe as { nome?: string }) ?? {}

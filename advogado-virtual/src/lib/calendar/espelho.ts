@@ -32,6 +32,19 @@ type Admin = SupabaseClient
 // por outro dreno após este tempo (protege contra dreno que morreu no meio).
 const CLAIM_STALE_MS = 15 * 60_000
 
+// Teto de tentativas: ao atingir este número de falhas consecutivas, o usuário
+// vira DEAD-LETTER PASSIVO (fica na fila para inspeção, mas o claim o ignora — não
+// queima mais budget). Exportado para o card de status contar só os vivos. Ver 072.
+// NÃO conta 'delegacaoPendente' (espera de autorização do admin, não falha terminal).
+export const TETO_TENTATIVAS = 8
+
+// Código LGPD-safe do erro para a coluna ultimo_erro: SÓ a classe/status HTTP,
+// NUNCA a mensagem (o corpo de erro do Google pode conter e-mail). Puro.
+function codigoErroCalendar(e: unknown): string {
+  if (e instanceof CalendarApiError) return `http_${e.status}`
+  return e instanceof Error ? e.name : 'erro'
+}
+
 /* ── PURO: mapeamento EventoCalendario -> recurso do Google ───────────────── */
 
 /** Dia civil SEGUINTE (YYYY-MM-DD) — o end.date do all-day do Google é EXCLUSIVO.
@@ -92,6 +105,9 @@ export interface CalendarContadores {
   upserts: number
   remocoes: number
   erros: number
+  // Classe/código HTTP do ÚLTIMO erro (LGPD: nunca o corpo) — vira ultimo_erro na
+  // fila quando o dreno incrementa a tentativa. undefined enquanto erros===0.
+  ultimoErro?: string
 }
 
 interface EspelhoRow {
@@ -138,8 +154,12 @@ export async function espelharUsuario(admin: Admin, userId: string): Promise<Cal
   try {
     calId = await garantirCalendarioSimas(email)
   } catch (e) {
-    if (e instanceof CalendarApiError && e.classe === 'delegacao_pendente') cont.delegacaoPendente = true
-    else logger.error('calendar.espelho.calendario', {}, e) // LGPD: sem nomes
+    if (e instanceof CalendarApiError && e.classe === 'delegacao_pendente') {
+      cont.delegacaoPendente = true // espera de autorização do admin — não conta tentativa
+    } else {
+      cont.ultimoErro = codigoErroCalendar(e)
+      logger.error('calendar.espelho.calendario', {}, e) // LGPD: sem nomes
+    }
     cont.erros++
     return cont
   }
@@ -153,6 +173,7 @@ export async function espelharUsuario(admin: Admin, userId: string): Promise<Cal
     eventos = await buscarEventosCalendario(admin, { tenantId, de, ate, particularesDe: userId })
   } catch (e) {
     logger.error('calendar.espelho.busca', {}, e)
+    cont.ultimoErro = codigoErroCalendar(e)
     cont.erros++
     return cont
   }
@@ -188,6 +209,7 @@ export async function espelharUsuario(admin: Admin, userId: string): Promise<Cal
       )
       cont.upserts++
     } catch (e) {
+      cont.ultimoErro = codigoErroCalendar(e)
       cont.erros++
       logger.error('calendar.espelho.upsert', { fonte: ev.fonte }, e) // LGPD: só a fonte
     }
@@ -201,6 +223,7 @@ export async function espelharUsuario(admin: Admin, userId: string): Promise<Cal
       await admin.from('calendar_espelho').delete().eq('id', row.id)
       cont.remocoes++
     } catch (e) {
+      cont.ultimoErro = codigoErroCalendar(e)
       cont.erros++
       logger.error('calendar.espelho.remover', {}, e) // LGPD: sem refs/nomes
     }
@@ -229,10 +252,13 @@ function novoResumo(): ResumoFilaCalendar {
 /**
  * Reclama UM usuário da fila e o reconcilia. CLAIM atômico em DOIS UPDATEs
  * condicionais (livre; senão claim velho > janela stale). NUNCA .or() com
- * timestamp: bug empírico do PostgREST (ver drive/espelho.ts). Sai da fila em
- * sucesso TOTAL (erros===0) ou quando IGNORADO (terminal: fora do domínio /
- * inativo); com erro/delegação pendente, LIBERA o claim para retomar depois.
- * A trava do claim impede corrida entre o cron e o dreno pós-mutação/botão.
+ * timestamp: bug empírico do PostgREST (ver drive/espelho.ts). O `.lt('tentativas',
+ * TETO)` no claim também ignora dead-letter. Sai da fila em sucesso TOTAL
+ * (erros===0) ou quando IGNORADO (terminal: fora do domínio / inativo). Em erro
+ * REAL, INCREMENTA tentativas + grava ultimo_erro (classe/código) e libera o claim
+ * (ao teto → dead-letter passivo). Delegação pendente = espera de autorização do
+ * admin: só libera o claim, SEM contar tentativa (senão o usuário viraria
+ * dead-letter antes de o admin autorizar). O claim impede corrida cron × botão.
  */
 async function reconciliarUsuarioDaFila(
   admin: Admin,
@@ -246,17 +272,20 @@ async function reconciliarUsuarioDaFila(
     .update({ processando_em: agoraIso })
     .eq('user_id', userId)
     .is('processando_em', null)
-    .select('user_id')
+    .lt('tentativas', TETO_TENTATIVAS)
+    .select('user_id, tentativas')
   if (!claim || claim.length === 0) {
     const { data: claimStale } = await admin
       .from('calendar_sync_fila')
       .update({ processando_em: agoraIso })
       .eq('user_id', userId)
       .lt('processando_em', staleAntes)
-      .select('user_id')
+      .lt('tentativas', TETO_TENTATIVAS)
+      .select('user_id, tentativas')
     claim = claimStale
   }
-  if (!claim || claim.length === 0) return // outro dreno já pegou este usuário
+  if (!claim || claim.length === 0) return // outro dreno já pegou (ou dead-letter)
+  const tentativasAtuais = (claim[0] as { tentativas: number | null }).tentativas ?? 0
 
   resumo.usuarios++
   const r = await espelharUsuario(admin, userId)
@@ -269,9 +298,17 @@ async function reconciliarUsuarioDaFila(
     // Sucesso total OU terminal (ignorado) → sai da fila.
     await admin.from('calendar_sync_fila').delete().eq('user_id', userId)
     if (!r.ignorado) resumo.sucesso++
-  } else {
-    // Erro/delegação pendente → libera o claim para retomar no próximo ciclo.
+  } else if (r.delegacaoPendente) {
+    // Espera de autorização do admin → só libera o claim (NÃO conta tentativa).
     await admin.from('calendar_sync_fila').update({ processando_em: null }).eq('user_id', userId)
+    resumo.comErro++
+  } else {
+    // Erro real → incrementa tentativa + grava a classe/código (LGPD: só código) e
+    // libera o claim; ao atingir o teto o filtro .lt() acima o exclui (dead-letter).
+    await admin
+      .from('calendar_sync_fila')
+      .update({ processando_em: null, tentativas: tentativasAtuais + 1, ultimo_erro: r.ultimoErro ?? null })
+      .eq('user_id', userId)
     resumo.comErro++
   }
 }
@@ -291,6 +328,7 @@ export async function processarFilaCalendar(
   const { data: fila } = await admin
     .from('calendar_sync_fila')
     .select('user_id')
+    .lt('tentativas', TETO_TENTATIVAS) // ignora dead-letter (não ocupa o lote nem budget)
     .order('enfileirado_em', { ascending: true })
     .limit(opts?.max ?? 50)
 
@@ -300,6 +338,15 @@ export async function processarFilaCalendar(
     if (Date.now() >= deadline) break
     await reconciliarUsuarioDaFila(admin, row.user_id, staleAntes, resumo)
   }
+
+  // Dead-letter passivo: usuários no teto de tentativas ficam para inspeção humana.
+  // Loga só a CONTAGEM (LGPD: nunca ids) para o item podre virar algo que se vê.
+  const { count: mortos } = await admin
+    .from('calendar_sync_fila')
+    .select('user_id', { count: 'exact', head: true })
+    .gte('tentativas', TETO_TENTATIVAS)
+  if (mortos && mortos > 0) logger.warn('calendar.fila.dead_letter', { mortos })
+
   return resumo
 }
 

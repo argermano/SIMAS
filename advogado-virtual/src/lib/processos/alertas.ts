@@ -37,7 +37,9 @@ export async function alertarFalhaPublicacoes(params: { assunto: string; detalhe
       extra: { assunto, detalhes },
     })
   } catch (err) {
-    logger.error('publicacoes.alerta.sentry_falha', { assunto }, err)
+    // Chave 'alerta' (não 'assunto'): 'assunto' é redigido pelo logger (rede LGPD);
+    // aqui é só o título operacional da falha, que precisa continuar visível.
+    logger.error('publicacoes.alerta.sentry_falha', { alerta: assunto }, err)
   }
 
   try {
@@ -57,6 +59,7 @@ export async function alertarFalhaPublicacoes(params: { assunto: string; detalhe
     })
   } catch (err) {
     // enviarEmail já não lança, mas blindamos o contrato "nunca lança" mesmo assim.
-    logger.error('publicacoes.alerta.email_falha', { assunto }, err)
+    // Chave 'alerta' (não 'assunto') para escapar da redação do logger — ver acima.
+    logger.error('publicacoes.alerta.email_falha', { alerta: assunto }, err)
   }
 }

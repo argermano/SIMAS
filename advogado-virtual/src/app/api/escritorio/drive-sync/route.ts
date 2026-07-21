@@ -3,7 +3,7 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { driveDisponivel } from '@/lib/drive/auth'
-import { processarFilaDrive, verificarRaiz } from '@/lib/drive/espelho'
+import { processarFilaDrive, verificarRaiz, TETO_TENTATIVAS } from '@/lib/drive/espelho'
 
 // Espelho do dossiê no Google Drive (066): estado + drenagem manual da fila.
 // Só admin. A drenagem AGORA é o botão "Sincronizar agora" em Configurações; o
@@ -30,6 +30,7 @@ export async function GET() {
     .from('drive_sync_fila')
     .select('cliente_id', { count: 'exact', head: true })
     .eq('tenant_id', auth.usuario.tenant_id)
+    .lt('tentativas', TETO_TENTATIVAS) // conta só os VIVOS (exclui dead-letter)
 
   const configurado = driveDisponivel()
   // Só bate no Drive se estiver configurado (verificarRaiz já é fail-safe).

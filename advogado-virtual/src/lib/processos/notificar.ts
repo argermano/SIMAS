@@ -46,11 +46,15 @@ export function montarTextoAviso(a: AvisoInput): string {
  * envio falhar (o chamador marca o movimento como 'erro' para retry no próximo sync).
  * `instancia` (opcional) escolhe o número de saída (body.instance); ausente → o
  * VPS roteia pelo DDD do destino. Avisos AUTOMÁTICOS não passam instância.
+ * `autor: 'atendente'` = mensagem ESCRITA POR HUMANO (modal "Mensagem ao
+ * cliente"): o ai-attendant PAUSA a IA daquela conversa (caso real: bot
+ * conversando por cima da atendente). Avisos automáticos NUNCA passam autor.
  */
 export async function enviarAvisoWhatsApp(
   telefone: string,
   texto: string,
   instancia?: Instancia | null,
+  autor?: 'atendente' | null,
 ): Promise<{ ok: boolean; id?: string }> {
   const url = process.env.PROCESSOS_NOTIFY_URL
   const token = process.env.PROCESSOS_NOTIFY_TOKEN
@@ -66,7 +70,7 @@ export async function enviarAvisoWhatsApp(
       const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Notify-Token': token },
-        body: JSON.stringify({ telefone, texto, ...(instancia ? { instance: instancia } : {}) }),
+        body: JSON.stringify({ telefone, texto, ...(instancia ? { instance: instancia } : {}), ...(autor ? { autor } : {}) }),
         signal: ctrl.signal,
       })
       clearTimeout(timer)
@@ -78,6 +82,13 @@ export async function enviarAvisoWhatsApp(
     } catch (err) {
       clearTimeout(timer)
       logger.error('processos.notificar.excecao', { tentativa }, err as Error)
+      // Invariante do dono: aviso nunca 2x. O timeout de 5s (AbortError) é
+      // exatamente a janela "talvez já entregou" — o ai-attendant pode ter
+      // recebido e mandado à Evolution, mas a resposta HTTP demorou. Nesse caso
+      // NÃO retransmitimos (a marcação atômica pendente→aprovada nos chamadores já
+      // garante at-most-once da DECISÃO; aqui protegemos a ENTREGA). Só re-tenta em
+      // erro de conexão claro pré-envio (rede/DNS), onde nada saiu.
+      if (err instanceof Error && err.name === 'AbortError') break
     }
   }
   return { ok: false }
@@ -95,6 +106,7 @@ export async function enviarMediaWhatsApp(
   media: { base64: string; filename: string; mimetype: string },
   caption?: string,
   instancia?: Instancia | null,
+  autor?: 'atendente' | null,
 ): Promise<{ ok: boolean; id?: string }> {
   const url = process.env.PROCESSOS_NOTIFY_URL
   const token = process.env.PROCESSOS_NOTIFY_TOKEN
@@ -109,7 +121,7 @@ export async function enviarMediaWhatsApp(
     const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Notify-Token': token },
-      body: JSON.stringify({ telefone, texto: caption ?? '', media, ...(instancia ? { instance: instancia } : {}) }),
+      body: JSON.stringify({ telefone, texto: caption ?? '', media, ...(instancia ? { instance: instancia } : {}), ...(autor ? { autor } : {}) }),
       signal: ctrl.signal,
     })
     clearTimeout(timer)

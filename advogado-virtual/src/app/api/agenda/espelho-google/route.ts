@@ -5,7 +5,7 @@ import { jsonError } from '@/lib/api'
 import { logger } from '@/lib/logger'
 import { calendarDisponivel, emailElegivel, verificarDelegacao } from '@/lib/calendar/api'
 import { calendarAdmin, enfileirarCalendarSync } from '@/lib/calendar/fila'
-import { drenarUsuarios } from '@/lib/calendar/espelho'
+import { drenarUsuarios, TETO_TENTATIVAS } from '@/lib/calendar/espelho'
 
 // Espelho ATIVO da agenda no Google Calendar do PRÓPRIO usuário (068). Estado (GET)
 // para o modal "Conectar ao meu calendário" e sincronização manual (POST, só o
@@ -50,6 +50,7 @@ export async function GET() {
     .from('calendar_sync_fila')
     .select('user_id', { count: 'exact', head: true })
     .eq('user_id', usuario.id)
+    .lt('tentativas', TETO_TENTATIVAS) // conta só os VIVOS (exclui dead-letter)
 
   return NextResponse.json({ configurado, elegivel, delegacaoOk, email, pendentesFila: count ?? 0 })
 }

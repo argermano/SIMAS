@@ -31,6 +31,18 @@ type Admin = SupabaseClient
 // acima do maxDuration=300 do cron para nunca reclamar algo ainda vivo.
 const CLAIM_STALE_MS = 15 * 60_000
 
+// Teto de tentativas: ao atingir este número de falhas consecutivas, o cliente
+// vira DEAD-LETTER PASSIVO (fica na fila para inspeção, mas o claim o ignora — não
+// queima mais budget). Exportado para o card de status contar só os vivos. Ver 072.
+export const TETO_TENTATIVAS = 8
+
+// Código LGPD-safe do erro para a coluna ultimo_erro: SÓ a classe/status HTTP,
+// NUNCA a mensagem (o corpo de erro do Google pode conter e-mail). Puro.
+function codigoErroDrive(e: unknown): string {
+  if (e instanceof DriveApiError) return `http_${e.status}`
+  return e instanceof Error ? e.name : 'erro'
+}
+
 /* ── PURO: saneamento e formatação de nomes ──────────────────────────────── */
 
 /** Nome seguro para o Drive: sem os separadores/reservados de path, sem controles,
@@ -248,6 +260,9 @@ export interface EspelhoContadores {
   atalhos: number
   lixeira: number
   erros: number
+  // Classe/código HTTP do ÚLTIMO erro (LGPD: nunca o corpo) — vira ultimo_erro na
+  // fila quando o dreno incrementa a tentativa. undefined enquanto erros===0.
+  ultimoErro?: string
 }
 
 interface EspelhoRow {
@@ -316,6 +331,7 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
     token = await obterAccessToken()
   } catch (e) {
     logger.error('drive.espelho.token', {}, e) // LGPD: sem nomes
+    cont.ultimoErro = codigoErroDrive(e)
     cont.erros++
     return cont
   }
@@ -333,6 +349,7 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
     try {
       const parentId = no.parent === null ? raizId : driveIdDe.get(no.parent)
       if (!parentId) {
+        cont.ultimoErro = 'pai_nao_resolvido'
         cont.erros++ // pai não resolvido (criação dele falhou antes)
         continue
       }
@@ -348,11 +365,13 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
       if (!id) {
         if (no.tipo === 'arquivo') {
           if (!no.fileUrl) {
+            cont.ultimoErro = 'sem_file_url'
             cont.erros++
             continue
           }
           const { data: blob, error } = await admin.storage.from('documentos').download(no.fileUrl)
           if (error || !blob) {
+            cont.ultimoErro = 'download_falhou'
             cont.erros++
             continue
           }
@@ -364,6 +383,7 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
         } else if (no.tipo === 'atalho') {
           const targetId = no.alvoChave ? driveIdDe.get(no.alvoChave) : undefined
           if (!targetId) {
+            cont.ultimoErro = 'alvo_nao_resolvido'
             cont.erros++ // arquivo alvo não resolvido
             continue
           }
@@ -387,6 +407,7 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
       }
       driveIdDe.set(ck, id)
     } catch (e) {
+      cont.ultimoErro = codigoErroDrive(e)
       cont.erros++
       logger.error('drive.espelho.no', { tipo: no.tipo }, e) // LGPD: só o tipo
     }
@@ -405,6 +426,7 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
         .update({ parent_drive_id: mov.addParent })
         .match({ tenant_id: tenantId, tipo: 'arquivo', ref_id: mov.ref })
     } catch (e) {
+      cont.ultimoErro = codigoErroDrive(e)
       cont.erros++
       logger.error('drive.espelho.mover', {}, e) // LGPD: sem nomes/refs
     }
@@ -447,6 +469,7 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
       await admin.from('drive_espelho').delete().eq('id', row.id)
       cont.lixeira++
     } catch (e) {
+      cont.ultimoErro = codigoErroDrive(e)
       cont.erros++
       logger.error('drive.espelho.remover', { tipo: row.tipo }, e)
     }
@@ -478,6 +501,7 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
         await admin.from('drive_espelho').delete().eq('id', row.id)
         cont.lixeira++
       } catch (e) {
+        cont.ultimoErro = codigoErroDrive(e)
         cont.erros++
         logger.error('drive.espelho.orfao', { tipo: row.tipo }, e)
       }
@@ -491,11 +515,13 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
 
 /**
  * Drena a fila (mais antigo primeiro) respeitando o teto de tempo (`deadline` =
- * epoch ms absoluto). Remove da fila SÓ em sucesso TOTAL (erros===0); com erros a
- * linha fica para a próxima rodada. No-op se o espelho está desligado.
- * Devolve os totais de clientes (processados/ok/com erro) E os agregados de
- * arquivos enviados e erros — o botão "Sincronizar agora" mostra {clientes,
- * arquivos, erros}. O enfileiramento (gatilhos) vive em ./fila.ts.
+ * epoch ms absoluto). Remove da fila SÓ em sucesso TOTAL (erros===0); com erros
+ * INCREMENTA tentativas + grava ultimo_erro (classe/código HTTP) e libera o claim.
+ * Ao atingir TETO_TENTATIVAS o item vira dead-letter passivo (fica na fila fora do
+ * claim, para inspeção). No-op se o espelho está desligado. Devolve os totais de
+ * clientes (processados/ok/com erro) E os agregados de arquivos enviados e erros —
+ * o botão "Sincronizar agora" mostra {clientes, arquivos, erros}. O enfileiramento
+ * (gatilhos) vive em ./fila.ts.
  */
 export async function processarFilaDrive(
   admin: Admin,
@@ -507,6 +533,7 @@ export async function processarFilaDrive(
   const { data: fila } = await admin
     .from('drive_sync_fila')
     .select('cliente_id')
+    .lt('tentativas', TETO_TENTATIVAS) // ignora dead-letter (não ocupa o lote nem budget)
     .order('enfileirado_em', { ascending: true })
     .limit(opts?.max ?? 50)
 
@@ -518,23 +545,28 @@ export async function processarFilaDrive(
     // .or() com timestamp neste UPDATE falha no PostgREST ("column does not
     // exist", com ou sem aspas) — dois UPDATEs condicionais simples são
     // equivalentes e cada um é atômico; o concorrente recebe 0 linhas e pula.
+    // O `.lt('tentativas', TETO)` também barra um item que virou dead-letter entre
+    // a leitura da fila e o claim. Trazemos `tentativas` para incrementar na falha.
     const agoraIso = new Date().toISOString()
     let { data: claim } = await admin
       .from('drive_sync_fila')
       .update({ processando_em: agoraIso })
       .eq('cliente_id', row.cliente_id)
       .is('processando_em', null)
-      .select('cliente_id')
+      .lt('tentativas', TETO_TENTATIVAS)
+      .select('cliente_id, tentativas')
     if (!claim || claim.length === 0) {
       const { data: claimStale } = await admin
         .from('drive_sync_fila')
         .update({ processando_em: agoraIso })
         .eq('cliente_id', row.cliente_id)
         .lt('processando_em', staleAntes)
-        .select('cliente_id')
+        .lt('tentativas', TETO_TENTATIVAS)
+        .select('cliente_id, tentativas')
       claim = claimStale
     }
-    if (!claim || claim.length === 0) continue // outro dreno já pegou este cliente
+    if (!claim || claim.length === 0) continue // outro dreno já pegou (ou dead-letter)
+    const tentativasAtuais = (claim[0] as { tentativas: number | null }).tentativas ?? 0
     resumo.clientes++
     const r = await espelharCliente(admin, row.cliente_id)
     resumo.arquivos += r.arquivos
@@ -543,11 +575,25 @@ export async function processarFilaDrive(
       await admin.from('drive_sync_fila').delete().eq('cliente_id', row.cliente_id)
       resumo.sucesso++
     } else {
-      // Libera o claim para retomar no próximo ciclo (sem esperar a janela stale).
-      await admin.from('drive_sync_fila').update({ processando_em: null }).eq('cliente_id', row.cliente_id)
+      // Incrementa a tentativa + grava a classe/código do erro (LGPD: só código) e
+      // libera o claim para retomar no próximo ciclo — até atingir o teto (então o
+      // filtro .lt() acima o exclui: dead-letter passivo).
+      await admin
+        .from('drive_sync_fila')
+        .update({ processando_em: null, tentativas: tentativasAtuais + 1, ultimo_erro: r.ultimoErro ?? null })
+        .eq('cliente_id', row.cliente_id)
       resumo.comErro++
     }
   }
+
+  // Dead-letter passivo: itens no teto de tentativas ficam para inspeção humana.
+  // Loga só a CONTAGEM (LGPD: nunca ids) para o item podre virar algo que se vê.
+  const { count: mortos } = await admin
+    .from('drive_sync_fila')
+    .select('cliente_id', { count: 'exact', head: true })
+    .gte('tentativas', TETO_TENTATIVAS)
+  if (mortos && mortos > 0) logger.warn('drive.fila.dead_letter', { mortos })
+
   return resumo
 }
 

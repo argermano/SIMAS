@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { classificarMovimento, sugereEncerramento, CATEGORIAS_NOTIFICAVEIS_DEFAULT, categoriasNotificaveis } from './categorias'
-import { hashMovimento, sincronizarProcessos } from './sync'
+import { hashMovimento, hashMovimentoCanonico, sincronizarProcessos } from './sync'
 import { montarTextoAviso } from './notificar'
 import { datajudDataParaISO, buscarProcessoCompletoPorNumero } from '@/lib/jurisprudencia/datajud'
 import { validarNumeroCNJ, aliasDataJud } from '@/lib/jurisprudencia/verificador-citacoes'
@@ -101,6 +101,48 @@ describe('sync — hash de movimento (dedup)', () => {
     expect(hashMovimento(a)).toBe(hashMovimento(b))
     expect(hashMovimento(a)).not.toBe(hashMovimento(c))
     expect(hashMovimento(a)).toHaveLength(32) // md5 hex
+  })
+})
+
+describe('sync — hash canônico (dedup estável do DataJud)', () => {
+  const mov = {
+    codigo: 60,
+    nome: 'Expedição de documento',
+    dataHora: '2026-03-11T10:00:00',
+    complementos: [{ nome: 'tipo_de_documento', descricao: 'Alvará' }],
+  }
+
+  it('é IMUNE à ordem das chaves da projeção e dos complementos', () => {
+    const reordenado = {
+      complementos: [{ descricao: 'Alvará', nome: 'tipo_de_documento' }], // chaves trocadas
+      dataHora: '2026-03-11T10:00:00',
+      nome: 'Expedição de documento',
+      codigo: 60,
+    }
+    expect(hashMovimentoCanonico(reordenado)).toBe(hashMovimentoCanonico(mov))
+  })
+
+  it('IGNORA campos extras (bump de schema do CNJ não reidrata o hash)', () => {
+    // O legado (JSON cru) muda com um campo novo → duplicaria tudo; o canônico não.
+    const cru = { ...mov, raw: mov }
+    const cruComCampoNovo = { ...mov, raw: mov, movimentoNacional: { seq: 1 } }
+    expect(hashMovimento(cruComCampoNovo)).not.toBe(hashMovimento(cru)) // fragilidade do legado
+    expect(hashMovimentoCanonico(cruComCampoNovo)).toBe(hashMovimentoCanonico(mov)) // canônico estável
+  })
+
+  it('normaliza a data a epoch: mesmo instante em formatos diferentes → mesmo hash', () => {
+    // O recompute lê data_hora (timestamptz) num formato ISO possivelmente distinto
+    // do enviado no insert; a normalização a epoch faz instantes iguais casarem.
+    // (Formatos com tz explícita p/ ser determinístico em qualquer TZ de CI.)
+    expect(hashMovimentoCanonico({ ...mov, dataHora: '2026-03-11T10:00:00+00:00' }))
+      .toBe(hashMovimentoCanonico({ ...mov, dataHora: '2026-03-11T10:00:00.000Z' }))
+  })
+
+  it('distingue movimentos realmente diferentes (data/nome/código)', () => {
+    expect(hashMovimentoCanonico({ ...mov, dataHora: '2026-03-12T10:00:00' })).not.toBe(hashMovimentoCanonico(mov))
+    expect(hashMovimentoCanonico({ ...mov, nome: 'Sentença' })).not.toBe(hashMovimentoCanonico(mov))
+    expect(hashMovimentoCanonico({ ...mov, codigo: 61 })).not.toBe(hashMovimentoCanonico(mov))
+    expect(hashMovimentoCanonico(mov)).toHaveLength(32)
   })
 })
 

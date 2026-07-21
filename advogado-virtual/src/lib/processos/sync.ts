@@ -9,7 +9,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { buscarProcessoCompletoPorNumero, type MovimentoBruto } from '@/lib/jurisprudencia/datajud'
 import { classificarMovimento, sugereEncerramento, categoriasNotificaveis } from './categorias'
 import { montarTextoAviso, enviarAvisoWhatsApp } from './notificar'
+import { reivindicarEEnviarAviso } from './aviso-movimentacao'
 import { completionJSON } from '@/lib/anthropic/client'
+import { verificarCota } from '@/lib/anthropic/quota'
 import { logger } from '@/lib/logger'
 import { logAudit } from '@/lib/audit'
 import { criarTarefaAutomatica } from '@/lib/financeiro/gancho-contrato'
@@ -34,10 +36,55 @@ function formatarCNJProc(d: string): string {
   return `${s.slice(0, 7)}-${s.slice(7, 9)}.${s.slice(9, 13)}.${s.slice(13, 14)}.${s.slice(14, 16)}.${s.slice(16, 20)}`
 }
 
-/** Hash estável do registro bruto do movimento (dedup no sync). O índice único
- * (processo_id, raw_hash) é a garantia real de idempotência; este hash é a chave. */
+/** Hash do registro bruto do movimento — LEGADO. Sensível à ordem das chaves e à
+ * presença de campos (é md5 do JSON cru do DataJud). Mantido para: (a) o dedup do
+ * DJEN, que hasheia {djen: it.id} (chave única estável — não sofre do problema);
+ * (b) o movimento SIMULADO; (c) casar linhas gravadas ANTES do hash canônico
+ * (transição sem reimportação). NÃO usar como chave nova de dedup do DataJud —
+ * ver hashMovimentoCanonico. */
 export function hashMovimento(raw: unknown): string {
   return createHash('md5').update(JSON.stringify(raw)).digest('hex')
+}
+
+/** Serialização canônica: ordena as chaves recursivamente. Torna o hash IMUNE à
+ * ordem em que o Elasticsearch do tribunal emite os campos e à ordem que o JSONB
+ * do Postgres devolve (nenhum dos dois preserva ordem de chaves). */
+function canonicalizar(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonicalizar)
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    return Object.keys(o)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, k) => {
+        acc[k] = canonicalizar(o[k])
+        return acc
+      }, {})
+  }
+  return v
+}
+
+/** Hash ESTÁVEL do movimento por PROJEÇÃO canônica (codigo + nome + dataHora +
+ * complementos), e não pelo objeto CRU do DataJud. O legado hashMovimento(m.raw)
+ * é sensível à ordem das chaves e à ADIÇÃO de campos pelo Elasticsearch: um bump de
+ * schema do CNJ reidrataria TODOS os hashes → cada movimento existente pareceria
+ * "novo" → duplicata em massa na base (1.314 processos) + reaviso retroativo à
+ * carteira. Esta projeção só olha os campos estáveis; campos novos são ignorados.
+ * `dataHora` é normalizada a epoch para casar com a coluna `data_hora`
+ * (TIMESTAMPTZ) relida do banco no recompute (ver syncUmProcesso). Exportado p/ teste. */
+export function hashMovimentoCanonico(p: {
+  codigo: number | null
+  nome: string | null
+  dataHora: string | null
+  complementos: unknown
+}): string {
+  const t = p.dataHora ? new Date(p.dataHora).getTime() : NaN
+  const proj = {
+    codigo: p.codigo ?? null,
+    nome: p.nome ?? '',
+    data: Number.isNaN(t) ? null : t,
+    complementos: canonicalizar(p.complementos ?? []),
+  }
+  return createHash('md5').update(JSON.stringify(proj)).digest('hex')
 }
 
 const RESUMO_SYSTEM =
@@ -59,11 +106,69 @@ export interface ResumoItem {
   complementos?: Array<Record<string, unknown>>
 }
 
+// Preço do Haiku por 1K tokens — espelha PRECOS_1K de anthropic/usage.ts (os
+// resumos de cron rodam SEMPRE em Haiku). Duplicado aqui de propósito: logUsage
+// insere via cliente anon (RLS) e exige usuário logado, inexistente no cron.
+const PRECO_HAIKU_1K = { input: 0.001, output: 0.005 }
+const MODELO_RESUMO = 'claude-haiku-4-5-20251001'
+
+/** Contexto p/ instrumentar a IA dos CRONS (sem usuário logado). `admin` é o
+ * cliente service_role (loga em api_usage_log e checa cota bypassando a RLS);
+ * `tenantId` é conhecido no loop. Ver AUDITORIA-2026-07-21 §21. */
+export interface UsoIaCron {
+  admin: Admin
+  tenantId: string
+  endpoint: string // ex.: 'resumo_movimento' | 'resumo_publicacao'
+}
+
+/** Cota do tenant para o resumo de cron. ADVISÓRIA: o cron nunca deve derrubar o
+ * sync factual, então fail-open em erro; só retorna false quando o tenant estourou
+ * um limite REAL (categoria de cron não tem limite hoje → sempre permite, mas a
+ * máquina fica pronta se um teto for definido em LIMITES_PLANO). */
+export async function cotaPermiteResumo(ctx: UsoIaCron): Promise<boolean> {
+  try {
+    return (await verificarCota(ctx.admin, ctx.tenantId, ctx.endpoint)).permitido
+  } catch {
+    return true
+  }
+}
+
+/** Registra o uso de IA do cron no api_usage_log via service_role, com user_id
+ * NULL (uso de sistema — ver migration 074). Nunca lança: log impreciso não pode
+ * derrubar o sync. */
+export async function registrarUsoIaCron(
+  ctx: UsoIaCron,
+  usage: { input: number; output: number },
+  latenciaMs: number,
+): Promise<void> {
+  try {
+    const custo = (usage.input / 1000) * PRECO_HAIKU_1K.input + (usage.output / 1000) * PRECO_HAIKU_1K.output
+    const { error } = await ctx.admin.from('api_usage_log').insert({
+      tenant_id: ctx.tenantId,
+      user_id: null,
+      endpoint: ctx.endpoint,
+      modelo: MODELO_RESUMO,
+      tokens_input: usage.input,
+      tokens_output: usage.output,
+      custo_estimado: custo,
+      latencia_ms: latenciaMs,
+    })
+    if (error) logger.error('processos.uso_ia_cron', { tenant: ctx.tenantId, endpoint: ctx.endpoint }, error)
+  } catch (err) {
+    logger.error('processos.uso_ia_cron.excecao', { endpoint: ctx.endpoint }, err as Error)
+  }
+}
+
 /** Gera resumos em linguagem natural para os movimentos (Haiku, em lotes de 30).
  * Best-effort por chunk: falha de rede deixa aquele item com null (não derruba os
- * demais). Exportada para reuso pelo cron de reparo (movimentos sem resumo_ia). */
-export async function gerarResumos(movs: ResumoItem[]): Promise<(string | null)[]> {
+ * demais). Exportada para reuso pelo cron de reparo (movimentos sem resumo_ia).
+ * `ctx` (opcional) instrumenta o uso quando roda num cron: registra o custo em
+ * api_usage_log e respeita a cota do tenant (se estourada, pula os resumos —
+ * NUNCA quebra o sync factual). Sem `ctx` (ex.: reparo cross-tenant) nada muda. */
+export async function gerarResumos(movs: ResumoItem[], ctx?: UsoIaCron): Promise<(string | null)[]> {
   const out: (string | null)[] = new Array(movs.length).fill(null)
+  if (movs.length === 0) return out
+  if (ctx && !(await cotaPermiteResumo(ctx))) return out // cota estourada → pula (factual segue)
   const CHUNK = 30
   for (let i = 0; i < movs.length; i += CHUNK) {
     const slice = movs.slice(i, i + CHUNK)
@@ -74,14 +179,16 @@ export async function gerarResumos(movs: ResumoItem[]): Promise<(string | null)[
       })
       .join('\n')
     try {
-      const { result } = await completionJSON<{ resumos: string[] }>({
-        model: 'claude-haiku-4-5-20251001',
+      const t0 = Date.now()
+      const { result, usage } = await completionJSON<{ resumos: string[] }>({
+        model: MODELO_RESUMO,
         maxTokens: 1500,
         system: RESUMO_SYSTEM,
         prompt:
           `Resuma cada movimento abaixo. Devolva JSON {"resumos": [...]} com EXATAMENTE ` +
           `${slice.length} itens, na mesma ordem dos movimentos.\n\n${lista}`,
       })
+      if (ctx) await registrarUsoIaCron(ctx, usage, Date.now() - t0)
       const rs = Array.isArray(result?.resumos) ? result.resumos : []
       for (let j = 0; j < slice.length; j++) {
         if (typeof rs[j] === 'string' && rs[j].trim()) out[i + j] = rs[j].trim()
@@ -129,13 +236,33 @@ async function syncUmProcesso(
   if (dados === 'nao_encontrado') return 'nao_encontrado'
   if (!dados) return null
 
-  const comHash = dados.movimentos.map((m) => ({ m, hash: hashMovimento(m.raw) }))
+  // Dedup por PROJEÇÃO canônica (imune à ordem de chaves e a campos novos do ES),
+  // com o hash LEGADO como desempate — ver hashMovimentoCanonico e
+  // AUDITORIA-2026-07-21 §6. Cada movimento carrega os dois hashes: o legado (casa
+  // linhas gravadas ANTES desta mudança) e o canônico (gravado daqui pra frente).
+  // Transição SEM reimportação: enquanto o schema do DataJud não mudar, as linhas
+  // antigas casam pelo legado; se mudar, casam pelo canônico RECOMPUTADO das
+  // próprias colunas já gravadas (abaixo) — sem backfill nem rajada de duplicatas.
+  const comHash = dados.movimentos.map((m) => ({
+    m,
+    hashLegado: hashMovimento(m.raw),
+    hashCanon: hashMovimentoCanonico({ codigo: m.codigo, nome: m.nome, dataHora: m.dataHora, complementos: m.complementos }),
+  }))
 
   const { data: existentes } = await admin
     .from('processo_movimentos')
-    .select('raw_hash')
+    .select('raw_hash, codigo, nome, data_hora, complementos')
     .eq('processo_id', proc.id)
-  const jaTem = new Set((existentes ?? []).map((r: { raw_hash: string }) => r.raw_hash))
+  // Para cada linha existente entram no set: o raw_hash gravado (legado OU canônico)
+  // E o canônico recomputado das colunas — este casa a linha antiga mesmo que o
+  // DataJud reordene/adicione campos, sem depender do raw_hash gravado.
+  const jaTem = new Set<string>()
+  for (const r of (existentes ?? []) as Array<{
+    raw_hash: string; codigo: number | null; nome: string | null; data_hora: string | null; complementos: unknown
+  }>) {
+    jaTem.add(r.raw_hash)
+    jaTem.add(hashMovimentoCanonico({ codigo: r.codigo, nome: r.nome, dataHora: r.data_hora, complementos: r.complementos }))
+  }
   // Baseline = processo nunca sincronizado com sucesso (ultima_sincronizacao null).
   // NÃO usar a contagem de movimentos: um movimento SIMULADO (teste) inseriria uma
   // linha e faria o 1º sync real achar que já havia histórico, notificando tudo
@@ -145,12 +272,14 @@ async function syncUmProcesso(
   // Novos, deduplicados também localmente (o DataJud às vezes repete um registro).
   const vistos = new Set<string>()
   const novos = comHash.filter((x) => {
-    if (jaTem.has(x.hash) || vistos.has(x.hash)) return false
-    vistos.add(x.hash)
+    if (jaTem.has(x.hashLegado) || jaTem.has(x.hashCanon) || vistos.has(x.hashCanon)) return false
+    vistos.add(x.hashCanon)
     return true
   })
 
-  const resumos = novos.length ? await gerarResumos(novos.map((x) => x.m)) : []
+  const resumos = novos.length
+    ? await gerarResumos(novos.map((x) => x.m), { admin, tenantId: proc.tenant_id, endpoint: 'resumo_movimento' })
+    : []
 
   // Contexto de notificação — só carrega se pode notificar (evita I/O à toa).
   const podeNotificar = novos.length > 0 && !baseline && opts?.notificar !== false
@@ -208,7 +337,7 @@ async function syncUmProcesso(
       data_hora: x.m.dataHora,
       complementos: x.m.complementos,
       raw: x.m.raw,
-      raw_hash: x.hash,
+      raw_hash: x.hashCanon, // grava o canônico (estável); dedup futuro converge nele
       resumo_ia: resumos[i] ?? null,
       categoria,
       notif_status,
@@ -229,36 +358,22 @@ async function syncUmProcesso(
     inseridos = data ?? []
   }
 
-  // Envio automático: para cada 'pendente' recém-inserido, faz um CLAIM atômico
-  // (só envia quem conseguir mudar de 'pendente'→'aprovada') e então envia. Isso
-  // impede envio duplicado sob concorrência (unique index + claim) e evita órfãos.
+  // Envio automático: claim atômico (pendente→aprovada) + envio, deduplicado por
+  // concorrência. Lógica compartilhada com o caminho DJEN em reivindicarEEnviarAviso
+  // (fonte única — ver AUDITORIA-2026-07-21 §18).
   let enviados = 0
   if (notif?.aviso === 'automatico' && notif.telefone) {
     for (const r of inseridos.filter((r) => r.notif_status === 'pendente' && r.notif_texto)) {
-      const { data: claim } = await admin
-        .from('processo_movimentos')
-        .update({ notif_status: 'aprovada' })
-        .eq('id', r.id)
-        .eq('notif_status', 'pendente')
-        .select('id')
-      if (!claim || claim.length === 0) continue // outro processo já pegou
-      const res = await enviarAvisoWhatsApp(notif.telefone, r.notif_texto as string)
-      if (res.ok) {
-        enviados++
-        await admin
-          .from('processo_movimentos')
-          .update({ notif_status: 'enviada', notif_enviada_em: new Date().toISOString() })
-          .eq('id', r.id)
-        await logAudit({
-          tenantId: proc.tenant_id,
-          action: 'processo.notificacao_enviada',
-          resourceType: 'processo',
-          resourceId: proc.id,
-          metadata: { movimento_id: r.id, cliente_id: proc.cliente_id },
-        })
-      } else {
-        await admin.from('processo_movimentos').update({ notif_status: 'erro' }).eq('id', r.id)
-      }
+      const desfecho = await reivindicarEEnviarAviso(admin, {
+        movimentoId: r.id,
+        telefone: notif.telefone,
+        texto: r.notif_texto as string,
+        tenantId: proc.tenant_id,
+        processoId: proc.id,
+        clienteId: proc.cliente_id,
+        origem: 'datajud',
+      })
+      if (desfecho === 'enviado') enviados++
     }
   }
   // GANCHO FINANCEIRO (L1): alvará expedido em processo cujo cliente tem contrato
