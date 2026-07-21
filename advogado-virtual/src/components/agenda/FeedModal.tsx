@@ -57,10 +57,26 @@ export function FeedModal({ aberto, onFechar }: FeedModalProps) {
     setSincronizando(true)
     try {
       const res = await fetch('/api/agenda/espelho-google', { method: 'POST' })
-      const dados = (await res.json().catch(() => ({}))) as { ok?: boolean; delegacaoPendente?: boolean }
+      const dados = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        delegacaoPendente?: boolean
+        erros?: number
+      }
       if (!res.ok) throw new Error('falha')
       if (dados.delegacaoPendente) {
         toastErro('Aguardando autorização do administrador', 'A delegação do Google ainda não foi liberada.')
+      } else if (!dados.ok) {
+        // O Google recusou as chamadas (ex.: API do Calendar não liberada no
+        // projeto) — antes isto aparecia como sucesso com zero eventos.
+        toastErro(
+          'O Google recusou a sincronização',
+          'Nenhum evento foi espelhado. Avise o administrador — a API do Google Calendar pode não estar liberada.',
+        )
+      } else if ((dados.erros ?? 0) > 0) {
+        toastErro(
+          'Sincronização parcial',
+          `${dados.erros} evento(s) não puderam ser espelhados — tente de novo em instantes.`,
+        )
       } else {
         toastOk('Sincronizado', 'Seus compromissos já aparecem no calendário SIMAS do seu Google Agenda.')
       }

@@ -80,5 +80,11 @@ export async function POST() {
   if (r.delegacaoPendente > 0) {
     return NextResponse.json({ ok: false, delegacaoPendente: true })
   }
+  // Google recusou TODAS as chamadas (ex.: Calendar API não ativada no projeto —
+  // a emissão do token passa, as chamadas reais dão 403): sem isso o modal
+  // mostrava sucesso com zero eventos espelhados.
+  if (r.erros > 0 && r.upserts === 0 && r.remocoes === 0) {
+    return NextResponse.json({ ok: false, erros: r.erros })
+  }
   return NextResponse.json({ ok: true, upserts: r.upserts, remocoes: r.remocoes, erros: r.erros })
 }
