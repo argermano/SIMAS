@@ -46,7 +46,10 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Rotas públicas (não precisam de auth)
-  const rotasPublicas = ['/login', '/registro', '/esqueci-senha', '/definir-senha', '/auth/callback', '/api/contato', '/api/version']
+  // robots.txt/sitemap: fetchers (ex.: Google Calendar) os consultam SEM cookie;
+  // redirecioná-los para /login faz o feed ICS ser recusado ("não foi possível
+  // adicionar o calendário") — caso real.
+  const rotasPublicas = ['/login', '/registro', '/esqueci-senha', '/definir-senha', '/auth/callback', '/api/contato', '/api/version', '/robots.txt', '/sitemap.xml']
   const isRotaPublica = rotasPublicas.some(r => pathname.startsWith(r))
   const isRaiz = pathname === '/'
 

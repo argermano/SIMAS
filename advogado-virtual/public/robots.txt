@@ -1,0 +1,7 @@
+# SIMAS — app atrás de login; nada indexável além da landing.
+# IMPORTANTE: o fetcher de feeds do Google consulta este arquivo antes de
+# assinar o calendário (/api/agenda/ics/*) — ele precisa responder 200 aqui.
+User-agent: *
+Allow: /
+Disallow: /api/
+Allow: /api/agenda/ics/
