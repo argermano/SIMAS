@@ -11,6 +11,24 @@ const MIME_PASTA = 'application/vnd.google-apps.folder'
 const MIME_ATALHO = 'application/vnd.google-apps.shortcut'
 const TIMEOUT_MS = 20_000
 
+// Marcador da raiz PRÓPRIA do app (pasta criada por ele, sob o "Meu Drive" da
+// impersonada). appProperties só é visível ao app que a criou — por isso serve de
+// marcador estável mesmo sob o escopo estreito 'drive.file'. Ver garantirPastaRaizApp.
+export const APP_RAIZ_KEY = 'simasRaiz'
+export const APP_RAIZ_VALOR = 'v1'
+
+/** Escapa aspas/barras para uso seguro num literal do parâmetro `q` da Drive API. */
+const escaparQ = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+
+/** PURO (testável): monta o `q` de busca da pasta-raiz do app — appProperties do
+ *  marcador + mimeType de pasta + fora da lixeira. */
+export function montarQRaizApp(): string {
+  return (
+    `appProperties has { key='${APP_RAIZ_KEY}' and value='${APP_RAIZ_VALOR}' }` +
+    ` and mimeType='${MIME_PASTA}' and trashed=false`
+  )
+}
+
 export class DriveApiError extends Error {
   constructor(
     public status: number,
@@ -80,6 +98,16 @@ export function criarPasta(
   return criarArquivoMeta(token, { name: nome, mimeType: MIME_PASTA, parents: [parentId], appProperties })
 }
 
+/** Cria uma pasta SEM parents → cai na raiz do "Meu Drive" da impersonada. Usada só
+ *  para a raiz PRÓPRIA do app (ver garantirPastaRaizApp). Devolve o id. */
+export function criarPastaRaiz(
+  token: string,
+  nome: string,
+  appProperties?: AppProperties,
+): Promise<string> {
+  return criarArquivoMeta(token, { name: nome, mimeType: MIME_PASTA, appProperties })
+}
+
 /** Cria um atalho NATIVO (shortcut) apontando para targetId. */
 export function criarAtalho(
   token: string,
@@ -117,6 +145,48 @@ export async function buscarPorAppProperty(
   const res = await driveFetch(token, url, { method: 'GET' })
   const data = (await res.json()) as { files?: Array<{ id: string }> }
   return data.files?.[0]?.id ?? null
+}
+
+/** Busca a pasta-raiz do app no "Meu Drive" da impersonada (space 'drive'), pelo
+ *  appProperties marcador (montarQRaizApp). Devolve {id, appProperties} da 1ª ou
+ *  null. Sem `includeItemsFromAllDrives`: só o Meu Drive. */
+export async function buscarPastaRaizApp(
+  token: string,
+): Promise<{ id: string; appProperties: AppProperties } | null> {
+  const q = encodeURIComponent(montarQRaizApp())
+  const url =
+    `${FILES}?q=${q}&spaces=drive&fields=files(id,appProperties)&pageSize=1&supportsAllDrives=true`
+  const res = await driveFetch(token, url, { method: 'GET' })
+  const data = (await res.json()) as { files?: Array<{ id: string; appProperties?: AppProperties }> }
+  const f = data.files?.[0]
+  return f ? { id: f.id, appProperties: f.appProperties ?? {} } : null
+}
+
+/** Lista (UMA página) os ids dos filhos diretos de uma pasta, fora da lixeira
+ *  (space 'drive'). Propaga DriveApiError — o chamador da migração trata 403/404
+ *  (raiz invisível) como "nada a migrar". */
+export async function listarFilhos(token: string, parentId: string, pageSize = 100): Promise<string[]> {
+  const q = encodeURIComponent(`'${escaparQ(parentId)}' in parents and trashed=false`)
+  const url =
+    `${FILES}?q=${q}&spaces=drive&fields=files(id)&pageSize=${pageSize}&supportsAllDrives=true`
+  const res = await driveFetch(token, url, { method: 'GET' })
+  const data = (await res.json()) as { files?: Array<{ id: string }> }
+  return (data.files ?? []).map((f) => f.id)
+}
+
+/** Mescla appProperties num arquivo/pasta (a v3 faz MERGE por chave — as demais
+ *  são preservadas). Usada para MARCAR a raiz do app como migrada. */
+export async function definirAppProperties(
+  token: string,
+  id: string,
+  appProperties: AppProperties,
+): Promise<void> {
+  const url = `${FILES}/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id`
+  await driveFetch(token, url, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ appProperties }),
+  })
 }
 
 /** Sobe um arquivo (multipart: metadata JSON + bytes). Devolve o id. */

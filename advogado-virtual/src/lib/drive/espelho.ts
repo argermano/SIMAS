@@ -10,17 +10,22 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 import { agruparVinculosPorDoc, type VinculoDoc, type VinculoRow } from '@/lib/documentos/vinculos'
-import { driveDisponivel, pastaRaizId, obterAccessToken } from './auth'
+import { driveDisponivel, pastaRaizManualId, obterAccessToken } from './auth'
 import {
   criarPasta,
+  criarPastaRaiz,
   criarAtalho,
   uploadArquivo,
   buscarPorAppProperty,
+  buscarPastaRaizApp,
+  listarFilhos,
+  definirAppProperties,
   renomear,
   moverArquivo,
   moverLixeira,
   removerPermanente,
-  obterMeta,
+  APP_RAIZ_KEY,
+  APP_RAIZ_VALOR,
   DriveApiError,
 } from './api'
 
@@ -41,6 +46,117 @@ export const TETO_TENTATIVAS = 8
 function codigoErroDrive(e: unknown): string {
   if (e instanceof DriveApiError) return `http_${e.status}`
   return e instanceof Error ? e.name : 'erro'
+}
+
+/* ── Raiz PRÓPRIA do app + migração da raiz manual antiga ─────────────────── */
+
+// Nome da raiz criada pelo app no "Meu Drive" da impersonada. Só cosmético (a
+// identidade é o appProperties marcador, não o nome).
+const NOME_RAIZ_APP = 'SIMAS — Documentos'
+
+// Chave do appProperties que marca a raiz do app como já migrada (valor = id da
+// raiz manual drenada). appProperties só é visível ao app → sobrevive ao drive.file.
+const MARCADOR_MIGRADO = 'migradoDaRaiz'
+
+// Cache por PROCESSO da raiz do app: {id, migradoDaRaiz}. migradoDaRaiz guarda o id
+// da raiz MANUAL já drenada (marcador idempotente da migração). resolverRaizApp
+// devolve SEMPRE este mesmo objeto — mutá-lo atualiza o cache (marcação grátis nos
+// drenos seguintes do mesmo processo).
+let cacheRaizApp: { id: string; migradoDaRaiz: string | null } | null = null
+
+/** PURO (testável): a migração da raiz manual para a raiz do app já está concluída?
+ *  Marca-se com appProperties.migradoDaRaiz === <id da raiz manual>. */
+export function raizJaMigrada(migradoDaRaiz: string | null | undefined, manualId: string): boolean {
+  return !!migradoDaRaiz && migradoDaRaiz === manualId
+}
+
+/** Resolve (busca-ou-cria) a raiz do app e cacheia por processo. Devolve o objeto
+ *  do cache (id + marcador de migração). Lança em falha de rede/Drive. */
+async function resolverRaizApp(token: string): Promise<{ id: string; migradoDaRaiz: string | null }> {
+  if (cacheRaizApp) return cacheRaizApp
+  const achada = await buscarPastaRaizApp(token)
+  if (achada) {
+    cacheRaizApp = { id: achada.id, migradoDaRaiz: achada.appProperties[MARCADOR_MIGRADO] ?? null }
+    return cacheRaizApp
+  }
+  const id = await criarPastaRaiz(token, NOME_RAIZ_APP, { [APP_RAIZ_KEY]: APP_RAIZ_VALOR })
+  cacheRaizApp = { id, migradoDaRaiz: null }
+  return cacheRaizApp
+}
+
+/**
+ * Resolve a pasta-raiz PRÓPRIA do app (criada por ele, marcada com
+ * appProperties.simasRaiz=v1) no "Meu Drive" da impersonada. Cria se não existir
+ * (sem parents → cai no root). Cacheada por processo. Devolve o id. É este id que o
+ * espelho usa como PAI do nível-cliente (substitui a raiz manual antiga).
+ */
+export async function garantirPastaRaizApp(token: string): Promise<string> {
+  return (await resolverRaizApp(token)).id
+}
+
+/** Marca a raiz do app como migrada (appProperties.migradoDaRaiz = id da manual) e
+ *  atualiza o cache. Best-effort: se falhar, tenta de novo no próximo dreno. */
+async function marcarRaizMigrada(
+  token: string,
+  appRoot: { id: string; migradoDaRaiz: string | null },
+  manualId: string,
+): Promise<void> {
+  try {
+    await definirAppProperties(token, appRoot.id, { [MARCADOR_MIGRADO]: manualId })
+    appRoot.migradoDaRaiz = manualId // atualiza o cache (marcação grátis daqui em diante)
+  } catch (e) {
+    logger.error('drive.migracao.marcar', {}, e) // não marcou → retoma depois
+  }
+}
+
+/**
+ * MIGRAÇÃO TRANSPARENTE (idempotente) da raiz MANUAL antiga (GOOGLE_DRIVE_PASTA_RAIZ)
+ * para a raiz PRÓPRIA do app. Roda no início de cada dreno; barata quando concluída
+ * (marcador em appProperties, checado no cache do processo). Move UMA página de
+ * filhos por dreno (timeout-safe): drenos seguintes pegam o resto; a marcação só
+ * ocorre quando uma listagem devolver ZERO filhos. NÃO apaga a pasta antiga (o dono
+ * remove à mão). Best-effort — nunca aborta o dreno. LGPD: loga só contagens.
+ */
+async function migrarRaizManualSeNecessario(token: string): Promise<void> {
+  const manualId = pastaRaizManualId()
+  if (!manualId) return // (a) sem raiz manual → nada a migrar
+
+  const appRoot = await resolverRaizApp(token)
+  if (raizJaMigrada(appRoot.migradoDaRaiz, manualId)) return // (b) já concluída
+
+  // (c) filhos diretos da raiz manual (uma página por dreno).
+  let filhos: string[]
+  try {
+    filhos = await listarFilhos(token, manualId)
+  } catch (e) {
+    if (e instanceof DriveApiError && (e.status === 403 || e.status === 404)) {
+      // Raiz invisível (escopo já estreito) ou removida → nada a migrar: conclui.
+      await marcarRaizMigrada(token, appRoot, manualId)
+      return
+    }
+    logger.error('drive.migracao.listar', {}, e) // transitório → tenta no próximo dreno
+    return
+  }
+
+  if (filhos.length === 0) {
+    await marcarRaizMigrada(token, appRoot, manualId) // (d) zero filhos → concluída
+    return
+  }
+
+  // (d) reparenta cada filho para a raiz do app (best-effort). NÃO marca aqui — a
+  // marcação fica para o dreno em que a listagem devolver zero (todos migrados).
+  for (const filhoId of filhos) {
+    try {
+      await moverArquivo(token, filhoId, appRoot.id, manualId)
+    } catch (e) {
+      logger.error('drive.migracao.filho', { pagina: filhos.length }, e) // LGPD: só contagem
+    }
+  }
+}
+
+/** Descarta o cache da raiz do app (útil em testes / rotação). */
+export function _resetRaizAppCache(): void {
+  cacheRaizApp = null
 }
 
 /* ── PURO: saneamento e formatação de nomes ──────────────────────────────── */
@@ -280,8 +396,7 @@ interface EspelhoRow {
  */
 export async function espelharCliente(admin: Admin, clienteId: string): Promise<EspelhoContadores> {
   const cont: EspelhoContadores = { pastas: 0, arquivos: 0, atalhos: 0, lixeira: 0, erros: 0 }
-  const raizId = pastaRaizId()
-  if (!driveDisponivel() || !raizId) return cont // espelho desligado
+  if (!driveDisponivel()) return cont // espelho desligado
 
   // 1) Estado atual do cliente no banco.
   const { data: cliente } = await admin
@@ -331,6 +446,17 @@ export async function espelharCliente(admin: Admin, clienteId: string): Promise<
     token = await obterAccessToken()
   } catch (e) {
     logger.error('drive.espelho.token', {}, e) // LGPD: sem nomes
+    cont.ultimoErro = codigoErroDrive(e)
+    cont.erros++
+    return cont
+  }
+
+  // Raiz PRÓPRIA do app (busca-ou-cria; cacheada por processo) — pai do nível-cliente.
+  let raizId: string
+  try {
+    raizId = await garantirPastaRaizApp(token)
+  } catch (e) {
+    logger.error('drive.espelho.raiz', {}, e) // LGPD: sem nomes
     cont.ultimoErro = codigoErroDrive(e)
     cont.erros++
     return cont
@@ -529,6 +655,18 @@ export async function processarFilaDrive(
 ): Promise<{ clientes: number; sucesso: number; comErro: number; arquivos: number; erros: number }> {
   const resumo = { clientes: 0, sucesso: 0, comErro: 0, arquivos: 0, erros: 0 }
   if (!driveDisponivel()) return resumo
+
+  // Migração transparente da raiz manual antiga → raiz do app, ANTES do lote.
+  // Idempotente e barata quando concluída (marcador no cache do processo). Só corre
+  // se a env da raiz manual existe; best-effort (nunca aborta o dreno).
+  if (pastaRaizManualId()) {
+    try {
+      await migrarRaizManualSeNecessario(await obterAccessToken())
+    } catch (e) {
+      logger.error('drive.migracao', {}, e) // segue o dreno mesmo assim
+    }
+  }
+
   const deadline = opts?.deadline ?? Date.now() + 45_000
   const { data: fila } = await admin
     .from('drive_sync_fila')
@@ -598,17 +736,16 @@ export async function processarFilaDrive(
 }
 
 /**
- * Verifica se a pasta raiz configurada existe e é acessível pela service account
- * (para o card de status em Configurações). NÃO expõe o id. Devolve false se o
- * espelho está inerte, se a raiz não abre (404/403) ou está na lixeira. Nunca lança.
+ * Verifica se o espelho consegue RESOLVER a raiz PRÓPRIA do app pela impersonada
+ * (para o card de status em Configurações). NÃO expõe o id. Busca-ou-cria a raiz
+ * (idempotente, cacheada): true se resolveu. Devolve false se o espelho está inerte
+ * ou o Drive não respondeu. Nunca lança.
  */
 export async function verificarRaiz(): Promise<boolean> {
-  const raizId = pastaRaizId()
-  if (!driveDisponivel() || !raizId) return false
+  if (!driveDisponivel()) return false
   try {
     const token = await obterAccessToken()
-    const meta = await obterMeta(token, raizId)
-    return !!meta && meta.trashed !== true
+    return !!(await garantirPastaRaizApp(token))
   } catch {
     return false
   }

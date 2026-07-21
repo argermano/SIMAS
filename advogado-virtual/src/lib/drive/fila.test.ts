@@ -11,13 +11,13 @@ function fakeClient() {
 
 function ligarEspelho() {
   process.env.GOOGLE_DRIVE_SA_KEY_BASE64 = 'x' // presença basta (driveDisponivel só checa envs)
-  process.env.GOOGLE_DRIVE_PASTA_RAIZ = 'raiz'
+  process.env.GOOGLE_DRIVE_IMPERSONATE = 'dono@escritorio.adv.br' // 2ª env do portão
 }
 
 describe('enfileirarDriveSync — gatilho barato do espelho', () => {
   afterEach(() => {
     delete process.env.GOOGLE_DRIVE_SA_KEY_BASE64
-    delete process.env.GOOGLE_DRIVE_PASTA_RAIZ
+    delete process.env.GOOGLE_DRIVE_IMPERSONATE
     vi.restoreAllMocks()
   })
 

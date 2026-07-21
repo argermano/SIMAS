@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { idEventoGoogle, dominioDoEmail, emailElegivel } from './api'
+import {
+  idEventoGoogle,
+  dominioDoEmail,
+  emailElegivel,
+  decisaoProbe,
+  eventosDoCalendarioAntigo,
+} from './api'
 
 describe('idEventoGoogle — id estável derivado do id lógico SIMAS', () => {
   it('md5 hex lowercase de 32 chars no charset válido do Google', () => {
@@ -47,5 +53,43 @@ describe('emailElegivel — mesmo domínio Workspace do impersonador', () => {
     expect(emailElegivel('', REF)).toBe(false)
     expect(emailElegivel(REF, null)).toBe(false)
     expect(emailElegivel('sem-arroba', REF)).toBe(false)
+  })
+})
+
+describe('decisaoProbe — reusar × recriar × erro (calendars.get, sem calendarList)', () => {
+  it('2xx (alcançável sob o escopo atual) => reusar', () => {
+    expect(decisaoProbe(200)).toBe('reusar')
+    expect(decisaoProbe(204)).toBe('reusar')
+  })
+
+  it('403 (invisível sob app.created) ou 404 (apagado) => recriar', () => {
+    expect(decisaoProbe(403)).toBe('recriar')
+    expect(decisaoProbe(404)).toBe('recriar')
+  })
+
+  it('status inesperado => erro (o chamador lança)', () => {
+    expect(decisaoProbe(401)).toBe('erro')
+    expect(decisaoProbe(400)).toBe('erro')
+    expect(decisaoProbe(500)).toBe('erro')
+  })
+})
+
+describe('eventosDoCalendarioAntigo — bookkeeping a remover do calendário antigo', () => {
+  const rows = [
+    { google_event_id: 'g1', calendar_google_id: 'cal-antigo' },
+    { google_event_id: 'g2', calendar_google_id: 'cal-antigo' },
+    { google_event_id: 'g3', calendar_google_id: 'cal-outro' },
+    { google_event_id: 'g4', calendar_google_id: null }, // nunca sincronizado
+  ]
+
+  it('filtra só os que ainda apontam para o calendário antigo', () => {
+    expect(eventosDoCalendarioAntigo(rows, 'cal-antigo').map((r) => r.google_event_id)).toEqual([
+      'g1',
+      'g2',
+    ])
+  })
+
+  it('nenhum aponta para o antigo => lista vazia (null não casa)', () => {
+    expect(eventosDoCalendarioAntigo(rows, 'cal-inexistente')).toEqual([])
   })
 })

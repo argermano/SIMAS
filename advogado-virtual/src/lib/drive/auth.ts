@@ -1,9 +1,11 @@
 // server-only: autenticação do espelho no Google Drive via SERVICE ACCOUNT.
 // Sem dependências novas: o token OAuth2 sai de um JWT bearer grant assinado com
 // node:crypto (RS256) — nada de googleapis/jose. A credencial vem da env
-// GOOGLE_DRIVE_SA_KEY_BASE64 (JSON da service account em base64) e a pasta raiz
-// compartilhada com a SA de GOOGLE_DRIVE_PASTA_RAIZ. Sem as DUAS envs o espelho
-// fica INERTE e silencioso (driveDisponivel() === false).
+// GOOGLE_DRIVE_SA_KEY_BASE64 (JSON da service account em base64) e a impersonação
+// do usuário do Workspace em GOOGLE_DRIVE_IMPERSONATE (DWD). Sem essas DUAS envs o
+// espelho fica INERTE e silencioso (driveDisponivel() === false). A raiz do app é
+// PRÓPRIA (criada pelo app, ver garantirPastaRaizApp); GOOGLE_DRIVE_PASTA_RAIZ vira
+// OPCIONAL — serve só à migração transparente da raiz MANUAL antiga.
 // SERVER-ONLY: manipula chave privada; nunca importar no bundle do cliente.
 
 import { createSign, createPrivateKey } from 'node:crypto'
@@ -45,13 +47,17 @@ export function parseServiceAccount(base64: string): ServiceAccount {
   return { client_email, private_key, token_uri }
 }
 
-/** As duas envs presentes? Portão do espelho: false → motor no-op (INERTE). */
+/** SA + impersonação presentes? Portão do espelho: false → motor no-op (INERTE).
+ *  A raiz do app é criada pelo próprio app, então PASTA_RAIZ deixou de ser exigida
+ *  (vira opcional, só p/ a migração da raiz manual antiga). */
 export function driveDisponivel(): boolean {
-  return !!process.env.GOOGLE_DRIVE_SA_KEY_BASE64 && !!process.env.GOOGLE_DRIVE_PASTA_RAIZ
+  return !!process.env.GOOGLE_DRIVE_SA_KEY_BASE64 && !!process.env.GOOGLE_DRIVE_IMPERSONATE
 }
 
-/** Id da pasta raiz do Drive compartilhada com a SA (ou null se não configurada). */
-export function pastaRaizId(): string | null {
+/** Id da pasta raiz MANUAL antiga (GOOGLE_DRIVE_PASTA_RAIZ), ou null. Usada APENAS
+ *  pela migração transparente para a raiz própria do app — o espelho novo não
+ *  depende mais dela. */
+export function pastaRaizManualId(): string | null {
   return process.env.GOOGLE_DRIVE_PASTA_RAIZ || null
 }
 

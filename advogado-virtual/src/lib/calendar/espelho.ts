@@ -152,7 +152,7 @@ export async function espelharUsuario(admin: Admin, userId: string): Promise<Cal
   // delegacao_pendente: nada muda no Google; retentar depois.
   let calId: string
   try {
-    calId = await garantirCalendarioSimas(email)
+    calId = await garantirCalendarioSimas(admin, tenantId, userId, email)
   } catch (e) {
     if (e instanceof CalendarApiError && e.classe === 'delegacao_pendente') {
       cont.delegacaoPendente = true // espera de autorização do admin — não conta tentativa

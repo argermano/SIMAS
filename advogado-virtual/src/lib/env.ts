@@ -33,8 +33,9 @@ const serverSchema = z.object({
   D4SIGN_WEBHOOK_SECRET: z.string().optional(),
   RELAY_URL: z.string().optional(),
   RELAY_TOKEN: z.string().optional(),
-  // Espelho do dossiê no Google Drive (066): as DUAS presentes ligam a feature;
-  // ausentes → espelho INERTE e silencioso (driveDisponivel() === false).
+  // Espelho do dossiê no Google Drive (066): SA_KEY + IMPERSONATE ligam a feature;
+  // ausentes → espelho INERTE e silencioso (driveDisponivel() === false). A raiz é
+  // PRÓPRIA do app; PASTA_RAIZ é OPCIONAL (só p/ migrar a raiz manual antiga).
   GOOGLE_DRIVE_SA_KEY_BASE64: z.string().optional(),
   GOOGLE_DRIVE_PASTA_RAIZ: z.string().optional(),
   CONTACT_REPLY_EMAIL: z.string().optional(),

@@ -10,6 +10,8 @@
 // Token cacheado POR EMAIL. SERVER-ONLY: manipula chave privada; nunca no cliente.
 
 import { createHash } from 'node:crypto'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
 import { parseServiceAccount, montarJwtAssertion, type ServiceAccount } from '@/lib/drive/auth'
 
 const BASE = 'https://www.googleapis.com/calendar/v3'
@@ -87,6 +89,34 @@ export function calendarDisponivel(): boolean {
  */
 export function idEventoGoogle(eventoRef: string): string {
   return createHash('md5').update(eventoRef).digest('hex')
+}
+
+/* ── PURO: decisões do provisionamento de calendário ──────────────────────── */
+
+/**
+ * PURO: dado o status do PROBE (calendars.get) de um calendar id JÁ registrado,
+ * decide o próximo passo — compatível com AMBOS os escopos (amplo/estreito):
+ *  • 2xx     → 'reusar'  (o calendário existe e é alcançável sob o escopo atual);
+ *  • 403/404 → 'recriar' (invisível sob app.created OU apagado — cria um novo, que
+ *              passa a ser "do app" e portanto sempre alcançável sob o estreito);
+ *  • outro   → 'erro'    (status inesperado; o chamador lança).
+ */
+export function decisaoProbe(status: number): 'reusar' | 'recriar' | 'erro' {
+  if (status >= 200 && status < 300) return 'reusar'
+  if (status === 403 || status === 404) return 'recriar'
+  return 'erro'
+}
+
+/**
+ * PURO: dentre as linhas de bookkeeping do usuário, as que ainda apontam para o
+ * calendário ANTIGO — cujos eventos serão removidos (best-effort) de lá depois de
+ * o bookkeeping ser reapontado para o novo calendário.
+ */
+export function eventosDoCalendarioAntigo<T extends { calendar_google_id: string | null }>(
+  rows: readonly T[],
+  calAntigo: string,
+): T[] {
+  return rows.filter((r) => r.calendar_google_id === calAntigo)
 }
 
 /* ── Auth por usuário (token cacheado por email) ──────────────────────────── */
@@ -183,41 +213,161 @@ async function calendarFetch(
 
 /* ── Operações ────────────────────────────────────────────────────────────── */
 
-/** Procura na calendarList do usuário o calendário 'SIMAS' e cria se faltar
- *  (timeZone America/Sao_Paulo; cor discreta best-effort). Devolve o calendarId. */
-export async function garantirCalendarioSimas(email: string): Promise<string> {
-  const listRes = await calendarFetch(
-    email,
-    `${BASE}/users/me/calendarList?maxResults=250&fields=items(id,summary,summaryOverride)`,
-    { method: 'GET' },
-  )
-  if (!listRes.ok) throw new CalendarApiError(listRes.status, `Calendar list HTTP ${listRes.status}`)
-  const lista = (await listRes.json()) as {
-    items?: Array<{ id: string; summary?: string; summaryOverride?: string }>
-  }
-  const achado = (lista.items ?? []).find((c) => (c.summaryOverride || c.summary) === NOME_CAL)
-  if (achado) return achado.id
-
-  const criaRes = await calendarFetch(email, `${BASE}/calendars?fields=id`, {
+/** Cria um calendário 'SIMAS' novo (calendars.insert — permitido sob app.created).
+ *  Devolve o id. NÃO usa calendarList (o PATCH de cor era via calendarList, fora do
+ *  escopo estreito → removido). Lança CalendarApiError em falha. */
+async function criarCalendarioSimas(email: string): Promise<string> {
+  const res = await calendarFetch(email, `${BASE}/calendars?fields=id`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ summary: NOME_CAL, timeZone: 'America/Sao_Paulo' }),
   })
-  if (!criaRes.ok) throw new CalendarApiError(criaRes.status, `Calendar create HTTP ${criaRes.status}`)
-  const novo = (await criaRes.json()) as { id?: string }
+  if (!res.ok) throw new CalendarApiError(res.status, `Calendar create HTTP ${res.status}`)
+  const novo = (await res.json()) as { id?: string }
   if (!novo.id) throw new CalendarApiError(0, 'Calendar create sem id')
-
-  // Cor discreta (grafite) — cosmético; falha aqui não invalida o calendário.
-  try {
-    await calendarFetch(email, `${BASE}/users/me/calendarList/${encodeURIComponent(novo.id)}?fields=id`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ colorId: '8' }),
-    })
-  } catch {
-    /* cor é opcional */
-  }
   return novo.id
+}
+
+/** Apaga um calendário (calendars.delete) — BEST-EFFORT: engole qualquer erro (sob
+ *  escopo estreito pode ser inalcançável). Só para desfazer o calendário criado a
+ *  mais numa corrida entre dois drenos. */
+async function removerCalendarioBestEffort(email: string, calId: string): Promise<void> {
+  try {
+    await calendarFetch(email, `${BASE}/calendars/${encodeURIComponent(calId)}`, { method: 'DELETE' })
+  } catch {
+    /* best-effort: fica para o usuário apagar o duplicado à mão */
+  }
+}
+
+/**
+ * Instala `novoId` em calendar_usuarios com proteção de CORRIDA (dois drenos
+ * simultâneos podem ter criado 2 calendários). Devolve o id que FICOU na linha e se
+ * ESTE processo ganhou:
+ *  • sem id anterior → UPSERT ON CONFLICT DO NOTHING (1º a gravar vence) + releitura;
+ *  • com id anterior (o probado como morto) → UPDATE condicional que só troca se a
+ *    linha ainda tiver o id antigo (1º a trocar vence); senão relê e usa o do outro.
+ */
+async function instalarCalendarId(
+  admin: SupabaseClient,
+  tenantId: string,
+  userId: string,
+  idAnterior: string | null,
+  novoId: string,
+): Promise<{ id: string; ganhei: boolean }> {
+  if (!idAnterior) {
+    await admin
+      .from('calendar_usuarios')
+      .upsert(
+        { tenant_id: tenantId, user_id: userId, calendar_google_id: novoId },
+        { onConflict: 'user_id', ignoreDuplicates: true }, // INSERT ... ON CONFLICT DO NOTHING
+      )
+  } else {
+    const { data: trocou } = await admin
+      .from('calendar_usuarios')
+      .update({ calendar_google_id: novoId })
+      .eq('user_id', userId)
+      .eq('calendar_google_id', idAnterior) // só troca se ainda for o id morto
+      .select('user_id')
+    if (trocou && trocou.length > 0) return { id: novoId, ganhei: true }
+  }
+  const { data } = await admin
+    .from('calendar_usuarios')
+    .select('calendar_google_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const id = (data as { calendar_google_id?: string } | null)?.calendar_google_id ?? novoId
+  return { id, ganhei: id === novoId }
+}
+
+/**
+ * Reaponta o bookkeeping (calendar_espelho) do usuário do calendário ANTIGO para o
+ * NOVO — o dreno re-upserta os eventos no novo (ids md5 estáveis) — e REMOVE
+ * best-effort os eventos do calendário antigo (sob escopo estreito ele é
+ * inalcançável → 403/404 engolidos; sobra o calendário duplicado para o usuário
+ * apagar à mão). LGPD: loga só contagens.
+ */
+async function migrarBookkeepingCalendario(
+  admin: SupabaseClient,
+  email: string,
+  userId: string,
+  calAntigo: string,
+  calNovo: string,
+): Promise<void> {
+  const { data: rows } = await admin
+    .from('calendar_espelho')
+    .select('google_event_id, calendar_google_id')
+    .eq('user_id', userId)
+  const antigos = eventosDoCalendarioAntigo(
+    (rows ?? []) as Array<{ google_event_id: string; calendar_google_id: string | null }>,
+    calAntigo,
+  )
+  // Reaponta TODO o bookkeeping do usuário para o novo calendário.
+  await admin.from('calendar_espelho').update({ calendar_google_id: calNovo }).eq('user_id', userId)
+  // Remove best-effort os eventos do calendário antigo (idempotente).
+  let removidos = 0
+  for (const r of antigos) {
+    try {
+      await removerEvento(email, calAntigo, r.google_event_id)
+      removidos++
+    } catch {
+      /* antigo inalcançável (ex.: 403 sob escopo estreito) — best-effort */
+    }
+  }
+  logger.info('calendar.migracao_calendario', { antigos: antigos.length, removidos })
+}
+
+/**
+ * Garante o calendário 'SIMAS' do usuário SEM usar users/me/calendarList (método
+ * fora do escopo app.created) — compatível com AMBOS os escopos:
+ *  1. lê calendar_usuarios.calendar_google_id do userId; se existe, faz um PROBE
+ *     barato (calendars.get, permitido sob app.created p/ calendários do app):
+ *     2xx → reusa; 403/404 → invisível/apagado sob o escopo atual → recria;
+ *  2. sem registro OU probe 'recriar' → CRIA um calendário novo (calendars.insert)
+ *     e o INSTALA em calendar_usuarios com proteção de corrida (UPSERT/troca
+ *     condicional + releitura). Se perdeu a corrida, usa o id do outro dreno e
+ *     apaga o que criou a mais. Se substituiu um calendário antigo, reaponta o
+ *     bookkeeping e remove best-effort os eventos de lá.
+ * Devolve o calendarId a usar. NUNCA chama users/me/calendarList.
+ */
+export async function garantirCalendarioSimas(
+  admin: SupabaseClient,
+  tenantId: string,
+  userId: string,
+  email: string,
+): Promise<string> {
+  // 1) id já registrado? PROBE barato (calendars.get) decide reusar × recriar.
+  const { data: reg } = await admin
+    .from('calendar_usuarios')
+    .select('calendar_google_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  const idAtual = (reg as { calendar_google_id?: string } | null)?.calendar_google_id ?? null
+
+  if (idAtual) {
+    const probe = await calendarFetch(
+      email,
+      `${BASE}/calendars/${encodeURIComponent(idAtual)}?fields=id`,
+      { method: 'GET' },
+    )
+    const decisao = decisaoProbe(probe.status)
+    if (decisao === 'reusar') return idAtual
+    if (decisao === 'erro') throw new CalendarApiError(probe.status, `Calendar probe HTTP ${probe.status}`)
+    // 'recriar' → cai para a criação abaixo (calendário invisível/apagado).
+  }
+
+  // 2) cria + instala (proteção de corrida) + migra bookkeeping se substituiu.
+  const novoId = await criarCalendarioSimas(email)
+  const { id: idFinal, ganhei } = await instalarCalendarId(admin, tenantId, userId, idAtual, novoId)
+  if (!ganhei) {
+    // Outro dreno gravou primeiro → usa o dele e apaga o calendário extra.
+    await removerCalendarioBestEffort(email, novoId)
+    logger.info('calendar.corrida_calendario', { descartado: 1 })
+    return idFinal
+  }
+  if (idAtual && idAtual !== novoId) {
+    await migrarBookkeepingCalendario(admin, email, userId, idAtual, novoId)
+  }
+  return novoId
 }
 
 /** Insere o evento com id FIXO (derivado); em 409 (id já existe) faz update (PUT).
