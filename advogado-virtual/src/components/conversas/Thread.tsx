@@ -419,7 +419,7 @@ export function Thread({
         {!conectado && (
           <p className="mb-2 flex items-center gap-1.5 text-xs text-muted-foreground">
             <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            Conecte sua conta do Chatwoot (acima) para responder. A leitura funciona sem conectar.
+            Conecte sua conta do Chatwoot para responder. A leitura funciona sem conectar.
           </p>
         )}
 

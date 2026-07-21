@@ -582,145 +582,150 @@ export function Conversas({ email }: { email: string }) {
       : nTodos
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 lg:p-6">
-      {/* Banner/estado de conexão da conta (fluxo 428 preservado) */}
-      <ConexaoAgente agente={agente} loading={loadingAgente} onMudou={carregarAgente} />
-
-      {/* 3 colunas full-height: LISTA | THREAD | CONTEXTO (xl+) */}
+    <div className="flex min-h-0 flex-1 flex-col px-4 py-3 lg:px-6 lg:py-4 [@media(max-height:760px)]:py-2">
+      {/* 3 colunas full-height: LISTA | THREAD | CONTEXTO (xl+). A conexão da
+          conta virou um indicador discreto na LINHA 1 do cabeçalho da lista
+          (não mais uma faixa full-width roubando altura da tela). */}
       <div className="flex min-h-0 flex-1 gap-4">
         {/* COLUNA 1 — LISTA (~330px) */}
         <section className="flex w-full min-w-0 flex-col lg:w-[330px] lg:shrink-0">
-          {/* Cabeçalho: título + contador, subtítulo, busca ⌘K, chips */}
-          <div className="shrink-0 space-y-3 pb-3">
-            <div className="max-lg:pl-12">
-              <div className="flex items-center gap-2">
-                <h1 className="min-w-0 flex-1 truncate text-lg font-bold text-foreground font-heading">
-                  Conversas
-                </h1>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => void revalidar(false)}
-                  title="Atualizar lista"
-                  aria-label="Atualizar lista"
-                  className="h-7 w-7"
-                >
-                  <RefreshCw className={cn('h-3.5 w-3.5', (loading || atualizando) && 'animate-spin')} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={alternarNotif}
-                  title={notifOn ? 'Notificações de mensagens novas: LIGADAS (clique para desligar)' : 'Notificações de mensagens novas: DESLIGADAS (clique para ligar)'}
-                  aria-label={notifOn ? 'Desligar notificações' : 'Ligar notificações'}
-                  aria-pressed={notifOn}
-                  className="h-7 w-7"
-                >
-                  {notifOn ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5 text-muted-foreground" />}
-                </Button>
-                <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
-                  {nCabecalho}
-                </span>
-              </div>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                Atendimento omnichannel · WhatsApp DF/SC
-              </p>
-            </div>
-
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden
-              />
-              <input
-                ref={buscaRef}
-                type="text"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar cliente, telefone..."
-                aria-label="Buscar conversa por nome, telefone ou trecho"
-                className="h-9 w-full rounded-full border border-input bg-background pl-9 pr-12 text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <kbd
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-                aria-hidden
+          {/* Cabeçalho compacto: título slim + 2 linhas de controles. O objetivo
+              é devolver altura para lista+thread no notebook — em telas baixas
+              (max-height 760px) o subtítulo some e o título encolhe. */}
+          <div className="shrink-0 space-y-2 pb-2 [@media(max-height:760px)]:space-y-1.5 [@media(max-height:760px)]:pb-1.5">
+            {/* Título da página (encolhe em telas baixas) + ações leves */}
+            <div className="flex items-center gap-2 max-lg:pl-12">
+              <h1 className="min-w-0 flex-1 truncate font-heading text-lg font-bold text-foreground [@media(max-height:760px)]:text-base">
+                Conversas
+              </h1>
+              <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
+                {nCabecalho}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => void revalidar(false)}
+                title="Atualizar lista"
+                aria-label="Atualizar lista"
+                className="h-7 w-7"
               >
-                ⌘K
-              </kbd>
+                <RefreshCw className={cn('h-3.5 w-3.5', (loading || atualizando) && 'animate-spin')} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={alternarNotif}
+                title={notifOn ? 'Notificações de mensagens novas: LIGADAS (clique para desligar)' : 'Notificações de mensagens novas: DESLIGADAS (clique para ligar)'}
+                aria-label={notifOn ? 'Desligar notificações' : 'Ligar notificações'}
+                aria-pressed={notifOn}
+                className="h-7 w-7"
+              >
+                {notifOn ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5 text-muted-foreground" />}
+              </Button>
             </div>
+            <p className="truncate text-xs text-muted-foreground max-lg:pl-12 [@media(max-height:760px)]:hidden">
+              Atendimento omnichannel · WhatsApp DF/SC
+            </p>
 
-            {/* Canal: Todas · DF · SC (o relay filtra na origem; agentes com uma
-                caixa só continuam vendo só a sua, qualquer que seja a escolha). */}
-            <div className="flex items-center gap-1.5" role="group" aria-label="Canal">
-              {([['', 'Todas'], ['DF', 'DF'], ['SC', 'SC']] as const).map(([v, rotulo]) => (
-                <button
-                  key={rotulo}
-                  type="button"
-                  onClick={() => { setCanal(v); setSelecionadaId(null) }}
-                  aria-pressed={canal === v}
-                  className={cn(
-                    'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-                    canal === v
-                      ? 'bg-foreground text-background'
-                      : 'border border-border bg-card text-muted-foreground hover:border-ring hover:text-foreground',
-                  )}
-                >
-                  {rotulo}
-                </button>
-              ))}
-            </div>
+            {/* LINHA 1: busca (flex-1) + segmento Abertas|Resolvidas + indicador
+                de conexão (pontinho). O segmento troca a query do relay; a
+                varredura (busca 2+ chars) cobre os dois status. */}
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <input
+                  ref={buscaRef}
+                  type="text"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar cliente…"
+                  aria-label="Buscar conversa por nome, telefone ou trecho (atalho ⌘K)"
+                  title="Buscar — atalho ⌘K / Ctrl+K"
+                  className="h-9 w-full rounded-full border border-input bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
 
-            {/* Segmento de STATUS (descobrível): Abertas | Resolvidas. Troca a
-                query do relay; resolvidas ficam a um clique (antes só um chip
-                escondido). A varredura (busca 2+ chars) cobre os dois status. */}
-            <div
-              className="grid grid-cols-2 gap-1 rounded-full border border-border bg-card p-1"
-              role="group"
-              aria-label="Status das conversas"
-            >
-              {([['open', 'Abertas'], ['resolved', 'Resolvidas']] as const).map(([v, rotulo]) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => mudarStatus(v)}
-                  aria-pressed={status === v}
-                  className={cn(
-                    'inline-flex items-center justify-center rounded-full px-2.5 py-1 text-xs font-semibold transition-colors',
-                    status === v
-                      ? 'bg-foreground text-background'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {rotulo}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtro de conversas">
-              {chips.map((chip) => {
-                const ativo = filtroChip === chip.value
-                return (
+              <div
+                className="flex shrink-0 items-center gap-1 rounded-full border border-border bg-card p-1"
+                role="group"
+                aria-label="Status das conversas"
+              >
+                {([['open', 'Abertas'], ['resolved', 'Resolvidas']] as const).map(([v, rotulo]) => (
                   <button
-                    key={chip.value}
+                    key={v}
                     type="button"
-                    onClick={() => mudarChip(chip.value)}
-                    aria-pressed={ativo}
+                    onClick={() => mudarStatus(v)}
+                    aria-pressed={status === v}
                     className={cn(
-                      'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-                      ativo
+                      'inline-flex items-center justify-center rounded-full px-2.5 py-1 text-xs font-semibold transition-colors',
+                      status === v
+                        ? 'bg-foreground text-background'
+                        : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+
+              <ConexaoAgente agente={agente} loading={loadingAgente} onMudou={carregarAgente} />
+            </div>
+
+            {/* LINHA 2: chips de filtro + canal (Todas·DF·SC) numa faixa única
+                com scroll horizontal próprio — nunca quebra em várias linhas. */}
+            <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex items-center gap-1.5" role="group" aria-label="Filtro de conversas">
+                {chips.map((chip) => {
+                  const ativo = filtroChip === chip.value
+                  return (
+                    <button
+                      key={chip.value}
+                      type="button"
+                      onClick={() => mudarChip(chip.value)}
+                      aria-pressed={ativo}
+                      className={cn(
+                        'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-colors',
+                        ativo
+                          ? 'bg-foreground text-background'
+                          : 'border border-border bg-card text-muted-foreground hover:border-ring hover:text-foreground',
+                      )}
+                    >
+                      {chip.label}
+                      {chip.n !== null && (
+                        <span className={cn('font-semibold', ativo ? 'text-background/70' : 'text-foreground/70')}>
+                          {chip.n}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
+
+              {/* Canal: Todas · DF · SC (o relay filtra na origem; agentes com uma
+                  caixa só continuam vendo só a sua, qualquer que seja a escolha). */}
+              <div className="flex items-center gap-1.5" role="group" aria-label="Canal">
+                {([['', 'Todas'], ['DF', 'DF'], ['SC', 'SC']] as const).map(([v, rotulo]) => (
+                  <button
+                    key={rotulo}
+                    type="button"
+                    onClick={() => { setCanal(v); setSelecionadaId(null) }}
+                    aria-pressed={canal === v}
+                    className={cn(
+                      'inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-colors',
+                      canal === v
                         ? 'bg-foreground text-background'
                         : 'border border-border bg-card text-muted-foreground hover:border-ring hover:text-foreground',
                     )}
                   >
-                    {chip.label}
-                    {chip.n !== null && (
-                      <span className={cn('font-semibold', ativo ? 'text-background/70' : 'text-foreground/70')}>
-                        {chip.n}
-                      </span>
-                    )}
+                    {rotulo}
                   </button>
-                )
-              })}
+                ))}
+              </div>
             </div>
           </div>
 
