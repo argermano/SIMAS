@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Bell, BellOff, MessageSquare, RefreshCw, Search, X } from 'lucide-react'
+import { Bell, BellOff, Bot, Clock, Inbox, MessageSquare, RefreshCw, Search, UserX, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
@@ -567,11 +567,13 @@ export function Conversas({ email }: { email: string }) {
   const nAguardando = visiveis.filter((c) => c.aguardandoDesde !== null).length
   const nNaoAtribuidas = visiveis.filter((c) => !c.assignee).length
 
-  const chips: { value: FiltroChip; label: string; n: number | null }[] = [
-    { value: 'todos', label: 'Todos', n: nTodos },
-    { value: 'transferidas', label: 'Transferidas', n: nTransferidas },
-    { value: 'aguardando', label: 'Aguardando', n: nAguardando },
-    { value: 'nao_atribuidas', label: 'Não atribuídas', n: nNaoAtribuidas },
+  // Chips por ÍCONE + contador (rótulo no tooltip): todos cabem na coluna de
+  // 330px sem depender de rolagem lateral — pedido do dono após o compactamento.
+  const chips: { value: FiltroChip; label: string; Icone: typeof Inbox; n: number | null }[] = [
+    { value: 'todos', label: 'Todas as conversas', Icone: Inbox, n: nTodos },
+    { value: 'transferidas', label: 'Transferidas pelo assistente', Icone: Bot, n: nTransferidas },
+    { value: 'aguardando', label: 'Aguardando resposta', Icone: Clock, n: nAguardando },
+    { value: 'nao_atribuidas', label: 'Sem atendente atribuído', Icone: UserX, n: nNaoAtribuidas },
   ]
 
   // Contador do cabeçalho: na varredura mostra os resultados; senão, o acumulado.
@@ -686,6 +688,8 @@ export function Conversas({ email }: { email: string }) {
                       type="button"
                       onClick={() => mudarChip(chip.value)}
                       aria-pressed={ativo}
+                      title={chip.label}
+                      aria-label={chip.label}
                       className={cn(
                         'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-colors',
                         ativo
@@ -693,7 +697,7 @@ export function Conversas({ email }: { email: string }) {
                           : 'border border-border bg-card text-muted-foreground hover:border-ring hover:text-foreground',
                       )}
                     >
-                      {chip.label}
+                      <chip.Icone className="h-3.5 w-3.5" aria-hidden />
                       {chip.n !== null && (
                         <span className={cn('font-semibold', ativo ? 'text-background/70' : 'text-foreground/70')}>
                           {chip.n}
