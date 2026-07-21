@@ -12,8 +12,10 @@ import {
   mesclarPaginas,
   mesmaLista,
   temMaisPorContagem,
+  TAMANHO_PAGINA_CONVERSAS,
 } from '@/lib/conversas/lista-infinita'
-import { apenasDigitos, mesmoTelefone } from '@/lib/conversas/telefone'
+import { mesmoTelefone } from '@/lib/conversas/telefone'
+import { conversaCasaBusca } from '@/lib/conversas/busca'
 import { transferidaPeloBot } from '@/lib/conversas/handoff'
 import { useToast } from '@/components/ui/toast'
 import type { Pessoa } from '@/lib/agenda/tipos'
@@ -24,13 +26,18 @@ import { PainelContexto } from './PainelContexto'
 import { Thread } from './Thread'
 import { mensagemErroRelay } from './erros'
 
-type FiltroChip = 'todos' | 'transferidas' | 'aguardando' | 'nao_atribuidas' | 'resolvidas'
+type FiltroChip = 'todos' | 'transferidas' | 'aguardando' | 'nao_atribuidas'
+
+// Teto generoso da varredura global por status: 12 páginas × 25 = 300 conversas
+// mais ativas/status. Ao esgotar sem achar, a UI sugere refinar a busca.
+const MAX_PAGINAS_VARREDURA = 12
 
 export function Conversas({ email }: { email: string }) {
   void email // e-mail (auth) é injetado server-side no header X-Simas-User-Email; aqui é só informativo.
   const { info } = useToast()
 
-  // Filtros: chips (client-side, exceto "resolvidas" que troca o status da query)
+  // Filtros: chips 100% client-side (o status Abertas/Resolvidas virou segmento
+  // próprio — ver `status`/`mudarStatus`, que trocam a QUERY do relay).
   const [filtroChip, setFiltroChip] = useState<FiltroChip>('todos')
   // Canal (inbox): '' = todas. Quem tem acesso a uma caixa só (escopo do relay)
   // simplesmente não vê diferença; quem vê as duas (ex.: administradora) escolhe.
@@ -44,6 +51,20 @@ export function Conversas({ email }: { email: string }) {
   }
   const [status, setStatus] = useState<StatusConversa>('open')
   const [busca, setBusca] = useState('')
+
+  // BUSCA GLOBAL (varredura): com 2+ caracteres, além de filtrar o já carregado,
+  // paginamos o relay nos DOIS status (open + resolved) e acumulamos os que casam
+  // por nome/telefone numa lista única (item resolvido já traz o selo RESOLVIDO).
+  // Assim a equipe reencontra cliente antigo/resolvido sem descobrir o segmento.
+  const termoBusca = busca.trim()
+  const buscaAtiva = termoBusca.length >= 2
+  const [varrendo, setVarrendo] = useState(false) // varredura em voo
+  const [varreResultados, setVarreResultados] = useState<Conversa[]>([])
+  const [varrePagina, setVarrePagina] = useState(0) // progresso ("página N")
+  const [varreCompleto, setVarreCompleto] = useState(false) // terminou/atingiu teto
+  // Sequência anti-corrida da varredura (independe do geracaoRef da query normal):
+  // cada tecla/limpeza incrementa e invalida qualquer varredura em voo.
+  const buscaSeqRef = useRef(0)
 
   // Lista (scroll infinito): acumula por página, deduplica por id.
   const [conversas, setConversas] = useState<Conversa[]>([])
@@ -145,14 +166,17 @@ export function Conversas({ email }: { email: string }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Busca UMA página do relay. Só rede — não toca em estado (composável).
-  const buscarPagina = useCallback(
+  // Busca UMA página do relay para um status arbitrário. Só rede — não toca em
+  // estado (composável). A varredura usa isto p/ paginar open E resolved; a lista
+  // normal usa via `buscarPagina` (status atual).
+  const buscarPaginaDe = useCallback(
     async (
+      statusQ: StatusConversa,
       pagina: number,
     ): Promise<{ ok: true; conversas: Conversa[] } | { ok: false; erro: string }> => {
       try {
         const params = new URLSearchParams()
-        params.set('status', status)
+        params.set('status', statusQ)
         params.set('page', String(pagina))
         if (canal) params.set('inbox', canal)
         const r = await fetch(`/api/conversas?${params.toString()}`)
@@ -163,7 +187,14 @@ export function Conversas({ email }: { email: string }) {
         return { ok: false, erro: 'Falha de rede ao carregar as conversas.' }
       }
     },
-    [status, canal],
+    [canal],
+  )
+
+  // Página do STATUS atual (lista normal). Muda de identidade com status/canal,
+  // então o reset da query re-roda exatamente nesses casos.
+  const buscarPagina = useCallback(
+    (pagina: number) => buscarPaginaDe(status, pagina),
+    [buscarPaginaDe, status],
   )
 
   // Próxima página (scroll infinito): APPEND + dedup, fim detectado por contagem.
@@ -189,6 +220,72 @@ export function Conversas({ email }: { email: string }) {
     carregandoMaisRef.current = false
     setCarregandoMais(false)
   }, [buscarPagina, loading, temMais, busca])
+
+  // Ordena por última mensagem desc (desempate por id) — mesma ordem da lista.
+  const ordenarPorRecente = useCallback((itens: Conversa[]): Conversa[] => {
+    return [...itens].sort((a, b) => {
+      const ta = a.ultimaMensagem?.timestamp ?? 0
+      const tb = b.ultimaMensagem?.timestamp ?? 0
+      return tb - ta || b.id - a.id
+    })
+  }, [])
+
+  // VARREDURA: pagina open + resolved (teto por status), acumulando por id os que
+  // casam o termo, com commit incremental (o usuário vê chegando). `seed` são os
+  // matches já carregados (aparecem na hora, sem flash). Cada passo checa o
+  // `buscaSeqRef`: se a busca mudou/limpou, aborta sem tocar em estado obsoleto.
+  const varrer = useCallback(
+    async (seq: number, termo: string, seed: Conversa[]) => {
+      const acc = new Map<number, Conversa>(seed.map((c) => [c.id, c]))
+      for (const st of ['open', 'resolved'] as const) {
+        for (let page = 1; page <= MAX_PAGINAS_VARREDURA; page++) {
+          if (buscaSeqRef.current !== seq) return // busca trocou/limpou → aborta
+          setVarrePagina(page)
+          const res = await buscarPaginaDe(st, page)
+          if (buscaSeqRef.current !== seq) return
+          if (!res.ok) break // erro neste status: tenta o próximo status
+          for (const c of res.conversas) {
+            if (conversaCasaBusca(c, termo)) acc.set(c.id, c)
+          }
+          setVarreResultados(ordenarPorRecente([...acc.values()]))
+          if (res.conversas.length < TAMANHO_PAGINA_CONVERSAS) break // fim deste status
+        }
+      }
+      if (buscaSeqRef.current !== seq) return
+      setVarrendo(false)
+      setVarreCompleto(true)
+    },
+    [buscarPaginaDe, ordenarPorRecente],
+  )
+
+  // Dispara a varredura com DEBOUNCE ao digitar 2+ caracteres (e re-dispara se o
+  // canal muda). Sem termo suficiente, sai do modo varredura e limpa — a lista
+  // NORMAL (conversas) nunca é tocada aqui, então cancelar a busca volta ao
+  // estado anterior sem bagunçar a paginação infinita. Incrementar o seq no corpo
+  // (não só no cleanup) invalida na hora qualquer varredura em voo.
+  useEffect(() => {
+    if (!buscaAtiva) {
+      buscaSeqRef.current++
+      setVarrendo(false)
+      setVarreResultados([])
+      setVarrePagina(0)
+      setVarreCompleto(false)
+      return
+    }
+    const seq = ++buscaSeqRef.current
+    // Só semeia matches do CANAL atual: ao trocar de canal, `conversasRef` ainda
+    // segura a lista anterior (o reset refaz a query em async), e sem este guard
+    // itens do outro canal vazariam para a varredura e ficariam até limpar a busca.
+    const seed = conversasRef.current.filter(
+      (c) => (canal === '' || c.inbox === canal) && conversaCasaBusca(c, termoBusca),
+    )
+    setVarreResultados(seed) // matches locais já aparecem (sem flash)
+    setVarreCompleto(false)
+    setVarrendo(true)
+    setVarrePagina(0)
+    const t = setTimeout(() => { void varrer(seq, termoBusca, seed) }, 350)
+    return () => clearTimeout(t)
+  }, [buscaAtiva, termoBusca, canal, varrer])
 
   // Revalidação (polling de 10s e botão "Atualizar"): re-busca as páginas
   // 1..paginaMax EM PARALELO e reconstrói a lista por concat+dedup (ordem do
@@ -402,12 +499,15 @@ export function Conversas({ email }: { email: string }) {
 
   function mudarChip(chip: FiltroChip) {
     setFiltroChip(chip)
-    const novoStatus: StatusConversa = chip === 'resolvidas' ? 'resolved' : 'open'
-    if (novoStatus !== status) {
-      // "Resolvidas" (e a volta) troca o status da QUERY → reset via efeito.
-      setStatus(novoStatus)
-      setSelecionadaId(null)
-    }
+  }
+
+  // Segmento Abertas | Resolvidas: troca o status da QUERY → reset via efeito
+  // (buscarPagina muda de identidade). Zera o chip e a seleção pra não confundir.
+  function mudarStatus(novo: StatusConversa) {
+    if (novo === status) return
+    setStatus(novo)
+    setFiltroChip('todos')
+    setSelecionadaId(null)
   }
 
   function selecionar(id: number) {
@@ -435,21 +535,31 @@ export function Conversas({ email }: { email: string }) {
     }
   }
 
-  const selecionada = conversas.find((c) => c.id === selecionadaId) ?? null
   const conectado = agente?.conectado === true
 
-  // Busca client-side por nome / telefone (dígitos) / trecho da última mensagem.
+  // Seleção resolvida da lista NORMAL ou da varredura (a conversa aberta pode ser
+  // resolvida, fora de `conversas`). Guarda o último objeto num ref pra manter a
+  // thread aberta mesmo depois de limpar a busca (quando a varredura é zerada).
+  const selecionadaMemoriaRef = useRef<Conversa | null>(null)
+  const selecionada = useMemo(() => {
+    const achada =
+      varreResultados.find((c) => c.id === selecionadaId) ??
+      conversas.find((c) => c.id === selecionadaId) ??
+      (selecionadaMemoriaRef.current?.id === selecionadaId ? selecionadaMemoriaRef.current : null)
+    if (achada) selecionadaMemoriaRef.current = achada
+    return achada
+  }, [varreResultados, conversas, selecionadaId])
+
+  // Busca client-side (nome/telefone/trecho, acento-insensível) sobre o já
+  // carregado — usada quando NÃO estamos em varredura (< 2 chars).
   const visiveis = useMemo(() => {
-    const t = busca.trim().toLowerCase()
+    const t = busca.trim()
     if (!t) return conversas
-    const dig = apenasDigitos(t)
-    return conversas.filter((c) => {
-      const nome = (c.contato.nome ?? '').toLowerCase()
-      const trecho = (c.ultimaMensagem?.trecho ?? '').toLowerCase()
-      const tel = apenasDigitos(c.contato.telefone)
-      return nome.includes(t) || trecho.includes(t) || (dig.length > 0 && tel.includes(dig))
-    })
+    return conversas.filter((c) => conversaCasaBusca(c, t))
   }, [conversas, busca])
+
+  // Lista efetivamente exibida: varredura (2+ chars) ou a lista/filtro normal.
+  const listaExibida = buscaAtiva ? varreResultados : visiveis
 
   // Contagens dos chips — sobre TODO o acumulado (pós-busca), não só uma página.
   const nTodos = visiveis.length
@@ -462,8 +572,14 @@ export function Conversas({ email }: { email: string }) {
     { value: 'transferidas', label: 'Transferidas', n: nTransferidas },
     { value: 'aguardando', label: 'Aguardando', n: nAguardando },
     { value: 'nao_atribuidas', label: 'Não atribuídas', n: nNaoAtribuidas },
-    { value: 'resolvidas', label: 'Resolvidas', n: null },
   ]
+
+  // Contador do cabeçalho: na varredura mostra os resultados; senão, o acumulado.
+  const nCabecalho = buscaAtiva
+    ? varreResultados.length
+    : loading && conversas.length === 0
+      ? '…'
+      : nTodos
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 lg:p-6">
@@ -503,7 +619,7 @@ export function Conversas({ email }: { email: string }) {
                   {notifOn ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5 text-muted-foreground" />}
                 </Button>
                 <span className="inline-flex h-6 min-w-[1.5rem] shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-muted-foreground">
-                  {loading && conversas.length === 0 ? '…' : nTodos}
+                  {nCabecalho}
                 </span>
               </div>
               <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -554,6 +670,32 @@ export function Conversas({ email }: { email: string }) {
               ))}
             </div>
 
+            {/* Segmento de STATUS (descobrível): Abertas | Resolvidas. Troca a
+                query do relay; resolvidas ficam a um clique (antes só um chip
+                escondido). A varredura (busca 2+ chars) cobre os dois status. */}
+            <div
+              className="grid grid-cols-2 gap-1 rounded-full border border-border bg-card p-1"
+              role="group"
+              aria-label="Status das conversas"
+            >
+              {([['open', 'Abertas'], ['resolved', 'Resolvidas']] as const).map(([v, rotulo]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => mudarStatus(v)}
+                  aria-pressed={status === v}
+                  className={cn(
+                    'inline-flex items-center justify-center rounded-full px-2.5 py-1 text-xs font-semibold transition-colors',
+                    status === v
+                      ? 'bg-foreground text-background'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {rotulo}
+                </button>
+              ))}
+            </div>
+
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtro de conversas">
               {chips.map((chip) => {
                 const ativo = filtroChip === chip.value
@@ -583,20 +725,50 @@ export function Conversas({ email }: { email: string }) {
           </div>
 
           {/* Lista rolável (scroll infinito). O container é o root do observer;
-              a sentinela no fim dispara o carregamento da próxima página. */}
+              a sentinela no fim dispara o carregamento da próxima página. Em
+              VARREDURA (busca 2+ chars) exibe os resultados acumulados dos dois
+              status; o chip não filtra (passa 'todos') pra não esconder um match. */}
           <div ref={listaRef} className="min-h-0 flex-1 overflow-y-auto pr-0.5">
-            <ListaConversas
-              conversas={visiveis}
-              loading={loading}
-              erro={erroLista}
-              selecionadaId={selecionadaId}
-              onSelecionar={selecionar}
-              filtroChip={filtroChip}
-              agoraEpochSeg={agoraEpochSeg}
-            />
+            {buscaAtiva && listaExibida.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
+                {varrendo ? (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Spinner className="h-4 w-4" /> Procurando em abertas e resolvidas…
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhuma conversa encontrada para “{termoBusca}”. Refine a busca.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <ListaConversas
+                conversas={listaExibida}
+                loading={buscaAtiva ? false : loading}
+                erro={erroLista}
+                selecionadaId={selecionadaId}
+                onSelecionar={selecionar}
+                filtroChip={buscaAtiva ? 'todos' : filtroChip}
+                agoraEpochSeg={agoraEpochSeg}
+              />
+            )}
+
+            {/* Rodapé da VARREDURA: progresso discreto e aviso de teto. Só com
+                resultados — o estado vazio acima já cobre "procurando"/"nada". */}
+            {buscaAtiva && listaExibida.length > 0 && (varrendo || varreCompleto) && (
+              <p className="flex items-center justify-center gap-2 py-3 text-center text-xs text-muted-foreground">
+                {varrendo ? (
+                  <><Spinner className="h-3.5 w-3.5" /> Procurando… página {varrePagina}</>
+                ) : (
+                  <>
+                    {listaExibida.length} resultado{listaExibida.length === 1 ? '' : 's'} · não achou? refine a busca
+                  </>
+                )}
+              </p>
+            )}
 
             {/* Sentinela + rodapé do scroll infinito. Só relevante sem busca
-                ativa (busca é filtro cliente sobre o já carregado). */}
+                ativa (busca é filtro cliente/varredura, não paginação normal). */}
             {!busca.trim() && conversas.length > 0 && (
               <>
                 <div ref={sentinelaRef} aria-hidden className="h-px w-full" />

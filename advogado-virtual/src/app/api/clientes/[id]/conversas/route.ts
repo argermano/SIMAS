@@ -14,8 +14,9 @@ import type { Conversa, RespostaLista } from '@/lib/conversas/tipos'
 // o custo do relay. Sem telefone no cadastro => { semTelefone: true, conversas: [] }.
 // LGPD: nada de conteúdo de mensagem em log (esta rota não loga).
 
-// Teto de varredura por status: 4 páginas × 25 = 100 conversas mais ativas/status.
-const MAX_PAGINAS = 4
+// Teto de varredura por status: 8 páginas × 25 = 200 conversas mais ativas/status
+// (subido de 4 → 8 p/ cobrir mais histórico do cliente; segue lazy no dossiê).
+const MAX_PAGINAS = 8
 
 export async function GET(
   _req: NextRequest,
