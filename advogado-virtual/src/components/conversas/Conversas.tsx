@@ -41,7 +41,11 @@ export function Conversas({ email }: { email: string }) {
   const [filtroChip, setFiltroChip] = useState<FiltroChip>('todos')
   // Canal (inbox): '' = todas. Quem tem acesso a uma caixa só (escopo do relay)
   // simplesmente não vê diferença; quem vê as duas (ex.: administradora) escolhe.
-  const [canal, setCanal] = useState<'' | 'DF' | 'SC'>('')
+  // DF/SC como alternâncias INDEPENDENTES (dono, 2026-07-21): um marcado filtra;
+  // ambos marcados OU nenhum = sem restrição (padrão dos chips da Agenda — nunca
+  // lista vazia). `canal` derivado preserva a identidade da query/geração.
+  const [canaisSel, setCanaisSel] = useState<ReadonlySet<'DF' | 'SC'>>(new Set())
+  const canal: '' | 'DF' | 'SC' = canaisSel.size === 1 ? [...canaisSel][0] : ''
   const [notifOn, setNotifOn] = useState(true)
   useEffect(() => { setNotifOn(notificacoesLigadas()) }, [])
   function alternarNotif() {
@@ -710,25 +714,38 @@ export function Conversas({ email }: { email: string }) {
 
               <span className="h-4 w-px shrink-0 bg-border" aria-hidden />
 
-              {/* Canal: Todas · DF · SC (o relay filtra na origem; agentes com uma
-                  caixa só continuam vendo só a sua, qualquer que seja a escolha). */}
+              {/* Canal: DF e SC alternáveis de forma independente (sem "Todas") —
+                  os dois marcados ou nenhum = mostra tudo. O relay filtra na
+                  origem; agente com uma caixa só continua vendo só a sua. */}
               <div className="flex items-center gap-1.5" role="group" aria-label="Canal">
-                {([['', 'Todas'], ['DF', 'DF'], ['SC', 'SC']] as const).map(([v, rotulo]) => (
-                  <button
-                    key={rotulo}
-                    type="button"
-                    onClick={() => { setCanal(v); setSelecionadaId(null) }}
-                    aria-pressed={canal === v}
-                    className={cn(
-                      'inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-colors',
-                      canal === v
-                        ? 'bg-foreground text-background'
-                        : 'border border-border bg-card text-muted-foreground hover:border-ring hover:text-foreground',
-                    )}
-                  >
-                    {rotulo}
-                  </button>
-                ))}
+                {(['DF', 'SC'] as const).map((v) => {
+                  const marcado = canaisSel.has(v)
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => {
+                        setCanaisSel((s) => {
+                          const n = new Set(s)
+                          if (n.has(v)) n.delete(v)
+                          else n.add(v)
+                          return n
+                        })
+                        setSelecionadaId(null)
+                      }}
+                      aria-pressed={marcado}
+                      title={marcado ? `Mostrando ${v} — clique para desmarcar` : `Filtrar pelo número ${v}`}
+                      className={cn(
+                        'inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium transition-colors',
+                        marcado
+                          ? 'bg-foreground text-background'
+                          : 'border border-border bg-card text-muted-foreground hover:border-ring hover:text-foreground',
+                      )}
+                    >
+                      {v}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>
