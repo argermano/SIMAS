@@ -46,6 +46,10 @@ export async function GET(req: NextRequest) {
   const parent     = searchParams.get('parent') // uuid da mãe | 'all' p/ incluir filhas
 
   // Paginação configurável (retrocompatível: default = limit 100, página 1).
+  // Mantemos o teto em 100: o SELECT abaixo traz 7 relações aninhadas por linha
+  // (embed caro, incl. processo→processos→clientes em 3 níveis), então subir o
+  // default multiplicaria o custo do join. Acima do teto respondemos com
+  // `truncado` p/ o consumidor avisar em vez de esconder linhas em silêncio.
   const limitParam = Number(searchParams.get('limit'))
   const limit = Number.isFinite(limitParam) && limitParam > 0
     ? Math.min(Math.floor(limitParam), 1000)
@@ -121,7 +125,13 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  return NextResponse.json({ tasks, total: count ?? tasks.length, page, limit })
+  // Truncamento: existem linhas além desta página no banco. `count` é o total
+  // antes do filtro de tag (que é pós-query), então o aviso pode aparecer mesmo
+  // com tag ativa — coerente, pois a filtragem por tag também só enxerga a página.
+  const total = count ?? tasks.length
+  const truncado = (count ?? 0) > offset + limit
+
+  return NextResponse.json({ tasks, total, truncado, page, limit })
 }
 
 // POST /api/tasks

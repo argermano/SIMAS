@@ -1,4 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { unstable_cache } from 'next/cache'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
@@ -12,6 +14,37 @@ import { formatarCnj, rotularArea } from '@/lib/tarefas/vinculo'
 import { decryptClienteFields } from '@/lib/encryption'
 
 export const metadata = { title: 'Clientes' }
+
+// Índice alfabético A-Z: varrer TODOS os nomes do tenant a cada abertura é caro e
+// cresce sem teto. Cacheamos as letras disponíveis por 60s. Optamos por cache (e não
+// por derivar da página) porque a página traz só 20 clientes — derivar apagaria as
+// letras das demais páginas do índice. unstable_cache não pode ler cookies, então o
+// scan usa o client service-role, escopado EXPLICITAMENTE por tenant_id (a chave do
+// cache também inclui o tenant, sem vazamento entre escritórios). Só o 1º caractere
+// é mantido; `nome` é plaintext (só cpf/rg são cifrados), então não descriptografamos.
+function letrasDisponiveisCache(tenantId: string) {
+  return unstable_cache(
+    async () => {
+      const admin = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      )
+      const { data } = await admin
+        .from('clientes')
+        .select('nome')
+        .eq('tenant_id', tenantId)
+        .is('deleted_at', null)
+        .neq('status_cadastro', 'pre_cadastro') // pré-cadastros do funil não poluem o índice
+      return [...new Set(
+        (data ?? [])
+          .map((c: { nome: string | null }) => c.nome?.charAt(0).toUpperCase())
+          .filter(Boolean)
+      )].sort() as string[]
+    },
+    ['clientes-letras', tenantId],
+    { revalidate: 60 },
+  )
+}
 
 export default async function ClientesPage({
   searchParams,
@@ -32,18 +65,8 @@ export default async function ClientesPage({
 
   if (!usuario) redirect('/login')
 
-  // Buscar primeiras letras disponíveis para o índice
-  const { data: todosNomes } = await supabase
-    .from('clientes')
-    .select('nome')
-    .eq('tenant_id', usuario.tenant_id)
-    .neq('status_cadastro', 'pre_cadastro') // pré-cadastros do funil não poluem o cadastro
-
-  const letrasDisponiveis = [...new Set(
-    (todosNomes ?? [])
-      .map(c => c.nome?.charAt(0).toUpperCase())
-      .filter(Boolean)
-  )].sort() as string[]
+  // Letras disponíveis p/ o índice A-Z (scan cacheado 60s — ver letrasDisponiveisCache).
+  const letrasDisponiveis = await letrasDisponiveisCache(usuario.tenant_id)()
 
   const pageNum = parseInt(page)
   const limit   = 20

@@ -63,6 +63,8 @@ export function KanbanBoard({
   const [detailTask,   setDetailTask]   = useState<TaskData | null>(null)
   const [lists,        setLists]        = useState<TaskList[]>([])
   const [tags,         setTags]         = useState<TaskTag[]>([])
+  // O GET traz no máx. 100 cards (embed caro); acima disso vem { truncado, total }.
+  const [truncadoTotal, setTruncadoTotal] = useState<number | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -86,7 +88,10 @@ export function KanbanBoard({
 
     const res  = await fetch(`/api/tasks?${params}`)
     const data = await res.json()
-    if (res.ok) setTasks(data.tasks ?? [])
+    if (res.ok) {
+      setTasks(data.tasks ?? [])
+      setTruncadoTotal(data.truncado ? data.total : null)
+    }
   }, [board.id, filters])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
@@ -182,6 +187,14 @@ export function KanbanBoard({
   return (
     <>
       <div className="flex h-full flex-col gap-3">
+        {/* Aviso discreto de truncamento: o quadro não pagina, então acima do teto
+            avisamos em vez de esconder cards em silêncio. */}
+        {truncadoTotal !== null && (
+          <p className="shrink-0 text-xs text-muted-foreground">
+            Mostrando {tasks.length} de {truncadoTotal} tarefas — refine os filtros para ver o restante.
+          </p>
+        )}
+
         {/* Abaixo de xl (onde o calendário fica oculto): lista de próximos prazos */}
         <ProximosPrazos tasks={tasks} onTaskClick={handleTaskClick} />
 
