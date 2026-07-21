@@ -101,10 +101,15 @@ interface SyncResultado {
   enviados: number // avisos enviados na hora (modo automático)
 }
 
+/** Desfecho de um sync: SyncResultado (ok), 'nao_encontrado' (consulta OK, mas o
+ * tribunal ainda não indexou o processo — não é falha) ou null (DataJud oscilou). */
+export type SyncOutcome = SyncResultado | 'nao_encontrado' | null
+
 /** Sincroniza UM processo: busca no DataJud, insere movimentos novos (delta por
  * hash), classifica, resume, atualiza a capa e — quando NÃO é o snapshot inicial —
- * dispara/enfileira avisos ao cliente conforme a config. Retorna null se a
- * consulta falhou (best-effort: fica para a próxima execução).
+ * dispara/enfileira avisos ao cliente conforme a config. Retorna 'nao_encontrado'
+ * se o tribunal ainda não indexou o processo (não toca em capa/movimentos/sync) ou
+ * null se a consulta ao DataJud falhou (best-effort: fica para a próxima execução).
  *
  * `notificar` default true; o cadastro passa false. A trava real contra aviso
  * retroativo é o `baseline` (processo sem nenhum movimento ainda ⇒ 1º snapshot ⇒
@@ -113,13 +118,15 @@ async function syncUmProcesso(
   admin: Admin,
   proc: ProcessoRow,
   opts?: { notificar?: boolean; datajud?: { timeoutMs?: number; tentativas?: number } },
-): Promise<SyncResultado | null> {
+): Promise<SyncOutcome> {
   const dados = await buscarProcessoCompletoPorNumero(
     proc.tribunal_alias,
     proc.numero_cnj,
     opts?.datajud?.timeoutMs,
     opts?.datajud?.tentativas,
   )
+  // Não indexado ainda (0 hits): não seta ultima_sincronizacao nem mexe em movimentos.
+  if (dados === 'nao_encontrado') return 'nao_encontrado'
   if (!dados) return null
 
   const comHash = dados.movimentos.map((m) => ({ m, hash: hashMovimento(m.raw) }))
@@ -322,7 +329,7 @@ export async function sincronizarProcessoPorId(
   admin: Admin,
   processoId: string,
   opts?: { notificar?: boolean; datajud?: { timeoutMs?: number; tentativas?: number } },
-): Promise<SyncResultado | null> {
+): Promise<SyncOutcome> {
   const { data: proc } = await admin.from('processos').select(COLS).eq('id', processoId).single()
   if (!proc) return null
   return syncUmProcesso(admin, proc as ProcessoRow, opts)
@@ -504,7 +511,9 @@ export async function sincronizarProcessos(
       const proc = fila[idx++]
       consultados++
       const r = await syncUmProcesso(admin, proc, { notificar: true })
-      if (r) {
+      // 'nao_encontrado' e null são falhas leves: NÃO limpam sync_pendente (fica na
+      // fila durável 059 para o retry diário). Só o sucesso contabiliza/atualiza.
+      if (r && r !== 'nao_encontrado') {
         processos++
         novosMovimentos += r.novos
         pendentes += r.pendentes

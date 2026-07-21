@@ -84,7 +84,7 @@ function nomePesquisado(pub: PublicacaoDetalhe, destinatarios: DestinatarioAdvog
  * PRESUMIDA como referência; inteiro teor sempre via textoPlano (nunca innerHTML).
  */
 export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, modo, onFechar, onConcluido, onReaberto }: Props) {
-  const { success, error: toastError } = useToast()
+  const { success, error: toastError, info } = useToast()
   const [pub, setPub] = useState<PublicacaoDetalhe | null>(null)
   const [loading, setLoading] = useState(true)
   const [ocupado, setOcupado] = useState(false)
@@ -291,6 +291,11 @@ export function PainelDetalhe({ id, teamMembers, currentUserId, partesFallback, 
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
         toastError('Não foi possível buscar andamentos', d.error ?? 'Tente novamente.')
+        return
+      }
+      // Processo novo ainda não indexado ≠ erro: aviso informativo (não de falha).
+      if (d.naoEncontrado) {
+        info('Tribunal ainda não indexou', 'Processo novo costuma demorar dias para entrar no DataJud. O SIMAS vai tentar automaticamente todos os dias.')
         return
       }
       if (d.sincronizado === false) {

@@ -197,6 +197,13 @@ export interface ProcessoCompleto {
   movimentos: MovimentoBruto[] // todos, ordenados por dataHora asc
 }
 
+/** Resultado da consulta completa, distinguindo os três desfechos:
+ *  - ProcessoCompleto  → encontrado;
+ *  - 'nao_encontrado'  → consulta OK, porém ZERO hits (processo novo ainda não
+ *    indexado neste tribunal — não é falha, o retry diário resolve);
+ *  - null              → falha de rede/5xx/timeout após as tentativas (inconclusivo). */
+export type ResultadoProcessoCompleto = ProcessoCompleto | 'nao_encontrado' | null
+
 /**
  * Busca UM processo pelo número e devolve a capa + TODOS os movimentos brutos
  * (para armazenar a íntegra — Fase 5). Best-effort: null em erro/timeout ou não
@@ -239,7 +246,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
  * Busca UM processo pelo número e devolve a capa + TODOS os movimentos brutos
  * (para armazenar a íntegra — Fase 5). A API pública do DataJud oscila (rejeita
  * consultas por sobrecarga), então re-tenta com backoff nas falhas transitórias.
- * Best-effort: null se não localizado ou se as tentativas se esgotarem.
+ * Distingue os desfechos: ProcessoCompleto (achou), 'nao_encontrado' (consulta OK
+ * com 0 hits — processo novo ainda não indexado) ou null (falha após as tentativas).
  * Separada de buscarProcessoPorNumero (E2) para não alterar aquele contrato.
  */
 export async function buscarProcessoCompletoPorNumero(
@@ -247,17 +255,20 @@ export async function buscarProcessoCompletoPorNumero(
   numeroLimpo: string,
   timeoutMs = 12000,
   tentativas = 3,
-): Promise<ProcessoCompleto | null> {
+): Promise<ResultadoProcessoCompleto> {
   let src: Record<string, unknown> | undefined
+  let respondeu = false // consulta autoritativa (achou OU 0 hits), não só falha transitória
   for (let i = 0; i < tentativas; i++) {
     const r = await fetchProcessoRaw(alias, numeroLimpo, timeoutMs)
     if (!r.retry) {
       src = r.src
+      respondeu = true
       break // resposta autoritativa (achou ou 0 hits)
     }
     if (i < tentativas - 1) await sleep(700 * (i + 1)) // backoff 0.7s, 1.4s
   }
-  if (!src) return null
+  // 0 hits definitivo (consulta respondeu) → não indexado; falhou tudo → inconclusivo.
+  if (!src) return respondeu ? 'nao_encontrado' : null
 
   const rawMovs = (src.movimentos as Array<Record<string, unknown>>) ?? []
   const assuntos = (src.assuntos as Array<{ nome?: string }>) ?? []

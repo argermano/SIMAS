@@ -66,7 +66,7 @@ export function ProcessosCliente({
   avisoInicial?: ModoAviso
   podeGerenciar?: boolean
 }) {
-  const { success, error: toastError } = useToast()
+  const { success, error: toastError, info } = useToast()
   const [processos, setProcessos] = useState<Processo[]>([])
   const [loading, setLoading] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
@@ -149,7 +149,9 @@ export function ProcessosCliente({
       }
       const parteMov = d.sincronizado
         ? `${d.novosMovimentos} movimentação(ões) importada(s).`
-        : 'A sincronização automática ocorrerá em breve.'
+        : d.naoEncontrado
+          ? 'O tribunal ainda não indexou este processo (novo). O SIMAS vai tentar automaticamente todos os dias.'
+          : 'A sincronização automática ocorrerá em breve.'
       const parteReligadas = d.publicacoesReligadas > 0
         ? ` ${d.publicacoesReligadas} publicação(ões) vinculada(s) ao cliente.`
         : ''
@@ -196,6 +198,12 @@ export function ProcessosCliente({
       })
       const d = await r.json()
       if (!r.ok) { toastError('Falha ao sincronizar', d.error ?? 'Tente novamente.'); return }
+      // Processo novo ainda não indexado ≠ erro: aviso informativo (não de falha).
+      if (d.naoEncontrado) {
+        info('Tribunal ainda não indexou', 'Processo novo costuma demorar dias para entrar no DataJud. O SIMAS vai tentar automaticamente todos os dias.')
+        await carregar()
+        return
+      }
       if (d.sincronizado === false) {
         toastError('DataJud indisponível', 'A consulta pública oscilou. Tente novamente em alguns instantes.')
         return

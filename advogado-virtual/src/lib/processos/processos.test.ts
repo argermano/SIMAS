@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { classificarMovimento, sugereEncerramento, CATEGORIAS_NOTIFICAVEIS_DEFAULT, categoriasNotificaveis } from './categorias'
 import { hashMovimento, sincronizarProcessos } from './sync'
 import { montarTextoAviso } from './notificar'
-import { datajudDataParaISO } from '@/lib/jurisprudencia/datajud'
+import { datajudDataParaISO, buscarProcessoCompletoPorNumero } from '@/lib/jurisprudencia/datajud'
 import { validarNumeroCNJ, aliasDataJud } from '@/lib/jurisprudencia/verificador-citacoes'
 import { chaveTelefone, mesmoTelefone } from '@/lib/funil/telefone'
 
@@ -112,6 +112,33 @@ describe('datajud — normalização de datas', () => {
     expect(datajudDataParaISO(null)).toBeNull()
     expect(datajudDataParaISO('')).toBeNull()
     expect(datajudDataParaISO(12345)).toBeNull()
+  })
+})
+
+describe('datajud — distingue não encontrado (0 hits) de erro (5xx) — caso VANIO', () => {
+  const numero = '00000000000000000000'
+  const originalFetch = global.fetch
+  afterEach(() => { global.fetch = originalFetch })
+
+  it("consulta OK com ZERO hits → 'nao_encontrado' (processo novo ainda não indexado)", async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ hits: { hits: [] } }) })) as unknown as typeof fetch
+    const r = await buscarProcessoCompletoPorNumero('tjsc', numero, 1000, 1)
+    expect(r).toBe('nao_encontrado')
+  })
+
+  it('falha 5xx após as tentativas → null (DataJud indisponível/oscilando)', async () => {
+    global.fetch = vi.fn(async () => ({ ok: false, json: async () => ({}) })) as unknown as typeof fetch
+    const r = await buscarProcessoCompletoPorNumero('tjsc', numero, 1000, 1)
+    expect(r).toBeNull()
+  })
+
+  it('200 com hit → ProcessoCompleto (não confunde com os dois desfechos acima)', async () => {
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ hits: { hits: [{ _source: { numeroProcesso: numero, movimentos: [] } }] } }),
+    })) as unknown as typeof fetch
+    const r = await buscarProcessoCompletoPorNumero('tjsc', numero, 1000, 1)
+    expect(r && typeof r === 'object' ? r.numeroProcesso : null).toBe(numero)
   })
 })
 

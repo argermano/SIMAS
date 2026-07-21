@@ -73,18 +73,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   let novosMovimentos: number | undefined
   let sincronizado: boolean | undefined
+  let naoEncontrado: boolean | undefined
   if (ressincronizar) {
     try {
-      const r = await sincronizarProcessoPorId(adminClient(), id)
-      sincronizado = !!r // null = DataJud indisponível/oscilando
-      novosMovimentos = r?.novos ?? 0
+      const admin = adminClient()
+      const r = await sincronizarProcessoPorId(admin, id)
+      if (r === 'nao_encontrado') {
+        // Tribunal ainda não indexou o processo (novo): mantém na fila durável (059)
+        // para o cron retentar todo dia — sync_pendente só limpa em sucesso.
+        sincronizado = false
+        naoEncontrado = true
+        await admin.from('processos').update({ sync_pendente: true }).eq('id', id)
+      } else {
+        sincronizado = !!r // null = DataJud indisponível/oscilando
+        novosMovimentos = r?.novos ?? 0
+      }
     } catch {
       sincronizado = false
     }
   }
 
   const { data: atual } = await supabase.from('processos').select('*').eq('id', id).single()
-  return NextResponse.json({ processo: atual, novosMovimentos, sincronizado })
+  return NextResponse.json({ processo: atual, novosMovimentos, sincronizado, naoEncontrado })
 }
 
 // DELETE /api/processos/[id] — desvincula/exclui o processo (cascade nos movimentos)

@@ -101,9 +101,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // o processo fica cadastrado e o cron sincroniza depois.
   let sincronizado = false
   let novosMovimentos = 0
+  let naoEncontrado = false
   try {
-    const r = await sincronizarProcessoPorId(adminClient(), processo.id, { notificar: false })
-    if (r) {
+    const admin = adminClient()
+    const r = await sincronizarProcessoPorId(admin, processo.id, { notificar: false })
+    if (r === 'nao_encontrado') {
+      // Processo novo ainda não indexado no DataJud: marca a fila durável (059) p/ o
+      // cron retentar diariamente (o insert nasce com sync_pendente=false por default).
+      naoEncontrado = true
+      await admin.from('processos').update({ sync_pendente: true }).eq('id', processo.id)
+    } else if (r) {
       sincronizado = true
       novosMovimentos = r.novos
     }
@@ -119,7 +126,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { data: atual } = await supabase.from('processos').select('*').eq('id', processo.id).single()
 
   return NextResponse.json(
-    { processo: atual ?? processo, sincronizado, novosMovimentos, publicacoesReligadas },
+    { processo: atual ?? processo, sincronizado, novosMovimentos, naoEncontrado, publicacoesReligadas },
     { status: 201 },
   )
 }
