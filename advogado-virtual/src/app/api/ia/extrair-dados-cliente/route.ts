@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { completionJSON, extractTextFromImage, extractTextFromPdf, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { extrairTexto, MAX_EXTRACT_BYTES } from '@/lib/documentos/extrair-texto'
 import { safeLogUsage } from '@/lib/anthropic/usage'
 import { logger } from '@/lib/logger'
 import {
@@ -11,8 +12,6 @@ import {
 } from '@/lib/prompts/extracao/dados-cliente'
 
 export const maxDuration = 120
-
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
 
 // POST /api/ia/extrair-dados-cliente
 export async function POST(req: NextRequest) {
@@ -51,29 +50,13 @@ export async function POST(req: NextRequest) {
         if (!fileData) continue
 
         const arrayBuffer = await fileData.arrayBuffer()
-        let texto = ''
-
-        if (IMAGE_TYPES.includes(doc.mime_type)) {
-          const base64 = Buffer.from(arrayBuffer).toString('base64')
-          texto = await extractTextFromImage({
-            imageBase64: base64,
-            mediaType: doc.mime_type as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-          })
-        } else if (doc.mime_type === 'application/pdf') {
-          // Tenta pdf-parse primeiro
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (buf: Buffer) => Promise<{ text: string }>
-            const pdfData = await pdfParse(Buffer.from(arrayBuffer))
-            texto = pdfData.text ?? ''
-          } catch { /* ignore */ }
-
-          // Se pouco texto, tenta via Claude Document
-          if (texto.replace(/\s+/g, '').length < 50) {
-            const base64 = Buffer.from(arrayBuffer).toString('base64')
-            texto = await extractTextFromPdf({ pdfBase64: base64 })
-          }
-        }
+        // Teto único (pula docs acima de MAX_EXTRACT_BYTES) + fallback OCR centralizados.
+        const { texto } = await extrairTexto(Buffer.from(arrayBuffer), {
+          mime:     doc.mime_type,
+          fileName: doc.file_name ?? '',
+          maxBytes: MAX_EXTRACT_BYTES,
+          ocr:      true,
+        })
 
         if (texto.trim()) {
           doc.texto_extraido = texto

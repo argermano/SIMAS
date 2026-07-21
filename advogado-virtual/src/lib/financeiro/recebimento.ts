@@ -43,6 +43,27 @@ function admin() {
   )
 }
 
+// Dependências injetáveis do orquestrador. Só existe para testabilidade: em
+// produção o webhook chama processarAnexoRecebido(input) e as defaults abaixo
+// (depsPadrao) são resolvidas em runtime — nada muda no comportamento. Os testes
+// passam um SupabaseClient fake + stubs de relay/extração/audit para exercitar
+// as decisões de roteamento SEM tocar rede/IA/banco.
+export interface RecebimentoDeps {
+  db: SupabaseClient
+  fetchBinario: typeof relayFetchBinario
+  extrair: typeof extrairDadosComprovante
+  auditar: typeof logAudit
+}
+
+function depsPadrao(): RecebimentoDeps {
+  return {
+    db: admin(),
+    fetchBinario: relayFetchBinario,
+    extrair: extrairDadosComprovante,
+    auditar: logAudit,
+  }
+}
+
 // Defesa em profundidade (paridade com a rota manual, z.string().url().max(2000)):
 // o data_url do anexo vem do webhook sem validação. Só http/https absolutos e
 // tamanho limitado passam para o relay (barreira própria contra SSRF, além da
@@ -162,15 +183,18 @@ async function duplicadoPorEndToEnd(
 // Devolve null (e loga) em qualquer falha OU quando a imagem NÃO é comprovante —
 // nunca lança. Compartilhado pelo fluxo com cliente casado e pelo inbox sem
 // cliente. Só é chamada depois dos dedups (evita gastar IA à toa).
-async function baixarEExtrair(input: {
-  anexoUrl: string
-  mensagemId: string
-  conversaId: string
-  tenantId: string
-  contentTypeHint?: string | null
-}): Promise<{ buffer: Buffer; contentType: string; dados: DadosComprovante } | null> {
+async function baixarEExtrair(
+  deps: Pick<RecebimentoDeps, 'fetchBinario' | 'extrair'>,
+  input: {
+    anexoUrl: string
+    mensagemId: string
+    conversaId: string
+    tenantId: string
+    contentTypeHint?: string | null
+  },
+): Promise<{ buffer: Buffer; contentType: string; dados: DadosComprovante } | null> {
   const { anexoUrl, mensagemId, conversaId, tenantId } = input
-  const anexo = await relayFetchBinario('/attachments', {
+  const anexo = await deps.fetchBinario('/attachments', {
     email: RELAY_EMAIL_SERVICO,
     query: { url: anexoUrl },
   })
@@ -183,7 +207,7 @@ async function baixarEExtrair(input: {
     .trim()
     .toLowerCase()
   // Foto qualquer / tipo não suportado NÃO é erro — só ignora (fluxo manual segue).
-  const extracao = await extrairDadosComprovante({ buffer: anexo.buffer, contentType })
+  const extracao = await deps.extrair({ buffer: anexo.buffer, contentType })
   if (!extracao.ok) {
     logger.info('financeiro.recebimento.ignorado', { mensagemId, conversaId, tenantId, motivo: extracao.motivo })
     return null
@@ -221,6 +245,7 @@ async function recebedorExterno(
 // (reentrega do webhook não duplica) e audita só ids. NUNCA lança.
 async function registrarComprovanteInbox(input: {
   db: SupabaseClient
+  auditar: RecebimentoDeps['auditar']
   tenantId: string
   clienteId: string | null
   telefone: string
@@ -231,7 +256,7 @@ async function registrarComprovanteInbox(input: {
   contentType: string
   contatoNome?: string | null // nome do contato no Chatwoot (best-effort); null se ausente
 }): Promise<void> {
-  const { db, tenantId, clienteId, telefone, conversaId, mensagemId, dados, buffer, contentType, contatoNome } = input
+  const { db, auditar, tenantId, clienteId, telefone, conversaId, mensagemId, dados, buffer, contentType, contatoNome } = input
   try {
     const ext = EXTENSOES[contentType] ?? 'bin'
     const path = `financeiro/${tenantId}/inbox/${mensagemId}.${ext}`
@@ -286,7 +311,7 @@ async function registrarComprovanteInbox(input: {
       return
     }
 
-    await logAudit({
+    await auditar({
       tenantId,
       userId: null,
       action: 'financeiro.comprovante_inbox_criado',
@@ -300,14 +325,21 @@ async function registrarComprovanteInbox(input: {
   }
 }
 
-export async function processarAnexoRecebido(input: {
-  telefone: string
-  anexoUrl: string
-  mensagemId: string
-  conversaId: string
-  contentTypeHint?: string | null
-  contatoNome?: string | null // nome do contato no Chatwoot (best-effort); param opcional/retrocompatível
-}): Promise<void> {
+export async function processarAnexoRecebido(
+  input: {
+    telefone: string
+    anexoUrl: string
+    mensagemId: string
+    conversaId: string
+    contentTypeHint?: string | null
+    contatoNome?: string | null // nome do contato no Chatwoot (best-effort); param opcional/retrocompatível
+  },
+  // Opcional: produção não passa nada e a default (depsPadrao) é resolvida DENTRO
+  // do try, no mesmo ponto do antigo admin() — assim um erro de construção do
+  // client segue coberto pela rede de "nunca lança" (default de PARÂMETRO de uma
+  // async function vira promise rejeitada, escaparia o try). Testes injetam fakes.
+  deps?: RecebimentoDeps,
+): Promise<void> {
   const { anexoUrl, mensagemId, conversaId } = input
   // Normaliza o nome do contato (trim); vazio => null. Gravado no inbox p/ deixar
   // a origem óbvia mesmo sem cadastro de cliente.
@@ -326,7 +358,10 @@ export async function processarAnexoRecebido(input: {
       return
     }
 
-    const db = admin()
+    // Resolve as deps aqui (não como default de parâmetro) para manter o admin()
+    // DENTRO do try — paridade exata com o comportamento anterior (nunca lança).
+    const d = deps ?? depsPadrao()
+    const { db } = d
 
     // c) Clientes que casam pelo telefone (todos os tenants, paginado).
     const casados = await clientesCasadosPorTelefone(db, input.telefone)
@@ -345,7 +380,7 @@ export async function processarAnexoRecebido(input: {
         return
       }
       if (await inboxJaRegistrado(db, tenantId, mensagemId)) return
-      const extraido = await baixarEExtrair({
+      const extraido = await baixarEExtrair(d, {
         anexoUrl, mensagemId, conversaId, tenantId, contentTypeHint: input.contentTypeHint,
       })
       if (!extraido) return
@@ -360,7 +395,7 @@ export async function processarAnexoRecebido(input: {
         return
       }
       await registrarComprovanteInbox({
-        db, tenantId, clienteId: null, telefone: input.telefone, conversaId, mensagemId, contatoNome,
+        db, auditar: d.auditar, tenantId, clienteId: null, telefone: input.telefone, conversaId, mensagemId, contatoNome,
         dados: extraido.dados, buffer: extraido.buffer, contentType: extraido.contentType,
       })
       return
@@ -413,7 +448,7 @@ export async function processarAnexoRecebido(input: {
 
     // h) Bytes do anexo + extração IA (mesma da rota manual). Só chega aqui se
     // não é duplicado — evita gastar IA à toa. Não-comprovante → null → silêncio.
-    const extraido = await baixarEExtrair({
+    const extraido = await baixarEExtrair(d, {
       anexoUrl, mensagemId, conversaId, tenantId, contentTypeHint: input.contentTypeHint,
     })
     if (!extraido) return
@@ -439,7 +474,7 @@ export async function processarAnexoRecebido(input: {
     // i) CASO (a) — cliente casado SEM parcela aberta: vai para o inbox.
     if (!abertas || abertas.length === 0) {
       await registrarComprovanteInbox({
-        db, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId, contatoNome,
+        db, auditar: d.auditar, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId, contatoNome,
         dados, buffer, contentType,
       })
       return
@@ -451,7 +486,7 @@ export async function processarAnexoRecebido(input: {
     if (!sugestao) {
       logger.info('financeiro.recebimento.sem_sugestao', { mensagemId, conversaId, tenantId, abertas: abertas.length })
       await registrarComprovanteInbox({
-        db, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId, contatoNome,
+        db, auditar: d.auditar, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId, contatoNome,
         dados, buffer, contentType,
       })
       return
@@ -501,7 +536,7 @@ export async function processarAnexoRecebido(input: {
       const curDados = (cur?.comprovante_recebido_dados ?? {}) as Record<string, unknown>
       if (curDados.mensagemId !== mensagemId) {
         await registrarComprovanteInbox({
-          db, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId, contatoNome,
+          db, auditar: d.auditar, tenantId, clienteId: clienteIdHint, telefone: input.telefone, conversaId, mensagemId, contatoNome,
           dados, buffer, contentType,
         })
       }
@@ -519,7 +554,7 @@ export async function processarAnexoRecebido(input: {
     }
 
     // m) Auditoria — sem valores/nomes, só ids de rastreio.
-    await logAudit({
+    await d.auditar({
       tenantId,
       userId: null,
       action: 'financeiro.comprovante_recebido',
