@@ -5,6 +5,7 @@ import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { logger } from '@/lib/logger'
 import { telefoneEnvioValido, validarAnexosDoCliente, despacharWhatsAppCliente } from '@/lib/conversas/whatsapp-cliente'
+import { instanciaDaUnidade } from '@/lib/conversas/instancia'
 
 // POST /api/atendimentos/[id]/whatsapp — envia uma mensagem ao cliente pelo
 // canal de WhatsApp do escritório SEM sair da tela do atendimento (pedido do
@@ -32,6 +33,9 @@ const schema = z
   .object({
     texto: z.string().trim().min(5).max(2000).optional(),
     anexos: z.array(anexoSchema).min(1).max(5).optional(),
+    // Número de saída (envio HUMANO): instância explícita, ou null p/ forçar o
+    // automático (DDD). Ausente → default pela unidade do usuário logado.
+    instancia: z.enum(['whatsapp-sc', 'whatsapp-df']).nullable().optional(),
   })
   .refine((d) => !!d.texto || (d.anexos?.length ?? 0) > 0, {
     message: 'Informe um texto ou ao menos um anexo',
@@ -50,7 +54,9 @@ export async function POST(
 
   const parsed = await validateBody(req, schema)
   if (!parsed.ok) return parsed.response
-  const { texto, anexos } = parsed.data
+  const { texto, anexos, instancia: instanciaCorpo } = parsed.data
+  // Não veio no corpo → default pela unidade; veio explícito (instância ou null=DDD) → respeita.
+  const instancia = instanciaCorpo === undefined ? instanciaDaUnidade(usuario.unidade) : instanciaCorpo
 
   // Atendimento do tenant + telefone do cliente (RLS já limita ao tenant;
   // o filtro explícito é defesa em profundidade, padrão das rotas irmãs).
@@ -93,6 +99,7 @@ export async function POST(
     telefone: telefone!,
     texto,
     anexos,
+    instancia,
   })
   if (!envio.ok) return jsonError(envio.erro, envio.status)
 

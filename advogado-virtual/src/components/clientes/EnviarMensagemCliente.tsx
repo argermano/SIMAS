@@ -9,7 +9,13 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 import { AnexosClientePicker, type ItemAnexo } from '@/components/clientes/AnexosClientePicker'
 import { apenasDigitos } from '@/lib/conversas/telefone'
+import { OPCOES_INSTANCIA, instanciaDaUnidade, type Instancia } from '@/lib/conversas/instancia'
 import { Send, MessageCircle } from 'lucide-react'
+
+// Valor do select: '' = automático (roteia pelo DDD); senão a instância explícita.
+type EscolhaInstancia = '' | Instancia
+const VALORES_INSTANCIA = OPCOES_INSTANCIA.map((o) => o.value)
+const chaveLocal = (userId: string) => `simas.wa.instancia.${userId}`
 
 /**
  * Botão + modal "Enviar mensagem ao cliente" reutilizável em QUALQUER tela com um
@@ -85,6 +91,43 @@ function ModalMensagem({
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [selecionados, setSelecionados] = useState<ItemAnexo[]>([])
+  // Número de saída: default pela unidade do usuário; localStorage lembra a última
+  // escolha por usuário (conveniência — não substitui o default por unidade).
+  const [instancia, setInstancia] = useState<EscolhaInstancia>('')
+  const [usuarioId, setUsuarioId] = useState<string | null>(null)
+  // A escolha só é ENVIADA quando explícita (localStorage ou clique). O pré-select
+  // por unidade é só visual: sem escolha explícita, omitimos `instancia` e a ROTA
+  // aplica o default pela unidade — evita forçar DDD se o perfil demorar/falhar.
+  const [escolhaExplicita, setEscolhaExplicita] = useState(false)
+
+  // Ao abrir, busca a unidade do usuário logado para pré-selecionar o número de
+  // saída (localStorage tem prioridade se houver escolha salva). Best-effort.
+  useEffect(() => {
+    let cancelado = false
+    fetch('/api/usuarios/perfil')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelado || !d?.usuario) return
+        const id = d.usuario.id as string
+        setUsuarioId(id)
+        const salvo = typeof window !== 'undefined' ? window.localStorage.getItem(chaveLocal(id)) : null
+        if (salvo !== null && VALORES_INSTANCIA.includes(salvo as EscolhaInstancia)) {
+          setInstancia(salvo as EscolhaInstancia)
+          setEscolhaExplicita(true) // escolha salva = explícita → é enviada
+        } else {
+          // Só visual: a rota deriva o default pela unidade (não marca explícita).
+          setInstancia(instanciaDaUnidade(d.usuario.unidade ?? null) ?? '')
+        }
+      })
+      .catch(() => { /* silencioso — fica no automático (DDD) */ })
+    return () => { cancelado = true }
+  }, [])
+
+  function trocarInstancia(v: EscolhaInstancia) {
+    setInstancia(v)
+    setEscolhaExplicita(true) // troca manual = explícita → respeitada no envio
+    if (usuarioId && typeof window !== 'undefined') window.localStorage.setItem(chaveLocal(usuarioId), v)
+  }
 
   // Sem telefone conhecido (ex.: Estudo de Caso só tem id/nome) → busca no cadastro
   // ao abrir para pré-preencher o campo (editável). Best-effort.
@@ -125,6 +168,7 @@ function ModalMensagem({
         texto?: string
         telefone?: string
         anexos?: Array<{ documentoId?: string; pecaId?: string }>
+        instancia?: Instancia | null
       } = {}
       if (textoValido) body.texto = textoTrim
       if (temAnexos) {
@@ -133,6 +177,9 @@ function ModalMensagem({
       // A rota por cliente usa o telefone editado; a rota do caso o ignora (usa o
       // do cadastro) — enviar sempre é inofensivo (zod descarta o extra).
       body.telefone = tel.trim()
+      // Número de saída: só envia se explícito ('' → null = automático/DDD; senão a
+      // instância). Sem escolha explícita, omite → a rota aplica o default por unidade.
+      if (escolhaExplicita) body.instancia = instancia === '' ? null : instancia
 
       const url = atendimentoId
         ? `/api/atendimentos/${atendimentoId}/whatsapp`
@@ -215,6 +262,21 @@ function ModalMensagem({
           onChange={setSelecionados}
           disabled={enviando}
         />
+
+        {/* Número de saída — discreto; default pela unidade do usuário. */}
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>Enviará pelo:</span>
+          <select
+            value={instancia}
+            onChange={(e) => trocarInstancia(e.target.value as EscolhaInstancia)}
+            disabled={enviando}
+            className="rounded-md border border-border bg-card px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+          >
+            {OPCOES_INSTANCIA.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
     </Dialog>
   )

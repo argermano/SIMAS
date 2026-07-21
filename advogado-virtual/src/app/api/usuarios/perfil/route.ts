@@ -7,6 +7,15 @@ const schemaPerfil = z.object({
   nome: z.string().max(200).optional(),
 })
 
+// GET /api/usuarios/perfil — dados leves do usuário logado (id + unidade), usados
+// pelo modal de WhatsApp para pré-selecionar o número de saída por unidade.
+export async function GET() {
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { usuario } = auth
+  return NextResponse.json({ usuario: { id: usuario.id, unidade: usuario.unidade } })
+}
+
 // PATCH /api/usuarios/perfil — o usuário atualiza seu próprio perfil
 export async function PATCH(req: NextRequest) {
   const auth = await getAuthContext()

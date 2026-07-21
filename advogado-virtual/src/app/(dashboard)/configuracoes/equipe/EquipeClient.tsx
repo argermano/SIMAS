@@ -14,6 +14,77 @@ const OPCOES_ROLE = [
   { value: 'colaborador', label: 'Colaborador(a)' },
 ]
 
+// Unidade do membro — roteia o número de saída do WhatsApp (vazio = sem preferência).
+const OPCOES_UNIDADE = [
+  { value: '',              label: '— Unidade —'   },
+  { value: 'brasilia',      label: 'Brasília'      },
+  { value: 'florianopolis', label: 'Florianópolis' },
+  { value: 'blumenau',      label: 'Blumenau'      },
+]
+
+// ─── Alterar unidade de um usuário ────────────────────────────────────────────
+
+interface AlterarUnidadeProps {
+  usuarioId: string
+  unidadeAtual: string | null
+}
+
+export function AlterarUnidade({ usuarioId, unidadeAtual }: AlterarUnidadeProps) {
+  const router = useRouter()
+  const { success, error: toastError } = useToast()
+  const [unidade, setUnidade]   = useState(unidadeAtual ?? '')
+  const [salvando, setSalvando] = useState(false)
+  const original = unidadeAtual ?? ''
+
+  async function salvar() {
+    if (unidade === original) return
+    setSalvando(true)
+    try {
+      const res = await fetch(`/api/usuarios/${usuarioId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ unidade: unidade === '' ? null : unidade }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toastError('Erro', data.error ?? 'Falha ao atualizar unidade')
+        setUnidade(original)
+        return
+      }
+      success('Unidade atualizada', 'Define o número de saída do WhatsApp deste membro.')
+      router.refresh()
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={unidade}
+        onChange={(e) => setUnidade(e.target.value)}
+        className="rounded-md border border-border bg-card px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        disabled={salvando}
+        title="Unidade — número de saída do WhatsApp"
+      >
+        {OPCOES_UNIDADE.map(o => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      {unidade !== original && (
+        <button
+          onClick={salvar}
+          disabled={salvando}
+          className="flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/80 disabled:opacity-50"
+        >
+          <Save className="h-3 w-3" />
+          {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Alterar role de um usuário ───────────────────────────────────────────────
 
 interface AlterarRoleProps {

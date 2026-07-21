@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
-import { AlterarRole, ToggleStatusUsuario, FormConvite, DefinirPrincipal, ReenviarConvite } from './EquipeClient'
+import { AlterarRole, AlterarUnidade, ToggleStatusUsuario, FormConvite, DefinirPrincipal, ReenviarConvite } from './EquipeClient'
 import { LABELS_ROLE } from '@/types'
 import { Users, UserPlus, Clock, ChevronLeft, UserX } from 'lucide-react'
 import Link from 'next/link'
@@ -38,7 +38,7 @@ export default async function EquipePage() {
   // Todos os usuários do escritório (ativos e inativos)
   const { data: usuarios } = await supabase
     .from('users')
-    .select('id, nome, email, role, status, created_at, auth_user_id, is_advogado_principal')
+    .select('id, nome, email, role, status, created_at, auth_user_id, is_advogado_principal, unidade')
     .eq('tenant_id', admin.tenant_id)
     .order('created_at', { ascending: true })
 
@@ -159,10 +159,12 @@ export default async function EquipePage() {
                         </div>
 
                         {/* Ações */}
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
                           <span className="hidden sm:block text-xs text-muted-foreground">
                             {formatarDataRelativa(u.created_at)}
                           </span>
+                          {/* Unidade (número de saída do WhatsApp) — o próprio membro também pode ajustar */}
+                          <AlterarUnidade usuarioId={u.id} unidadeAtual={u.unidade} />
                           <DefinirPrincipal
                             usuarioId={u.id}
                             isPrincipal={!!u.is_advogado_principal}

@@ -10,6 +10,7 @@
 import type { createClient } from '@/lib/supabase/server'
 import { apenasDigitos } from '@/lib/conversas/telefone'
 import { enviarAvisoWhatsApp, enviarMediaWhatsApp } from '@/lib/processos/notificar'
+import type { Instancia } from '@/lib/conversas/instancia'
 import { carregarBytesAnexo } from '@/lib/conversas/anexo-documento'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
@@ -82,6 +83,7 @@ export async function validarAnexosDoCliente(args: {
  * Em falha parcial (algo já saiu) devolve 502 com a contagem — nunca finge "tudo
  * ok". As mensagens de erro são idênticas às que a rota do caso já retornava.
  * NÃO valida posse dos anexos — chame validarAnexosDoCliente antes.
+ * `instancia` (opcional) escolhe o número de saída; ausente → roteia pelo DDD.
  */
 export async function despacharWhatsAppCliente(args: {
   supabase: SupabaseServer
@@ -89,13 +91,14 @@ export async function despacharWhatsAppCliente(args: {
   telefone: string
   texto?: string
   anexos?: AnexoRef[]
+  instancia?: Instancia | null
 }): Promise<Resultado> {
-  const { supabase, tenantId, telefone, texto, anexos } = args
+  const { supabase, tenantId, telefone, texto, anexos, instancia } = args
   const temAnexos = (anexos?.length ?? 0) > 0
 
   // ── Caminho SEM anexos: um único texto ─────────────────────────────────────
   if (!temAnexos) {
-    const r = await enviarAvisoWhatsApp(telefone, texto!)
+    const r = await enviarAvisoWhatsApp(telefone, texto!, instancia)
     if (!r.ok) return { ok: false, erro: 'Falha ao enviar pelo WhatsApp — tente novamente', status: 502 }
     return { ok: true, enviados: [] }
   }
@@ -123,6 +126,7 @@ export async function despacharWhatsAppCliente(args: {
       { base64: anexo.bytes.toString('base64'), filename: anexo.filename, mimetype: anexo.contentType },
       // Só o PRIMEIRO anexo leva o texto como legenda (mantém a ordem).
       i === 0 ? texto ?? '' : '',
+      instancia,
     )
     if (!r.ok) {
       if (enviados.length === 0) {

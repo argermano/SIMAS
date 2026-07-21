@@ -8,6 +8,7 @@ import {
   validarAnexosDoCliente,
   despacharWhatsAppCliente,
 } from '@/lib/conversas/whatsapp-cliente'
+import { instanciaDaUnidade } from '@/lib/conversas/instancia'
 
 // POST /api/clientes/[id]/whatsapp — envia uma mensagem ao cliente pelo canal de
 // WhatsApp do escritório a partir de QUALQUER tela em que o cliente esteja
@@ -36,6 +37,9 @@ const schema = z
     // cadastro. Envio passa pelo bot, então vale qualquer número.
     telefone: z.string().trim().max(30).optional(),
     anexos: z.array(anexoSchema).min(1).max(5).optional(),
+    // Número de saída (envio HUMANO): instância explícita, ou null p/ forçar o
+    // automático (DDD). Ausente → default pela unidade do usuário logado.
+    instancia: z.enum(['whatsapp-sc', 'whatsapp-df']).nullable().optional(),
   })
   .refine((d) => !!d.texto || (d.anexos?.length ?? 0) > 0, {
     message: 'Informe um texto ou ao menos um anexo',
@@ -54,7 +58,9 @@ export async function POST(
 
   const parsed = await validateBody(req, schema)
   if (!parsed.ok) return parsed.response
-  const { texto, telefone: telefoneCorpo, anexos } = parsed.data
+  const { texto, telefone: telefoneCorpo, anexos, instancia: instanciaCorpo } = parsed.data
+  // Não veio no corpo → default pela unidade; veio explícito (instância ou null=DDD) → respeita.
+  const instancia = instanciaCorpo === undefined ? instanciaDaUnidade(usuario.unidade) : instanciaCorpo
 
   // Cliente do tenant + telefone do cadastro (RLS limita ao tenant; o filtro
   // explícito é defesa em profundidade, padrão das rotas irmãs).
@@ -94,6 +100,7 @@ export async function POST(
     telefone: telefoneAlvo!,
     texto,
     anexos,
+    instancia,
   })
   if (!envio.ok) return jsonError(envio.erro, envio.status)
 

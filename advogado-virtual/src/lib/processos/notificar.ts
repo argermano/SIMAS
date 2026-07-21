@@ -4,6 +4,7 @@
 // disparar o handoff de "humano assumiu". Ver docs/PLANO-FASE-5-OPUS.md §6.
 
 import { logger } from '@/lib/logger'
+import type { Instancia } from '@/lib/conversas/instancia'
 
 export interface AvisoInput {
   clienteNome: string | null
@@ -43,8 +44,14 @@ export function montarTextoAviso(a: AvisoInput): string {
  * Envia o texto ao WhatsApp do cliente via ai-attendant. Best-effort com timeout
  * 5s e 1 retry. Retorna {ok:false} se as envs não estiverem configuradas ou o
  * envio falhar (o chamador marca o movimento como 'erro' para retry no próximo sync).
+ * `instancia` (opcional) escolhe o número de saída (body.instance); ausente → o
+ * VPS roteia pelo DDD do destino. Avisos AUTOMÁTICOS não passam instância.
  */
-export async function enviarAvisoWhatsApp(telefone: string, texto: string): Promise<{ ok: boolean; id?: string }> {
+export async function enviarAvisoWhatsApp(
+  telefone: string,
+  texto: string,
+  instancia?: Instancia | null,
+): Promise<{ ok: boolean; id?: string }> {
   const url = process.env.PROCESSOS_NOTIFY_URL
   const token = process.env.PROCESSOS_NOTIFY_TOKEN
   if (!url || !token) {
@@ -59,7 +66,7 @@ export async function enviarAvisoWhatsApp(telefone: string, texto: string): Prom
       const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Notify-Token': token },
-        body: JSON.stringify({ telefone, texto }),
+        body: JSON.stringify({ telefone, texto, ...(instancia ? { instance: instancia } : {}) }),
         signal: ctrl.signal,
       })
       clearTimeout(timer)
@@ -87,6 +94,7 @@ export async function enviarMediaWhatsApp(
   telefone: string,
   media: { base64: string; filename: string; mimetype: string },
   caption?: string,
+  instancia?: Instancia | null,
 ): Promise<{ ok: boolean; id?: string }> {
   const url = process.env.PROCESSOS_NOTIFY_URL
   const token = process.env.PROCESSOS_NOTIFY_TOKEN
@@ -101,7 +109,7 @@ export async function enviarMediaWhatsApp(
     const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Notify-Token': token },
-      body: JSON.stringify({ telefone, texto: caption ?? '', media }),
+      body: JSON.stringify({ telefone, texto: caption ?? '', media, ...(instancia ? { instance: instancia } : {}) }),
       signal: ctrl.signal,
     })
     clearTimeout(timer)

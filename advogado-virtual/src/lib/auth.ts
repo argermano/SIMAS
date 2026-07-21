@@ -18,6 +18,8 @@ export interface Usuario {
   nome: string | null
   tenant_id: string
   role: string
+  /** Unidade do membro; deriva a instância padrão de saída do WhatsApp. null = sem preferência. */
+  unidade: string | null
 }
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
@@ -36,7 +38,7 @@ export async function getAuthContext(): Promise<AuthContext> {
 
   const { data: usuario } = await supabase
     .from('users')
-    .select('id, nome, tenant_id, role')
+    .select('id, nome, tenant_id, role, unidade')
     .eq('auth_user_id', user.id)
     .single()
 

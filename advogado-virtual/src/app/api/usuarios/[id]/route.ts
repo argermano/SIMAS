@@ -9,9 +9,12 @@ const schema = z.object({
   role:                  z.enum(['admin', 'advogado', 'colaborador']).optional(),
   status:                z.enum(['ativo', 'inativo']).optional(),
   is_advogado_principal: z.boolean().optional(),
-}).refine(data => data.role || data.status || data.is_advogado_principal !== undefined, {
-  message: 'Informe role, status ou is_advogado_principal',
-})
+  // Unidade do membro; roteia o número de saída do WhatsApp. '' → null (sem preferência).
+  unidade:               z.enum(['brasilia', 'florianopolis', 'blumenau']).nullable().optional(),
+}).refine(
+  data => data.role || data.status || data.is_advogado_principal !== undefined || data.unidade !== undefined,
+  { message: 'Informe role, status, is_advogado_principal ou unidade' },
+)
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -39,13 +42,10 @@ export async function PATCH(
     return jsonError('Dados inválidos', 400, resultado.error.flatten())
   }
 
-  // Admin não pode alterar o próprio role/status, mas pode definir-se como advogado principal
-  if (id === admin.id) {
-    const apenasDefinindoPrincipal = resultado.data.is_advogado_principal !== undefined
-      && !resultado.data.role && !resultado.data.status
-    if (!apenasDefinindoPrincipal) {
-      return jsonError('Você não pode alterar seu próprio perfil', 400)
-    }
+  // Admin não pode alterar o próprio role/status, mas pode definir-se como advogado
+  // principal e ajustar a própria unidade (número de saída do WhatsApp).
+  if (id === admin.id && (resultado.data.role || resultado.data.status)) {
+    return jsonError('Você não pode alterar seu próprio perfil', 400)
   }
 
   // Usa admin client para bypass de RLS (já verificamos permissões acima)
