@@ -28,6 +28,9 @@ const schema = z.object({
 // storagePath, baixa os bytes com o admin client, repassa ao relay (que resolve o
 // token pessoal do agente e posta no Chatwoot) e apaga o objeto temporário.
 // LGPD: audita só ids/tipo/tamanho — nunca o nome do arquivo nem conteúdo.
+// maxDuration: baixar do Storage + repassar ao relay um anexo de até 40 MB não
+// cabe no default de 10s da função.
+export const maxDuration = 60
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },

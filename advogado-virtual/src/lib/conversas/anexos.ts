@@ -18,18 +18,20 @@ export const TIPOS_ANEXO_PERMITIDOS = new Set<string>([
 
 // Limite do upload do PC (produto). O arquivo sobe DIRETO ao Storage por URL
 // assinada (fluxo preparar → uploadToSignedUrl), então NÃO passa mais pelo corpo
-// da função Vercel (~4,5 MB) — o teto agora é de produto/UX, não da plataforma.
-// Deve ser <= LIMITE_ANEXO_SERVIDOR_BYTES para o passo server-side nunca recusar
-// um arquivo que o cliente já aceitou.
-export const LIMITE_UPLOAD_BYTES = 20 * 1024 * 1024
+// da função Vercel (~4,5 MB). O teto de 40 MB NÃO é arbitrário: é o limite de
+// anexo do CHATWOOT (validação interna dele, próximo elo relay→Chatwoot) — acima
+// disso o upload passaria e o ENVIO falharia depois. Subir além de 40 MB exige
+// patch no Chatwoot do VPS. Deve ser <= LIMITE_ANEXO_SERVIDOR_BYTES para o passo
+// server-side nunca recusar um arquivo que o cliente já aceitou.
+export const LIMITE_UPLOAD_BYTES = 40 * 1024 * 1024
 
 // Teto para anexos buferizados SERVER-SIDE (baixar do Storage p/ relay: envio do
 // PC, encaminhar, documento do SIMAS): não sofrem o limite de body da Vercel, mas
-// precisam de um teto para não estourar a memória/timeout da função com PDFs
-// escaneados enormes (40-80 MB são comuns). Fica ACIMA de LIMITE_UPLOAD_BYTES (20
-// MB) como folga/anti-abuso: o caminho legítimo já barrou 20 MB no preparar; este
-// só pega bytes que excedem muito o tamanho declarado na URL assinada.
-export const LIMITE_ANEXO_SERVIDOR_BYTES = 25 * 1024 * 1024
+// precisam de um teto para não estourar a memória/timeout da função. Fica ACIMA
+// de LIMITE_UPLOAD_BYTES (40 MB) como folga/anti-abuso: o caminho legítimo já
+// barrou 40 MB no preparar; este só pega bytes que excedem o tamanho declarado
+// na URL assinada.
+export const LIMITE_ANEXO_SERVIDOR_BYTES = 45 * 1024 * 1024
 
 // Legenda (WhatsApp aceita ~1024 chars): teto compartilhado pelas rotas de anexo.
 export const LIMITE_CAPTION_CHARS = 1024
@@ -134,7 +136,7 @@ export function validarAnexoParaEnvio(dados: {
     return { ok: false, erro: 'Tamanho inválido', status: 400 }
   }
   if (dados.tamanho > LIMITE_UPLOAD_BYTES) {
-    return { ok: false, erro: 'Arquivo excede o limite de 20 MB', status: 413 }
+    return { ok: false, erro: 'Arquivo excede o limite de 40 MB', status: 413 }
   }
   return { ok: true, contentType }
 }

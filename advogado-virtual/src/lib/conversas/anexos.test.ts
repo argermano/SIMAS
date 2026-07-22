@@ -13,8 +13,8 @@ const TENANT = '11111111-1111-1111-1111-111111111111'
 const OUTRO_TENANT = '22222222-2222-2222-2222-222222222222'
 
 describe('limites de anexo', () => {
-  it('upload = 20 MB e servidor >= upload (coerência)', () => {
-    expect(LIMITE_UPLOAD_BYTES).toBe(20 * 1024 * 1024)
+  it('upload = 40 MB e servidor >= upload (coerência)', () => {
+    expect(LIMITE_UPLOAD_BYTES).toBe(40 * 1024 * 1024)
     expect(LIMITE_ANEXO_SERVIDOR_BYTES).toBeGreaterThanOrEqual(LIMITE_UPLOAD_BYTES)
   })
 })

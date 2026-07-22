@@ -189,7 +189,7 @@ export function Thread({
       return
     }
     if (f.size > LIMITE_UPLOAD_BYTES) {
-      toastError('Arquivo muito grande', 'O limite é 20 MB.')
+      toastError('Arquivo muito grande', 'O limite é 40 MB.')
       return
     }
     setArquivo(f)
@@ -213,7 +213,7 @@ export function Thread({
       const prepData = await prep.json().catch(() => ({}))
       if (!prep.ok) {
         if (tratou428(prep.status, prepData)) return
-        if (prep.status === 413) toastError('Arquivo muito grande', 'O limite é 20 MB.')
+        if (prep.status === 413) toastError('Arquivo muito grande', 'O limite é 40 MB.')
         else toastError('Não enviado', mensagemErroRelay(prep.status, prepData))
         return
       }
@@ -245,7 +245,7 @@ export function Thread({
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
         if (tratou428(r.status, d)) return
-        if (r.status === 413) toastError('Arquivo muito grande', 'O limite é 20 MB.')
+        if (r.status === 413) toastError('Arquivo muito grande', 'O limite é 40 MB.')
         else toastError('Não enviado', mensagemErroRelay(r.status, d))
         return
       }
