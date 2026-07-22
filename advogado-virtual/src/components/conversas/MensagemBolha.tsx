@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import dynamic from 'next/dynamic'
 import {
   Check,
   Download,
@@ -10,6 +11,7 @@ import {
   Image as ImageIcon,
   MapPin,
   Mic,
+  RotateCw,
   ScanLine,
   StickyNote,
   User,
@@ -17,10 +19,20 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { horaCurta } from '@/lib/conversas/formato'
+import {
+  classificarFalhaAudio,
+  decidirPlayerAudio,
+  mimeAudioDoAnexo,
+  pareceAudio,
+} from '@/lib/conversas/audio'
 import type { Anexo, Mensagem } from '@/lib/conversas/tipos'
 import { ComprovanteModal } from './ComprovanteModal'
 import { EncaminharModal } from './EncaminharModal'
 import { SalvarNoClienteModal } from './SalvarNoClienteModal'
+
+// Player ogv (WASM) carregado SOB DEMANDA: só entra no bundle quando um navegador
+// que não toca Ogg nativamente (Safari) precisa dele. ssr:false — depende do DOM.
+const AudioOgvPlayer = dynamic(() => import('./AudioOgvPlayer'), { ssr: false })
 
 /** Imagem/arquivo (pdf/doc): mesma família aceita para encaminhar E para salvar
  * no dossiê (áudio/vídeo/localização/contato ficam de fora — a allowlist de
@@ -102,31 +114,138 @@ function AnexoCard({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
   )
 }
 
-/** Extensões de áudio comuns do WhatsApp/encaminhamentos. Áudio enviado como
- * ARQUIVO (documento) chega com tipo 'file' — pela extensão ainda ganha player
- * (caso real: áudio da equipe encaminhado não reproduzia, só baixava). */
-const EXT_AUDIO = /\.(ogg|oga|opus|mp3|m4a|aac|amr|wav|weba|webm)(\?|$)/i
-function pareceAudio(a: Anexo): boolean {
-  if (a.tipo === 'audio') return true
-  if (a.tipo !== 'file' || !a.url) return false
-  try {
-    return EXT_AUDIO.test(new URL(a.url).pathname)
-  } catch {
-    return EXT_AUDIO.test(a.url)
-  }
+/** Placeholder discreto enquanto decidimos o player / o ogv carrega (mesma
+ * altura do <audio> para não haver salto de layout). */
+function AudioPlaceholder({ escuro }: { escuro: boolean }) {
+  return (
+    <div
+      className={cn(
+        'inline-flex h-10 w-64 max-w-full items-center gap-2 rounded-lg border px-2.5 text-xs',
+        escuro
+          ? 'border-background/25 text-background/80 dark:border-primary-foreground/25 dark:text-primary-foreground/80'
+          : 'border-border bg-background/60 text-muted-foreground',
+      )}
+    >
+      <RotateCw className="h-4 w-4 animate-spin" aria-hidden />
+      Carregando áudio…
+    </div>
+  )
 }
 
-/** Áudio inline (player nativo) via proxy, nas duas direções. onError (proxy
- * desligado/codec sem suporte) degrada para o card clicável com download. */
+/** Falha de TRANSPORTE (proxy/HTTP fora): erro honesto com botão de tentar de
+ * novo — nada de trocar para download em silêncio. */
+function AudioErroCarregamento({ escuro, aoTentar }: { escuro: boolean; aoTentar: () => void }) {
+  return (
+    <div
+      className={cn(
+        'inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs',
+        escuro
+          ? 'border-background/25 text-background/90 dark:border-primary-foreground/25 dark:text-primary-foreground/90'
+          : 'border-border bg-background/60 text-muted-foreground',
+      )}
+    >
+      <span>Não foi possível carregar o áudio</span>
+      <button
+        type="button"
+        onClick={aoTentar}
+        className={cn(
+          'inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-medium transition-colors',
+          escuro
+            ? 'border-background/30 hover:bg-background/15 dark:border-primary-foreground/30 dark:hover:bg-primary-foreground/15'
+            : 'border-border hover:border-ring hover:text-foreground',
+        )}
+      >
+        <RotateCw className="h-3 w-3" aria-hidden /> tentar de novo
+      </button>
+    </div>
+  )
+}
+
+/** Falha de DECODIFICAÇÃO mesmo com o ogv (arquivo corrompido/codec exótico):
+ * card de download com a explicação honesta. */
+function AudioCardDownload({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span
+        className={cn(
+          'text-[11px]',
+          escuro ? 'text-background/70 dark:text-primary-foreground/70' : 'text-muted-foreground',
+        )}
+      >
+        Este áudio não pôde ser reproduzido aqui — baixe para ouvir.
+      </span>
+      <AnexoCard anexo={anexo} escuro={escuro} />
+    </div>
+  )
+}
+
+type ModoAudio = 'checando' | 'nativo' | 'ogv'
+type ErroAudio = null | 'carregamento' | 'download'
+
+/**
+ * Áudio inline via proxy. Decide no CLIENTE: se o navegador declara suporte ao
+ * mimetype real (audio.canPlayType) usa o <audio> nativo (Chrome com Ogg/Opus);
+ * senão, cai no AudioOgvPlayer (WASM), que só então baixa o bundle do ogv — o
+ * Chrome NÃO muda de comportamento nem baixa o WASM.
+ *
+ * Erros são honestos (nada de virar download em silêncio): transporte → "tentar
+ * de novo"; decodificação impossível → card de download explicado.
+ */
 function AnexoAudio({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
-  const [falhou, setFalhou] = useState(false)
-  if (falhou) return <AnexoCard anexo={anexo} escuro={escuro} />
+  const src = srcProxy(anexo)
+  const mimetype = useMemo(() => mimeAudioDoAnexo(anexo), [anexo])
+  const [modo, setModo] = useState<ModoAudio>('checando')
+  const [erro, setErro] = useState<ErroAudio>(null)
+  const [tentativa, setTentativa] = useState(0)
+
+  // canPlayType exige o DOM: decidimos no cliente (evita divergência de hidratação
+  // — no servidor o modo inicial é sempre 'checando'). `tentativa` entra nas deps
+  // para que "tentar de novo" (que volta o modo a 'checando') refaça a decisão e
+  // saia do placeholder — sem ela, o modo ficaria preso em 'checando'.
+  useEffect(() => {
+    const el = document.createElement('audio')
+    setModo(decidirPlayerAudio(mimetype, (t) => el.canPlayType(t)))
+  }, [mimetype, tentativa])
+
+  const tentarDeNovo = useCallback(() => {
+    setErro(null)
+    setTentativa((n) => n + 1) // re-monta o player (key) e refaz a decisão
+    setModo('checando')
+  }, [])
+
+  const aoFalharCarregamento = useCallback(() => setErro('carregamento'), [])
+  const aoFalharDecodificacao = useCallback(() => setErro('download'), [])
+
+  if (erro === 'download') return <AudioCardDownload anexo={anexo} escuro={escuro} />
+  if (erro === 'carregamento') return <AudioErroCarregamento escuro={escuro} aoTentar={tentarDeNovo} />
+  if (modo === 'checando') return <AudioPlaceholder escuro={escuro} />
+
+  if (modo === 'ogv') {
+    return (
+      <AudioOgvPlayer
+        key={tentativa}
+        src={src}
+        escuro={escuro}
+        aoFalharCarregamento={aoFalharCarregamento}
+        aoFalharDecodificacao={aoFalharDecodificacao}
+      />
+    )
+  }
+
   return (
     <audio
+      key={tentativa}
       controls
       preload="none"
-      src={srcProxy(anexo)}
-      onError={() => setFalhou(true)}
+      src={src}
+      onError={() => {
+        // O canPlayType disse que dá para tocar: um erro aqui é transporte ou um
+        // codec que o nativo não aguentou. Classifica honestamente em vez de cair
+        // mudo no download.
+        void classificarFalhaAudio(src).then((causa) =>
+          setErro(causa === 'transporte' ? 'carregamento' : 'download'),
+        )
+      }}
       className="h-10 w-64 max-w-full"
     />
   )

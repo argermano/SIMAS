@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/copiar-ogv.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
@@ -55,6 +55,7 @@
     "mammoth": "^1.11.0",
     "marked": "^17.0.4",
     "next": "^15.1.0",
+    "ogv": "^1.9.0",
     "pdf-parse": "^1.1.1",
     "pizzip": "^3.2.0",
     "react": "^19.0.0",

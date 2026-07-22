@@ -11,6 +11,10 @@
 /.next/
 /out/
 
+# Assets do ogv.js copiados de node_modules no build (binários WASM/worker).
+# NÃO versionar — regenerados por `npm run build` (scripts/copiar-ogv.mjs).
+/public/ogv/
+
 # Production
 /build
 
