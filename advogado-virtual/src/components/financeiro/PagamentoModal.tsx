@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Download, ExternalLink, FileText, RefreshCw, ScanLine, User } from 'lucide-react'
-import { Dialog } from '@/components/ui/dialog'
+import { Download, ExternalLink, FileText, RefreshCw, ScanLine, User, Zap, Undo2 } from 'lucide-react'
+import { Dialog, ConfirmDialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
+import { useToast } from '@/components/ui/toast'
 import { formatarData } from '@/lib/utils'
 import { formatarValor } from '@/lib/financeiro/parcelas'
 import { type Parcela, LABELS_MEIO } from './tipos'
@@ -33,6 +34,7 @@ interface Pagamento {
     meio: string | null
     baixaPorNome: string | null
     obs: string | null
+    baixaAutomatica?: boolean
   }
   dados: DadosExtraidos | null
   comprovante: Comprovante | null
@@ -61,15 +63,24 @@ function mensagemErro(data: unknown, fallback: string): string {
 export function PagamentoModal({
   parcela,
   onClose,
+  podeDesfazer = false,
+  onDesfeita,
 }: {
   parcela: Parcela | null
   onClose: () => void
+  // DESFAZER baixa automática (migration 077) — só quando a baixa foi automática
+  // E o usuário é admin/advogado. onDesfeita recarrega a lista no pai.
+  podeDesfazer?: boolean
+  onDesfeita?: () => void
 }) {
+  const { success, error: toastError } = useToast()
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [dados, setDados] = useState<Pagamento | null>(null)
   // Falha ao carregar a <img> da signed URL → mostra o fallback textual.
   const [imgErro, setImgErro] = useState(false)
+  const [confirmarDesfazer, setConfirmarDesfazer] = useState(false)
+  const [desfazendo, setDesfazendo] = useState(false)
 
   const carregar = useCallback(async (parcelaId: string) => {
     setCarregando(true)
@@ -105,9 +116,33 @@ export function PagamentoModal({
   const ext = dados?.dados
   const comp = dados?.comprovante
   const ehPdf = (comp?.contentType ?? '').includes('pdf')
+  const ehAutomatica = pag?.baixaAutomatica === true
+
+  async function desfazer() {
+    if (!parcela || desfazendo) return
+    setDesfazendo(true)
+    try {
+      const r = await fetch(`/api/financeiro/parcelas/${parcela.id}/desfazer-automatica`, { method: 'POST' })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        toastError('Não foi possível desfazer', mensagemErro(d, 'Tente novamente.'))
+        // 409 = já desfeita/alterada em outra sessão → fecha e recarrega.
+        if (r.status === 409) { setConfirmarDesfazer(false); onDesfeita?.() }
+        return
+      }
+      success('Baixa desfeita', 'A parcela voltou a ficar em aberto, aguardando conferência.')
+      setConfirmarDesfazer(false)
+      onDesfeita?.()
+    } catch {
+      toastError('Não foi possível desfazer', 'Falha de rede. Tente novamente.')
+    } finally {
+      setDesfazendo(false)
+    }
+  }
 
   return (
-    <Dialog
+    <>
+      <Dialog
       open={Boolean(parcela)}
       onClose={onClose}
       title="Pagamento da parcela"
@@ -118,9 +153,22 @@ export function PagamentoModal({
       }
       size="lg"
       footer={
-        <Button variant="secondary" size="md" onClick={onClose}>
-          Fechar
-        </Button>
+        <>
+          {/* DESFAZER só aparece numa baixa AUTOMÁTICA e p/ admin/advogado. */}
+          {ehAutomatica && podeDesfazer && (
+            <Button
+              variant="ghost"
+              size="md"
+              onClick={() => setConfirmarDesfazer(true)}
+              className="mr-auto text-destructive hover:bg-destructive/10"
+            >
+              <Undo2 className="h-4 w-4" /> Desfazer baixa
+            </Button>
+          )}
+          <Button variant="secondary" size="md" onClick={onClose}>
+            Fechar
+          </Button>
+        </>
       }
     >
       {carregando ? (
@@ -138,6 +186,18 @@ export function PagamentoModal({
         </div>
       ) : dados && pag ? (
         <div className="space-y-4">
+          {/* Destaque: esta baixa foi AUTOMÁTICA (migration 077) */}
+          {ehAutomatica && (
+            <div className="flex items-start gap-2 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
+              <Zap className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span>
+                Baixa dada <strong>automaticamente</strong> pelo sistema: comprovante do WhatsApp com
+                recebedor do escritório e valor casando exatamente esta cobrança.
+                {podeDesfazer ? ' Confira e, se necessário, use “Desfazer baixa”.' : ''}
+              </span>
+            </div>
+          )}
+
           {/* Bloco Pagamento */}
           <div className="rounded-lg border border-border bg-background px-4 py-3">
             <div className="flex items-end justify-between gap-3">
@@ -164,8 +224,11 @@ export function PagamentoModal({
               <div>
                 <dt className="text-xs text-muted-foreground">Confirmado por</dt>
                 <dd className="flex items-center gap-1.5 font-medium text-foreground">
-                  <User className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                  {pag.baixaPorNome ?? '—'}
+                  {ehAutomatica ? (
+                    <><Zap className="h-3.5 w-3.5 text-success" aria-hidden /> Sistema (automática)</>
+                  ) : (
+                    <><User className="h-3.5 w-3.5 text-muted-foreground" aria-hidden /> {pag.baixaPorNome ?? '—'}</>
+                  )}
                 </dd>
               </div>
               {pag.obs && (
@@ -266,6 +329,27 @@ export function PagamentoModal({
           )}
         </div>
       ) : null}
-    </Dialog>
+      </Dialog>
+
+      <ConfirmDialog
+        open={confirmarDesfazer}
+        onClose={() => setConfirmarDesfazer(false)}
+        onConfirm={desfazer}
+        loading={desfazendo}
+        variant="danger"
+        title="Desfazer baixa automática"
+        confirmLabel="Desfazer baixa"
+        cancelLabel="Voltar"
+        description={
+          parcela ? (
+            <>
+              A baixa de <strong>{formatarValor(pag?.valorPagoCentavos ?? parcela.valor_centavos)}</strong> será
+              desfeita: a parcela volta a ficar <strong>em aberto</strong> e o comprovante retorna à fila de
+              conferência (aguardando baixa) para revisão humana.
+            </>
+          ) : ''
+        }
+      />
+    </>
   )
 }

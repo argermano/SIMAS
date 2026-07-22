@@ -41,7 +41,7 @@ export default async function FinanceiroPage() {
         <div>
           {/* Suspense exigido pelo useSearchParams (deep-link ?contrato=) no client component */}
           <Suspense fallback={<PageLoading label="Carregando financeiro..." />}>
-            <FinanceiroClient />
+            <FinanceiroClient role={usuario.role} />
           </Suspense>
         </div>
       </main>

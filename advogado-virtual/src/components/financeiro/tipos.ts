@@ -16,6 +16,9 @@ export interface Parcela {
   pago_em?: string | null
   pago_valor_centavos?: number | null
   meio?: 'pix' | 'boleto' | 'transferencia' | 'dinheiro' | 'outro' | null
+  // Baixa feita pelo SISTEMA sob a TRAVA (migration 077). true numa parcela paga
+  // = comprovante do WhatsApp baixou sozinho; a UI destaca e oferece DESFAZER.
+  baixa_automatica?: boolean | null
   // Comprovante recebido por WhatsApp e pré-organizado pelo staging (migration
   // 052). Parcela "aguardando baixa" = status 'aberta' E comprovante_recebido_em
   // não-nulo. A baixa continua sendo confirmação humana (nunca automática).

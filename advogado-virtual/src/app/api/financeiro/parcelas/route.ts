@@ -16,6 +16,9 @@ const DATA_RE = /^\d{4}-\d{2}-\d{2}$/
 const COLS =
   'id, cliente_id, contrato_id, processo_id, descricao, valor_centavos, vencimento, ' +
   'status, pago_em, pago_valor_centavos, meio, comprovante_url, created_at, ' +
+  // baixa_automatica (migration 077): parcela paga pelo SISTEMA (sob a TRAVA) —
+  // a UI destaca o estado e oferece DESFAZER.
+  'baixa_automatica, ' +
   // Staging do comprovante recebido por WhatsApp (migration 052) — habilita o
   // estado derivado "aguardando baixa" na tela. A URL aqui é só o path no
   // bucket (a UI pede signed URL sob demanda); jsonb com os dados da IA.
@@ -35,6 +38,7 @@ interface ParcelaRow {
   meio: string | null
   comprovante_url: string | null
   created_at: string
+  baixa_automatica: boolean
   comprovante_recebido_em: string | null
   comprovante_recebido_url: string | null
   comprovante_recebido_dados: Record<string, unknown> | null

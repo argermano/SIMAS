@@ -50,7 +50,7 @@ export async function GET(
 
   const { data: parcela } = await supabase
     .from('parcelas')
-    .select('id, status, descricao, valor_centavos, vencimento, pago_em, pago_valor_centavos, meio, comprovante_url, comprovante_dados, baixa_por, baixa_obs')
+    .select('id, status, descricao, valor_centavos, vencimento, pago_em, pago_valor_centavos, meio, comprovante_url, comprovante_dados, baixa_por, baixa_obs, baixa_automatica')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .maybeSingle()
@@ -112,6 +112,8 @@ export async function GET(
       meio: parcela.meio,
       baixaPorNome,
       obs: parcela.baixa_obs,
+      // Baixa feita pelo SISTEMA (migration 077): a UI destaca e oferece DESFAZER.
+      baixaAutomatica: parcela.baixa_automatica === true,
     },
     dados,
     comprovante,

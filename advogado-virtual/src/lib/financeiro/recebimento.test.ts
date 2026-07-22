@@ -102,9 +102,13 @@ function dadosBase(over?: Partial<DadosComprovante>): DadosComprovante {
   return { valorCentavos: 10000, dataISO: '2026-07-10', ...over }
 }
 
-// INVARIANTE DURA (recebimento.ts:9): a função NUNCA dá baixa. Nenhuma escrita
-// em `parcelas` pode carregar os campos de baixa (pago_em/pago_valor_centavos/
-// meio/comprovante_url) nem status 'paga'. O staging só toca comprovante_recebido_*.
+// INVARIANTE (atualizado 2026-07-22): FORA da TRAVA de baixa automática, a função
+// NUNCA dá baixa. Nenhuma escrita em `parcelas` pode carregar os campos de baixa
+// (pago_em/pago_valor_centavos/meio/comprovante_url) nem status 'paga'. O staging
+// só toca comprovante_recebido_*. A TRAVA (recebedor 'sim' + cliente identificado
+// + valor casando EXATAMENTE 1 parcela aberta + valor/data lidos) é o ÚNICO
+// caminho que baixa — coberto pelo bloco "baixa automática (TRAVA)" abaixo, que
+// verifica o oposto (a baixa ACONTECE) e NÃO usa este assert.
 const CAMPOS_DE_BAIXA = ['pago_em', 'pago_valor_centavos', 'meio', 'comprovante_url']
 function assertNuncaBaixa(chamadas: Chamada[]) {
   for (const c of chamadas) {
@@ -510,6 +514,234 @@ describe('processarAnexoRecebido — staging por claim atômico (INVARIANTE: nun
     expect(storage.removes).toHaveLength(1)
     expect(storage.removes[0][0]).toContain('/pendentes/')
     assertNuncaBaixa(chamadas)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRAVA de baixa automática (decisão do dono, 2026-07-22). A baixa ACONTECE só
+// quando TODAS valem: (a) recebedor 'sim' (escritório com confiança); (b) cliente
+// identificado E o valor casa EXATAMENTE com UMA única parcela aberta; (c) valor
+// e data lidos (sem null). Recebedor 'sim' = recebedorNome intersecta pixNome/
+// tenantNome por token distintivo (aqui 'MARTA GERMANO' × pix_nome 'MARTA GERMANO').
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RECEBEDOR_SIM = { recebedorNome: 'MARTA GERMANO' }
+const TENANT_ESCRITORIO = { data: { nome: 'MARTA ADVOCACIA', config: { financeiro: { pix_nome: 'MARTA GERMANO' } } } }
+
+describe('processarAnexoRecebido — baixa automática (TRAVA)', () => {
+  it('TRAVA completa → baixa AUTOMÁTICA (mesma transição da confirmação humana)', async () => {
+    const chamadas: Chamada[] = []
+    const storage = novoStorage()
+    const s = stubs(dadosBase(RECEBEDOR_SIM)) // valor 10000 → casa p1 exatamente
+    const db = fakeDb(
+      {
+        clientes: [{ data: [{ id: 'c1', telefone: PHONE, tenant_id: 't1' }] }],
+        parcelas: [
+          { data: [{ id: 'p1', valor_centavos: 10000, vencimento: '2026-07-10' }] }, // abertas (1 exata)
+          { data: null },        // jaProcessado
+          { data: [{ id: 'p1' }] }, // baixa automática: claim venceu (1 linha)
+        ],
+        comprovantes_recebidos: [{ data: null }], // inboxJaRegistrado
+        tenants: [TENANT_ESCRITORIO],             // recebedor 'sim'
+      },
+      { chamadas, storage },
+    )
+    await processarAnexoRecebido(
+      { telefone: PHONE, anexoUrl: URL_OK, mensagemId: 'm1', conversaId: 'c1' },
+      { db, ...s },
+    )
+    // Subiu o comprovante (pendentes/) e baixou a parcela (única update em parcelas).
+    expect(storage.uploads).toHaveLength(1)
+    expect(storage.uploads[0].path).toContain('/pendentes/')
+    const updates = chamadas.filter((c) => c.tabela === 'parcelas' && c.metodo === 'update')
+    expect(updates).toHaveLength(1)
+    const payload = updates[0].args[0] as Record<string, unknown>
+    // Transição idêntica à baixa humana (+ marcador baixa_automatica, baixa_por null).
+    expect(payload.status).toBe('paga')
+    expect(payload.baixa_automatica).toBe(true)
+    expect(payload.baixa_por).toBeNull()
+    expect(payload.meio).toBe('pix')
+    expect(payload.pago_valor_centavos).toBe(10000)
+    expect(payload.comprovante_url).toContain('/pendentes/')
+    // pago_em = data do comprovante (2026-07-10 no fuso -03:00).
+    expect(typeof payload.pago_em).toBe('string')
+    expect(payload.pago_em as string).toContain('2026-07-10')
+    // Consome o staging; mantém só o tombstone de dedup.
+    expect(payload.comprovante_recebido_em).toBeNull()
+    expect(payload.comprovante_recebido_url).toBeNull()
+    expect(payload.comprovante_recebido_dados).toEqual({ mensagemId: 'm1' })
+    // Auditou como baixa automática (só ids), userId nulo.
+    expect(s.auditar).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'financeiro.baixa_automatica', resourceType: 'parcela', resourceId: 'p1', userId: null }),
+    )
+    // Não criou inbox nem fez staging separado.
+    expect(fez(chamadas, 'comprovantes_recebidos', 'upsert')).toBe(false)
+  })
+
+  it('recebedor DESCONHECIDO (config vazia) → NÃO baixa, faz staging', async () => {
+    const chamadas: Chamada[] = []
+    const storage = novoStorage()
+    const s = stubs(dadosBase(RECEBEDOR_SIM)) // mesmo comprovante, mas...
+    const db = fakeDb(
+      {
+        clientes: [{ data: [{ id: 'c1', telefone: PHONE, tenant_id: 't1' }] }],
+        parcelas: [
+          { data: [{ id: 'p1', valor_centavos: 10000, vencimento: '2026-07-10' }] },
+          { data: null },        // jaProcessado
+          { data: [{ id: 'p1' }] }, // staging claim venceu
+        ],
+        comprovantes_recebidos: [{ data: null }],
+        tenants: [{ data: { nome: 'X', config: {} } }], // ...sem referência → 'desconhecido'
+      },
+      { chamadas, storage },
+    )
+    await processarAnexoRecebido(
+      { telefone: PHONE, anexoUrl: URL_OK, mensagemId: 'm1', conversaId: 'c1' },
+      { db, ...s },
+    )
+    const upd = chamadas.find((c) => c.tabela === 'parcelas' && c.metodo === 'update')
+    expect(Object.keys(upd!.args[0] as Record<string, unknown>).sort()).toEqual(
+      ['comprovante_recebido_dados', 'comprovante_recebido_em', 'comprovante_recebido_url'],
+    )
+    expect(s.auditar).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'financeiro.comprovante_recebido' }),
+    )
+    assertNuncaBaixa(chamadas)
+  })
+
+  it('recebedor sim mas valor só APROXIMADO (0 casamentos exatos) → NÃO baixa, staging', async () => {
+    const chamadas: Chamada[] = []
+    const storage = novoStorage()
+    const s = stubs(dadosBase(RECEBEDOR_SIM)) // valor 10000
+    const db = fakeDb(
+      {
+        clientes: [{ data: [{ id: 'c1', telefone: PHONE, tenant_id: 't1' }] }],
+        parcelas: [
+          // 10050 casa por ±1% (tolerância 100) mas NÃO é exato → trava não arma.
+          { data: [{ id: 'p1', valor_centavos: 10050, vencimento: '2026-07-10' }] },
+          { data: null },        // jaProcessado
+          { data: [{ id: 'p1' }] }, // staging claim venceu
+        ],
+        comprovantes_recebidos: [{ data: null }],
+        tenants: [TENANT_ESCRITORIO],
+      },
+      { chamadas, storage },
+    )
+    await processarAnexoRecebido(
+      { telefone: PHONE, anexoUrl: URL_OK, mensagemId: 'm1', conversaId: 'c1' },
+      { db, ...s },
+    )
+    const upd = chamadas.find((c) => c.tabela === 'parcelas' && c.metodo === 'update')
+    expect(Object.keys(upd!.args[0] as Record<string, unknown>).sort()).toEqual(
+      ['comprovante_recebido_dados', 'comprovante_recebido_em', 'comprovante_recebido_url'],
+    )
+    assertNuncaBaixa(chamadas)
+  })
+
+  it('recebedor sim mas DUAS parcelas com valor exato (ambíguo) → NÃO baixa, staging', async () => {
+    const chamadas: Chamada[] = []
+    const storage = novoStorage()
+    const s = stubs(dadosBase(RECEBEDOR_SIM)) // valor 10000
+    const db = fakeDb(
+      {
+        clientes: [{ data: [{ id: 'c1', telefone: PHONE, tenant_id: 't1' }] }],
+        parcelas: [
+          {
+            data: [
+              { id: 'p1', valor_centavos: 10000, vencimento: '2026-07-10' },
+              { id: 'p2', valor_centavos: 10000, vencimento: '2026-07-20' }, // 2ª exata → não arma
+            ],
+          },
+          { data: null },        // jaProcessado
+          { data: [{ id: 'p1' }] }, // staging claim venceu (na sugerida por proximidade)
+        ],
+        comprovantes_recebidos: [{ data: null }],
+        tenants: [TENANT_ESCRITORIO],
+      },
+      { chamadas, storage },
+    )
+    await processarAnexoRecebido(
+      { telefone: PHONE, anexoUrl: URL_OK, mensagemId: 'm1', conversaId: 'c1' },
+      { db, ...s },
+    )
+    const upd = chamadas.find((c) => c.tabela === 'parcelas' && c.metodo === 'update')
+    expect(Object.keys(upd!.args[0] as Record<string, unknown>).sort()).toEqual(
+      ['comprovante_recebido_dados', 'comprovante_recebido_em', 'comprovante_recebido_url'],
+    )
+    assertNuncaBaixa(chamadas)
+  })
+
+  it('recebedor sim + 1 exata mas DATA ausente (defesa) → NÃO baixa, staging', async () => {
+    const chamadas: Chamada[] = []
+    const storage = novoStorage()
+    const s = stubs(dadosBase({ ...RECEBEDOR_SIM, dataISO: '' })) // sem data lida
+    const db = fakeDb(
+      {
+        clientes: [{ data: [{ id: 'c1', telefone: PHONE, tenant_id: 't1' }] }],
+        parcelas: [
+          { data: [{ id: 'p1', valor_centavos: 10000, vencimento: '2026-07-10' }] },
+          { data: null },        // jaProcessado
+          { data: [{ id: 'p1' }] }, // staging claim venceu
+        ],
+        comprovantes_recebidos: [{ data: null }],
+        tenants: [TENANT_ESCRITORIO],
+      },
+      { chamadas, storage },
+    )
+    await processarAnexoRecebido(
+      { telefone: PHONE, anexoUrl: URL_OK, mensagemId: 'm1', conversaId: 'c1' },
+      { db, ...s },
+    )
+    const upd = chamadas.find((c) => c.tabela === 'parcelas' && c.metodo === 'update')
+    expect(Object.keys(upd!.args[0] as Record<string, unknown>).sort()).toEqual(
+      ['comprovante_recebido_dados', 'comprovante_recebido_em', 'comprovante_recebido_url'],
+    )
+    assertNuncaBaixa(chamadas)
+  })
+
+  it('CORRIDA: 2ª baixa automática da MESMA parcela perde o claim → vira sugestão normal (inbox), não baixa 2x', async () => {
+    const chamadas: Chamada[] = []
+    const storage = novoStorage()
+    const s = stubs(dadosBase(RECEBEDOR_SIM)) // valor 10000 → trava arma
+    const db = fakeDb(
+      {
+        clientes: [{ data: [{ id: 'c1', telefone: PHONE, tenant_id: 't1' }] }],
+        parcelas: [
+          { data: [{ id: 'p1', valor_centavos: 10000, vencimento: '2026-07-10' }] }, // abertas (lidas antes do 1º commitar)
+          { data: null }, // jaProcessado
+          { data: [] },   // baixa automática: PERDEU a corrida (0 linhas)
+          { data: [] },   // staging claim: também perde (parcela já paga pelo 1º)
+          // cur (claim perdido): outra mensagem venceu; nosso path não é referenciado.
+          {
+            data: {
+              comprovante_recebido_url: null,
+              comprovante_url: 'financeiro/t1/pendentes/p1-WINNER.jpg',
+              comprovante_recebido_dados: { mensagemId: 'WINNER' },
+            },
+          },
+        ],
+        comprovantes_recebidos: [
+          { data: null },              // inboxJaRegistrado
+          { data: [{ id: 'inbox-x' }] }, // upsert do inbox (vira sugestão normal)
+        ],
+        tenants: [TENANT_ESCRITORIO],
+      },
+      { chamadas, storage },
+    )
+    await processarAnexoRecebido(
+      { telefone: PHONE, anexoUrl: URL_OK, mensagemId: 'm1', conversaId: 'c1' },
+      { db, ...s },
+    )
+    // Tentou baixa automática (2 updates: baixa + staging), mas AMBAS sem efeito.
+    const updates = chamadas.filter((c) => c.tabela === 'parcelas' && c.metodo === 'update')
+    expect(updates).toHaveLength(2)
+    // NÃO auditou baixa (não baixou 2x); virou sugestão normal (inbox).
+    expect(s.auditar).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'financeiro.baixa_automatica' }),
+    )
+    expect(s.auditar).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'financeiro.comprovante_inbox_criado' }),
+    )
   })
 })
 

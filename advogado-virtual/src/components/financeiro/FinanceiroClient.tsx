@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import {
   Wallet, CalendarClock, AlertTriangle, CheckCircle2, Copy, HandCoins,
   XCircle, Plus, Search, ChevronLeft, ChevronRight, FilterX, MessageSquare, FileClock, Receipt,
-  TrendingUp, Sparkles, Trash2, FileSignature
+  TrendingUp, Sparkles, Trash2, FileSignature, Zap
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +25,7 @@ import { ModalComunicar } from './ModalComunicar'
 import { ModalNovaCobranca, type PrefillContrato } from './ModalNovaCobranca'
 import { ConferirComprovanteModal } from './ConferirComprovanteModal'
 import { InboxComprovantes } from './InboxComprovantes'
+import { BaixasAutomaticas } from './BaixasAutomaticas'
 import { PagamentoModal } from './PagamentoModal'
 import { type Parcela, type PixConfig, LABELS_MEIO, hojeISO, somarDiasISO, ehVencida, aguardandoBaixa, ehPrevisao } from './tipos'
 
@@ -67,10 +68,12 @@ function parseIndicador(o: unknown): Indicador {
 // Componente principal
 // ─────────────────────────────────────────────────────────────
 
-export function FinanceiroClient() {
+export function FinanceiroClient({ role }: { role?: string }) {
   const { success, error: toastError } = useToast()
   const searchParams = useSearchParams()
   const hoje = useMemo(() => hojeISO(), [])
+  // DESFAZER baixa automática é restrito a admin/advogado (paridade com a rota).
+  const podeDesfazer = role === 'admin' || role === 'advogado'
 
   const [resumo, setResumo]     = useState<Resumo | null>(null)
   const [parcelas, setParcelas] = useState<Parcela[]>([])
@@ -337,6 +340,10 @@ export function FinanceiroClient() {
 
   return (
     <div className="space-y-5">
+      {/* Baixas automáticas recentes (migration 077): aviso do topo p/ conferir
+          o que o sistema baixou sozinho, com DESFAZER (admin/advogado). */}
+      <BaixasAutomaticas podeDesfazer={podeDesfazer} onChange={aposMudanca} />
+
       {/* Inbox de comprovantes recebidos sem cobrança (migration 053): aparece
           só quando há pendentes. Atribuir/descartar recarrega as parcelas. */}
       <InboxComprovantes onChange={aposMudanca} />
@@ -509,7 +516,14 @@ export function FinanceiroClient() {
                               <Sparkles className="h-3 w-3" /> Previsão
                             </Badge>
                           ) : p.status === 'paga' ? (
-                            <Badge variant="success">Paga</Badge>
+                            <span className="inline-flex flex-wrap items-center gap-1">
+                              <Badge variant="success">Paga</Badge>
+                              {p.baixa_automatica && (
+                                <Badge variant="success" className="gap-1 ring-1 ring-success/40" title="Baixa dada automaticamente pelo sistema">
+                                  <Zap className="h-3 w-3" /> Automática
+                                </Badge>
+                              )}
+                            </span>
                           ) : p.status === 'cancelada' ? (
                             <Badge variant="default">Cancelada</Badge>
                           ) : vencida ? (
@@ -656,6 +670,8 @@ export function FinanceiroClient() {
       <PagamentoModal
         parcela={parcelaPagamento}
         onClose={() => setParcelaPagamento(null)}
+        podeDesfazer={podeDesfazer}
+        onDesfeita={() => { setParcelaPagamento(null); aposMudanca() }}
       />
       <ModalNovaCobranca
         open={novaAberta}

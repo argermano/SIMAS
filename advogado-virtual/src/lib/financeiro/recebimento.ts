@@ -6,7 +6,11 @@
 // nenhuma parcela casou, claim perdido, ou telefone sem cliente), cria um
 // registro no INBOX (comprovantes_recebidos) para o atendente conferir e
 // atribuir a um contrato/cliente — em vez de descartar em silêncio.
-// INVARIANTE DURA: NUNCA dá baixa; só pré-organiza para conferência humana.
+// REGRA (decisão do dono, 2026-07-22): por padrão NÃO dá baixa — só pré-organiza
+// para conferência humana. A ÚNICA exceção é a TRAVA de baixa automática (ver
+// tentarBaixaAutomatica): recebedor escritório com confiança + cliente
+// identificado + valor casando exatamente UMA parcela aberta + valor/data lidos.
+// Fora da trava, o invariante antigo vale (IA sugere, humano confirma).
 // O webhook não pode 500 por isso: esta função NUNCA lança.
 // LGPD: logger/logAudit só com ids e contagens — nunca valores/nomes/textos.
 
@@ -17,7 +21,7 @@ import { relayFetchBinario } from '@/lib/conversas/relay'
 import { apenasDigitos, mesmoTelefone } from '@/lib/conversas/telefone'
 import { extrairDadosComprovante } from '@/lib/financeiro/extracao'
 import { sugerirParcela, type DadosComprovante } from '@/lib/financeiro/comprovante'
-import { recebedorEhEscritorio } from '@/lib/financeiro/recebedor'
+import { recebedorEhEscritorio, type DecisaoRecebedor } from '@/lib/financeiro/recebedor'
 
 // Mesmo mapa de extensões da rota de baixa manual (contentType → sufixo do path).
 const EXTENSOES: Record<string, string> = {
@@ -215,28 +219,104 @@ async function baixarEExtrair(
   return { buffer: anexo.buffer, contentType, dados: extracao.dados }
 }
 
-// Filtro por RECEBEDOR (pedido do dono): só entram no financeiro os comprovantes
-// direcionados AO ESCRITÓRIO (recebedor = escritório ou conta pessoal da
-// titular). Um recibo de TERCEIRO que passou pelo WhatsApp não vira staging nem
+// Classifica o RECEBEDOR do comprovante lendo a config do tenant UMA vez.
+// 'sim' = certeza de que é do escritório (habilita a TRAVA de baixa automática);
+// 'nao' = terceiro (não entra no financeiro); 'desconhecido' = na dúvida (entra,
+// mas NUNCA baixa sozinho). Erro ao ler a config → cfg vazia → 'desconhecido'
+// (não descarta por falha transitória). LGPD: não loga nada dos dados.
+async function classificarRecebedor(
+  db: SupabaseClient,
+  tenantId: string,
+  dados: DadosComprovante,
+): Promise<DecisaoRecebedor> {
+  const { data } = await db.from('tenants').select('nome, config').eq('id', tenantId).maybeSingle()
+  const fin = ((data?.config as { financeiro?: { pix_chave?: string; pix_nome?: string } } | null)?.financeiro ?? {})
+  return recebedorEhEscritorio(dados, {
+    pixChave: fin.pix_chave ?? null,
+    pixNome: fin.pix_nome ?? null,
+    tenantNome: (data?.nome as string | null) ?? null,
+  })
+}
+
+// Comprovante direcionado a TERCEIRO (só na CERTEZA 'nao'): não vira staging nem
 // inbox — segue na conversa p/ ser anexado ao caso/cliente por outro fluxo.
-// Só devolve true na CERTEZA de terceiro ('nao'); 'sim'/'desconhecido' entram
-// (na dúvida mantém — nunca perder recibo real do escritório). Erro ao ler a
-// config → cfg vazia → 'desconhecido' → mantém (não descarta por falha
-// transitória). LGPD: não loga nada dos dados.
+// 'sim'/'desconhecido' entram (na dúvida mantém — nunca perder recibo real do
+// escritório). Usado no caminho SEM cliente (caso d), onde não há baixa possível.
 async function recebedorExterno(
   db: SupabaseClient,
   tenantId: string,
   dados: DadosComprovante,
 ): Promise<boolean> {
-  const { data } = await db.from('tenants').select('nome, config').eq('id', tenantId).maybeSingle()
-  const fin = ((data?.config as { financeiro?: { pix_chave?: string; pix_nome?: string } } | null)?.financeiro ?? {})
-  return (
-    recebedorEhEscritorio(dados, {
-      pixChave: fin.pix_chave ?? null,
-      pixNome: fin.pix_nome ?? null,
-      tenantNome: (data?.nome as string | null) ?? null,
-    }) === 'nao'
-  )
+  return (await classificarRecebedor(db, tenantId, dados)) === 'nao'
+}
+
+// ── TRAVA de baixa automática (decisão do dono, 2026-07-22) ──────────────────
+// Executa EXATAMENTE a transição da confirmação humana (parcela 'paga', pago_em =
+// data do comprovante, comprovante vinculado, audit log) — só que baixa_por =
+// null (baixa do sistema) e baixa_automatica = true. O CLAIM é ATÔMICO no WHERE
+// status='aberta' (padrão da casa): dois comprovantes iguais concorrentes não
+// baixam a mesma parcela duas vezes — o 2º perde a corrida (0 linhas) e volta ao
+// fluxo normal (staging → inbox). Só é chamada quando a TRAVA inteira vale.
+// Devolve true se a baixa ocorreu; false se perdeu a corrida ou deu erro.
+async function tentarBaixaAutomatica(
+  deps: Pick<RecebimentoDeps, 'db' | 'auditar'>,
+  input: {
+    tenantId: string
+    parcelaId: string
+    dados: DadosComprovante
+    mensagemId: string
+    conversaId: string
+    contentType: string
+    comprovanteUrl: string
+  },
+): Promise<boolean> {
+  const { db, auditar } = deps
+  const { tenantId, parcelaId, dados, mensagemId, conversaId, contentType, comprovanteUrl } = input
+
+  // pago_em = data do comprovante (dataISO) no fuso do escritório (-03:00, meio-
+  // dia p/ não vazar de mês). dataISO já passou o regex, mas pode ser calendário
+  // inválido (mês 00/13…) → NaN → cai em agora (paridade com a baixa manual).
+  const dataCandidata = new Date(`${dados.dataISO}T12:00:00-03:00`)
+  const pagoEm = Number.isNaN(dataCandidata.getTime()) ? new Date() : dataCandidata
+
+  const { data: baixadas, error } = await db
+    .from('parcelas')
+    .update({
+      status: 'paga',
+      pago_em: pagoEm.toISOString(),
+      pago_valor_centavos: dados.valorCentavos, // == valor da parcela (match exato)
+      meio: 'pix',
+      comprovante_url: comprovanteUrl,
+      comprovante_dados: { ...dados, mensagemId, conversaId, contentType },
+      baixa_por: null, // baixa do sistema (sem usuário)
+      baixa_obs: null,
+      baixa_automatica: true,
+      // Nasce baixada (sem passar por staging). Mantém só o mensagemId como
+      // tombstone de dedup do webhook (paridade com a baixa manual).
+      comprovante_recebido_em: null,
+      comprovante_recebido_url: null,
+      comprovante_recebido_dados: { mensagemId },
+    })
+    .eq('id', parcelaId)
+    .eq('tenant_id', tenantId)
+    .eq('status', 'aberta')
+    // Também exige SEM comprovante pendente: nunca baixa por cima de um staging
+    // aguardando conferência humana (defesa a mais que o WHERE status='aberta').
+    .is('comprovante_recebido_em', null)
+    .select('id')
+  if (error || !baixadas || baixadas.length === 0) return false
+
+  await auditar({
+    tenantId,
+    userId: null,
+    action: 'financeiro.baixa_automatica',
+    resourceType: 'parcela',
+    resourceId: parcelaId,
+    // LGPD: só ids/flags — nunca valores/nomes.
+    metadata: { conversaId, mensagemId, meio: 'pix' },
+  })
+  logger.info('financeiro.recebimento.baixa_automatica', { mensagemId, conversaId, tenantId })
+  return true
 }
 
 // Cria o registro de INBOX quando a imagem É comprovante mas não houve staging
@@ -455,9 +535,12 @@ export async function processarAnexoRecebido(
     const { buffer, contentType, dados } = extraido
 
     // h.0) Filtro por RECEBEDOR: vale para os DOIS caminhos (staging de parcela
-    // E inbox). Comprovante de terceiro não entra no financeiro; o anexo segue
-    // na conversa p/ ser anexado ao caso/cliente por outro fluxo.
-    if (await recebedorExterno(db, tenantId, dados)) {
+    // E inbox). Comprovante de terceiro ('nao') não entra no financeiro; o anexo
+    // segue na conversa p/ ser anexado ao caso/cliente por outro fluxo. Guardamos
+    // a DECISÃO: só 'sim' (certeza de escritório) habilita a TRAVA de baixa
+    // automática mais abaixo — 'desconhecido' entra, mas nunca baixa sozinho.
+    const decisaoRecebedor = await classificarRecebedor(db, tenantId, dados)
+    if (decisaoRecebedor === 'nao') {
       logger.info('financeiro.recebimento.recebedor_externo', { mensagemId, conversaId, tenantId })
       return
     }
@@ -502,6 +585,29 @@ export async function processarAnexoRecebido(
     if (upErr) {
       logger.warn('financeiro.recebimento.upload_falhou', { mensagemId, conversaId, tenantId })
       return // sem arquivo não grava staging
+    }
+
+    // k.1) TRAVA DE BAIXA AUTOMÁTICA (decisão do dono, 2026-07-22). Só quando
+    // TODAS valem: (a) recebedor 'sim' (escritório com confiança); (b) cliente
+    // identificado (telefone casou 1 único cliente) E o valor bate EXATAMENTE com
+    // UMA única parcela 'aberta' — 'em aberto' = a receber e não paga/cancelada;
+    // 'prevista' NUNCA entra (a query de `abertas` filtra status='aberta'); (c) a
+    // IA leu valor e data (sem null). O casamento exato de valor é sobre `abertas`
+    // (mesmo conjunto da sugestão): exatamente 1 parcela com valor_centavos igual.
+    // Fora da trava, cai no staging (step l) — IA sugere, humano confirma.
+    const exatas = abertas.filter((p) => p.valor_centavos === dados.valorCentavos)
+    const valorLido = Number.isInteger(dados.valorCentavos) && dados.valorCentavos > 0
+    const dataLida = typeof dados.dataISO === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dados.dataISO)
+    if (decisaoRecebedor === 'sim' && clienteIdHint !== null && exatas.length === 1 && valorLido && dataLida) {
+      // A parcela exata é a própria sugestão (o casamento exato vence na
+      // sugerirParcela), então reusa o mesmo id/arquivo (path).
+      const baixou = await tentarBaixaAutomatica(d, {
+        tenantId, parcelaId: sugestao.id, dados, mensagemId, conversaId, contentType, comprovanteUrl: path,
+      })
+      if (baixou) return
+      // Corrida perdida (parcela saiu de 'aberta' entre a leitura e o claim): NÃO
+      // retorna — cai no claim de staging abaixo, que também perde e manda ao
+      // inbox (o 2º comprovante idêntico vira "sugestão normal", nunca 2ª baixa).
     }
 
     // l) CLAIM ATÔMICO: só marca o staging se a parcela seguir aberta e SEM
