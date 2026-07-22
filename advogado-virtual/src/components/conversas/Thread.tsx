@@ -22,6 +22,7 @@ import { agrupadorDia } from '@/lib/conversas/formato'
 import type { Conversa, Mensagem, RespostaMensagens } from '@/lib/conversas/tipos'
 import { MensagemBolha } from './MensagemBolha'
 import { codeDoErro, mensagemErroRelay, rotuloDia } from './erros'
+import { createClient } from '@/lib/supabase/client'
 import {
   LIMITE_UPLOAD_BYTES,
   TIPOS_ANEXO_PERMITIDOS,
@@ -188,26 +189,63 @@ export function Thread({
       return
     }
     if (f.size > LIMITE_UPLOAD_BYTES) {
-      toastError('Arquivo muito grande', 'O limite é 4 MB.')
+      toastError('Arquivo muito grande', 'O limite é 20 MB.')
       return
     }
     setArquivo(f)
   }
 
-  /** Envia o arquivo do PC como anexo (multipart); a legenda é o texto do composer. */
+  /** Envia o arquivo do PC ao cliente: sobe DIRETO ao Storage por URL assinada e
+   *  só então manda o storagePath ao servidor — o binário nunca passa pelo corpo
+   *  da função Vercel (teto ~4,5 MB). A legenda é o texto do composer. */
   async function enviarAnexo() {
     if (!arquivo) return
     setEnviando(true)
     try {
-      const fd = new FormData()
-      fd.append('file', arquivo)
       const caption = texto.trim()
-      if (caption) fd.append('caption', caption)
-      const r = await fetch(`/api/conversas/${id}/anexo`, { method: 'POST', body: fd })
+
+      // 1) Prepara: valida tipo/tamanho no servidor e devolve a URL assinada.
+      const prep = await fetch(`/api/conversas/${id}/anexo/preparar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: arquivo.name, mimetype: arquivo.type, tamanho: arquivo.size }),
+      })
+      const prepData = await prep.json().catch(() => ({}))
+      if (!prep.ok) {
+        if (tratou428(prep.status, prepData)) return
+        if (prep.status === 413) toastError('Arquivo muito grande', 'O limite é 20 MB.')
+        else toastError('Não enviado', mensagemErroRelay(prep.status, prepData))
+        return
+      }
+      const { token, storagePath } = prepData as { token: string; storagePath: string }
+
+      // 2) Upload direto ao Storage (contorna o teto de corpo da função Vercel).
+      const supabase = createClient()
+      const { error: upErr } = await supabase.storage
+        .from('documentos')
+        .uploadToSignedUrl(storagePath, token, arquivo, {
+          contentType: arquivo.type || 'application/octet-stream',
+        })
+      if (upErr) {
+        toastError('Não enviado', 'Falha ao subir o arquivo. Tente novamente.')
+        return
+      }
+
+      // 3) Dispara o envio ao cliente pelo relay (o servidor baixa do Storage).
+      const r = await fetch(`/api/conversas/${id}/anexo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storagePath,
+          filename: arquivo.name,
+          mimetype: arquivo.type,
+          caption: caption || undefined,
+        }),
+      })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
         if (tratou428(r.status, d)) return
-        if (r.status === 413) toastError('Arquivo muito grande', 'O limite é 4 MB.')
+        if (r.status === 413) toastError('Arquivo muito grande', 'O limite é 20 MB.')
         else toastError('Não enviado', mensagemErroRelay(r.status, d))
         return
       }
