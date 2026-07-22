@@ -20,6 +20,14 @@ import {
   ScrollText,
   ClipboardCheck,
   Building2,
+  MessagesSquare,
+  Radar,
+  Newspaper,
+  CalendarClock,
+  FolderTree,
+  Wallet,
+  KanbanSquare,
+  KeyRound,
   Menu,
   X,
 } from 'lucide-react'
@@ -143,6 +151,58 @@ const WORKFLOW_STEPS = [
   },
 ]
 
+// Módulos de gestão do escritório — o SIMAS além da geração de peças.
+const GESTAO = [
+  {
+    icon: MessagesSquare,
+    title: 'Conversas em um só lugar',
+    description:
+      'O WhatsApp do escritório centralizado. O assistente virtual faz triagem e agendamento e transfere para a equipe — quando a atendente assume, a IA se cala.',
+  },
+  {
+    icon: Radar,
+    title: 'Acompanhamento processual',
+    description:
+      'Publicações do DJEN e andamentos do DataJud chegam sozinhos. Linha do tempo por processo com resumo em linguagem clara — e o cliente pergunta pelo WhatsApp e recebe a situação real.',
+  },
+  {
+    icon: Newspaper,
+    title: 'Publicações com IA',
+    description:
+      'A caixa de publicações sugere o tratamento e destaca a data. Nada vira prazo sem confirmação humana — o controle continua com o advogado.',
+  },
+  {
+    icon: CalendarClock,
+    title: 'Agenda conectada',
+    description:
+      'Compromissos, prazos e audiências no Google Agenda de cada advogado, automaticamente, com convites por e-mail aos envolvidos.',
+  },
+  {
+    icon: FolderTree,
+    title: 'Documentos como um Drive',
+    description:
+      'O dossiê do cliente em árvore — casos, processos, contratos. O mesmo documento em várias pastas, espelhado no Google Drive do escritório.',
+  },
+  {
+    icon: Wallet,
+    title: 'Financeiro do caso',
+    description:
+      'Parcelas e previsão de recebimento nascem do contrato. O comprovante chega pelo WhatsApp e a baixa é automática quando o pagamento confere — na dúvida, quem decide é gente.',
+  },
+  {
+    icon: KanbanSquare,
+    title: 'Funil comercial',
+    description:
+      'Cada conversa nova vira card no kanban. As consultas agendadas pelo assistente já aparecem na agenda.',
+  },
+  {
+    icon: FileSignature,
+    title: 'Contratos',
+    description:
+      'Geração, assinatura digital via D4Sign e previsão financeira no mesmo fluxo.',
+  },
+]
+
 const FEATURES = [
   {
     icon: BadgeCheck,
@@ -170,9 +230,9 @@ const FEATURES = [
   },
   {
     icon: Users,
-    title: 'Dossiê do cliente',
+    title: 'Histórico do caso',
     description:
-      'Atendimentos, documentos, análises e peças de cada cliente centralizados em um único lugar.',
+      'Atendimentos, análises e peças de cada cliente reunidos — o caso inteiro à mão na hora de redigir.',
   },
   {
     icon: ShieldCheck,
@@ -206,13 +266,16 @@ const DIFERENCIAIS = [
 const STATS: { value?: number; suffix?: string; text?: string; label: string }[] = [
   { value: 8, label: 'áreas do direito' },
   { value: 20, label: 'combinações de prompts curados (área × tipo de peça)' },
-  { text: 'Citações', label: 'conferidas automaticamente: nº CNJ, súmulas e leis' },
-  { text: 'Teses', label: 'do escritório usadas na fundamentação' },
+  { text: 'Citações', label: 'conferidas: nº CNJ, súmulas e leis' },
+  { text: 'Teses', label: 'do escritório na fundamentação' },
+  { text: 'DJEN', label: 'publicações conferidas diariamente' },
+  { text: 'Google', label: 'Agenda e Drive espelhados automaticamente' },
 ]
 
 const TRUST = [
   { icon: Lock, title: 'LGPD & isolamento por escritório', desc: 'Dados isolados por RLS e criptografados' },
   { icon: BadgeCheck, title: 'Fundamentação verificada', desc: 'Citações conferidas: nº CNJ, súmulas e leis' },
+  { icon: KeyRound, title: 'Acesso mínimo no Google', desc: 'O app só acessa a agenda e as pastas que ele mesmo criou' },
   { icon: Building2, title: 'Feito em escritório real', desc: 'Desenvolvido na rotina da advocacia (SC/DF)' },
 ]
 
@@ -355,6 +418,7 @@ export default function LandingPage() {
 
   const NAV_LINKS: [string, string][] = [
     ['#workflow', 'Como funciona'],
+    ['#gestao', 'Gestão'],
     ['#features', 'Funcionalidades'],
     ['#contato', 'Contato'],
     ['#diferenciais', 'Diferenciais'],
@@ -374,7 +438,7 @@ export default function LandingPage() {
             inLanguage: 'pt-BR',
             url: 'https://simas.app',
             description:
-              'Sistema jurídico com IA para a advocacia brasileira — peças com fundamentação verificada.',
+              'Sistema de gestão jurídica com IA para a advocacia brasileira — do primeiro contato no WhatsApp à peça assinada, com fundamentação verificada.',
           }),
         }}
       />
@@ -486,10 +550,10 @@ export default function LandingPage() {
 
               {/* Headline */}
               <h1 className="font-serif text-4xl font-semibold leading-[1.08] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
-                Peças jurídicas com fundamentação{' '}
+                Todo o escritório em um sistema,{' '}
                 <span className="relative">
                   <span className="bg-gradient-to-r from-primary via-primary-glow to-primary bg-clip-text text-transparent">
-                    que você pode conferir
+                    da consulta à peça assinada
                   </span>
                   <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 300 12" fill="none">
                     <path
@@ -504,9 +568,9 @@ export default function LandingPage() {
               </h1>
 
               <p className="mx-auto mt-8 max-w-2xl text-lg leading-relaxed text-muted-foreground md:text-xl">
-                Grave a consulta, analise o caso e gere a peça — com{' '}
-                <span className="font-semibold text-primary">citações verificadas</span> e as{' '}
-                <span className="font-semibold text-primary">teses do seu escritório</span>.
+                Do primeiro contato no WhatsApp ao financeiro do caso: atendimento, processos, agenda e
+                documentos em um só lugar — com a geração de peças de{' '}
+                <span className="font-semibold text-primary">fundamentação verificada</span> no coração.
               </p>
 
               {/* CTA buttons */}
@@ -553,7 +617,7 @@ export default function LandingPage() {
           backgroundSize: '32px 32px',
         }} />
         <div className="relative mx-auto max-w-5xl px-5 py-14 sm:px-8">
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-8 md:grid-cols-3">
             {STATS.map((s) => (
               <StatCard key={s.label} value={s.value} suffix={s.suffix} text={s.text} label={s.label} />
             ))}
@@ -609,6 +673,47 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ═══════════ Gestão do escritório ═══════════ */}
+      <section id="gestao" className="relative border-t py-24 md:py-32">
+        {/* Subtle background glow */}
+        <div className="absolute right-0 top-1/3 h-[380px] w-[380px] rounded-full bg-primary/[0.04] blur-[100px]" />
+
+        <div className="relative mx-auto max-w-7xl px-5 sm:px-8">
+          <Reveal>
+            <div className="text-center">
+              <span className="eyebrow-cinzel inline-block rounded-full bg-accent/15 px-4 py-1.5 text-xs font-semibold uppercase text-primary">
+                Gestão do escritório
+              </span>
+              <h2 className="mt-5 font-serif text-3xl font-semibold text-foreground md:text-4xl lg:text-5xl">
+                Além da peça,{' '}
+                <span className="bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">o escritório inteiro</span>
+              </h2>
+              <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
+                Atendimento, processos, agenda, documentos e financeiro no mesmo lugar da geração de
+                peças — cada rotina puxa a seguinte, sempre com a palavra final do advogado.
+              </p>
+            </div>
+          </Reveal>
+
+          <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {GESTAO.map((m, i) => {
+              const Icon = m.icon
+              return (
+                <Reveal key={m.title} delay={(i % 4) * 80}>
+                  <div className="group relative flex h-full flex-col rounded-xl border border-border/60 bg-card p-6 shadow-card transition-all hover:shadow-card-hover hover:-translate-y-1 hover:border-primary/20">
+                    <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-primary transition-transform group-hover:scale-110">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="font-heading text-base font-semibold text-foreground">{m.title}</h3>
+                    <p className="mt-2 flex-1 text-sm leading-relaxed text-muted-foreground">{m.description}</p>
+                  </div>
+                </Reveal>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
       {/* ═══════════ Features ═══════════ */}
       <section id="features" className="relative border-t bg-muted/20 py-24 md:py-32">
         {/* Subtle background glow */}
@@ -621,10 +726,10 @@ export default function LandingPage() {
                 Funcionalidades
               </span>
               <h2 className="mt-5 font-serif text-3xl font-semibold text-foreground md:text-4xl lg:text-5xl">
-                O que o SIMAS faz pelo seu escritório
+                O coração: a peça que se sustenta
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-                Fundamentação verificada, teses do escritório e revisão — pensados para a rotina jurídica.
+                Citações conferidas, teses do escritório e revisão trecho a trecho — para você assinar com segurança.
               </p>
             </div>
           </Reveal>
@@ -790,7 +895,7 @@ export default function LandingPage() {
       {/* ═══════════ Trust badges ═══════════ */}
       <section className="border-t py-14">
         <div className="mx-auto max-w-7xl px-5 sm:px-8">
-          <div className="grid gap-8 md:grid-cols-3">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {TRUST.map((t, i) => {
               const Icon = t.icon
               return (
