@@ -1,3 +1,5 @@
+import Link from 'next/link'
+import { Settings } from 'lucide-react'
 import { cn, iniciais } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { AtalhosRapidos } from '@/components/layout/AtalhosRapidos'
@@ -27,6 +29,16 @@ export function Header({ titulo, subtitulo, acoes, nomeUsuario }: HeaderProps) {
           <AtalhosRapidos />
           <SinoComentarios />
           <ThemeToggle />
+          {/* Engrenagem ao lado do tema (dono, 2026-07-23) — antes vivia só no
+              rodapé da sidebar; movida para cá. Mesmo estilo do ThemeToggle. */}
+          <Link
+            href="/configuracoes"
+            aria-label="Configurações"
+            title="Configurações"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <Settings className="h-[18px] w-[18px]" />
+          </Link>
           <div
             className={cn(
               'flex h-10 w-10 items-center justify-center rounded-full',

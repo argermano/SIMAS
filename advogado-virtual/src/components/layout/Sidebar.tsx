@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { NotificadorConversas } from '@/components/conversas/NotificadorConversas'
 import { useState, useEffect } from 'react'
 import {
-  LayoutDashboard, Users, Settings, LogOut,
+  LayoutDashboard, Users, LogOut,
   Menu, X, ClipboardCheck, UserCog, FileSignature,
   KanbanSquare, ChevronLeft, ChevronRight, BookMarked, Filter, BellRing, Newspaper, MessagesSquare,
   CalendarDays, Wallet, Briefcase,
@@ -161,7 +161,6 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
     // (decisão do dono, 2026-07-16 — a equipe trabalha pelos Atendimentos).
     .filter(item => item.href !== '/funil' || roleRaw === 'admin')
 
-  const isConfigAtivo = pathname.startsWith('/configuracoes') && !pathname.startsWith('/configuracoes/equipe')
 
   const sidebarContent = (isCollapsed: boolean) => (
     <div className="flex h-full flex-col" style={{ background: 'var(--gradient-sidebar)' }}>
@@ -253,7 +252,8 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
         </ul>
       </nav>
 
-      {/* Rodapé — Configurações virou só a engrenagem, ao lado e ANTES do Sair (dono, 2026-07-16). */}
+      {/* Rodapé — a engrenagem de Configurações foi movida para a barra superior,
+          ao lado do seletor de tema (dono, 2026-07-23); aqui fica só o Sair. */}
       <div className="border-t border-sidebar-border p-3">
         {/* Avatar / Perfil */}
         <div className={cn('rounded-lg bg-sidebar-accent/40 px-3 py-2.5', isCollapsed && 'px-2')}>
@@ -275,46 +275,20 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
             )}
 
             {!isCollapsed && (
-              <>
-                <Link
-                  href="/configuracoes"
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    'shrink-0 rounded-md p-1.5 transition-colors animate-in fade-in-0 duration-300',
-                    isConfigAtivo ? 'bg-sidebar-accent text-white' : 'text-sidebar-muted hover:text-white hover:bg-sidebar-accent'
-                  )}
-                  aria-label="Configurações"
-                  title="Configurações"
-                >
-                  <Settings className="h-4 w-4" />
-                </Link>
-                <button
-                  onClick={sair}
-                  className="shrink-0 rounded-md p-1.5 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors animate-in fade-in-0 duration-300"
-                  aria-label="Sair do sistema"
-                  title="Sair do sistema"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </>
+              <button
+                onClick={sair}
+                className="shrink-0 rounded-md p-1.5 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors animate-in fade-in-0 duration-300"
+                aria-label="Sair do sistema"
+                title="Sair do sistema"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             )}
           </div>
         </div>
 
         {isCollapsed && (
           <div className="mt-2 flex flex-col items-center gap-1">
-            <Link
-              href="/configuracoes"
-              onClick={() => setMobileOpen(false)}
-              className={cn(
-                'flex w-full items-center justify-center rounded-lg p-2 transition-colors',
-                isConfigAtivo ? 'bg-sidebar-accent text-white' : 'text-sidebar-muted hover:text-white hover:bg-sidebar-accent'
-              )}
-              aria-label="Configurações"
-              title="Configurações"
-            >
-              <Settings className="h-4 w-4" />
-            </Link>
             <button
               onClick={sair}
               className="flex w-full items-center justify-center rounded-lg p-2 text-sidebar-muted hover:text-white hover:bg-sidebar-accent transition-colors"
