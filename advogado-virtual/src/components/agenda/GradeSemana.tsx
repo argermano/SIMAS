@@ -12,6 +12,9 @@ import { ItemAgenda, horaSP } from './ItemAgenda'
 
 const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 const MAX_CELULA = 3
+// A equipe usa quase tudo como TAREFA "dia todo" (nasce da publicação): a faixa
+// empilha muitos itens por dia, então limitamos e oferecemos "mais N" p/ expandir.
+const MAX_DIATODO = 3
 
 interface GradeSemanaProps {
   dataRef: string
@@ -130,6 +133,10 @@ export function GradeSemana({
               const k = chaveDia(diaIso)
               const lista = diaTodo.get(k) ?? []
               const selecionado = k === selKey
+              const chaveExp = `allday#${k}`
+              const aberto = expandidos.has(chaveExp)
+              const visiveis = aberto ? lista : lista.slice(0, MAX_DIATODO)
+              const restantes = lista.length - visiveis.length
               return (
                 <div
                   key={k}
@@ -139,9 +146,33 @@ export function GradeSemana({
                     selecionado && 'bg-primary/5',
                   )}
                 >
-                  {lista.map(ev => (
+                  {visiveis.map(ev => (
                     <ItemAgenda key={ev.id} evento={ev} meUserId={meUserId} onClick={onItemClick} />
                   ))}
+                  {restantes > 0 && (
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation()
+                        alternar(chaveExp)
+                      }}
+                      className="rounded px-1 py-0.5 text-left text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      mais {restantes}
+                    </button>
+                  )}
+                  {aberto && lista.length > MAX_DIATODO && (
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation()
+                        alternar(chaveExp)
+                      }}
+                      className="rounded px-1 py-0.5 text-left text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      ver menos
+                    </button>
+                  )}
                 </div>
               )
             })}

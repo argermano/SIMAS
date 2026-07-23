@@ -5,7 +5,7 @@
 // grade (esquerda) e coluna de detalhes/próximos compromissos (direita, sticky).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { CalendarX2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useToast } from '@/components/ui/toast'
@@ -100,6 +100,7 @@ export function AgendaCalendario({
   meUserId, pessoas, papel, advogadaPrincipalId,
 }: AgendaCalendarioProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { error: toastErro } = useToast()
 
   const [dataRef, setDataRef] = useState<string>(() => refHoje())
@@ -177,6 +178,17 @@ export function AgendaCalendario({
   useEffect(() => {
     void carregarPresencas()
   }, [filtro.de, filtro.ate, carregarPresencas])
+
+  // Deep-link /agenda?novo=1 (atalho "Novo evento" da barra superior): abre o
+  // EventoModal em modo "novo" e limpa o parâmetro da URL depois de abrir.
+  const novoTratado = useRef(false)
+  useEffect(() => {
+    if (searchParams.get('novo') !== '1') { novoTratado.current = false; return }
+    if (novoTratado.current) return
+    novoTratado.current = true
+    setModal({ modo: 'novo' })
+    router.replace('/agenda', { scroll: false })
+  }, [searchParams, router])
 
   // Nome das pessoas para o chip de presença do PainelDia.
   const presencasComNome = useMemo(() => {

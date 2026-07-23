@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { User, Briefcase, Scale } from 'lucide-react'
+import { User, Briefcase, Scale, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { resolverVinculoView, type VinculoTipo } from '@/lib/tarefas/vinculo'
 
@@ -47,9 +47,30 @@ const PRIORITY_COLORS: Record<string, string> = {
   urgente: '#ef4444',
 }
 
+// due_date é um DIA (tarefa dia-todo, sem hora — padrão do escritório) guardado
+// como meia-noite UTC. Renderizamos e comparamos pelo dia UTC p/ recuperar o dia
+// digitado (usar o fuso local exibiria -1 dia no Brasil).
 function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', timeZone: 'UTC' })
+}
+
+function diaUTC(iso: string): number {
   const d = new Date(iso)
-  return d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+}
+
+function diaDeHoje(): number {
+  const n = new Date()
+  return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())
+}
+
+/** Estado do vencimento p/ o destaque vermelho (vencida/hoje) do card. */
+function estadoVencimento(iso: string): 'vencida' | 'hoje' | 'futura' {
+  const due = diaUTC(iso)
+  const hoje = diaDeHoje()
+  if (due < hoje)  return 'vencida'
+  if (due === hoje) return 'hoje'
+  return 'futura'
 }
 
 function initials(nome: string) {
@@ -72,17 +93,21 @@ function TaskCardBase({ task, onClick }: TaskCardProps) {
   }
 
   const tags       = (task.task_tag_links ?? []).map(l => l.task_tags).filter(Boolean)
-  const firstTag   = tags[0]
-  const borderColor = firstTag?.color ?? PRIORITY_COLORS[task.priority] ?? '#6b7280'
+  // Borda pela PRIORIDADE (padrão de uso real). As etiquetas coloridas continuam
+  // como chips no topo do card — a cor da borda comunica a urgência.
+  const borderColor = PRIORITY_COLORS[task.priority] ?? '#6b7280'
 
-  // Responsáveis: principal + adicionais
+  // Responsáveis: principal (1º) + envolvidos. Avatares empilhados como no Astrea.
   const allAssignees = [
     task.users ? { id: task.users.id, nome: task.users.nome } : null,
     ...(task.task_assignees ?? []).map(a => a.users),
   ].filter(Boolean) as { id: string; nome: string }[]
 
-  const visibleAssignees = allAssignees.slice(0, 2)
-  const extra            = allAssignees.length - 2
+  const visibleAssignees = allAssignees.slice(0, 3)
+  const extra            = allAssignees.length - visibleAssignees.length
+
+  const venc = task.due_date ? estadoVencimento(task.due_date) : null
+  const vencAlerta = !task.completed_at && (venc === 'vencida' || venc === 'hoje')
 
   const vinculo    = resolverVinculoView(task)
   const VinculoIcon = vinculo ? VINCULO_ICON[vinculo.tipo] : null
@@ -147,20 +172,23 @@ function TaskCardBase({ task, onClick }: TaskCardProps) {
         </span>
       )}
 
-      {/* Footer: avatares + data */}
+      {/* Footer: avatares empilhados (responsável + envolvidos) + data */}
       <div className="mt-3 flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          {visibleAssignees.map(u => (
+        <div className="flex items-center -space-x-1.5">
+          {visibleAssignees.map((u, i) => (
             <span
               key={u.id}
               title={u.nome}
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/80 text-[10px] font-bold text-white"
+              className={cn(
+                'flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-card',
+                i === 0 ? 'bg-primary' : 'bg-primary/70',   // 1º = responsável principal
+              )}
             >
               {initials(u.nome)}
             </span>
           ))}
           {extra > 0 && (
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground ring-2 ring-card">
               +{extra}
             </span>
           )}
@@ -168,9 +196,10 @@ function TaskCardBase({ task, onClick }: TaskCardProps) {
 
         {task.due_date && (
           <span className={cn(
-            'text-xs text-muted-foreground',
-            new Date(task.due_date) < new Date() && !task.completed_at && 'text-destructive font-medium'
+            'inline-flex items-center gap-1 text-xs text-muted-foreground',
+            vencAlerta && 'text-destructive font-semibold',
           )}>
+            {vencAlerta && <AlertCircle className="h-3 w-3 shrink-0" />}
             {formatDate(task.due_date)}
           </span>
         )}

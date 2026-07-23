@@ -1,5 +1,7 @@
 import { cn, iniciais } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { AtalhosRapidos } from '@/components/layout/AtalhosRapidos'
+import { SinoComentarios } from '@/components/tarefas/SinoComentarios'
 
 interface HeaderProps {
   titulo:       string
@@ -20,8 +22,10 @@ export function Header({ titulo, subtitulo, acoes, nomeUsuario }: HeaderProps) {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2">
           {acoes}
+          <AtalhosRapidos />
+          <SinoComentarios />
           <ThemeToggle />
           <div
             className={cn(

@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
   const column_id  = searchParams.get('column_id')
   const assignee   = searchParams.get('assignee') // 'me' ou uuid
   const period     = searchParams.get('period')    // 'month', 'week', 'today'
+  const month      = searchParams.get('month')     // 'YYYY-MM' (navegador de mês do quadro)
   const tag_id     = searchParams.get('tag_id')
   const search     = searchParams.get('search')
   const parent     = searchParams.get('parent') // uuid da mãe | 'all' p/ incluir filhas
@@ -110,6 +111,17 @@ export async function GET(req: NextRequest) {
     }
     if (start) query = query.gte('due_date', start.toISOString())
     if (end)   query = query.lt('due_date', end.toISOString())
+  }
+
+  // Navegador de mês do quadro (Astrea: "< JULHO 2026 >"): filtra pelo vencimento
+  // dentro do mês pedido. Fronteiras em horário local (paridade com o bloco period
+  // acima). Tarefas sem due_date ficam de fora do recorte de mês — por isso a UI
+  // oferece "Todos os períodos" p/ vê-las (nunca some card em silêncio).
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [ano, mes] = month.split('-').map(Number)
+    const start = new Date(ano, mes - 1, 1)
+    const end   = new Date(ano, mes, 1)
+    query = query.gte('due_date', start.toISOString()).lt('due_date', end.toISOString())
   }
 
   if (search) query = query.ilike('description', `%${search}%`)

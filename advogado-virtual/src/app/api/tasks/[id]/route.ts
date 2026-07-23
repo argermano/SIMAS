@@ -27,6 +27,40 @@ const schemaUpdate = z.object({
   tag_ids:          z.array(z.string().uuid()).optional(),
 })
 
+// Mesmo embed do GET /api/tasks (lista): o modal de detalhe precisa das relações
+// (responsáveis, tags, vínculo) para renderizar igual ao card. Usado no deep-link
+// (/tarefas?task=<id>) quando a tarefa não está na página carregada do quadro.
+const SELECT_TASK = `
+  id, description, due_date, priority, origin, completed_at, created_at, updated_at,
+  task_list_id, process_id, cliente_id, processo_id, assignee_id, kanban_board_id, kanban_column_id, origin_reference, parent_task_id,
+  task_lists(name),
+  atendimentos(id, area, numero_processo, clientes(id, nome)),
+  cliente:clientes!cliente_id(id, nome),
+  processo:processos!processo_id(id, numero_cnj, apelido, clientes(id, nome)),
+  users!tasks_assignee_id_fkey(id, nome),
+  task_tag_links(tag_id, task_tags(id, name, color)),
+  task_assignees(user_id, users(id, nome))
+`
+
+// GET /api/tasks/[id] → uma tarefa com o embed completo (deep-link do modal).
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const auth = await getAuthContext()
+  if (!auth.ok) return auth.response
+  const { supabase, usuario } = auth
+
+  const { data: task, error } = await supabase
+    .from('tasks')
+    .select(SELECT_TASK)
+    .eq('id', id)
+    .eq('tenant_id', usuario.tenant_id)
+    .maybeSingle()
+
+  if (error) return jsonError(error.message, 500)
+  if (!task) return jsonError('Tarefa não encontrada', 404)
+  return NextResponse.json({ task })
+}
+
 // PATCH /api/tasks/[id]
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

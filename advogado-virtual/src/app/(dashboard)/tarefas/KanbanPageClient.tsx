@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { Search, Tag, ChevronDown, Plus, User } from 'lucide-react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Search, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { KanbanBoard } from '@/components/tarefas/KanbanBoard'
 import { TaskFormModal } from '@/components/tarefas/TaskFormModal'
 import { cn } from '@/lib/utils'
@@ -19,19 +20,34 @@ interface KanbanPageClientProps {
   currentUserName: string
 }
 
-const PERIOD_OPTIONS = [
-  { value: '',       label: 'Todos os períodos' },
-  { value: 'today',  label: 'Hoje' },
-  { value: 'week',   label: 'Esta semana' },
-  { value: 'month',  label: 'Este mês' },
-]
+// Navegador de mês do quadro (Astrea: "‹ JULHO 2026 ›"). O mês é 'YYYY-MM' e
+// alimenta o filtro `month` da API (recorte por vencimento). '' = todos os períodos
+// (tarefas sem vencimento ficam fora do recorte de mês, então mantemos essa saída).
+function mesAtual(): string {
+  const n = new Date()
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`
+}
+
+function rotuloMes(m: string): string {
+  if (!m) return 'Todos os períodos'
+  const [ano, mes] = m.split('-').map(Number)
+  const s = new Date(ano, mes - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  return s.charAt(0).toUpperCase() + s.slice(1)  // "Julho 2026"
+}
+
+function deslocarMes(m: string, delta: number): string {
+  const n = new Date()
+  const [ano, mes] = m ? m.split('-').map(Number) : [n.getFullYear(), n.getMonth() + 1]
+  const d = new Date(ano, mes - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
 
 export function KanbanPageClient({
   boards, tags, teamMembers, currentUserId, currentUserName,
 }: KanbanPageClientProps) {
   const [activeBoardId, setActiveBoardId] = useState(boards[0]?.id ?? '')
   const [assigneeFilter, setAssigneeFilter] = useState('')  // '' = all, 'me', or UUID
-  const [periodFilter,   setPeriodFilter]   = useState('')
+  const [monthFilter,    setMonthFilter]    = useState<string>(mesAtual)  // 'YYYY-MM' | '' = todos
   const [tagFilter,      setTagFilter]      = useState('')
   const [search,         setSearch]         = useState('')
   const [searchOpen,     setSearchOpen]     = useState(false)
@@ -43,8 +59,8 @@ export function KanbanPageClient({
   // Map filter value to what the API expects
   const assigneeApiValue = assigneeFilter === '' ? 'all' : assigneeFilter
   const filters = useMemo(
-    () => ({ assignee: assigneeApiValue, period: periodFilter, tagId: tagFilter, search }),
-    [assigneeApiValue, periodFilter, tagFilter, search]
+    () => ({ assignee: assigneeApiValue, month: monthFilter, tagId: tagFilter, search }),
+    [assigneeApiValue, monthFilter, tagFilter, search]
   )
 
   const handleSaved = useCallback(() => {
@@ -53,6 +69,19 @@ export function KanbanPageClient({
   }, [])
 
   const handleFormClose = useCallback(() => setFormOpen(false), [])
+
+  // Deep-link /tarefas?nova=1 (atalho "Nova tarefa" da barra superior): abre o
+  // TaskFormModal e limpa o parâmetro da URL depois de abrir.
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const novaTratada = useRef(false)
+  useEffect(() => {
+    if (searchParams.get('nova') !== '1') { novaTratada.current = false; return }
+    if (novaTratada.current) return
+    novaTratada.current = true
+    setFormOpen(true)
+    router.replace('/tarefas', { scroll: false })
+  }, [searchParams, router])
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -91,18 +120,37 @@ export function KanbanPageClient({
 
         {/* Filtros */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {/* Período */}
-          <div className="relative">
-            <select
-              value={periodFilter}
-              onChange={e => setPeriodFilter(e.target.value)}
-              className="h-8 appearance-none rounded-full border border-border bg-card pl-3 pr-8 text-sm text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          {/* Navegador de mês (Astrea: "‹ JULHO 2026 ›"). Default = mês atual; o
+              rótulo alterna p/ "Todos os períodos" (para ver tarefas sem vencimento,
+              que ficam fora do recorte de mês). */}
+          <div className="flex items-center rounded-full border border-border bg-card">
+            <button
+              type="button"
+              onClick={() => setMonthFilter(m => deslocarMes(m, -1))}
+              aria-label="Mês anterior"
+              className="flex h-8 w-8 items-center justify-center rounded-l-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             >
-              {PERIOD_OPTIONS.map(p => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setMonthFilter(m => (m ? '' : mesAtual()))}
+              title={monthFilter ? 'Ver todos os períodos' : 'Voltar ao mês atual'}
+              className={cn(
+                'min-w-[9rem] px-2 text-center text-sm font-medium transition-colors',
+                monthFilter ? 'text-foreground' : 'text-muted-foreground'
+              )}
+            >
+              {rotuloMes(monthFilter)}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMonthFilter(m => deslocarMes(m, 1))}
+              aria-label="Próximo mês"
+              className="flex h-8 w-8 items-center justify-center rounded-r-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
 
           {/* Filtro por responsável */}

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import {
   DndContext,
   DragOverlay,
@@ -46,7 +47,7 @@ interface KanbanBoardProps {
   teamMembers:     TeamMember[]
   filters: {
     assignee: string
-    period:   string
+    month:    string  // 'YYYY-MM' (navegador de mês) | '' = todos os períodos
     tagId:    string
     search:   string
   }
@@ -56,6 +57,11 @@ export function KanbanBoard({
   board, initialTasks, currentUserId, currentUserName, teamMembers, filters,
 }: KanbanBoardProps) {
   const { error: toastError } = useToast()
+  const searchParams = useSearchParams()
+  const router       = useRouter()
+  const deepLinkTaskId = searchParams.get('task')
+  const handledDeepLink = useRef<string | null>(null)
+  const [loaded,       setLoaded]       = useState(false)
   const [tasks,        setTasks]        = useState<TaskData[]>(initialTasks)
   const [activeTask,   setActiveTask]   = useState<TaskData | null>(null)
   const [formOpen,     setFormOpen]     = useState(false)
@@ -82,7 +88,7 @@ export function KanbanBoard({
     // as tarefas-raiz. Cada subtarefa aparece como card na sua própria coluna.
     params.set('parent', 'all')
     if (filters.assignee !== 'all') params.set('assignee', filters.assignee)
-    if (filters.period)             params.set('period',   filters.period)
+    if (filters.month)              params.set('month',    filters.month)
     if (filters.tagId)              params.set('tag_id',   filters.tagId)
     if (filters.search)             params.set('search',   filters.search)
 
@@ -92,6 +98,7 @@ export function KanbanBoard({
       setTasks(data.tasks ?? [])
       setTruncadoTotal(data.truncado ? data.total : null)
     }
+    setLoaded(true)
   }, [board.id, filters])
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
@@ -106,6 +113,30 @@ export function KanbanBoard({
       setTags(t.tags ?? [])
     })
   }, [])
+
+  // Deep-link /tarefas?task=<id>: abre o detalhe daquela tarefa (a frente W3 manda
+  // esses links por WhatsApp / o sino de comentários também). Usa a tarefa já
+  // carregada no quadro; se ela não está no recorte atual (mês/filtros/board),
+  // busca a tarefa isolada (GET /api/tasks/[id]). Guarda o id tratado p/ não
+  // reabrir a cada refetch e limpa o ?task da URL depois de abrir.
+  useEffect(() => {
+    const id = deepLinkTaskId
+    // Libera o ref quando o ?task some: clicar DE NOVO no mesmo link (sino/WhatsApp)
+    // deve reabrir a tarefa. Dentro de um mesmo ?task o ref evita o duplo-fetch.
+    if (!id) { handledDeepLink.current = null; return }
+    if (handledDeepLink.current === id) return
+    handledDeepLink.current = id
+    const local = tasks.find(t => t.id === id)
+    if (local) {
+      setDetailTask(local)
+    } else {
+      fetch(`/api/tasks/${id}`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => { if (d?.task) setDetailTask(d.task as TaskData) })
+        .catch(() => {})
+    }
+    router.replace('/tarefas', { scroll: false })
+  }, [deepLinkTaskId, tasks, router])
 
   const tasksForColumn = useCallback(
     (colId: string) => tasks.filter(t => t.kanban_column_id === colId),

@@ -133,6 +133,13 @@ export function TaskDetailModal({
     setSubCount(null)
   }, [task.id])
 
+  // Marca "visto" ao abrir: zera esta tarefa no sino de comentários novos (os
+  // comentários de colegas anteriores a agora deixam de me alertar). Best-effort.
+  useEffect(() => {
+    if (!open) return
+    fetch(`/api/tasks/${task.id}/visto`, { method: 'POST' }).catch(() => {})
+  }, [task.id, open])
+
   // Carregar comentários ao abrir/trocar de tarefa (alimenta o badge de contagem).
   useEffect(() => {
     if (!open) return
