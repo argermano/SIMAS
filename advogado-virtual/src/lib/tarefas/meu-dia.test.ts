@@ -5,7 +5,7 @@ import {
   limitesDiaUTC,
   escolherComecePorAqui,
   type ItemMeuDia,
-} from './route'
+} from './meu-dia'
 
 const item = (id: string, prioridade: ItemMeuDia['prioridade']): ItemMeuDia => ({
   id,

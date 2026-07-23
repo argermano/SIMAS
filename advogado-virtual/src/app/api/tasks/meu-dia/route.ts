@@ -2,6 +2,14 @@ import { NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { janelaDiaSaoPaulo } from '@/lib/tarefas/aviso-diario'
 import { resolverVinculoView, type TaskVinculoData } from '@/lib/tarefas/vinculo'
+import {
+  compararMeuDia,
+  escolherComecePorAqui,
+  limitesDiaUTC,
+  TETO_EXIBIDO,
+  type ItemMeuDia,
+  type Prioridade,
+} from '@/lib/tarefas/meu-dia'
 
 // GET /api/tasks/meu-dia — painel "Meu dia" do usuário logado.
 //
@@ -16,78 +24,13 @@ import { resolverVinculoView, type TaskVinculoData } from '@/lib/tarefas/vinculo
 // prioridade e o rótulo do vínculo (nome do cliente/caso/processo já exibido nos
 // cards) — nunca telefone/CPF.
 
-export type Prioridade = 'baixa' | 'media' | 'alta' | 'urgente'
+// (lógica pura em src/lib/tarefas/meu-dia.ts — rota só pode exportar handler;
+// helpers exportados aqui derrubam o build do Next)
 
-/** Peso p/ ordenar do mais ao menos urgente (ascendente = urgente primeiro). */
-export const PESO_PRIORIDADE: Record<Prioridade, number> = {
-  urgente: 0,
-  alta: 1,
-  media: 2,
-  baixa: 3,
-}
-
-export interface ItemMeuDia {
-  id: string
-  titulo: string
-  prioridade: Prioridade
-  vinculoRotulo: string | null
-}
-
-/** Teto de itens exibidos por grupo (a contagem total vai separada). */
-export const TETO_EXIBIDO = 15
 /** Teto por subconsulta (responsável / envolvido). Um membro raramente tem mais
  *  que isto vencido/hoje; acima do teto a contagem total pode subestimar (aceito
  *  p/ um painel pessoal — nunca esconde item em silêncio, só limita a lista). */
 const TETO_BUSCA = 100
-
-interface TarefaOrdenavel {
-  priority: Prioridade
-  due_date: string | null
-}
-
-/**
- * Ordena do mais urgente ao menos urgente e, em empate, do vencimento mais
- * antigo ao mais novo. Pura (sem rede/DB) — testável. A tarefa sem due_date vai
- * para o fim do empate (não deveria ocorrer aqui, pois os grupos têm vencimento).
- */
-export function compararMeuDia(a: TarefaOrdenavel, b: TarefaOrdenavel): number {
-  const pa = PESO_PRIORIDADE[a.priority] ?? 99
-  const pb = PESO_PRIORIDADE[b.priority] ?? 99
-  if (pa !== pb) return pa - pb
-  const da = a.due_date ? Date.parse(a.due_date) : Number.POSITIVE_INFINITY
-  const db = b.due_date ? Date.parse(b.due_date) : Number.POSITIVE_INFINITY
-  return da - db
-}
-
-/**
- * Fronteiras em meia-noite UTC do dia civil de São Paulo (`diaSP` = 'YYYY-MM-DD').
- * due_date é um DIA guardado como meia-noite UTC (ver TaskCard) — por isso as
- * fronteiras são meia-noite UTC do dia, e NÃO o instante SP (00:00 SP = 03:00Z),
- * que classificaria a tarefa de hoje como atrasada. Assim o painel bate 1:1 com
- * o destaque vermelho/âmbar dos cards. `Date.UTC(...,d+1)` cuida da virada de mês.
- */
-export function limitesDiaUTC(diaSP: string): { inicioHojeUTC: string; inicioAmanhaUTC: string } {
-  const [y, m, d] = diaSP.split('-').map(Number)
-  return {
-    inicioHojeUTC: new Date(Date.UTC(y, m - 1, d)).toISOString(),
-    inicioAmanhaUTC: new Date(Date.UTC(y, m - 1, d + 1)).toISOString(),
-  }
-}
-
-/**
- * Escolha determinística e transparente do "Comece por aqui": a mais urgente
- * entre as atrasadas; na ausência de atrasadas, a mais urgente entre as de hoje.
- * Como cada grupo já vem ordenado, é o primeiro item do grupo escolhido. O
- * `criterio` é o subtítulo que a UI mostra para deixar a regra explícita.
- */
-export function escolherComecePorAqui(
-  atrasadas: ItemMeuDia[],
-  hoje: ItemMeuDia[],
-): { id: string; criterio: string } | null {
-  if (atrasadas.length > 0) return { id: atrasadas[0].id, criterio: 'A mais urgente entre as atrasadas' }
-  if (hoje.length > 0) return { id: hoje[0].id, criterio: 'A mais urgente entre as que vencem hoje' }
-  return null
-}
 
 // Campos da tarefa + joins do vínculo (mesmo shape que resolverVinculoView espera).
 const SELECT_TAREFA = `

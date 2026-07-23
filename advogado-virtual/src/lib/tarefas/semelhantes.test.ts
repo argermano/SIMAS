@@ -4,7 +4,7 @@ import {
   combinaComCriterio,
   atendimentoVinculado,
   tituloDaPeca,
-} from './route'
+} from './semelhantes'
 
 describe('criterioDaTarefa', () => {
   it('peça: guarda a ação + o tipo detectado', () => {
