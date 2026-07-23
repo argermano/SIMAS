@@ -120,9 +120,13 @@ export function TelaAtendimento({
         }
         const modoSalvo = at.modo_input
         setModoInput(modoSalvo === 'texto' ? 'texto' : 'audio')
-        setTextoRelato(at.transcricao_editada ?? at.transcricao_raw ?? '')
-        setTranscricao(at.transcricao_editada ?? at.transcricao_raw ?? '')
-        setPedidoEspecifico(at.pedidos_especificos ?? '')
+        // Inicializa a partir do banco (relato = transcricao_editada ?? transcricao_raw;
+        // pedido = pedidos_especificos). Guarda funcional: só preenche o estado VAZIO —
+        // nunca por cima do que o usuário já digitou (invariante: humano é dono do texto).
+        const relatoBanco = at.transcricao_editada ?? at.transcricao_raw ?? ''
+        setTextoRelato((prev) => (prev.trim() ? prev : relatoBanco))
+        setTranscricao((prev) => (prev.trim() ? prev : relatoBanco))
+        setPedidoEspecifico((prev) => (prev.trim() ? prev : (at.pedidos_especificos ?? '')))
         if (at.audio_url) setHasAudio(true)
         if (at.documentos) setDocumentosExistentes(at.documentos)
       } catch {

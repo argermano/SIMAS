@@ -15,6 +15,7 @@ import { completionJSON, DEFAULT_MODEL } from '@/lib/anthropic/client'
 import { verificarCota } from '@/lib/anthropic/quota'
 import { logUsage } from '@/lib/anthropic/usage'
 import { extrairTextoPlano } from '@/lib/processos/djen'
+import { cacheAtual, type SugestoesIA } from '@/lib/publicacoes/sugestoes-prompt'
 import { z } from 'zod'
 import { AREAS, type AreaId } from '@/lib/constants/areas'
 import { inferirAreaDoProcesso, type AreaInferida, type SinaisArea } from './area-inferida'
@@ -34,6 +35,10 @@ export interface SinaisCaso extends SinaisArea {
   publicacaoData: string | null
   /** Nº do processo mascarado (CNJ) na publicação — usado no título quando não há processo. */
   numeroMascara: string | null
+  /** Resumo/análise CACHEADO das sugestões da IA (`sugestoes_ia.resumo`), quando o
+   * cache é da VERSÃO atual — é o texto que o advogado espera como relato do caso.
+   * Ausente/versão antiga ⇒ null (o chamador cai no resumo por IA ou no inteiro teor). */
+  sugestoesResumo: string | null
 }
 
 /**
@@ -53,6 +58,7 @@ export async function coletarSinaisCaso(
   let inteiroTeor: string | null = null
   let publicacaoData: string | null = null
   let numeroMascara: string | null = null
+  let sugestoesResumo: string | null = null
 
   if (input.processoId) {
     const { data: proc } = await db
@@ -75,7 +81,7 @@ export async function coletarSinaisCaso(
   if (pubId) {
     const { data: pub } = await db
       .from('publicacoes')
-      .select('nome_classe, orgao_julgador, texto, data_disponibilizacao, numero_mascara')
+      .select('nome_classe, orgao_julgador, texto, data_disponibilizacao, numero_mascara, sugestoes_ia')
       .eq('id', pubId)
       .eq('tenant_id', tenantId)
       .maybeSingle()
@@ -87,10 +93,15 @@ export async function coletarSinaisCaso(
       const d = pub.data_disponibilizacao as string | null
       publicacaoData = d ? String(d).slice(0, 10) : null
       numeroMascara = (pub.numero_mascara as string | null) ?? null
+      // Só aproveita o resumo se o cache for da VERSÃO atual (payload antigo ⇒ null).
+      if (cacheAtual(pub.sugestoes_ia)) {
+        const r = (pub.sugestoes_ia as SugestoesIA).resumo?.trim()
+        sugestoesResumo = r || null
+      }
     }
   }
 
-  return { classe, orgaoJulgador, assuntos, inteiroTeor, publicacaoData, numeroMascara }
+  return { classe, orgaoJulgador, assuntos, inteiroTeor, publicacaoData, numeroMascara, sugestoesResumo }
 }
 
 type AuthUsuario = { id: string; tenant_id: string }

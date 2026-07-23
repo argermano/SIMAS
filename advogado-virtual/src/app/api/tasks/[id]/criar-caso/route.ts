@@ -112,8 +112,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       clienteId,
       area,
       titulo: tituloCaso,
+      // Pedido específico = título da tarefa (a ação determinada pela publicação).
+      pedidoEspecifico: titulo,
       processoId,
-      publicacao: { data: sinais.publicacaoData, inteiroTeor: sinais.inteiroTeor },
+      publicacao: {
+        data: sinais.publicacaoData,
+        inteiroTeor: sinais.inteiroTeor,
+        numeroMascara: sinais.numeroMascara,
+        numeroCnj: proc?.numero_cnj ?? null,
+        resumoCache: sinais.sugestoesResumo,
+      },
     })
     casoId = res.casoId
 
