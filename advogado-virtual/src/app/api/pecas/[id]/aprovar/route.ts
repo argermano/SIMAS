@@ -4,6 +4,7 @@ import { jsonError } from '@/lib/api'
 import { enviarEmailPecaAprovada, urlBaseApp } from '@/lib/email'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import { LABELS_AREA } from '@/types'
+import { materializarPecaNoDossie } from '@/lib/pecas/materializar'
 
 const ROLES_REVISORES = ['admin', 'advogado']
 
@@ -38,12 +39,23 @@ export async function POST(
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .eq('status', 'aguardando_revisao')
-    .select('id, status, area, tipo, autor:users!pecas_created_by_fkey(nome, email), atendimentos(clientes(nome))')
+    .select('id, status, area, tipo, conteudo_markdown, atendimento_id, autor:users!pecas_created_by_fkey(nome, email), atendimentos(clientes(nome))')
     .single()
 
   if (error || !peca) {
     return jsonError('Peça não encontrada ou não está aguardando revisão', 404)
   }
+
+  // Estado final (revisão aprovada) → materializa o .docx no dossiê do caso.
+  // Best-effort: nunca bloqueia a aprovação (o humano decide o conteúdo/estado).
+  await materializarPecaNoDossie(supabase, {
+    id: peca.id,
+    tipo: peca.tipo,
+    area: peca.area,
+    conteudo_markdown: peca.conteudo_markdown ?? null,
+    atendimento_id: peca.atendimento_id ?? null,
+    tenant_id: usuario.tenant_id,
+  })
 
   // Auto-concluir tarefa de revisão associada no kanban
   const { data: taskRevisao } = await supabase

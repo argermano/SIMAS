@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { markdownToDocx } from '@/lib/export/docx-generator'
-import { aplicarTimbrado } from '@/lib/export/aplicar-timbrado'
 import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
+import { gerarDocxComTimbrado } from '@/lib/export/gerar-docx'
 
 // POST /api/exportar-documento — gerar DOCX a partir de markdown raw (sem pecaId)
 export async function POST(req: NextRequest) {
@@ -21,19 +20,9 @@ export async function POST(req: NextRequest) {
     const { supabase, usuario } = auth
 
     const estilo = await carregarEstiloTenant(supabase, usuario.tenant_id)
-    let buffer = await markdownToDocx(conteudo, { titulo, estilo, contrato, compacto })
-
-    // Aplica o papel timbrado do escritório, se houver (preserva cabeçalho/marca d'água/rodapé)
-    const { data: timbrado } = await supabase.storage
-      .from('documentos')
-      .download(`${usuario.tenant_id}/timbrado/timbrado.docx`)
-    if (timbrado) {
-      try {
-        buffer = aplicarTimbrado(Buffer.from(await timbrado.arrayBuffer()), buffer)
-      } catch (err) {
-        console.error('[exportar-documento] falha ao aplicar timbrado:', err instanceof Error ? err.message : err)
-      }
-    }
+    const buffer = await gerarDocxComTimbrado(supabase, usuario.tenant_id, {
+      conteudo, titulo, estilo, contrato, compacto,
+    })
 
     // titulo vem do corpo da requisição: sanitizar antes do header p/ evitar
     // injeção no Content-Disposition (aspas/quebras de linha/controle quebram o

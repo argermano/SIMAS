@@ -5,7 +5,7 @@ import {
   Paperclip, Upload, Loader2, FileText, Image as ImageIcon,
   FileSpreadsheet, File as FileIcon, Download, ExternalLink, Trash2, Link2,
   Scale, Briefcase, ChevronRight, Folder, FolderOpen, MoreVertical, Unlink,
-  FileSignature,
+  FileSignature, ScrollText,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +20,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatarBytes } from '@/lib/documentos/tamanho'
 import { formatarDataRelativa } from '@/lib/utils'
 import { rotularArea, formatarCnj } from '@/lib/tarefas/vinculo'
+import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
 import type { VinculoDoc } from '@/lib/documentos/vinculos'
 
 // Aba "Documentos" do dossiê: o dono quer que ela SUBSTITUA o Google Drive — os
@@ -64,6 +65,30 @@ const BADGE_CONTRATO_STATUS: Record<string, { variant: 'success' | 'warning' | '
   assinado:   { variant: 'success',   label: 'Assinado'   },
 }
 
+// Peça como ITEM da árvore (dentro da pasta do caso). Só leitura + navegação: a
+// edição/aprovação é no editor. Materialização (estado final) gera um .docx que
+// aparece separado, como documento — este item é o atalho para o editor.
+interface PecaDossie {
+  id: string
+  tipo: string
+  status: string
+  area: string | null
+  atendimento_id: string | null
+  atendimento_titulo: string | null
+  atualizado_em: string
+}
+
+// Estados reais do fluxo de peças (004 + workflow de revisão). Badge por estado.
+const BADGE_PECA_STATUS: Record<string, { variant: 'success' | 'warning' | 'secondary' | 'default'; label: string }> = {
+  rascunho:           { variant: 'warning',   label: 'Rascunho'   },
+  aguardando_revisao: { variant: 'secondary', label: 'Em revisão' },
+  revisada:           { variant: 'secondary', label: 'Revisada'   },
+  aprovada:           { variant: 'success',   label: 'Aprovada'   },
+  exportada:          { variant: 'default',   label: 'Exportada'  },
+}
+
+const nomeTipoPeca = (tipo: string) => TIPOS_PECA[tipo]?.nome ?? tipo.replace(/_/g, ' ')
+
 interface ProgressoItem {
   nome: string
   status: 'enviando' | 'concluido' | 'erro'
@@ -104,6 +129,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
   const { success, error: toastError } = useToast()
   const [documentos, setDocumentos] = useState<DocumentoDossie[]>([])
   const [contratos, setContratos]   = useState<ContratoDossie[]>([])
+  const [pecas, setPecas]           = useState<PecaDossie[]>([])
   const [carregando, setCarregando] = useState(true)
   const [enviando, setEnviando]     = useState(false)
   const [progresso, setProgresso]   = useState<ProgressoItem[]>([])
@@ -140,6 +166,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
       if (r.ok) {
         setDocumentos((d.documentos ?? []) as DocumentoDossie[])
         setContratos((d.contratos ?? []) as ContratoDossie[])
+        setPecas((d.pecas ?? []) as PecaDossie[])
       }
     } catch {
       // silencioso — a lista fica vazia; o upload ainda funciona
@@ -351,12 +378,12 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
   // ── Monta a árvore a partir dos vínculos (o mesmo doc entra em cada pasta) ────
   const arvore = useMemo(() => {
     const gerais: DocumentoDossie[] = []
-    const casos = new Map<string, { id: string; label: string; docs: DocumentoDossie[]; contratos: ContratoDossie[] }>()
+    const casos = new Map<string, { id: string; label: string; docs: DocumentoDossie[]; contratos: ContratoDossie[]; pecas: PecaDossie[] }>()
     const procs = new Map<string, { id: string; label: string; docs: DocumentoDossie[] }>()
     // Nó do caso, criando sob demanda. `label` melhora o rótulo se o atual ainda é
     // o placeholder (docs trazem o título do caso; contratos, o rótulo da área).
     const noCaso = (id: string, label?: string | null) => {
-      const cur = casos.get(id) ?? { id, label: label?.trim() || 'Caso sem título', docs: [], contratos: [] }
+      const cur = casos.get(id) ?? { id, label: label?.trim() || 'Caso sem título', docs: [], contratos: [], pecas: [] }
       if (label?.trim() && cur.label === 'Caso sem título') cur.label = label.trim()
       casos.set(id, cur)
       return cur
@@ -378,10 +405,15 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     for (const c of contratos) {
       if (c.atendimento_id) noCaso(c.atendimento_id, rotularArea(c.area)).contratos.push(c)
     }
+    // Peça: item na pasta do caso. Cria a pasta mesmo que o caso não tenha documento
+    // nem contrato (a peça não pode sumir da árvore) — rotula pelo título do caso.
+    for (const p of pecas) {
+      if (p.atendimento_id) noCaso(p.atendimento_id, p.atendimento_titulo).pecas.push(p)
+    }
     const ordenar = <T extends { label: string }>(m: Map<string, T>) =>
       [...m.values()].sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
     return { gerais, casos: ordenar(casos), procs: ordenar(procs) }
-  }, [documentos, contratos])
+  }, [documentos, contratos, pecas])
 
   // ── Uma linha de documento (nível folha da árvore). Render-helpers (chamados
   // como função, não como <Componente/>) para não remontar a subárvore — e fechar
@@ -513,14 +545,54 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
     )
   }
 
+  // ── Uma linha de peça (folha, só em pastas de caso). Só leitura + navegação ao
+  // editor: a edição/aprovação é lá. Badge do estado (rascunho/revisada/aprovada/
+  // exportada). Sem `area` não há rota de editor — mostra só o texto. ────────────
+  function renderLinhaPeca(p: PecaDossie) {
+    const badge = BADGE_PECA_STATUS[p.status] ?? BADGE_PECA_STATUS.rascunho
+    const nome = `Peça — ${nomeTipoPeca(p.tipo)}`
+    const href = p.area ? `/${p.area}/editor/${p.id}` : null
+    return (
+      <li key={`pc:${p.id}`} className="group flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50 transition-colors">
+        <ScrollText className="h-4 w-4 shrink-0 text-violet-500" />
+        <div className="min-w-0 flex-1">
+          {href ? (
+            <a
+              href={href}
+              className="block truncate font-medium text-foreground hover:text-primary transition-colors"
+              title={nome}
+            >
+              {nome}
+            </a>
+          ) : (
+            <span className="block truncate font-medium text-foreground" title={nome}>{nome}</span>
+          )}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Badge variant={badge.variant} className="px-1.5 py-0 text-[10px]">{badge.label}</Badge>
+            {formatarDataRelativa(p.atualizado_em)}
+          </div>
+        </div>
+        {href && (
+          <a
+            href={href}
+            className="shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:bg-muted hover:text-primary group-hover:opacity-100"
+            title="Abrir no editor"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        )}
+      </li>
+    )
+  }
+
   // ── Uma pasta (caso ou processo): cabeçalho colapsável + "Anexar aqui" ────────
-  // `contratosDaPasta` só é preenchido em pastas de caso (contrato tem atendimento).
+  // `contratosDaPasta`/`pecasDaPasta` só são preenchidos em pastas de caso.
   function renderPasta(
     nodeKey: string, label: string, docs: DocumentoDossie[], ctx: Contexto, alvo: AlvoUpload,
-    contratosDaPasta: ContratoDossie[] = [],
+    contratosDaPasta: ContratoDossie[] = [], pecasDaPasta: PecaDossie[] = [],
   ) {
     const aberta = expandido.has(nodeKey)
-    const total = docs.length + contratosDaPasta.length
+    const total = docs.length + contratosDaPasta.length + pecasDaPasta.length
     return (
       <li key={nodeKey}>
         <div className="group flex items-center gap-1 rounded-md pr-1 hover:bg-muted/40">
@@ -544,6 +616,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
         </div>
         {aberta && (
           <ul className="ml-[13px] space-y-0.5 border-l border-border pl-2">
+            {pecasDaPasta.map((p) => renderLinhaPeca(p))}
             {contratosDaPasta.map((c) => renderLinhaContrato(c))}
             {docs.map((d) => renderLinhaDoc(d, ctx))}
           </ul>
@@ -576,8 +649,10 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
   // Contratos com caso vivem na pasta do caso; a pasta "Contratos" é só dos órfãos.
   const contratosSemCaso = contratos.filter((c) => !c.atendimento_id)
 
-  // Total do cabeçalho: arquivos + contratos (cada contrato é único).
-  const totalItens = documentos.length + contratos.length
+  // Total do cabeçalho: arquivos + contratos + peças (cada um é um item único da
+  // árvore). Inclui peças para que um caso que só tenha peça ainda apareça (não
+  // caia no estado vazio).
+  const totalItens = documentos.length + contratos.length + pecas.length
   const temAlgum = totalItens > 0
 
   return (
@@ -650,7 +725,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
               <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />,
               arvore.casos.length,
               <ul className="space-y-0.5">
-                {arvore.casos.map((c) => renderPasta(`at:${c.id}`, c.label, c.docs, { tipo: 'atendimento', id: c.id }, { tipo: 'atendimento', id: c.id }, c.contratos))}
+                {arvore.casos.map((c) => renderPasta(`at:${c.id}`, c.label, c.docs, { tipo: 'atendimento', id: c.id }, { tipo: 'atendimento', id: c.id }, c.contratos, c.pecas))}
               </ul>,
             )}
 

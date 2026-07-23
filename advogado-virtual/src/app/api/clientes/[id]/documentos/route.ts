@@ -257,5 +257,37 @@ export async function GET(
     }))
   }
 
-  return NextResponse.json({ documentos, contratos })
+  // Peças do cliente (via atendimentos) como itens da árvore do dossiê — MESMO
+  // padrão dos contratos: só leitura + navegação ao editor, vindas de `pecas`, não
+  // de `documentos` (a peça vive no editor; ao chegar ao estado final ela também
+  // é materializada num .docx próprio, que aparece separado como documento). Só no
+  // modo árvore (o picker ?gerais=1 não as usa). Uma linha por peça do cliente —
+  // garante que o CASO com peça apareça na árvore mesmo sem nenhum documento.
+  let pecas: Array<{
+    id: string; tipo: string; status: string; area: string | null
+    atendimento_id: string | null; atendimento_titulo: string | null; atualizado_em: string
+  }> = []
+  if (!soGerais) {
+    const { data: pecasRaw } = await supabase
+      .from('pecas')
+      .select('id, tipo, status, area, updated_at, atendimento_id, atendimentos!inner(cliente_id, titulo)')
+      .eq('tenant_id', usuario.tenant_id)
+      .eq('atendimentos.cliente_id', clienteId)
+      .order('updated_at', { ascending: false })
+    pecas = (pecasRaw ?? []).map((p) => {
+      const at = p.atendimentos as unknown as { titulo?: string | null } | { titulo?: string | null }[] | null
+      const titulo = Array.isArray(at) ? (at[0]?.titulo ?? null) : (at?.titulo ?? null)
+      return {
+        id:                 p.id,
+        tipo:               p.tipo,
+        status:             p.status,
+        area:               p.area ?? null,
+        atendimento_id:     p.atendimento_id ?? null,
+        atendimento_titulo: titulo,
+        atualizado_em:      p.updated_at,
+      }
+    })
+  }
+
+  return NextResponse.json({ documentos, contratos, pecas })
 }

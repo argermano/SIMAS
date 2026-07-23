@@ -69,6 +69,15 @@ export default async function EditorPecaPage({
     citacoes: vf?.citacoes,
   } : null
 
+  // Materializada? Existe um documento do dossiê gerado a partir desta peça (080).
+  // Só a contagem — a UI mostra um aviso discreto com link ao dossiê do cliente.
+  const { count: docsMaterializados } = await supabase
+    .from('documentos')
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', usuario.tenant_id)
+    .eq('peca_id', pecaId)
+  const materializada = (docsMaterializados ?? 0) > 0
+
   const tipoConfig = TIPOS_PECA[peca.tipo]
   const tipoNome = tipoConfig?.nome ?? peca.tipo.replace(/_/g, ' ')
 
@@ -109,6 +118,7 @@ export default async function EditorPecaPage({
           versaoInicial={peca.versao ?? 1}
           statusInicial={peca.status ?? 'rascunho'}
           validacaoInicial={validacaoInicial}
+          materializada={materializada}
         />
       </main>
     </>

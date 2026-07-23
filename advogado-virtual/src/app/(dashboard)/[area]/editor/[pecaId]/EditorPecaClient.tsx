@@ -11,7 +11,7 @@ import { formatarPeca } from '@/lib/format/formatar-peca'
 import { salvarPecaComGuarda } from '@/lib/ia/pecas/salvar-peca-client'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
-import { Send, CheckCircle, Clock, ClipboardCheck, X, Loader2, GitCompare } from 'lucide-react'
+import { Send, CheckCircle, Clock, ClipboardCheck, X, Loader2, GitCompare, Paperclip } from 'lucide-react'
 
 type ValidacaoData = ComponentProps<typeof RelatorioValidacao>['data']
 
@@ -26,6 +26,8 @@ interface EditorPecaClientProps {
   versaoInicial: number
   statusInicial: string
   validacaoInicial?: ValidacaoData | null
+  /** Já existe um .docx desta peça anexado aos documentos do caso (080). */
+  materializada?: boolean
 }
 
 const PRAZO_OPTIONS = [
@@ -47,6 +49,7 @@ export function EditorPecaClient({
   conteudoInicial,
   statusInicial,
   validacaoInicial,
+  materializada,
 }: EditorPecaClientProps) {
   const router = useRouter()
   const { success, error: toastError } = useToast()
@@ -292,8 +295,22 @@ export function EditorPecaClient({
     ? <SeloCitacoes citacoes={validacao.citacoes} onClick={() => setPainelAberto(true)} />
     : null
 
+  // Aviso discreto: a peça já foi materializada num .docx dentro dos documentos do
+  // caso (080). Link ao dossiê do cliente, onde a árvore lista o arquivo.
+  const avisoAnexada = materializada && clienteId ? (
+    <a
+      href={`/clientes/${clienteId}`}
+      title="Ver nos documentos do caso"
+      className="flex items-center gap-1.5 rounded-lg bg-muted px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+    >
+      <Paperclip className="h-3.5 w-3.5" />
+      Anexada aos documentos do caso
+    </a>
+  ) : null
+
   const acoes = (
     <div className="flex items-center gap-2">
+      {avisoAnexada}
       {seloCitacoes}
       {badgeRevisao}
       <Button

@@ -2,16 +2,13 @@ import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { markdownToDocx } from '@/lib/export/docx-generator'
-import { aplicarTimbrado } from '@/lib/export/aplicar-timbrado'
 import { carregarEstiloTenant } from '@/lib/format/estilo-documento'
+import { gerarDocxComTimbrado, DOCX_MIME } from '@/lib/export/gerar-docx'
 import { enfileirarDriveSync } from '@/lib/drive/fila'
 
 // Client service-role só para o gatilho do espelho (drive_sync_fila é service-only).
 const driveAdmin = () =>
   createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-
-const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 // Documentos curtos que devem caber em uma única página (espaçamento compacto)
 const TIPOS_COMPACTOS = new Set([
@@ -56,21 +53,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // Gera o .docx (mesmo pipeline do export) e aplica o papel timbrado, se houver
   const estilo = await carregarEstiloTenant(supabase, usuario.tenant_id)
-  let buffer = await markdownToDocx(conteudo, {
-    titulo, estilo,
+  const buffer = await gerarDocxComTimbrado(supabase, usuario.tenant_id, {
+    conteudo, titulo, estilo,
     compacto: TIPOS_COMPACTOS.has(tipo ?? ''),
     contrato: TIPOS_CONTRATO.has(tipo ?? ''),
   })
-  const { data: timbrado } = await supabase.storage
-    .from('documentos')
-    .download(`${usuario.tenant_id}/timbrado/timbrado.docx`)
-  if (timbrado) {
-    try {
-      buffer = aplicarTimbrado(Buffer.from(await timbrado.arrayBuffer()), buffer)
-    } catch (err) {
-      console.error('[anexar-gerado] falha ao aplicar timbrado:', err instanceof Error ? err.message : err)
-    }
-  }
 
   const base = (titulo ?? 'documento').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_')
   const fileName = `${base}.docx`

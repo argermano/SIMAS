@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
-import { markdownToDocx } from '@/lib/export/docx-generator'
-import { aplicarTimbrado } from '@/lib/export/aplicar-timbrado'
 import { resolverEstiloEfetivo } from '@/lib/format/estilo-documento'
+import { gerarDocxComTimbrado } from '@/lib/export/gerar-docx'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
+import { materializarPecaNoDossie } from '@/lib/pecas/materializar'
 
 // POST /api/exportar — gerar e retornar DOCX
 export async function POST(req: NextRequest) {
@@ -32,24 +32,12 @@ export async function POST(req: NextRequest) {
     const titulo = tipoPecaConfig?.nome ?? peca.tipo
 
     const estilo = await resolverEstiloEfetivo(supabase, usuario.tenant_id, { tipo: 'peca', subtipo: peca.tipo })
-    let buffer = await markdownToDocx(peca.conteudo_markdown, {
+    const buffer = await gerarDocxComTimbrado(supabase, usuario.tenant_id, {
       titulo,
       area: peca.area,
       estilo,
+      conteudo: peca.conteudo_markdown,
     })
-
-    // Se o escritório cadastrou um papel timbrado, gera a peça dentro dele
-    // (preservando cabeçalho/logo, marca d'água e rodapé). Falha não bloqueia o export.
-    const { data: timbrado } = await supabase.storage
-      .from('documentos')
-      .download(`${usuario.tenant_id}/timbrado/timbrado.docx`)
-    if (timbrado) {
-      try {
-        buffer = aplicarTimbrado(Buffer.from(await timbrado.arrayBuffer()), buffer)
-      } catch (err) {
-        console.error('[exportar] falha ao aplicar timbrado:', err instanceof Error ? err.message : err)
-      }
-    }
 
     // Salvar registro de exportação
     await supabase.from('exportacoes').insert({
@@ -63,6 +51,21 @@ export async function POST(req: NextRequest) {
 
     // Atualizar status da peça
     await supabase.from('pecas').update({ status: 'exportada' }).eq('id', pecaId)
+
+    // Estado final → materializa o .docx no dossiê do caso (reusa o buffer já
+    // gerado). Best-effort: nunca bloqueia o download da peça.
+    await materializarPecaNoDossie(
+      supabase,
+      {
+        id: peca.id,
+        tipo: peca.tipo,
+        area: peca.area,
+        conteudo_markdown: peca.conteudo_markdown,
+        atendimento_id: peca.atendimento_id ?? null,
+        tenant_id: usuario.tenant_id,
+      },
+      { bufferPronto: buffer },
+    )
 
     const fileName = `${titulo.replace(/\s+/g, '_')}_v${peca.versao}.docx`
 
