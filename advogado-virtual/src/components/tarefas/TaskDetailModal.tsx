@@ -39,6 +39,11 @@ interface AcaoInfo {
   clienteId?:   string | null
   clienteNome?: string | null
   processoId?:  string | null
+  // Pré-criação de caso (1 clique) + área inferida pelos dados do processo.
+  podeCriarCaso?:    boolean
+  areaInferida?:     string | null
+  areaInferidaNome?: string | null
+  confiancaArea?:    'alta' | 'baixa' | null
 }
 
 // Ícone por ação (rótulo vem da rota). Mantém árvore de ícones estática.
@@ -178,6 +183,9 @@ export function TaskDetailModal({
             acao: d.acao, rotulo: d.rotulo, href: d.href ?? null,
             pendencia: d.pendencia ?? null,
             clienteId: d.clienteId ?? null, clienteNome: d.clienteNome ?? null, processoId: d.processoId ?? null,
+            podeCriarCaso: d.podeCriarCaso ?? false,
+            areaInferida: d.areaInferida ?? null, areaInferidaNome: d.areaInferidaNome ?? null,
+            confiancaArea: d.confiancaArea ?? null,
           })
         }
       }
@@ -757,6 +765,10 @@ export function TaskDetailModal({
               clienteId={acaoInfo.clienteId ?? null}
               clienteNome={acaoInfo.clienteNome ?? null}
               processoId={acaoInfo.processoId ?? null}
+              podeCriarCaso={acaoInfo.podeCriarCaso}
+              areaInferida={acaoInfo.areaInferida ?? null}
+              areaInferidaNome={acaoInfo.areaInferidaNome ?? null}
+              confiancaArea={acaoInfo.confiancaArea ?? null}
               onVinculado={() => { void recarregarAcao(); onSaved() }}
             />
           )}

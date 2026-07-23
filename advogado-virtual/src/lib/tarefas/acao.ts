@@ -44,8 +44,11 @@ function norm(s: string | null | undefined): string {
 // "VER CLIENTE. DIGITALIZAR RG" casava "cliente. d…" e virava peça por engano.
 const RE_AGENDAMENTO =
   /\b(agendar|agende|agendamento|agenda|ligacao|ligar|ligue|reuniao|atendimento|contato|contatar|entrevista)\b/
+// Inclui as peças de execução/cumprimento (caso real do dono: "Protocolar
+// requerimento de cumprimento de sentença…"): cumprimento, requerimento e
+// impugnação (ao cumprimento) são peças — abrem o motor, não o processo.
 const RE_PECA =
-  /\b(apelacao|contrarrazoes|contra-?razoes|embargos|recurso|contestacao|impugnacao|impugnar|manifestar|manifestacao|manifestacoes|emenda|emendar|alegacoes|inicial|peticao|replica|treplica|tutela|cumprimento|agravo|habeas)\b|\be\.\s*d\.?(?![a-z])/
+  /\b(apelacao|contrarrazoes|contra-?razoes|embargos|recurso|contestacao|impugnacao|impugnar|manifestar|manifestacao|manifestacoes|emenda|emendar|alegacoes|inicial|peticao|requerimento|replica|treplica|tutela|cumprimento|agravo|habeas)\b|\be\.\s*d\.?(?![a-z])/
 const RE_DOCUMENTO =
   /\b(juntar|juntada|juntado|escanear|escaneie|digitalizar|digitalize|documentacao|documento|documentos|comprovante|comprovantes|anexar|anexe|anexo)\b/
 const RE_PROCESSO =

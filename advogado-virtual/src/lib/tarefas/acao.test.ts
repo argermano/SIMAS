@@ -65,6 +65,16 @@ describe('classificarAcaoTarefa — títulos reais (exports do Astrea)', () => {
     expect(classificarAcaoTarefa('PROTOCOLAR APELAÇÃO')).toBe('peca')
   })
 
+  it('cumprimento de sentença / requerimento / impugnação são peça (título real do dono)', () => {
+    // Caso real: nasce de publicação, "Protocolar…" (verbo processual) mas é PEÇA.
+    expect(classificarAcaoTarefa(
+      'Protocolar requerimento de cumprimento de sentença para cobrança dos honorários sucumbenciais',
+    )).toBe('peca')
+    expect(classificarAcaoTarefa('CUMPRIMENTO DE SENTENÇA')).toBe('peca')
+    expect(classificarAcaoTarefa('REQUERIMENTO DE HABILITAÇÃO')).toBe('peca')
+    expect(classificarAcaoTarefa('IMPUGNAÇÃO AO CUMPRIMENTO DE SENTENÇA')).toBe('peca')
+  })
+
   it('E.D. só casa o token real de embargos (não "…e. d…" no meio da frase)', () => {
     expect(classificarAcaoTarefa('CICLANO x BANCO: E.D. PUB 15/02')).toBe('peca')
     expect(classificarAcaoTarefa('OPOR E.D')).toBe('peca')

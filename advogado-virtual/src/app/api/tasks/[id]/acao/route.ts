@@ -16,6 +16,7 @@ import {
   type AcaoTarefa,
   type AcaoConcreta,
 } from '@/lib/tarefas/acao'
+import { inferirAreaDoProcesso, nomeArea } from '@/lib/tarefas/area-inferida'
 
 export const maxDuration = 30
 
@@ -26,7 +27,7 @@ const SELECT = `
   process_id, cliente_id, processo_id,
   atendimentos(id, area, clientes(id, nome)),
   cliente:clientes!cliente_id(id, nome),
-  processo:processos!processo_id(id, clientes(id, nome))
+  processo:processos!processo_id(id, classe, orgao_julgador, assuntos, clientes(id, nome))
 `
 
 // Timeout curto da 1 chamada de IA de desempate (a classificação é trivial;
@@ -144,6 +145,23 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   // assistente que liga a tarefa ao caso e abre o motor de peças.
   const pecaPendente = acao === 'peca' && pecaSemCaso(ctx)
 
+  // Quando há processo/cliente (mas nenhum caso), pré-inferimos a ÁREA pelos
+  // dados do processo (determinístico e barato — sem IA): a UI mostra "Caso novo
+  // em Cível — trocar?" e cria o caso em 1 clique. confiança baixa → a UI pede a
+  // escolha. Só computado se houver algo a criar (cliente OU processo vinculado).
+  const podeCriarCaso = pecaPendente && !!(ctx.clienteId || ctx.processoId)
+  let areaPreview: { areaInferida: string; areaInferidaNome: string; confiancaArea: 'alta' | 'baixa' } | null = null
+  if (podeCriarCaso) {
+    const proc = Array.isArray(task.processo) ? task.processo[0] : task.processo
+    const p = proc as { classe?: string | null; orgao_julgador?: string | null; assuntos?: unknown } | null
+    const inf = inferirAreaDoProcesso({
+      classe: p?.classe ?? null,
+      orgaoJulgador: p?.orgao_julgador ?? null,
+      assuntos: Array.isArray(p?.assuntos) ? (p!.assuntos as unknown[]).map(String) : null,
+    })
+    areaPreview = { areaInferida: inf.area, areaInferidaNome: nomeArea(inf.area), confiancaArea: inf.confianca }
+  }
+
   return NextResponse.json({
     acao,
     rotulo: meta.rotulo,
@@ -157,6 +175,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
           clienteId: ctx.clienteId,
           clienteNome: ctx.clienteNome,
           processoId: ctx.processoId,
+          podeCriarCaso,
+          ...(areaPreview ?? {}),
         }
       : {}),
   })
