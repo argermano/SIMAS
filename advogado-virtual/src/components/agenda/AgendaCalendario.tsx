@@ -82,8 +82,11 @@ const FILTRO_BASE: FiltroAgenda = {
   pessoas: [], equipes: [], tags: [], q: '',
 }
 
+/** Pré-preenchimento do "Novo evento" (deep-link /agenda?novo=1 a partir de uma tarefa). */
+type PrefillNovo = { titulo?: string; data?: string; clienteId?: string; clienteNome?: string }
+
 type EstadoModal =
-  | { modo: 'novo' }
+  | { modo: 'novo'; prefill?: PrefillNovo }
   | { modo: 'editar'; evento: ReturnType<typeof paraEdicao> }
   | null
 
@@ -179,14 +182,20 @@ export function AgendaCalendario({
     void carregarPresencas()
   }, [filtro.de, filtro.ate, carregarPresencas])
 
-  // Deep-link /agenda?novo=1 (atalho "Novo evento" da barra superior): abre o
-  // EventoModal em modo "novo" e limpa o parâmetro da URL depois de abrir.
+  // Deep-link /agenda?novo=1 (atalho "Novo evento" da barra superior e "Agendar"
+  // de uma tarefa): abre o EventoModal em modo "novo", pré-preenchendo título,
+  // data (=vencimento) e cliente quando vierem na URL, e limpa os parâmetros.
   const novoTratado = useRef(false)
   useEffect(() => {
     if (searchParams.get('novo') !== '1') { novoTratado.current = false; return }
     if (novoTratado.current) return
     novoTratado.current = true
-    setModal({ modo: 'novo' })
+    const titulo = searchParams.get('titulo')?.trim() || undefined
+    const dataRaw = searchParams.get('data') ?? ''
+    const data = /^\d{4}-\d{2}-\d{2}$/.test(dataRaw) ? dataRaw : undefined
+    const clienteId = searchParams.get('clienteId') || undefined
+    const clienteNome = searchParams.get('clienteNome')?.trim() || undefined
+    setModal({ modo: 'novo', prefill: { titulo, data, clienteId, clienteNome } })
     router.replace('/agenda', { scroll: false })
   }, [searchParams, router])
 
@@ -329,6 +338,7 @@ export function AgendaCalendario({
         pessoas={pessoas}
         onFechar={() => setModal(null)}
         onSalvo={aoSalvarEvento}
+        inicial={modal?.modo === 'novo' ? modal.prefill : undefined}
       />
 
       <FeedModal aberto={feedAberto} onFechar={() => setFeedAberto(false)} />

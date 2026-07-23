@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode, type ComponentType } from 'react'
+import { useRouter } from 'next/navigation'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,10 @@ import {
   X, Calendar, User, Users, Flag, Layers, Tag,
   CheckCircle2, Trash2, Loader2, Pencil, Check, ExternalLink,
   MessageSquare, History, FileText, ListChecks,
+  FilePen, CalendarPlus, FolderOpen, Scale,
+  ChevronDown, ChevronRight, BookOpen,
 } from 'lucide-react'
+import type { AcaoConcreta } from '@/lib/tarefas/acao'
 import { cn } from '@/lib/utils'
 import type { TaskData } from './TaskCard'
 import { VinculoPicker, type VinculoSelecionado } from './VinculoPicker'
@@ -22,6 +26,21 @@ import { CardPublicacao } from './detalhe/CardPublicacao'
 
 function vinculoParaSelecionado(v: VinculoView | null): VinculoSelecionado | null {
   return v ? { tipo: v.tipo, id: v.id, label: v.label, sublabel: v.sublabel } : null
+}
+
+// Alvo pré-resolvido do botão "Resolver" (POST /api/tasks/[id]/acao).
+interface AcaoInfo {
+  acao:   AcaoConcreta
+  rotulo: string
+  href:   string | null
+}
+
+// Ícone por ação (rótulo vem da rota). Mantém árvore de ícones estática.
+const ACAO_ICON: Record<AcaoConcreta, ComponentType<{ className?: string }>> = {
+  peca:        FilePen,
+  agendamento: CalendarPlus,
+  documento:   FolderOpen,
+  processo:    Scale,
 }
 
 interface Column   { id: string; name: string; position: number; color?: string | null }
@@ -81,6 +100,7 @@ export function TaskDetailModal({
   task, boards, lists, tags, teamMembers, currentUserId, currentUserName, open, onClose, onSaved,
 }: TaskDetailModalProps) {
   const { success, error: toastError } = useToast()
+  const router = useRouter()
 
   const [description,  setDescription]  = useState(task.description)
   const [dueDate,      setDueDate]       = useState(toInputDate(task.due_date))
@@ -109,10 +129,15 @@ export function TaskDetailModal({
     ? task.origin_reference.slice('publicacao:'.length)
     : null
   type Aba = 'comentarios' | 'subtarefas' | 'historico' | 'publicacao'
-  const [activeTab,        setActiveTab]        = useState<Aba>('comentarios')
+  const [activeTab,        setActiveTab]        = useState<Aba>(publicacaoId ? 'publicacao' : 'comentarios')
   const [comentarios,      setComentarios]      = useState<Comentario[] | null>(null)
   const [loadingComments,  setLoadingComments]  = useState(false)
   const [subCount,         setSubCount]         = useState<number | null>(null)
+
+  // Botão "Resolver": ação classificada + alvo pré-resolvido (POST .../acao).
+  // Buscado ao abrir; cacheado no estado (a rota não persiste nada).
+  const [acaoInfo,   setAcaoInfo]   = useState<AcaoInfo | null>(null)
+  const [acaoLoading, setAcaoLoading] = useState(false)
 
   // Resetar estado quando a tarefa mudar
   useEffect(() => {
@@ -128,10 +153,34 @@ export function TaskDetailModal({
     setVinculo(vinculoParaSelecionado(resolverVinculoView(task)))
     setIsCompleted(!!task.completed_at)
     setEditingDesc(false)
-    setActiveTab('comentarios')
+    setActiveTab(publicacaoId ? 'publicacao' : 'comentarios')
     setComentarios(null)
     setSubCount(null)
+    setAcaoInfo(null)
   }, [task.id])
+
+  // Alvo do "Resolver": classifica a tarefa e resolve a URL de destino. Só para
+  // tarefas não concluídas (concluída não mostra o botão). Best-effort.
+  useEffect(() => {
+    if (!open || task.completed_at) return
+    let vivo = true
+    setAcaoLoading(true)
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/tasks/${task.id}/acao`, { method: 'POST' })
+        if (!vivo) return
+        if (res.ok) {
+          const d = await res.json().catch(() => null)
+          if (d?.acao) setAcaoInfo({ acao: d.acao, rotulo: d.rotulo, href: d.href ?? null })
+        }
+      } catch {
+        // silencioso — o botão simplesmente não aparece
+      } finally {
+        if (vivo) setAcaoLoading(false)
+      }
+    })()
+    return () => { vivo = false }
+  }, [task.id, open, task.completed_at])
 
   // Marca "visto" ao abrir: zera esta tarefa no sino de comentários novos (os
   // comentários de colegas anteriores a agora deixam de me alertar). Best-effort.
@@ -623,6 +672,12 @@ export function TaskDetailModal({
             )}
           </div>
 
+          {/* ── Como foi resolvido antes (guia discreto; só se houver histórico) ── */}
+          <HistoricoGuia
+            taskId={task.id}
+            onAbrirTarefa={(sid) => router.push(`/tarefas?task=${sid}`)}
+          />
+
           {/* ── Abas de paridade (Comentários / Histórico / Publicação) ── */}
           <div className="border-t border-border">
             <div className="flex items-center gap-1 px-4 pt-2" role="tablist">
@@ -684,7 +739,26 @@ export function TaskDetailModal({
 
           {/* ── Footer ── */}
           <div className="flex items-center justify-between border-t border-border px-6 py-4">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {/* Resolver: leva ao trabalho da tarefa (peça / agenda / dossiê /
+                  processo). Não aparece em tarefa concluída. Sem alvo resolvido
+                  (falta vínculo) → desabilitado com dica. */}
+              {!isCompleted && acaoInfo && (() => {
+                const Icone = ACAO_ICON[acaoInfo.acao]
+                const semAlvo = !acaoInfo.href
+                return (
+                  <Button
+                    size="sm"
+                    onClick={() => { if (acaoInfo.href) router.push(acaoInfo.href) }}
+                    disabled={semAlvo || acaoLoading}
+                    title={semAlvo ? 'Vincule um cliente ou caso a esta tarefa para resolver' : acaoInfo.rotulo}
+                  >
+                    <Icone className="h-4 w-4" />
+                    {acaoInfo.rotulo}
+                  </Button>
+                )
+              })()}
+
               {/* Concluir / Reabrir */}
               <Button
                 size="sm"
@@ -762,5 +836,106 @@ function TabButton({ active, onClick, icon, label, badge }: TabButtonProps) {
         </span>
       )}
     </button>
+  )
+}
+
+// ── "Como foi resolvido antes" ──────────────────────────────────────────────
+// Guia de LEITURA: tarefas concluídas do mesmo trabalho (GET .../semelhantes) +
+// atalho p/ a peça de referência daquele caso. NADA é copiado/gerado/concluído —
+// só links: abrir a tarefa (deep-link ?task=) e abrir a peça no editor.
+interface Semelhante {
+  id:            string
+  titulo:        string
+  concluidaEm:   string | null
+  vinculoRotulo: string | null
+  pecaId?:       string
+  pecaTitulo?:   string
+  pecaHref?:     string
+}
+
+function HistoricoGuia({
+  taskId, onAbrirTarefa,
+}: {
+  taskId: string
+  onAbrirTarefa: (id: string) => void
+}) {
+  const [itens,  setItens]  = useState<Semelhante[] | null>(null)
+  const [aberto, setAberto] = useState(false)
+
+  // Busca best-effort ao abrir/trocar de tarefa. Sem histórico → seção some.
+  useEffect(() => {
+    let vivo = true
+    setItens(null)
+    setAberto(false)
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/semelhantes`)
+        if (!vivo) return
+        if (res.ok) {
+          const d = await res.json().catch(() => null)
+          setItens((d?.semelhantes ?? []) as Semelhante[])
+        } else {
+          setItens([])
+        }
+      } catch {
+        if (vivo) setItens([])
+      }
+    })()
+    return () => { vivo = false }
+  }, [taskId])
+
+  if (!itens || itens.length === 0) return null
+
+  return (
+    <div className="border-t border-border px-6 py-3">
+      <button
+        type="button"
+        onClick={() => setAberto(v => !v)}
+        aria-expanded={aberto}
+        className="flex w-full items-center gap-2 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+      >
+        {aberto ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        <BookOpen className="h-3.5 w-3.5" />
+        Como foi resolvido antes
+        <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-muted px-1 text-[10px] font-semibold text-muted-foreground">
+          {itens.length}
+        </span>
+      </button>
+
+      {aberto && (
+        <ul className="mt-2 space-y-2">
+          {itens.map(s => (
+            <li key={s.id} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <div className="flex items-start justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => onAbrirTarefa(s.id)}
+                  title="Abrir esta tarefa"
+                  className="group min-w-0 flex-1 text-left"
+                >
+                  <p className="truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary">
+                    {s.titulo}
+                  </p>
+                  <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                    {s.concluidaEm && <span>Concluída em {formatDateBR(s.concluidaEm)}</span>}
+                    {s.vinculoRotulo && <span className="truncate">· {s.vinculoRotulo}</span>}
+                  </p>
+                </button>
+                <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-border" />
+              </div>
+              {s.pecaHref && (
+                <a
+                  href={s.pecaHref}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Abrir peça de referência{s.pecaTitulo ? ` · ${s.pecaTitulo}` : ''}
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

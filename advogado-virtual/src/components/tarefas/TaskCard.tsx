@@ -1,11 +1,15 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, type ComponentType } from 'react'
+import { useRouter } from 'next/navigation'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { User, Briefcase, Scale, AlertCircle } from 'lucide-react'
+import { User, Briefcase, Scale, AlertCircle, FilePen, CalendarPlus, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { resolverVinculoView, type VinculoTipo } from '@/lib/tarefas/vinculo'
+import {
+  classificarAcaoTarefa, contextoAlvoDaTask, construirHref, ACAO_META, type AcaoConcreta,
+} from '@/lib/tarefas/acao'
 
 type RelNome = { id: string; nome: string } | null
 
@@ -37,6 +41,14 @@ export interface TaskData {
 const VINCULO_ICON: Record<VinculoTipo, typeof User> = {
   cliente:     User,
   atendimento: Briefcase,
+  processo:    Scale,
+}
+
+// Ícone da ação rápida "Resolver" no card (rótulo no tooltip via ACAO_META).
+const ACAO_ICON: Record<AcaoConcreta, ComponentType<{ className?: string }>> = {
+  peca:        FilePen,
+  agendamento: CalendarPlus,
+  documento:   FolderOpen,
   processo:    Scale,
 }
 
@@ -83,8 +95,21 @@ interface TaskCardProps {
 }
 
 function TaskCardBase({ task, onClick }: TaskCardProps) {
+  const router = useRouter()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id })
+
+  // Ação rápida "Resolver": classificação PURA no cliente (sem IA/HTTP). O modal
+  // faz a versão completa (com desempate por IA); no card, 'indefinido' ou alvo
+  // não resolvido simplesmente esconde o atalho. Concluída não mostra.
+  const acaoRapida: { acao: AcaoConcreta; href: string; rotulo: string } | null = (() => {
+    if (task.completed_at) return null
+    const acao = classificarAcaoTarefa(task.description)
+    if (acao === 'indefinido') return null
+    const href = construirHref(acao, contextoAlvoDaTask(task))
+    if (!href) return null
+    return { acao, href, rotulo: ACAO_META[acao].rotulo }
+  })()
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -120,11 +145,29 @@ function TaskCardBase({ task, onClick }: TaskCardProps) {
       {...listeners}
       onClick={onClick}
       className={cn(
-        'cursor-pointer rounded-lg bg-card shadow-sm ring-1 ring-border',
+        'group relative cursor-pointer rounded-lg bg-card shadow-sm ring-1 ring-border',
         'border-l-4 p-3 transition-shadow hover:shadow-md',
         task.completed_at && 'opacity-60'
       )}
     >
+      {/* Ação rápida "Resolver" (ícone no hover). stopPropagation no pointerdown
+          evita iniciar o drag; no click evita abrir o modal antes de navegar. */}
+      {acaoRapida && (() => {
+        const Icone = ACAO_ICON[acaoRapida.acao]
+        return (
+          <button
+            type="button"
+            onPointerDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); router.push(acaoRapida.href) }}
+            title={acaoRapida.rotulo}
+            aria-label={acaoRapida.rotulo}
+            className="absolute right-2 top-2 z-10 rounded-md bg-card/90 p-1.5 text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition-opacity hover:text-primary focus:opacity-100 group-hover:opacity-100"
+          >
+            <Icone className="h-3.5 w-3.5" />
+          </button>
+        )
+      })()}
+
       {/* Tags */}
       {tags.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1">

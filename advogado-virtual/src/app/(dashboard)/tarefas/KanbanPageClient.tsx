@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { KanbanBoard } from '@/components/tarefas/KanbanBoard'
 import { TaskFormModal } from '@/components/tarefas/TaskFormModal'
+import { MeuDia } from '@/components/tarefas/MeuDia'
 import { cn } from '@/lib/utils'
 
 interface Column { id: string; name: string; position: number; color?: string | null }
@@ -213,6 +214,11 @@ export function KanbanPageClient({
             />
           )}
         </div>
+      </div>
+
+      {/* ─── Meu dia (topo, acima do Kanban) ─────────────────────────────────── */}
+      <div className="shrink-0 px-6 pt-4">
+        <MeuDia />
       </div>
 
       {/* ─── Kanban ──────────────────────────────────────────────────────────── */}

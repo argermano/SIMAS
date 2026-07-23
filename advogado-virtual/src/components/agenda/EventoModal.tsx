@@ -47,10 +47,11 @@ interface EventoModalProps {
   onFechar: () => void
   onSalvo: () => void
   /**
-   * Pré-vinculação OPCIONAL ao criar (ex.: "Agendar na agenda" a partir de
-   * /conversas). Ignorada na edição; default undefined — a /agenda não muda.
+   * Pré-preenchimento OPCIONAL ao criar (ex.: "Agendar" a partir de uma tarefa
+   * ou de /conversas): vincula o cliente e/ou já preenche título e data (dia
+   * todo). Ignorado na edição; default undefined — a /agenda não muda.
    */
-  inicial?: { clienteId?: string; clienteNome?: string }
+  inicial?: { clienteId?: string; clienteNome?: string; titulo?: string; data?: string }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -169,11 +170,15 @@ export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo, inicia
       setVisibilidade(evento.visibilidade)
       setStatus(evento.status)
     } else {
+      // Novo evento: aplica o pré-preenchimento (título + data). Data (vencimento
+      // da tarefa) é um DIA → nasce como evento de "dia todo"; o input `date` casa
+      // com o formato YYYY-MM-DD. NUNCA calcula prazo — só copia a data escolhida.
+      const temData = !!inicial?.data
       setTipo('evento')
-      setTitulo('')
+      setTitulo(inicial?.titulo ?? '')
       setDescricao('')
-      setDiaTodo(false)
-      setInicio('')
+      setDiaTodo(temData)
+      setInicio(inicial?.data ?? '')
       setFim('')
       setLocal('')
       setResponsavelId('')
@@ -181,7 +186,7 @@ export function EventoModal({ aberto, evento, pessoas, onFechar, onSalvo, inicia
       setVisibilidade('escritorio')
       setStatus('a_concluir')
     }
-  }, [aberto, evento])
+  }, [aberto, evento, inicial])
 
   function toggleEnvolvido(id: string) {
     setEnvolvidos(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))

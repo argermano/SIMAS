@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { Spinner } from '@/components/ui/spinner'
 import { cn, formatarData } from '@/lib/utils'
-import { ExternalLink, FileText } from 'lucide-react'
+import { ExternalLink, FileText, Sparkles } from 'lucide-react'
 import type { PublicacaoDetalhe } from '@/components/publicacoes/tipos'
+import { cacheAtual } from '@/lib/publicacoes/sugestoes-prompt'
 
 /**
  * Aba "Publicação" do modal de tarefa. Quando a tarefa nasceu de uma publicação
@@ -59,8 +60,40 @@ export function CardPublicacao({ publicacaoId }: { publicacaoId: string }) {
   const processo = pub.numero_mascara || pub.numero_processo || '—'
   const termo = pub.oab_consultada ? `OAB ${pub.oab_consultada}${pub.uf_oab ? '/' + pub.uf_oab : ''}` : '—'
 
+  // Tratamento sugerido pela IA (só EXIBE o cache já gerado na caixa de
+  // publicações — NUNCA dispara geração daqui). Cache de versão antiga ⇒ ignora.
+  const s = pub.sugestoes_ia
+  const sugestao =
+    s && cacheAtual(s) && (s.resumo?.trim() || s.tarefas?.length || s.trechos?.length) ? s : null
+
   return (
     <div className="rounded-xl border border-border bg-muted/20 p-4">
+      {sugestao && (
+        <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-3">
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+            <Sparkles className="h-3.5 w-3.5" /> Tratamento sugerido pela IA
+          </div>
+          {sugestao.resumo?.trim() && (
+            <p className="whitespace-pre-wrap break-words text-sm text-foreground">{sugestao.resumo}</p>
+          )}
+          {sugestao.tarefas.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {sugestao.tarefas.map((t, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-sm text-foreground">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/60" />
+                  <span className="min-w-0 break-words">{t.titulo}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <a
+            href={`/publicacoes?pub=${publicacaoId}`}
+            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Ver publicação
+          </a>
+        </div>
+      )}
       {/* Cabeçalho */}
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
