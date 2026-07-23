@@ -9,6 +9,7 @@ import { hojeSaoPauloISO } from '@/lib/processos/util'
 import { enviarAvisoWhatsApp } from '@/lib/processos/notificar'
 import { montarMensagensAvisoParcela } from '@/lib/financeiro/aviso'
 import { gerarPixCopiaECola } from '@/lib/financeiro/pix'
+import { enviarAvisosTarefasHoje, type ResultadoAvisosTarefas } from '@/lib/tarefas/aviso-diario'
 
 export const maxDuration = 60
 
@@ -165,7 +166,20 @@ export async function GET(req: Request) {
     logger.error('cron.avisos_parcelas.falha', {}, e as Error)
   }
 
-  return NextResponse.json({ ok: true, pessoas: porPessoa.size, enviados, tarefas: marcados, avisosParcelas })
+  // Aviso diário de tarefas ao PRÓPRIO membro (frente W3) — etapa ISOLADA na
+  // folga do cron, com deadline próprio: nunca derruba as etapas acima. Claim
+  // atômico por (user_id, dia) antes do envio → nunca 2 avisos no mesmo dia; falha
+  // de envio NÃO desfaz o claim (evita spam em retry). Só LEMBRA tarefas com
+  // due_date definido por humano — nunca calcula prazo. LGPD: só ids/contagens.
+  let avisosTarefas: ResultadoAvisosTarefas = { usuarios: 0, comTarefas: 0, enviados: 0, erros: 0 }
+  try {
+    avisosTarefas = await enviarAvisosTarefasHoje(admin, t0 + 55_000)
+    logger.info('cron.avisos_tarefas', { ...avisosTarefas })
+  } catch (e) {
+    logger.error('cron.avisos_tarefas.falha', {}, e as Error)
+  }
+
+  return NextResponse.json({ ok: true, pessoas: porPessoa.size, enviados, tarefas: marcados, avisosParcelas, avisosTarefas })
 }
 
 /** Soma `dias` a uma data YYYY-MM-DD ancorando no meio-dia UTC (imune a fuso/DST). */

@@ -7,7 +7,20 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
+import { apenasDigitos } from '@/lib/funil/telefone'
 import { UserPlus, Save, UserX, UserCheck, Star, RefreshCw } from 'lucide-react'
+
+// Máscara BR de celular para o input (mesmo padrão do FormCliente). Aceita DDI 55
+// colado e o descarta; formata DDD + número (10/11 dígitos).
+function formatarCelInput(valor: string): string {
+  let d = valor.replace(/\D/g, '')
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2)
+  d = d.slice(0, 11)
+  if (d.length <= 2) return d
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+}
 
 const OPCOES_ROLE = [
   { value: 'admin',       label: 'Administrador'  },
@@ -76,6 +89,80 @@ export function AlterarUnidade({ usuarioId, unidadeAtual }: AlterarUnidadeProps)
         <button
           onClick={salvar}
           disabled={salvando}
+          className="flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/80 disabled:opacity-50"
+        >
+          <Save className="h-3 w-3" />
+          {salvando ? 'Salvando…' : 'Salvar'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── Alterar celular (WhatsApp) de um membro ─────────────────────────────────
+
+interface AlterarCelularProps {
+  usuarioId:    string
+  celularAtual: string | null
+}
+
+export function AlterarCelular({ usuarioId, celularAtual }: AlterarCelularProps) {
+  const router = useRouter()
+  const { success, error: toastError } = useToast()
+  const original = celularAtual ?? ''
+  const [celular, setCelular]   = useState(formatarCelInput(original))
+  const [salvando, setSalvando] = useState(false)
+
+  const digitos    = apenasDigitos(celular)
+  const digOriginal = apenasDigitos(original)
+  const mudou      = digitos !== digOriginal
+  // Vazio (limpar) ou BR válido (10/11 dígitos). Bloqueia salvar quando inválido.
+  const valido     = digitos === '' || digitos.length === 10 || digitos.length === 11
+
+  async function salvar() {
+    if (!mudou) return
+    if (!valido) {
+      toastError('Celular inválido', 'Informe DDD + número (ex.: (61) 99999-0000).')
+      return
+    }
+    setSalvando(true)
+    try {
+      const res = await fetch(`/api/usuarios/${usuarioId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ celular: digitos }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toastError('Erro', data.error ?? 'Falha ao atualizar celular')
+        return
+      }
+      success(
+        digitos === '' ? 'Celular removido' : 'Celular atualizado',
+        'Recebe o aviso diário de tarefas por WhatsApp.',
+      )
+      router.refresh()
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="tel"
+        inputMode="numeric"
+        value={celular}
+        onChange={(e) => setCelular(formatarCelInput(e.target.value))}
+        placeholder="(00) 00000-0000"
+        className="w-40 rounded-md border border-border bg-card px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        disabled={salvando}
+        title="Celular (WhatsApp) — recebe o aviso diário de tarefas"
+      />
+      {mudou && (
+        <button
+          onClick={salvar}
+          disabled={salvando || !valido}
           className="flex items-center gap-1 rounded-md bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/80 disabled:opacity-50"
         >
           <Save className="h-3 w-3" />

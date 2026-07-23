@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
-import { AlterarRole, AlterarUnidade, ToggleStatusUsuario, FormConvite, DefinirPrincipal, ReenviarConvite } from './EquipeClient'
+import { AlterarRole, AlterarUnidade, AlterarCelular, ToggleStatusUsuario, FormConvite, DefinirPrincipal, ReenviarConvite } from './EquipeClient'
 import { LABELS_ROLE } from '@/types'
 import { Users, UserPlus, Clock, ChevronLeft, UserX } from 'lucide-react'
 import Link from 'next/link'
@@ -38,7 +38,7 @@ export default async function EquipePage() {
   // Todos os usuários do escritório (ativos e inativos)
   const { data: usuarios } = await supabase
     .from('users')
-    .select('id, nome, email, role, status, created_at, auth_user_id, is_advogado_principal, unidade')
+    .select('id, nome, email, role, status, created_at, auth_user_id, is_advogado_principal, unidade, celular')
     .eq('tenant_id', admin.tenant_id)
     .order('created_at', { ascending: true })
 
@@ -163,6 +163,8 @@ export default async function EquipePage() {
                           <span className="hidden sm:block text-xs text-muted-foreground">
                             {formatarDataRelativa(u.created_at)}
                           </span>
+                          {/* Celular (WhatsApp) do membro — recebe o aviso diário de tarefas */}
+                          <AlterarCelular usuarioId={u.id} celularAtual={u.celular} />
                           {/* Unidade (número de saída do WhatsApp) — o próprio membro também pode ajustar */}
                           <AlterarUnidade usuarioId={u.id} unidadeAtual={u.unidade} />
                           <DefinirPrincipal

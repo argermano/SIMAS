@@ -3,6 +3,7 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { apenasDigitos } from '@/lib/funil/telefone'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -11,9 +12,26 @@ const schema = z.object({
   is_advogado_principal: z.boolean().optional(),
   // Unidade do membro; roteia o número de saída do WhatsApp. '' → null (sem preferência).
   unidade:               z.enum(['brasilia', 'florianopolis', 'blumenau']).nullable().optional(),
+  // Celular (WhatsApp) do PRÓPRIO membro. Aceita mascarado; guarda SÓ dígitos.
+  // '' (limpar) → null. Valida BR: DDD + número (10/11), com DDI opcional (12/13).
+  celular:               z
+                           .string()
+                           .trim()
+                           .transform(s => apenasDigitos(s))
+                           .refine(d => d === '' || (d.length >= 10 && d.length <= 13), {
+                             message: 'Celular inválido (informe DDD + número)',
+                           })
+                           .transform(d => (d === '' ? null : d))
+                           .nullable()
+                           .optional(),
 }).refine(
-  data => data.role || data.status || data.is_advogado_principal !== undefined || data.unidade !== undefined,
-  { message: 'Informe role, status, is_advogado_principal ou unidade' },
+  data =>
+    data.role ||
+    data.status ||
+    data.is_advogado_principal !== undefined ||
+    data.unidade !== undefined ||
+    data.celular !== undefined,
+  { message: 'Informe role, status, is_advogado_principal, unidade ou celular' },
 )
 
 function getAdminSupabase() {
@@ -65,20 +83,24 @@ export async function PATCH(
     .update(resultado.data)
     .eq('id', id)
     .eq('tenant_id', admin.tenant_id)
-    .select('id, nome, email, role, status, is_advogado_principal')
+    .select('id, nome, email, role, status, is_advogado_principal, unidade, celular')
     .single()
 
   if (error || !usuario) {
     return jsonError('Usuário não encontrado', 404)
   }
 
+  // LGPD: nunca gravar o número no audit — só sinaliza que o celular mudou.
+  const { celular, ...metadata } = resultado.data
   await logAudit({
     tenantId:     admin.tenant_id,
     userId:       admin.id,
     action:       'user.update',
     resourceType: 'user',
     resourceId:   id,
-    metadata:     resultado.data,
+    metadata:     celular !== undefined
+                    ? { ...metadata, celular: celular === null ? 'removido' : 'atualizado' }
+                    : metadata,
   })
 
   return NextResponse.json({ ok: true, usuario })
