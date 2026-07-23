@@ -6,6 +6,7 @@ import {
   construirHref,
   contextoAlvoDaTask,
   tituloNaoTrivial,
+  pecaSemCaso,
   type AlvoContexto,
 } from './acao'
 
@@ -135,8 +136,10 @@ describe('construirHref', () => {
     expect(params.nome).toBe('EMENDA')
   })
 
-  it('peça sem atendimento cai no cliente (se houver)', () => {
-    expect(construirHref('peca', { ...base, titulo: 'APELAÇÃO', clienteId: 'c9' })).toBe('/clientes/c9')
+  it('peça sem caso → null (sem atalho morto; a UI mostra o assistente de vínculo)', () => {
+    // Mesmo com cliente/processo NÃO devolve dossiê: o motor precisa do caso.
+    expect(construirHref('peca', { ...base, titulo: 'APELAÇÃO', clienteId: 'c9' })).toBeNull()
+    expect(construirHref('peca', { ...base, titulo: 'APELAÇÃO', processoId: 'p1' })).toBeNull()
     expect(construirHref('peca', { ...base, titulo: 'APELAÇÃO' })).toBeNull()
   })
 
@@ -204,6 +207,23 @@ describe('contextoAlvoDaTask', () => {
     expect(ctx.atendimentoId).toBeNull()
     expect(ctx.clienteId).toBeNull()
     expect(ctx.area).toBeNull()
+  })
+})
+
+describe('pecaSemCaso', () => {
+  const base: AlvoContexto = {
+    titulo: 'APELAÇÃO', dueDate: null, atendimentoId: null, area: null,
+    clienteId: null, clienteNome: null, processoId: null,
+  }
+  it('false quando há caso (atendimento + área válida) → motor abre direto', () => {
+    expect(pecaSemCaso({ ...base, atendimentoId: 'at1', area: 'previdenciario' })).toBe(false)
+  })
+  it('true quando falta atendimento ou área (só cliente/processo, ou nada)', () => {
+    expect(pecaSemCaso({ ...base, clienteId: 'c1' })).toBe(true)
+    expect(pecaSemCaso({ ...base, processoId: 'p1' })).toBe(true)
+    expect(pecaSemCaso({ ...base, atendimentoId: 'at1', area: null })).toBe(true)
+    expect(pecaSemCaso({ ...base, atendimentoId: 'at1', area: 'inexistente' })).toBe(true)
+    expect(pecaSemCaso(base)).toBe(true)
   })
 })
 

@@ -11,7 +11,13 @@ import { ehVinculoTipo, formatarCnj, rotularArea, sublabelCliente, type VinculoT
  *   atendimento → label=área,                     sublabel=cliente (· nº processo)
  *   processo    → label=apelido/nº CNJ,           sublabel=cliente
  * ?tipos= (opcional) restringe quais tipos buscar (CSV). Ausente = os 3 (legado).
+ *
+ * ?clienteId= (opcional) → modo "casos daquele cliente": devolve os atendimentos
+ * do cliente (ignora os outros tipos), SEM exigir q. Alimenta o assistente de
+ * vínculo (peça sem caso), que prioriza os casos do cliente da tarefa.
  */
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 interface Resultado {
   tipo:     VinculoTipo
@@ -46,6 +52,40 @@ export async function GET(req: NextRequest) {
 
   const sp = new URL(req.url).searchParams
   const q = (sp.get('q') ?? '').trim()
+
+  // ── Modo "casos do cliente" (assistente de vínculo) ──────────────────────
+  // clienteId válido → devolve os atendimentos daquele cliente (não exige q).
+  // Se q vier junto (≥2), filtra por área/nº/título. Isola do fluxo legado.
+  const clienteId = (sp.get('clienteId') ?? '').trim()
+  if (clienteId) {
+    if (!UUID_RE.test(clienteId)) return NextResponse.json({ resultados: [] })
+    let query = supabase
+      .from('atendimentos')
+      .select('id, area, numero_processo, titulo')
+      .eq('tenant_id', usuario.tenant_id)
+      .eq('cliente_id', clienteId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(8)
+    if (q.length >= 2) {
+      const likeQ = `%${q}%`
+      query = query.or(`area.ilike.${likeQ},numero_processo.ilike.${likeQ},titulo.ilike.${likeQ}`)
+    }
+    const { data } = await query
+    const resultados: Resultado[] = (data ?? []).map((a) => {
+      const titulo = (a as { titulo?: string | null }).titulo?.trim() || null
+      const numero = (a as { numero_processo?: string | null }).numero_processo?.trim() || null
+      const area = rotularArea((a as { area?: string }).area)
+      return {
+        tipo: 'atendimento' as const,
+        id: a.id as string,
+        label: titulo || area,
+        sublabel: [titulo ? area : null, numero].filter(Boolean).join(' · ') || null,
+      }
+    })
+    return NextResponse.json({ resultados })
+  }
+
   if (q.length < 2) return NextResponse.json({ resultados: [] })
 
   // ?tipos= restringe a busca (CSV). Vazio/ausente = os 3 tipos (comportamento legado).

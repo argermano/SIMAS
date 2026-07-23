@@ -159,8 +159,9 @@ export function construirHref(acao: AcaoConcreta, ctx: AlvoContexto): string | n
         if (nome) qs.set('nome', nome)
         return `/${ctx.area}/pecas/${tipoPeca}?${qs.toString()}`
       }
-      // Sem atendimento vinculado: leva ao cliente p/ escolher o caso e gerar.
-      if (ctx.clienteId) return `/clientes/${ctx.clienteId}`
+      // Sem caso (atendimento+área) NÃO há alvo de peça: o motor precisa do caso.
+      // Em vez de um atalho morto ao dossiê, a UI mostra o ASSISTENTE DE VÍNCULO
+      // (modal) ou o indicador de elo (card). Ver pecaSemCaso() + rota /acao.
       return null
     }
     case 'agendamento': {
@@ -181,6 +182,16 @@ export function construirHref(acao: AcaoConcreta, ctx: AlvoContexto): string | n
       // Tela do processo vinculado (convenção do app: página do cliente).
       return ctx.clienteId ? `/clientes/${ctx.clienteId}` : null
   }
+}
+
+/**
+ * Peça cujo motor NÃO abre direto porque falta o CASO (atendimento + área): não
+ * há como pré-montar a URL do motor de peças. Sinaliza que a UI deve oferecer o
+ * assistente de vínculo (modal) / o indicador de elo (card) em vez de um atalho
+ * morto. Só faz sentido quando a ação já é 'peca'.
+ */
+export function pecaSemCaso(ctx: AlvoContexto): boolean {
+  return !(ctx.atendimentoId && ctx.area && !!(AREAS as Record<string, unknown>)[ctx.area])
 }
 
 // ── Adaptação do vínculo da tarefa → AlvoContexto ───────────────────────────

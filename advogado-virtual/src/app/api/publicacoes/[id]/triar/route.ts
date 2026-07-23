@@ -6,6 +6,7 @@ import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { logger } from '@/lib/logger'
 import { taskService } from '@/services/task-service'
+import { derivarVinculoHerdado } from '@/lib/tarefas/heranca-publicacao'
 import { validarTransicao, montarDescricaoTarefa, statusAposTratamento } from '@/lib/processos/triagem'
 
 export const maxDuration = 30
@@ -28,8 +29,9 @@ const schema = z.object({
   tarefas: z.array(tarefaSchema).max(10).optional(),
 })
 
-// Campos suficientes para montar a descrição da tarefa.
-const CAMPOS_CLAIM = 'id, status, tipo_documento, tipo_comunicacao, numero_mascara, sigla_tribunal'
+// Campos suficientes para montar a descrição da tarefa + o processo de origem
+// (para herdar o vínculo da tarefa no ato da criação).
+const CAMPOS_CLAIM = 'id, status, tipo_documento, tipo_comunicacao, numero_mascara, sigla_tribunal, processo_id'
 
 interface PublicacaoRow {
   id: string
@@ -38,6 +40,7 @@ interface PublicacaoRow {
   tipo_comunicacao: string | null
   numero_mascara: string | null
   sigla_tribunal: string | null
+  processo_id: string | null
 }
 
 /**
@@ -170,6 +173,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
     const pub = reservados[0] as PublicacaoRow
 
+    // Vínculo herdado da publicação (processo → caso único / processo). Derivado
+    // UMA vez: é o mesmo para todas as tarefas desta publicação. Escopo de tenant.
+    const vinculoHerdado = await derivarVinculoHerdado(supabase, pub.processo_id, usuario.tenant_id)
+
     // 2) Cria cada tarefa pedida (best-effort). Descrição vem do body (editável)
     //    ou é montada; dueDate NUNCA vem pré-confirmada (default null).
     const taskIds: string[] = []
@@ -182,6 +189,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           createdBy: usuario.id,
           priority: t.priority ?? 'media',
           dueDate: t.due_date ?? null,
+          vinculo: vinculoHerdado,
           originReference: `publicacao:${id}`,
           tagNames: ['PUBLICAÇÃO'],
         })
@@ -253,6 +261,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
   const pub = reservados[0] as PublicacaoRow
 
+  // Vínculo herdado da publicação (processo → caso único / processo). Escopo de tenant.
+  const vinculoHerdado = await derivarVinculoHerdado(supabase, pub.processo_id, usuario.tenant_id)
+
   // 2) Cria a tarefa no Kanban. Descrição vem do body (editável) ou é montada.
   //    dueDate NUNCA vem pré-confirmada — usa o que o body enviar (default null).
   const descricao = tarefa!.description?.trim() || montarDescricaoTarefa(pub)
@@ -265,6 +276,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       createdBy: usuario.id,
       priority: tarefa!.priority ?? 'media',
       dueDate: tarefa!.due_date ?? null,
+      vinculo: vinculoHerdado,
       originReference: `publicacao:${id}`,
       tagNames: ['PUBLICAÇÃO'],
     })

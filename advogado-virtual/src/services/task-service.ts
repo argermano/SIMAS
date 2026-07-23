@@ -4,6 +4,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
+import { vinculoParaColunas, TABELA_POR_TIPO, type Vinculo } from '@/lib/tarefas/vinculo'
 
 /**
  * Garante que todos os IDs informados existem E pertencem ao tenant.
@@ -37,6 +38,13 @@ export interface CreateTaskInput {
   priority?:        'baixa' | 'media' | 'alta' | 'urgente'
   dueDate?:         Date | string | null
   processId?:       string | null
+  /**
+   * Vínculo único da tarefa (cliente | caso | processo). Quando informado, tem
+   * precedência sobre `processId` e define as 3 colunas exclusivas (054). Passe
+   * `null` para nascer sem vínculo; omita para manter o comportamento legado
+   * (só `process_id`).
+   */
+  vinculo?:         Vinculo | null
   taskListId?:      string | null
   kanbanBoardId?:   string | null
   kanbanColumnId?:  string | null
@@ -54,6 +62,7 @@ export interface CreateAutomaticTaskInput {
   priority?:        'baixa' | 'media' | 'alta' | 'urgente'
   dueDate?:         Date | string | null
   processId?:       string | null
+  vinculo?:         Vinculo | null   // vínculo único herdado (ver CreateTaskInput.vinculo)
   originReference?: string | null
   tagNames?:        string[]   // nomes de tags — lookup automático
 }
@@ -100,12 +109,22 @@ const taskService = {
       taskListId = list?.id ?? null
     }
 
+    // Vínculo único (054): quando informado, define as 3 colunas exclusivas e
+    // tem precedência sobre `processId`. Omitido → comportamento legado (só process_id).
+    const colunasVinculo = input.vinculo !== undefined
+      ? vinculoParaColunas(input.vinculo)
+      : { cliente_id: null, process_id: input.processId ?? null, processo_id: null }
+
     // Valida que todas as referências pertencem ao tenant antes de inserir
     await Promise.all([
       validarPertencimentoTenant(supabase, 'users', [input.assigneeId, input.createdBy, ...(input.extraAssignees ?? [])], input.tenantId),
       validarPertencimentoTenant(supabase, 'kanban_boards', [kanbanBoardId], input.tenantId),
       validarPertencimentoTenant(supabase, 'task_lists', [taskListId], input.tenantId),
       validarPertencimentoTenant(supabase, 'task_tags', input.tagIds ?? [], input.tenantId),
+      // Alvo do vínculo herdado: confirma que existe no tenant (defesa em profundidade).
+      input.vinculo
+        ? validarPertencimentoTenant(supabase, TABELA_POR_TIPO[input.vinculo.tipo], [input.vinculo.id], input.tenantId)
+        : Promise.resolve(),
     ])
 
     const { data: task, error } = await supabase
@@ -117,7 +136,9 @@ const taskService = {
         created_by:       input.createdBy,
         priority:         input.priority        ?? 'media',
         due_date:         input.dueDate         ?? null,
-        process_id:       input.processId       ?? null,
+        cliente_id:       colunasVinculo.cliente_id,
+        process_id:       colunasVinculo.process_id,
+        processo_id:      colunasVinculo.processo_id,
         task_list_id:     taskListId,
         kanban_board_id:  kanbanBoardId,
         kanban_column_id: kanbanColumnId,

@@ -18,6 +18,7 @@ import type { AcaoConcreta } from '@/lib/tarefas/acao'
 import { cn } from '@/lib/utils'
 import type { TaskData } from './TaskCard'
 import { VinculoPicker, type VinculoSelecionado } from './VinculoPicker'
+import { VinculoAssistente } from './VinculoAssistente'
 import { resolverVinculoView, ROTULO_TIPO, type VinculoView } from '@/lib/tarefas/vinculo'
 import { ComentariosSecao, type Comentario } from './ComentariosSecao'
 import { SubtarefasSecao } from './SubtarefasSecao'
@@ -33,6 +34,11 @@ interface AcaoInfo {
   acao:   AcaoConcreta
   rotulo: string
   href:   string | null
+  // Peça sem caso: pendência de vínculo + contexto p/ o assistente (PART 2).
+  pendencia?:   'vincular' | null
+  clienteId?:   string | null
+  clienteNome?: string | null
+  processoId?:  string | null
 }
 
 // Ícone por ação (rótulo vem da rota). Mantém árvore de ícones estática.
@@ -159,27 +165,33 @@ export function TaskDetailModal({
     setAcaoInfo(null)
   }, [task.id])
 
-  // Alvo do "Resolver": classifica a tarefa e resolve a URL de destino. Só para
-  // tarefas não concluídas (concluída não mostra o botão). Best-effort.
+  // Alvo do "Resolver": classifica a tarefa e resolve a URL de destino (ou a
+  // pendência de vínculo). Só para tarefas não concluídas. Best-effort.
+  async function recarregarAcao() {
+    setAcaoLoading(true)
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/acao`, { method: 'POST' })
+      if (res.ok) {
+        const d = await res.json().catch(() => null)
+        if (d?.acao) {
+          setAcaoInfo({
+            acao: d.acao, rotulo: d.rotulo, href: d.href ?? null,
+            pendencia: d.pendencia ?? null,
+            clienteId: d.clienteId ?? null, clienteNome: d.clienteNome ?? null, processoId: d.processoId ?? null,
+          })
+        }
+      }
+    } catch {
+      // silencioso — o botão simplesmente não aparece
+    } finally {
+      setAcaoLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!open || task.completed_at) return
-    let vivo = true
-    setAcaoLoading(true)
-    ;(async () => {
-      try {
-        const res = await fetch(`/api/tasks/${task.id}/acao`, { method: 'POST' })
-        if (!vivo) return
-        if (res.ok) {
-          const d = await res.json().catch(() => null)
-          if (d?.acao) setAcaoInfo({ acao: d.acao, rotulo: d.rotulo, href: d.href ?? null })
-        }
-      } catch {
-        // silencioso — o botão simplesmente não aparece
-      } finally {
-        if (vivo) setAcaoLoading(false)
-      }
-    })()
-    return () => { vivo = false }
+    void recarregarAcao()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.id, open, task.completed_at])
 
   // Marca "visto" ao abrir: zera esta tarefa no sino de comentários novos (os
@@ -737,13 +749,25 @@ export function TaskDetailModal({
             </div>
           </div>
 
+          {/* ── Assistente de vínculo: peça sem caso (AJUDA ATIVA, PART 2) ── */}
+          {!isCompleted && acaoInfo?.acao === 'peca' && acaoInfo.pendencia === 'vincular' && (
+            <VinculoAssistente
+              taskId={task.id}
+              titulo={task.description}
+              clienteId={acaoInfo.clienteId ?? null}
+              clienteNome={acaoInfo.clienteNome ?? null}
+              processoId={acaoInfo.processoId ?? null}
+              onVinculado={() => { void recarregarAcao(); onSaved() }}
+            />
+          )}
+
           {/* ── Footer ── */}
           <div className="flex items-center justify-between border-t border-border px-6 py-4">
             <div className="flex flex-wrap gap-2">
               {/* Resolver: leva ao trabalho da tarefa (peça / agenda / dossiê /
-                  processo). Não aparece em tarefa concluída. Sem alvo resolvido
-                  (falta vínculo) → desabilitado com dica. */}
-              {!isCompleted && acaoInfo && (() => {
+                  processo). Não aparece em tarefa concluída. Peça sem caso é
+                  tratada pelo assistente acima (não vira botão morto aqui). */}
+              {!isCompleted && acaoInfo && acaoInfo.pendencia !== 'vincular' && (() => {
                 const Icone = ACAO_ICON[acaoInfo.acao]
                 const semAlvo = !acaoInfo.href
                 return (

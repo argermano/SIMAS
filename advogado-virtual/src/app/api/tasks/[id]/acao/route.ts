@@ -11,6 +11,7 @@ import {
   contextoAlvoDaTask,
   construirHref,
   tituloNaoTrivial,
+  pecaSemCaso,
   ACAO_META,
   type AcaoTarefa,
   type AcaoConcreta,
@@ -138,6 +139,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const href = construirHref(acao, ctx)
   const meta = ACAO_META[acao]
 
+  // Peça sem caso: em vez de href para o dossiê (atalho morto), devolvemos a
+  // PENDÊNCIA de vínculo + o contexto (cliente/processo) para a UI oferecer o
+  // assistente que liga a tarefa ao caso e abre o motor de peças.
+  const pecaPendente = acao === 'peca' && pecaSemCaso(ctx)
+
   return NextResponse.json({
     acao,
     rotulo: meta.rotulo,
@@ -145,5 +151,13 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     href,
     via,
     concluida: !!task.completed_at,
+    ...(pecaPendente
+      ? {
+          pendencia: 'vincular' as const,
+          clienteId: ctx.clienteId,
+          clienteNome: ctx.clienteNome,
+          processoId: ctx.processoId,
+        }
+      : {}),
   })
 }

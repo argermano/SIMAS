@@ -4,7 +4,7 @@ import { memo, type ComponentType } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { User, Briefcase, Scale, AlertCircle, FilePen, CalendarPlus, FolderOpen } from 'lucide-react'
+import { User, Briefcase, Scale, AlertCircle, FilePen, CalendarPlus, FolderOpen, Link2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { resolverVinculoView, type VinculoTipo } from '@/lib/tarefas/vinculo'
 import {
@@ -102,14 +102,18 @@ function TaskCardBase({ task, onClick }: TaskCardProps) {
   // Ação rápida "Resolver": classificação PURA no cliente (sem IA/HTTP). O modal
   // faz a versão completa (com desempate por IA); no card, 'indefinido' ou alvo
   // não resolvido simplesmente esconde o atalho. Concluída não mostra.
-  const acaoRapida: { acao: AcaoConcreta; href: string; rotulo: string } | null = (() => {
+  const acaoConcreta: AcaoConcreta | null = (() => {
     if (task.completed_at) return null
     const acao = classificarAcaoTarefa(task.description)
-    if (acao === 'indefinido') return null
-    const href = construirHref(acao, contextoAlvoDaTask(task))
-    if (!href) return null
-    return { acao, href, rotulo: ACAO_META[acao].rotulo }
+    return acao === 'indefinido' ? null : acao
   })()
+  const hrefRapido = acaoConcreta ? construirHref(acaoConcreta, contextoAlvoDaTask(task)) : null
+  const acaoRapida = acaoConcreta && hrefRapido
+    ? { acao: acaoConcreta, href: hrefRapido, rotulo: ACAO_META[acaoConcreta].rotulo }
+    : null
+  // Peça sem caso (sem alvo de motor): indicador de elo — em vez de atalho morto —
+  // convidando a vincular ao caso (o modal traz o assistente). PART 3.
+  const pecaSemVinculo = acaoConcreta === 'peca' && !hrefRapido
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -167,6 +171,17 @@ function TaskCardBase({ task, onClick }: TaskCardProps) {
           </button>
         )
       })()}
+
+      {/* Peça sem caso: indicador de elo discreto (abre o modal → assistente). */}
+      {pecaSemVinculo && (
+        <span
+          title="Vincule ao caso para gerar a peça"
+          aria-label="Vincule ao caso para gerar a peça"
+          className="absolute right-2 top-2 z-10 rounded-md bg-card/90 p-1.5 text-muted-foreground shadow-sm ring-1 ring-border"
+        >
+          <Link2 className="h-3.5 w-3.5" />
+        </span>
+      )}
 
       {/* Tags */}
       {tags.length > 0 && (
