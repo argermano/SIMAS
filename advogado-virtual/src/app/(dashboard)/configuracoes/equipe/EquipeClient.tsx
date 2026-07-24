@@ -8,19 +8,8 @@ import { Select } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { apenasDigitos } from '@/lib/funil/telefone'
+import { formatarCelularBR as formatarCelInput } from '@/lib/format/celular'
 import { UserPlus, Save, UserX, UserCheck, Star, RefreshCw } from 'lucide-react'
-
-// Máscara BR de celular para o input (mesmo padrão do FormCliente). Aceita DDI 55
-// colado e o descarta; formata DDD + número (10/11 dígitos).
-function formatarCelInput(valor: string): string {
-  let d = valor.replace(/\D/g, '')
-  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2)
-  d = d.slice(0, 11)
-  if (d.length <= 2) return d
-  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
-  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
-}
 
 const OPCOES_ROLE = [
   { value: 'admin',       label: 'Administrador'  },

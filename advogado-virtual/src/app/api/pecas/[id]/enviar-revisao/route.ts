@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { taskService } from '@/services/task-service'
+import { agendarNotificacaoNovaTarefa } from '@/lib/notificacoes/notificar-nova-tarefa'
 
 // POST /api/pecas/[id]/enviar-revisao — envia peça para fila de revisão e cria tarefa no kanban
 export async function POST(
@@ -60,8 +61,9 @@ export async function POST(
   // Criar tarefa no kanban
   try {
     const tipoFormatado = peca.tipo.replace(/_/g, ' ')
-    await taskService.createAutomatic({
-      description:     `Revisar peça: ${tipoFormatado} (${peca.area}) — ${nomeCliente}`,
+    const descricao = `Revisar peça: ${tipoFormatado} (${peca.area}) — ${nomeCliente}`
+    const task = await taskService.createAutomatic({
+      description:     descricao,
       assigneeId:      revisorId,
       tenantId:        usuario.tenant_id,
       createdBy:       usuario.id,
@@ -70,6 +72,14 @@ export async function POST(
       processId:       peca.atendimento_id ?? undefined,
       originReference: `revisao_peca:${id}`,
       tagNames:        ['REVISÃO'],
+    })
+    // Avisa o revisor da nova tarefa (exceto se ele mesmo enviou). Best-effort —
+    // o helper é blindado e vira no-op quando revisorId cai no próprio autor.
+    await agendarNotificacaoNovaTarefa({
+      taskId:     task.id as string,
+      descricao,
+      assigneeId: revisorId,
+      excluir:    usuario.id,
     })
   } catch { /* tarefa automática não é crítica */ }
 

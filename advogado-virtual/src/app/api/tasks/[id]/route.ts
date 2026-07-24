@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { vinculoParaColunas } from '@/lib/tarefas/vinculo'
 import { vinculoValido } from '@/lib/tarefas/validar-vinculo'
 import { calendarAdmin, agendarEspelhoUsuarios, coletarAfetadosTask } from '@/lib/calendar/fila'
+import { agendarNotificacaoNovaTarefa } from '@/lib/notificacoes/notificar-nova-tarefa'
 
 const schemaVinculo = z
   .object({ tipo: z.enum(['cliente', 'atendimento', 'processo']), id: z.string().uuid() })
@@ -102,6 +103,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const calAdmin = calendarAdmin()
   const afetadosAntes = await coletarAfetadosTask(calAdmin, id)
 
+  // Reatribuição: quem já era responsável ANTES (principal + envolvidos), só quando
+  // o PATCH mexe em responsáveis. Serve para avisar APENAS quem for ADICIONADO
+  // agora — não re-notificar quem já estava na tarefa. Independente do espelho
+  // (coletarAfetadosTask é no-op quando o Calendar está desligado).
+  let respAntes: Set<string> | null = null
+  if (rest.assignee_id !== undefined || extra_assignees !== undefined) {
+    const { data: antes } = await supabase
+      .from('tasks')
+      .select('assignee_id, task_assignees(user_id)')
+      .eq('id', id)
+      .eq('tenant_id', usuario.tenant_id)
+      .maybeSingle()
+    const prevExtras = ((antes?.task_assignees ?? []) as { user_id: string | null }[]).map((a) => a.user_id)
+    respAntes = new Set(
+      [(antes as { assignee_id?: string | null } | null)?.assignee_id ?? null, ...prevExtras].filter(
+        (v): v is string => !!v,
+      ),
+    )
+  }
+
   // Estado anterior (para o diff do histórico). Não altera o comportamento:
   // se a tarefa não existir/for de outro tenant, o update abaixo falha como antes.
   const camposEscalares = Object.keys(taskData)
@@ -178,6 +199,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     ...afetadosAntes,
     ...(await coletarAfetadosTask(calAdmin, id)),
   ])
+
+  // Reatribuição → avisa SÓ quem foi ADICIONADO agora (responsável/envolvido novo),
+  // exceto quem fez a alteração. respAntes null = o PATCH não mexeu em responsáveis.
+  if (respAntes) {
+    const principalNovo =
+      rest.assignee_id ?? (anterior as { assignee_id?: string | null } | null)?.assignee_id ?? null
+    // extras novos = os enviados no PATCH (substituição) ou, se não vieram, os que já
+    // existiam (inalterados) — nesse caso nenhum é "adicionado".
+    const extrasNovos =
+      extrasUnicos !== undefined ? extrasUnicos : [...respAntes].filter((u) => u !== principalNovo)
+    const adicionados = [principalNovo, ...extrasNovos].filter(
+      (u): u is string => !!u && !respAntes!.has(u),
+    )
+    await agendarNotificacaoNovaTarefa({
+      taskId: id,
+      descricao: task.description as string,
+      envolvidos: adicionados,
+      excluir: usuario.id,
+    })
+  }
 
   return NextResponse.json({ task })
 }

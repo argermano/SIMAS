@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger'
 import { enviarAvisoWhatsApp } from '@/lib/processos/notificar'
 import { instanciaDaUnidade } from '@/lib/conversas/instancia'
 import { urlBaseApp } from '@/lib/email'
+import { resolverPreferencias } from '@/lib/notificacoes/catalogo'
 
 // ── Helpers PUROS (testáveis sem rede/DB) ────────────────────────────────────
 
@@ -115,6 +116,7 @@ interface UsuarioComCelular {
   tenant_id: string
   unidade: string | null
   celular: string
+  notificacoes: unknown
 }
 
 export interface ResultadoAvisosTarefas {
@@ -139,7 +141,7 @@ export async function enviarAvisosTarefasHoje(
 
   const { data: usuariosRaw, error: errUsuarios } = await admin
     .from('users')
-    .select('id, nome, tenant_id, unidade, celular')
+    .select('id, nome, tenant_id, unidade, celular, notificacoes')
     .eq('status', 'ativo')
     .not('celular', 'is', null)
   if (errUsuarios) throw errUsuarios
@@ -197,6 +199,12 @@ export async function enviarAvisosTarefasHoje(
 
     const mapa = porUsuario.get(u.id)
     if (!mapa || mapa.size === 0) continue // sem tarefas hoje → não claim, não envia
+
+    // Preferência do usuário (Perfil → Notificações). Default do 'resumo_diario' é
+    // whatsapp:true → quem nunca mexeu segue recebendo (comportamento atual). Quem
+    // desligou não recebe: pulamos ANTES do claim para não consumir o dia dele.
+    if (!resolverPreferencias(u.notificacoes, 'resumo_diario').whatsapp) continue
+
     resultado.comTarefas++
 
     // CLAIM atômico (INSERT ON CONFLICT DO NOTHING): só quem inserir a linha do

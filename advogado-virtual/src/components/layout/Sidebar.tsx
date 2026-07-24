@@ -258,21 +258,33 @@ export function Sidebar({ nomeUsuario, nomeEscritorio, roleUsuario, roleRaw }: S
         {/* Avatar / Perfil */}
         <div className={cn('rounded-lg bg-sidebar-accent/40 px-3 py-2.5', isCollapsed && 'px-2')}>
           <div className={cn('flex items-center gap-3', isCollapsed && 'justify-center')}>
-            <div className="relative shrink-0">
-              <div className="rounded-full p-[2px]" style={{ background: 'var(--gradient-primary)' }}>
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar text-xs font-bold text-white">
-                  {initials(nomeUsuario)}
+            {/* Avatar + nome → Meu perfil (dados + preferências de notificação). */}
+            <Link
+              href="/perfil"
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                'flex min-w-0 items-center gap-3 rounded-md transition-opacity hover:opacity-90',
+                isCollapsed ? 'justify-center' : 'flex-1',
+              )}
+              title="Meu perfil"
+              aria-label="Meu perfil"
+            >
+              <div className="relative shrink-0">
+                <div className="rounded-full p-[2px]" style={{ background: 'var(--gradient-primary)' }}>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar text-xs font-bold text-white">
+                    {initials(nomeUsuario)}
+                  </div>
                 </div>
+                <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar bg-success/50" />
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-sidebar bg-success/50" />
-            </div>
 
-            {!isCollapsed && (
-              <div className="flex-1 min-w-0 overflow-hidden animate-in fade-in-0 duration-300">
-                <p className="truncate text-sm font-semibold text-white">{nomeUsuario.split(' ')[0]}</p>
-                <p className="text-xs text-sidebar-muted">{roleUsuario}</p>
-              </div>
-            )}
+              {!isCollapsed && (
+                <div className="flex-1 min-w-0 overflow-hidden animate-in fade-in-0 duration-300">
+                  <p className="truncate text-sm font-semibold text-white">{nomeUsuario.split(' ')[0]}</p>
+                  <p className="text-xs text-sidebar-muted">{roleUsuario}</p>
+                </div>
+              )}
+            </Link>
 
             {!isCollapsed && (
               <button

@@ -6,6 +6,7 @@ import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { logger } from '@/lib/logger'
 import { taskService } from '@/services/task-service'
+import { agendarNotificacaoNovaTarefa } from '@/lib/notificacoes/notificar-nova-tarefa'
 import { derivarVinculoHerdado } from '@/lib/tarefas/heranca-publicacao'
 import { validarTransicao, montarDescricaoTarefa, statusAposTratamento } from '@/lib/processos/triagem'
 
@@ -180,10 +181,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // 2) Cria cada tarefa pedida (best-effort). Descrição vem do body (editável)
     //    ou é montada; dueDate NUNCA vem pré-confirmada (default null).
     const taskIds: string[] = []
+    const criadas: { id: string; descricao: string; assignee: string }[] = []
     for (const t of tarefasPedidas) {
+      const descricaoT = t.description?.trim() || montarDescricaoTarefa(pub)
       try {
         const task = await taskService.createAutomatic({
-          description: t.description?.trim() || montarDescricaoTarefa(pub),
+          description: descricaoT,
           assigneeId: t.assignee_id,
           tenantId: usuario.tenant_id,
           createdBy: usuario.id,
@@ -194,6 +197,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           tagNames: ['PUBLICAÇÃO'],
         })
         taskIds.push(task.id as string)
+        criadas.push({ id: task.id as string, descricao: descricaoT, assignee: t.assignee_id })
       } catch (err) {
         logger.error('publicacao.tratar.tarefa_falha', { publicacaoId: id }, err)
       }
@@ -237,6 +241,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       resourceId: id,
       metadata: { tarefas: taskIds.length },
     })
+
+    // Avisa cada responsável da tarefa criada (exceto quem triou). Best-effort.
+    for (const c of criadas) {
+      await agendarNotificacaoNovaTarefa({
+        taskId: c.id,
+        descricao: c.descricao,
+        assigneeId: c.assignee,
+        excluir: usuario.id,
+      })
+    }
 
     return NextResponse.json({ ok: true, status: statusFinal, taskIds })
   }
@@ -314,6 +328,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     resourceType: 'publicacao',
     resourceId: id,
     metadata: { task_id: taskId, assignee_id: tarefa!.assignee_id },
+  })
+
+  // Avisa o responsável da tarefa criada (exceto quem triou). Best-effort.
+  await agendarNotificacaoNovaTarefa({
+    taskId,
+    descricao,
+    assigneeId: tarefa!.assignee_id,
+    excluir: usuario.id,
   })
 
   return NextResponse.json({ ok: true, status: 'tarefa_criada', task_id: taskId })

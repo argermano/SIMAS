@@ -7,6 +7,7 @@ import { logAudit } from '@/lib/audit'
 import { vinculoParaColunas } from '@/lib/tarefas/vinculo'
 import { vinculoValido } from '@/lib/tarefas/validar-vinculo'
 import { calendarAdmin, agendarEspelhoUsuarios, coletarAfetadosTask } from '@/lib/calendar/fila'
+import { agendarNotificacaoNovaTarefa } from '@/lib/notificacoes/notificar-nova-tarefa'
 
 // Vínculo único (cliente | caso | processo) — ver migration 054 e lib/tarefas/vinculo.
 const schemaVinculo = z
@@ -243,6 +244,16 @@ export async function POST(req: NextRequest) {
   // No-op se o espelho está inerte.
   const calAdmin = calendarAdmin()
   await agendarEspelhoUsuarios(calAdmin, usuario.tenant_id, await coletarAfetadosTask(calAdmin, task.id))
+
+  // Aviso "nova tarefa" aos responsáveis (assignee + extras), exceto o criador.
+  // Best-effort pós-resposta; nunca quebra a criação (o helper é blindado).
+  await agendarNotificacaoNovaTarefa({
+    taskId: task.id,
+    descricao: taskData.description,
+    assigneeId: taskData.assignee_id,
+    envolvidos: extrasLimpos,
+    excluir: usuario.id,
+  })
 
   return NextResponse.json({ task }, { status: 201 })
 }
