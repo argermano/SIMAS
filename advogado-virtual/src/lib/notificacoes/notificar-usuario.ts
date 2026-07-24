@@ -28,6 +28,9 @@ export interface NotificarUsuarioInput {
   titulo: string
   /** Corpo do e-mail (texto simples; escapado antes de ir ao HTML). */
   corpo: string
+  /** Linhas curtas para o WhatsApp entre o título e o link (ex.: vencimento,
+   *  vínculo). Ausente → WhatsApp segue só título + link, como antes. */
+  corpoCurto?: string
   /** Destino do botão do e-mail e do link no WhatsApp. */
   url: string
 }
@@ -93,7 +96,9 @@ export async function notificarUsuario(
   // ── WhatsApp ──────────────────────────────────────────────────────────────
   if (prefs.whatsapp && user.celular) {
     try {
-      const texto = `${input.titulo}\n${input.url}`
+      const texto = input.corpoCurto
+        ? `${input.titulo}\n${input.corpoCurto}\n${input.url}`
+        : `${input.titulo}\n${input.url}`
       const res = await enviarAvisoWhatsApp(user.celular, texto, instanciaDaUnidade(user.unidade))
       resultado.whatsapp = res.ok
     } catch (err) {

@@ -11,13 +11,48 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { logger } from '@/lib/logger'
 import { urlBaseApp } from '@/lib/email'
-import { tituloCurtoTarefa } from '@/lib/tarefas/aviso-diario'
+import { janelaDiaSaoPaulo, tituloCurtoTarefa } from '@/lib/tarefas/aviso-diario'
+import { resolverVinculoView, type TaskVinculoData } from '@/lib/tarefas/vinculo'
 import { notificarUsuario, notificacoesAdmin } from './notificar-usuario'
 import { destinatariosNovaTarefa } from './destinatarios'
 
 /** Link direto para a tarefa no app. */
 function urlDaTarefa(taskId: string): string {
   return `${urlBaseApp().replace(/\/+$/, '')}/tarefas?task=${taskId}`
+}
+
+/**
+ * Linha de vencimento do aviso (PURA — testável). due_date guarda o DIA como
+ * meia-noite UTC (ver TaskCard): comparamos o YYYY-MM-DD com o dia civil de SP.
+ * HOJE ganha destaque explícito (pedido do dono); vencida idem; sem data, nada.
+ */
+export function linhaVencimento(dueDate: string | null, diaHojeSP: string): string | null {
+  if (!dueDate) return null
+  const dia = dueDate.slice(0, 10)
+  const [y, m, d] = dia.split('-')
+  const ddmm = `${d}/${m}/${y.slice(2)}`
+  if (dia === diaHojeSP) return `⚠️ Vence HOJE (${ddmm})`
+  if (dia < diaHojeSP) return `⚠️ VENCIDA desde ${ddmm}`
+  return `Vencimento: ${ddmm}`
+}
+
+/** Monta título + linhas do corpo do aviso (vencimento, vínculo). O LINK não
+ *  entra aqui: cada canal o acrescenta (botão no e-mail, última linha no
+ *  WhatsApp) — evita URL duplicada. */
+export function montarLinhasAviso(args: {
+  descricao: string
+  dueDate: string | null
+  vinculoRotulo: string | null
+  diaHojeSP: string
+}): { titulo: string; corpo: string } {
+  const linhas: string[] = []
+  const venc = linhaVencimento(args.dueDate, args.diaHojeSP)
+  if (venc) linhas.push(venc)
+  if (args.vinculoRotulo) linhas.push(`Cliente/caso: ${args.vinculoRotulo}`)
+  return {
+    titulo: `Nova tarefa para você: ${tituloCurtoTarefa(args.descricao)}`,
+    corpo: linhas.join('\n'),
+  }
 }
 
 /**
@@ -28,8 +63,39 @@ async function notificarNovaTarefa(
   admin: SupabaseClient,
   args: { taskId: string; descricao: string; destinatarios: string[] },
 ): Promise<void> {
-  const titulo = `Nova tarefa para você: ${tituloCurtoTarefa(args.descricao)}`
   const url = urlDaTarefa(args.taskId)
+
+  // Enriquecimento (pedido do dono): vencimento com destaque de HOJE + vínculo.
+  // Buscamos da própria tarefa (1 query pós-resposta) para não tocar os call
+  // sites; falha aqui degrada para o aviso simples, nunca cancela o envio.
+  let dueDate: string | null = null
+  let vinculoRotulo: string | null = null
+  try {
+    const { data } = await admin
+      .from('tasks')
+      .select(
+        `due_date, cliente_id, process_id, processo_id,
+         cliente:clientes!cliente_id(id, nome),
+         atendimentos(id, area, numero_processo, clientes(id, nome)),
+         processo:processos!processo_id(id, numero_cnj, apelido, clientes(id, nome))`,
+      )
+      .eq('id', args.taskId)
+      .maybeSingle()
+    if (data) {
+      dueDate = (data.due_date as string | null) ?? null
+      const view = resolverVinculoView(data as unknown as TaskVinculoData)
+      vinculoRotulo = view ? view.label : null
+    }
+  } catch (err) {
+    logger.error('notificacoes.nova_tarefa.detalhes', { taskId: args.taskId }, err)
+  }
+
+  const { titulo, corpo } = montarLinhasAviso({
+    descricao: args.descricao,
+    dueDate,
+    vinculoRotulo,
+    diaHojeSP: janelaDiaSaoPaulo(new Date()).dia,
+  })
   let enviados = 0
   for (const userId of args.destinatarios) {
     try {
@@ -37,7 +103,8 @@ async function notificarNovaTarefa(
         userId,
         tipo: 'tarefa_atribuida',
         titulo,
-        corpo: args.descricao,
+        corpo: corpo || args.descricao,
+        corpoCurto: corpo || undefined,
         url,
       })
       if (r.email || r.whatsapp) enviados++

@@ -81,9 +81,13 @@ export function escaparHtml(s: string): string {
  * é inútil para quem recebe.
  */
 function baseUrl(): string {
-  if (process.env.NEXTAUTH_URL) return process.env.NEXTAUTH_URL
+  // trim(): a env pode vir com \n/espaço no fim (cadastro via echo — caso real:
+  // link do WhatsApp quebrado, URL partida em duas linhas). Saneia TODOS os
+  // consumidores de urlBaseApp de uma vez; barra final removida por higiene.
+  const cfg = (process.env.NEXTAUTH_URL ?? '').trim()
+  if (cfg) return cfg.replace(/\/+$/, '')
   if (process.env.VERCEL_ENV === 'production') return 'https://simas.app'
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL.trim()}`
   return 'http://localhost:3000'
 }
 
