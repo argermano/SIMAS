@@ -8,6 +8,7 @@ import { rodarSentinela, type SentinelaResultado } from '@/lib/processos/sentine
 import { repararResumos, type ReparoResultado } from '@/lib/processos/reparo'
 import { processarFilaDrive } from '@/lib/drive/espelho'
 import { processarFilaCalendar } from '@/lib/calendar/espelho'
+import { medirParidade, type MedidorResultado } from '@/lib/conversas-acervo/medidor'
 
 export const maxDuration = 300
 
@@ -200,5 +201,22 @@ export async function GET(req: Request) {
     logger.error('cron.calendar_sync.falha', {}, e as Error)
   }
 
-  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo, driveSync, calendarSync })
+  // Medidor de paridade acervo próprio × Chatwoot (082 / plano Conversas
+  // Próprias, Etapa 0.3) — a RÉGUA que dirá quando aposentar o Chatwoot é
+  // seguro. Roda por ÚLTIMO, na folga que sobrar: só leitura (banco + relay),
+  // grava apenas CONTAGENS em conversa_gaps. Teto próprio de 30s e cap absoluto
+  // t0+292s; o medidor não INICIA chamada ao relay (timeout de 8s) que possa
+  // ultrapassar o deadline, então o handler nunca chega perto do maxDuration=300.
+  // medirParidade nunca lança; o try/catch é cinto e suspensório.
+  let paridade: MedidorResultado | null = null
+  try {
+    const parDeadline = Math.min(Date.now() + 30_000, t0 + 292_000)
+    if (parDeadline > Date.now() + 10_000) {
+      paridade = await medirParidade(admin, { deadline: parDeadline })
+    }
+  } catch (e) {
+    logger.error('cron.paridade_conversas.falha', {}, e as Error)
+  }
+
+  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo, driveSync, calendarSync, paridade })
 }
