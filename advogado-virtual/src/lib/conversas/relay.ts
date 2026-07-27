@@ -140,6 +140,72 @@ export async function relayFetchBinario(path: string, opts: RelayOpts): Promise<
   }
 }
 
+export interface RelayFormParams {
+  email: string
+  /** Campos de texto do multipart (ex.: `payload` = JSON serializado). */
+  campos: Record<string, string>
+  /** Anexo opcional; `campo` é o nome do field (o contrato usa 'arquivo'). */
+  arquivo?: { campo: string; bytes: Buffer; filename: string; contentType: string }
+  /** Timeout próprio (default: TIMEOUT_ANEXO_MS quando há arquivo, senão TIMEOUT_MS). */
+  timeoutMs?: number
+}
+
+/**
+ * POST multipart/form-data genérico ao relay (o boundary é montado pelo runtime
+ * a partir do FormData — nunca à mão). Existe para a RECONCILIAÇÃO da Etapa 1
+ * (POST /reconciliar/mensagem: campo `payload` JSON + campo `arquivo` binário),
+ * mas é genérico de propósito: a leitura de RELAY_URL/RELAY_TOKEN continua
+ * confinada a este arquivo (invariante do módulo).
+ * Sem `arquivo`, envia só os campos de texto — o relay aceita JSON puro nesse
+ * caso, mas um único caminho de código evita duas superfícies de erro.
+ * Best-effort: nunca lança. Mesmos status especiais dos demais helpers
+ * (503 RELAY_NAO_CONFIGURADO / 502 RELAY_INDISPONIVEL).
+ */
+export async function relayPostForm(path: string, params: RelayFormParams): Promise<RelayResposta> {
+  const base = process.env.RELAY_URL
+  const token = process.env.RELAY_TOKEN
+  if (!base || !token) {
+    logger.error('conversas.relay.sem_config', { temUrl: !!base, temToken: !!token })
+    return { status: 503, data: { code: 'RELAY_NAO_CONFIGURADO' } }
+  }
+
+  const form = new FormData()
+  for (const [chave, valor] of Object.entries(params.campos)) form.append(chave, valor)
+  if (params.arquivo) {
+    const blob = new Blob([new Uint8Array(params.arquivo.bytes)], {
+      type: params.arquivo.contentType || 'application/octet-stream',
+    })
+    form.append(params.arquivo.campo, blob, limitarNome(params.arquivo.filename))
+  }
+
+  const ctrl = new AbortController()
+  const timer = setTimeout(
+    () => ctrl.abort(),
+    params.timeoutMs ?? (params.arquivo ? TIMEOUT_ANEXO_MS : TIMEOUT_MS),
+  )
+  try {
+    const r = await fetch(montarUrl(base, path), {
+      method: 'POST',
+      // Sem Content-Type manual: o fetch põe o boundary do FormData.
+      headers: { Authorization: `Bearer ${token}`, 'X-Simas-User-Email': params.email },
+      body: form,
+      signal: ctrl.signal,
+    })
+    let data: unknown = {}
+    try {
+      data = await r.json()
+    } catch {
+      data = {}
+    }
+    return { status: r.status, data }
+  } catch (err) {
+    logger.error('conversas.relay.indisponivel', { path }, err)
+    return { status: 502, data: { code: 'RELAY_INDISPONIVEL' } }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export interface RelayAnexoParams {
   email: string
   conversaId: string

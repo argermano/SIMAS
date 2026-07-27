@@ -346,13 +346,17 @@ type ContagemChatwoot =
  * telefone — é a mesma varredura que o dossiê do cliente e o inbox de
  * comprovantes já fazem. Falha total (nenhuma página respondeu) → ok: false.
  *
+ * EXPORTADA porque o confirmador da Etapa 1 usa a MESMA identificação de
+ * conversa/inbox (casaConversaChatwoot + inboxDaInstancia): duas varreduras
+ * diferentes dariam duas verdades diferentes sobre "qual conversa é esta".
+ *
  * O teto (4 × 25 por status) é um limite de custo: a lista vem ordenada por
  * atividade e as candidatas do medidor são justamente as conversas ativas nas
  * últimas ~24h, então elas ficam no topo. Conversa do Chatwoot ALÉM do teto
  * seria lida como 'sem_correspondente' — por isso essa linha é diagnóstico, não
  * "mensagem perdida" (e não entra em comDivergencia).
  */
-async function indiceChatwoot(
+export async function indiceChatwoot(
   deadline: number,
 ): Promise<{ ok: true; conversas: ConversaChatwootLeve[] } | { ok: false; status: number }> {
   const porId = new Map<number, ConversaChatwootLeve>()

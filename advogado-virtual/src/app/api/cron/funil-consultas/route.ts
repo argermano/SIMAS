@@ -9,6 +9,7 @@ import { repararResumos, type ReparoResultado } from '@/lib/processos/reparo'
 import { processarFilaDrive } from '@/lib/drive/espelho'
 import { processarFilaCalendar } from '@/lib/calendar/espelho'
 import { medirParidade, type MedidorResultado } from '@/lib/conversas-acervo/medidor'
+import { reconciliarVarredura, type VarreduraResultado } from '@/lib/conversas-acervo/reconciliador'
 
 export const maxDuration = 300
 
@@ -201,6 +202,24 @@ export async function GET(req: Request) {
     logger.error('cron.calendar_sync.falha', {}, e as Error)
   }
 
+  // Reconciliação do acervo → Chatwoot (083 / plano Conversas Próprias, Etapa 1)
+  // — resgate das conversas que o gatilho quente (after() da ingestão) não cobre:
+  // aquelas que silenciaram DEPOIS do buraco. Pega as pendências mais antigas
+  // (teto de 30 conversas) e repõe no Chatwoot o que comprovadamente não chegou.
+  // Roda ANTES do medidor: tapar o buraco vale mais do que medi-lo, e o medidor
+  // mede o dia FECHADO (o que for reposto agora não distorce a régua de hoje).
+  // Teto próprio de 40s e cap absoluto t0+255s; reconciliarVarredura nunca lança
+  // (o try/catch é cinto e suspensório) e é no-op com RECONCILIA_CONVERSAS off.
+  let reconciliacao: VarreduraResultado | null = null
+  try {
+    const recDeadline = Math.min(Date.now() + 40_000, t0 + 255_000)
+    if (recDeadline > Date.now() + 15_000) {
+      reconciliacao = await reconciliarVarredura(admin, { deadline: recDeadline })
+    }
+  } catch (e) {
+    logger.error('cron.reconciliacao_conversas.falha', {}, e as Error)
+  }
+
   // Medidor de paridade acervo próprio × Chatwoot (082 / plano Conversas
   // Próprias, Etapa 0.3) — a RÉGUA que dirá quando aposentar o Chatwoot é
   // seguro. Roda por ÚLTIMO, na folga que sobrar: só leitura (banco + relay),
@@ -218,5 +237,5 @@ export async function GET(req: Request) {
     logger.error('cron.paridade_conversas.falha', {}, e as Error)
   }
 
-  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo, driveSync, calendarSync, paridade })
+  return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo, driveSync, calendarSync, reconciliacao, paridade })
 }

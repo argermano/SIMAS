@@ -112,7 +112,7 @@ describe('ingerirEventos', () => {
       evento({ mensagemId: 'b' }), // já existe no banco (banco inseriu só 1)
     ])
     expect(registro.mensagensEnviadas).toBe(2) // o lote foi deduplicado antes do insert
-    expect(resultado).toEqual({ aceitos: 1, duplicados: 2 })
+    expect(resultado).toEqual({ aceitos: 1, duplicados: 2, conversaIds: ['c1'] })
   })
 
   it('lote inteiro repetido (retry do encaminhador) = 0 aceitos, nada se perde', async () => {
@@ -121,7 +121,7 @@ describe('ingerirEventos', () => {
       evento({ mensagemId: 'a' }),
       evento({ mensagemId: 'b' }),
     ])
-    expect(resultado).toEqual({ aceitos: 0, duplicados: 2 })
+    expect(resultado).toEqual({ aceitos: 0, duplicados: 2, conversaIds: ['c1'] })
   })
 
   it('conversa já com timestamp mais novo não recebe UPDATE', async () => {

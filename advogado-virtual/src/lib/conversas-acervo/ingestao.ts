@@ -33,6 +33,11 @@ export class ErroIngestao extends Error {
 export interface ResultadoIngestao {
   aceitos: number
   duplicados: number
+  /**
+   * Ids das conversas tocadas pelo lote — o gatilho quente da Etapa 1
+   * (reconciliação em after()) precisa saber QUAIS conversas olhar.
+   */
+  conversaIds: string[]
 }
 
 export async function ingerirEventos(
@@ -41,7 +46,7 @@ export async function ingerirEventos(
   eventos: EventoConversa[],
 ): Promise<ResultadoIngestao> {
   const { unicos, duplicadosNoLote } = deduplicarEventos(eventos)
-  if (unicos.length === 0) return { aceitos: 0, duplicados: duplicadosNoLote }
+  if (unicos.length === 0) return { aceitos: 0, duplicados: duplicadosNoLote, conversaIds: [] }
 
   const desejadas = conversasDoLote(unicos)
 
@@ -113,8 +118,17 @@ export async function ingerirEventos(
   if (erroMensagens) throw new ErroIngestao('mensagens_upsert')
 
   const aceitos = inseridas?.length ?? 0
+  // Conversas do lote (sem repetição) — insumo do gatilho de reconciliação.
+  const conversaIds = [
+    ...new Set(
+      desejadas
+        .map((d) => porChave.get(d.chave)?.id)
+        .filter((id): id is string => typeof id === 'string'),
+    ),
+  ]
   return {
     aceitos,
     duplicados: duplicadosNoLote + (unicos.length - aceitos),
+    conversaIds,
   }
 }
