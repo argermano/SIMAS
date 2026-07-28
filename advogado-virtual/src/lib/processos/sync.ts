@@ -15,6 +15,9 @@ import { verificarCota } from '@/lib/anthropic/quota'
 import { logger } from '@/lib/logger'
 import { logAudit } from '@/lib/audit'
 import { criarTarefaAutomatica } from '@/lib/financeiro/gancho-contrato'
+// Fonte única do texto original do movimento (nome + complementos): a mesma que a
+// timeline de acompanhamento usa na coluna "Movimentação original".
+import { complementosTexto } from './movimento-texto'
 
 type Admin = SupabaseClient
 
@@ -94,12 +97,6 @@ const RESUMO_SYSTEM =
   'definitiva — não cabe mais recurso."; "Conclusão para despacho" → "O processo foi enviado ao juiz ' +
   'para uma decisão."; "Juntada de Petição" → "Um documento foi anexado ao processo."'
 
-const complementoTexto = (c: Array<Record<string, unknown>> | undefined): string =>
-  (c ?? [])
-    .map((x) => Object.values(x).filter((v) => typeof v === 'string').join(' '))
-    .filter(Boolean)
-    .join('; ')
-
 /** Item mínimo para resumir um movimento (nome técnico + complementos brutos). */
 export interface ResumoItem {
   nome: string
@@ -174,7 +171,7 @@ export async function gerarResumos(movs: ResumoItem[], ctx?: UsoIaCron): Promise
     const slice = movs.slice(i, i + CHUNK)
     const lista = slice
       .map((m, j) => {
-        const comp = complementoTexto(m.complementos)
+        const comp = complementosTexto(m.complementos)
         return `${j + 1}. ${m.nome}${comp ? ` (${comp})` : ''}`
       })
       .join('\n')

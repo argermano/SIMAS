@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { ConfirmDialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { formatarData, formatarDataRelativa, cn } from '@/lib/utils'
+import { formatarMovimentoOriginal } from '@/lib/processos/movimento-texto'
 import {
   Scale, Plus, RefreshCw, Trash2, ChevronDown, ChevronRight,
   Archive, RotateCcw, Landmark, FlaskConical, BellRing,
@@ -34,6 +35,8 @@ interface Movimento {
   codigo: number | null
   nome: string
   data_hora: string | null
+  /** complementosTabelados do DataJud (ou objeto livre do DJEN), crus do JSONB. */
+  complementos: unknown
   resumo_ia: string | null
   categoria: string | null
 }
@@ -391,6 +394,11 @@ export function ProcessosCliente({
                         <ol className="space-y-3">
                           {movs.map((m) => {
                             const cat = m.categoria ? CATEGORIA_BADGE[m.categoria] : null
+                            // O advogado acompanha pelo texto ORIGINAL do tribunal (nome +
+                            // complementos); o resumo da IA é a leitura em linguagem simples.
+                            // Duas colunas no desktop, empilhadas no mobile.
+                            const original = formatarMovimentoOriginal(m.nome, m.complementos)
+                            const resumo = m.resumo_ia?.trim() || null
                             return (
                               <li key={m.id} className="relative pl-4 border-l-2 border-border">
                                 <span className="absolute -left-[5px] top-1.5 h-2 w-2 rounded-full bg-primary" />
@@ -398,8 +406,24 @@ export function ProcessosCliente({
                                   <span className="text-xs text-muted-foreground">{m.data_hora ? formatarData(m.data_hora) : '—'}</span>
                                   {cat && <Badge variant={cat.variant}>{cat.label}</Badge>}
                                 </div>
-                                {m.resumo_ia && <p className="text-sm text-foreground mt-0.5">{m.resumo_ia}</p>}
-                                <p className={cn('text-xs mt-0.5', m.resumo_ia ? 'text-muted-foreground' : 'text-foreground')}>{m.nome}</p>
+                                <div className="mt-1.5 grid gap-3 md:grid-cols-2 md:gap-0 md:divide-x md:divide-border">
+                                  <div className="min-w-0 md:pr-4">
+                                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                      Movimentação original
+                                    </p>
+                                    <p className="mt-0.5 text-sm text-foreground whitespace-pre-line break-words">
+                                      {original || '—'}
+                                    </p>
+                                  </div>
+                                  <div className="min-w-0 md:pl-4">
+                                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                      Resumo
+                                    </p>
+                                    <p className={cn('mt-0.5 text-sm break-words', resumo ? 'text-foreground' : 'italic text-muted-foreground')}>
+                                      {resumo ?? 'Resumo em processamento…'}
+                                    </p>
+                                  </div>
+                                </div>
                               </li>
                             )
                           })}
