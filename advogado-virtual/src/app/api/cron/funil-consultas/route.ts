@@ -128,6 +128,31 @@ export async function GET(req: Request) {
     })
   }
 
+  // Reconciliação do acervo → Chatwoot (083 / Etapa 1) e medidor de paridade
+  // (082 / Etapa 0.3): PROMOVIDOS para logo após o DJEN (caso real 2026-07-28:
+  // na cauda da folga, o reparo de 180s + Drive + Calendar os deixavam SEM RODAR
+  // — zero varredura e zero placar no primeiro dia). São os únicos passos que
+  // existem SÓ neste cron e são baratos (40s+30s); os elásticos da cauda
+  // (reparo/Drive/Calendar) já sabem viver de sobras e têm botão/after().
+  let reconciliacao: VarreduraResultado | null = null
+  try {
+    const recDeadline = Math.min(Date.now() + 40_000, t0 + 165_000)
+    if (recDeadline > Date.now() + 10_000) {
+      reconciliacao = await reconciliarVarredura(admin, { deadline: recDeadline })
+    }
+  } catch (e) {
+    logger.error('cron.reconciliacao_conversas.falha', {}, e as Error)
+  }
+  let paridade: MedidorResultado | null = null
+  try {
+    const parDeadline = Math.min(Date.now() + 30_000, t0 + 195_000)
+    if (parDeadline > Date.now() + 10_000) {
+      paridade = await medirParidade(admin, { deadline: parDeadline })
+    }
+  } catch (e) {
+    logger.error('cron.paridade_conversas.falha', {}, e as Error)
+  }
+
   // Passada pós-DJEN: drena SÓ a fila sync_pendente (059) que o DJEN acabou de marcar
   // nos processos casados — assim a publicação do dia reflete nos ANDAMENTOS no MESMO
   // ciclo (não espera o cron de amanhã). `somentePendentes` evita re-consultar os VIPs
@@ -200,41 +225,6 @@ export async function GET(req: Request) {
     }
   } catch (e) {
     logger.error('cron.calendar_sync.falha', {}, e as Error)
-  }
-
-  // Reconciliação do acervo → Chatwoot (083 / plano Conversas Próprias, Etapa 1)
-  // — resgate das conversas que o gatilho quente (after() da ingestão) não cobre:
-  // aquelas que silenciaram DEPOIS do buraco. Pega as pendências mais antigas
-  // (teto de 30 conversas) e repõe no Chatwoot o que comprovadamente não chegou.
-  // Roda ANTES do medidor: tapar o buraco vale mais do que medi-lo, e o medidor
-  // mede o dia FECHADO (o que for reposto agora não distorce a régua de hoje).
-  // Teto próprio de 40s e cap absoluto t0+255s; reconciliarVarredura nunca lança
-  // (o try/catch é cinto e suspensório) e é no-op com RECONCILIA_CONVERSAS off.
-  let reconciliacao: VarreduraResultado | null = null
-  try {
-    const recDeadline = Math.min(Date.now() + 40_000, t0 + 255_000)
-    if (recDeadline > Date.now() + 15_000) {
-      reconciliacao = await reconciliarVarredura(admin, { deadline: recDeadline })
-    }
-  } catch (e) {
-    logger.error('cron.reconciliacao_conversas.falha', {}, e as Error)
-  }
-
-  // Medidor de paridade acervo próprio × Chatwoot (082 / plano Conversas
-  // Próprias, Etapa 0.3) — a RÉGUA que dirá quando aposentar o Chatwoot é
-  // seguro. Roda por ÚLTIMO, na folga que sobrar: só leitura (banco + relay),
-  // grava apenas CONTAGENS em conversa_gaps. Teto próprio de 30s e cap absoluto
-  // t0+292s; o medidor não INICIA chamada ao relay (timeout de 8s) que possa
-  // ultrapassar o deadline, então o handler nunca chega perto do maxDuration=300.
-  // medirParidade nunca lança; o try/catch é cinto e suspensório.
-  let paridade: MedidorResultado | null = null
-  try {
-    const parDeadline = Math.min(Date.now() + 30_000, t0 + 292_000)
-    if (parDeadline > Date.now() + 10_000) {
-      paridade = await medirParidade(admin, { deadline: parDeadline })
-    }
-  } catch (e) {
-    logger.error('cron.paridade_conversas.falha', {}, e as Error)
   }
 
   return NextResponse.json({ ok: true, marcados: n, processos, djen, processosDrain, sentinela, reparo, driveSync, calendarSync, reconciliacao, paridade })
