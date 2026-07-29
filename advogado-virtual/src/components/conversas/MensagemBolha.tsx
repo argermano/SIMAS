@@ -25,6 +25,7 @@ import {
   mimeAudioDoAnexo,
   pareceAudio,
 } from '@/lib/conversas/audio'
+import { anexoEncaminhavel } from '@/lib/conversas/encaminhar'
 import type { Anexo, Mensagem } from '@/lib/conversas/tipos'
 import { ComprovanteModal } from './ComprovanteModal'
 import { EncaminharModal } from './EncaminharModal'
@@ -34,11 +35,10 @@ import { SalvarNoClienteModal } from './SalvarNoClienteModal'
 // que não toca Ogg nativamente (Safari) precisa dele. ssr:false — depende do DOM.
 const AudioOgvPlayer = dynamic(() => import('./AudioOgvPlayer'), { ssr: false })
 
-/** Imagem/arquivo (pdf/doc): mesma família aceita para encaminhar E para salvar
- * no dossiê (áudio/vídeo/localização/contato ficam de fora — a allowlist de
- * documento/relay os recusa de qualquer forma). */
+/** Encaminhável: tudo que tem BINÁRIO — imagem, arquivo (pdf/doc), vídeo e áudio.
+ * A regra é pura e testada em lib/conversas/encaminhar; aqui só o adaptador. */
 function podeEncaminhar(a: Anexo): boolean {
-  return a.tipo === 'image' || a.tipo === 'file'
+  return anexoEncaminhavel(a.tipo)
 }
 
 /** Nome default do arquivo ao salvar: último segmento da URL do anexo (o servidor
@@ -353,8 +353,8 @@ export function MensagemBolha({
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {anexos.map((a, i) => {
                 // Ações de escrita por anexo, ocultas no modo leitura. Salvar no
-                // cliente vale para TODOS os anexos (dono, 2026-07-17) — áudio e
-                // vídeo inclusive; Encaminhar segue restrito a imagem/pdf/doc.
+                // cliente vale para TODOS os anexos (dono, 2026-07-17); Encaminhar
+                // vale para todo anexo com binário (mídia inclusive).
                 const podeSalvar = !somenteLeitura && conversaId !== undefined && !!a.url
                 const temAcoes = (!somenteLeitura && podeEncaminhar(a)) || podeSalvar
                 const salvo = salvos.has(a.url)
@@ -382,7 +382,7 @@ export function MensagemBolha({
                             )}
                             title={
                               conectado
-                                ? 'Encaminhar este anexo para outra conversa'
+                                ? 'Encaminhar este anexo para outra conversa ou número'
                                 : 'Conecte sua conta para encaminhar'
                             }
                           >

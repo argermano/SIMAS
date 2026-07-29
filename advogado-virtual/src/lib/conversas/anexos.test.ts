@@ -2,10 +2,15 @@ import { describe, it, expect } from 'vitest'
 import {
   LIMITE_UPLOAD_BYTES,
   LIMITE_ANEXO_SERVIDOR_BYTES,
+  TIPOS_ANEXO_PERMITIDOS,
+  ehMidiaInerte,
+  extensaoPorMime,
+  mimePorNomeArquivo,
   prefixoAnexoEnvio,
   caminhoAnexoEnvio,
   pathAnexoEnvioValido,
   sanitizarNomeArquivo,
+  tipoAnexoPermitido,
   validarAnexoParaEnvio,
 } from './anexos'
 
@@ -16,6 +21,43 @@ describe('limites de anexo', () => {
   it('upload = 40 MB e servidor >= upload (coerência)', () => {
     expect(LIMITE_UPLOAD_BYTES).toBe(40 * 1024 * 1024)
     expect(LIMITE_ANEXO_SERVIDOR_BYTES).toBeGreaterThanOrEqual(LIMITE_UPLOAD_BYTES)
+  })
+})
+
+describe('mídia inerte (vídeo/áudio encaminháveis)', () => {
+  it('aceita qualquer subtipo de áudio/vídeo, com ou sem params', () => {
+    for (const t of ['video/mp4', 'video/3gpp', 'video/quicktime', 'audio/ogg; codecs=opus', 'audio/x-m4a', 'AUDIO/MPEG']) {
+      expect(ehMidiaInerte(t)).toBe(true)
+      expect(tipoAnexoPermitido(t)).toBe(true)
+    }
+  })
+
+  it('não afrouxa nada fora de mídia (SVG/HTML/executável seguem barrados)', () => {
+    for (const t of ['image/svg+xml', 'text/html', 'application/x-msdownload', 'application/octet-stream', '']) {
+      expect(ehMidiaInerte(t)).toBe(false)
+      expect(tipoAnexoPermitido(t)).toBe(false)
+    }
+  })
+
+  it('mídia entra por REGRA, não pela lista de documentos (que gateia o dossiê)', () => {
+    expect(TIPOS_ANEXO_PERMITIDOS.has('video/mp4')).toBe(false)
+    expect(tipoAnexoPermitido('application/pdf')).toBe(true)
+  })
+
+  it('deduz o MIME pela extensão quando o Chatwoot não informa', () => {
+    expect(mimePorNomeArquivo('gravacao.mp4')).toBe('video/mp4')
+    expect(mimePorNomeArquivo('antigo.3gp')).toBe('video/3gpp')
+    expect(mimePorNomeArquivo('iphone.MOV')).toBe('video/quicktime')
+    expect(mimePorNomeArquivo('voz.opus')).toBe('audio/ogg')
+    expect(mimePorNomeArquivo('voz.ogg')).toBe('audio/ogg')
+    expect(mimePorNomeArquivo('musica.mp3')).toBe('audio/mpeg')
+    expect(mimePorNomeArquivo('audio.m4a')).toBe('audio/mp4')
+  })
+
+  it('extensaoPorMime devolve a canônica (ogg antes de opus) sem quebrar os docs', () => {
+    expect(extensaoPorMime('audio/ogg')).toBe('.ogg')
+    expect(extensaoPorMime('video/mp4')).toBe('.mp4')
+    expect(extensaoPorMime('application/pdf')).toBe('.pdf')
   })
 })
 
@@ -71,6 +113,15 @@ describe('validarAnexoParaEnvio (guard de tipo/tamanho do preparar)', () => {
   it('cai na extensão quando o mimetype vem vazio (.docx)', () => {
     const r = validarAnexoParaEnvio({ filename: 'peticao.docx', mimetype: '', tamanho: 2048 })
     expect(r.ok).toBe(true)
+  })
+
+  it('aceita vídeo/áudio do PC (coerente com o WhatsApp; teto de 40 MB vale igual)', () => {
+    expect(validarAnexoParaEnvio({ filename: 'v.mp4', mimetype: 'video/mp4', tamanho: 10 * 1024 * 1024 }))
+      .toMatchObject({ ok: true, contentType: 'video/mp4' })
+    expect(validarAnexoParaEnvio({ filename: 'v.mp4', mimetype: '', tamanho: 1024 }))
+      .toMatchObject({ ok: true, contentType: 'video/mp4' })
+    expect(validarAnexoParaEnvio({ filename: 'v.mp4', mimetype: 'video/mp4', tamanho: LIMITE_UPLOAD_BYTES + 1 }))
+      .toMatchObject({ ok: false, status: 413 })
   })
 
   it('recusa tipo fora da allowlist (400)', () => {

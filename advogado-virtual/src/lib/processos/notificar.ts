@@ -95,8 +95,25 @@ export async function enviarAvisoWhatsApp(
 }
 
 /**
- * Envia um DOCUMENTO/IMAGEM por WhatsApp pelo mesmo canal do bot (/notify com
- * `media`) — funciona para QUALQUER número, mesmo sem conversa aberta no
+ * Por que a falha vem TIPADA: quem chama de uma tela (encaminhar anexo para um
+ * número) precisa dizer ao usuário a VERDADE, e as três falhas pedem conselhos
+ * opostos — 'timeout' é a janela "talvez já entregou" (NÃO mandar reenviar às
+ * cegas: duplica a mídia no WhatsApp do cliente), 'http' 413 é arquivo grande
+ * demais (reenviar nunca resolve) e 'sem_config' é problema de servidor.
+ * Campos OPCIONAIS: quem só olha `ok` (avisos automáticos) segue igual.
+ */
+export type FalhaNotify = 'sem_config' | 'timeout' | 'http' | 'erro'
+export interface ResultadoNotify {
+  ok: boolean
+  id?: string
+  motivo?: FalhaNotify
+  /** Status HTTP devolvido pelo /notify quando motivo === 'http'. */
+  status?: number
+}
+
+/**
+ * Envia um DOCUMENTO/IMAGEM/MÍDIA por WhatsApp pelo mesmo canal do bot (/notify
+ * com `media`) — funciona para QUALQUER número, mesmo sem conversa aberta no
  * Chatwoot (caso "cliente novo": mandar procuração no primeiro contato).
  * caption vira a legenda. SEM retry (mídia duplicada no WhatsApp é pior que
  * pedir pro atendente reenviar); timeout maior (arquivo + base64).
@@ -107,12 +124,12 @@ export async function enviarMediaWhatsApp(
   caption?: string,
   instancia?: Instancia | null,
   autor?: 'atendente' | null,
-): Promise<{ ok: boolean; id?: string }> {
+): Promise<ResultadoNotify> {
   const url = process.env.PROCESSOS_NOTIFY_URL
   const token = process.env.PROCESSOS_NOTIFY_TOKEN
   if (!url || !token) {
     logger.error('processos.notificar.sem_config', { temUrl: !!url, temToken: !!token })
-    return { ok: false }
+    return { ok: false, motivo: 'sem_config' }
   }
 
   const ctrl = new AbortController()
@@ -130,9 +147,14 @@ export async function enviarMediaWhatsApp(
       return { ok: true, id: d.id }
     }
     logger.error('processos.notificar.media_http', { status: r.status })
+    return { ok: false, motivo: 'http', status: r.status }
   } catch (err) {
     clearTimeout(timer)
     logger.error('processos.notificar.media_excecao', {}, err as Error)
+    // AbortError = estourou os 30s: o /notify pode ter recebido e já mandado à
+    // Evolution. Mesma doutrina do enviarAvisoWhatsApp — nunca retransmitir só
+    // porque a RESPOSTA demorou; quem chama avisa o humano para conferir.
+    const timeout = err instanceof Error && err.name === 'AbortError'
+    return { ok: false, motivo: timeout ? 'timeout' : 'erro' }
   }
-  return { ok: false }
 }

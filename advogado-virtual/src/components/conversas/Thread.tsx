@@ -30,10 +30,13 @@ import {
   mimePorNomeArquivo,
 } from '@/lib/conversas/anexos'
 
-// accept do seletor: MIME da allowlist + extensões (alguns navegadores só casam por extensão).
+// accept do seletor: MIME da allowlist + mídia inerte (áudio/vídeo, aceitos por
+// regra de prefixo em anexos.ts) + extensões (alguns navegadores só casam por extensão).
 const ACCEPT_ANEXO = [
   ...TIPOS_ANEXO_PERMITIDOS,
+  'audio/*', 'video/*',
   '.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt',
+  '.mp4', '.3gp', '.mov', '.ogg', '.opus', '.mp3', '.m4a',
 ].join(',')
 
 /** Tamanho legível para o chip do anexo (B/KB/MB). */
@@ -185,7 +188,7 @@ export function Thread({
     // Alguns SOs dão File.type '' para .doc/.docx: cai na extensão antes de barrar.
     const tipo = f.type ? f.type : mimePorNomeArquivo(f.name)
     if (!tipoAnexoPermitido(tipo)) {
-      toastError('Tipo não permitido', 'Envie imagem, PDF, Word, Excel ou texto.')
+      toastError('Tipo não permitido', 'Envie imagem, vídeo, áudio, PDF, Word, Excel ou texto.')
       return
     }
     if (f.size > LIMITE_UPLOAD_BYTES) {

@@ -4,23 +4,25 @@ import { getAuthContext, requireRole } from '@/lib/auth'
 import { jsonError, validateBody } from '@/lib/api'
 import { logAudit } from '@/lib/audit'
 import { relayFetchBinario, relaySendAttachment } from '@/lib/conversas/relay'
-import {
-  tipoAnexoPermitido,
-  tipoBase,
-  mimePorNomeArquivo,
-  LIMITE_ANEXO_SERVIDOR_BYTES,
-} from '@/lib/conversas/anexos'
+import { LIMITE_ANEXO_SERVIDOR_BYTES, LIMITE_CAPTION_CHARS } from '@/lib/conversas/anexos'
+import { nomeParaEncaminhar, resolverTipoEncaminhado } from '@/lib/conversas/encaminhar'
+
+// maxDuration: encaminhar um VÍDEO de até 40 MB baixa os bytes do relay e os
+// repassa ao Chatwoot na MESMA invocação — o default de 10s da Vercel cortava o
+// envio no meio. Mesmo teto da rota de anexo do PC.
+export const maxDuration = 60
 
 const schema = z.object({
   anexoUrl: z.string().url().max(2000),
   contentType: z.string().max(200).optional(),
   filename: z.string().max(300).optional(),
-  caption: z.string().max(1024).optional(),
+  caption: z.string().max(LIMITE_CAPTION_CHARS).optional(),
 })
 
 // POST /api/conversas/[id]/encaminhar — ENCAMINHA um anexo recebido em outra
 // conversa para a conversa DESTINO ([id] da rota). Baixa os bytes server-side pelo
 // relay (a proteção SSRF da URL de origem é do relay), revalida o tipo e reenvia.
+// Destino SEM conversa (número solto/cliente do cadastro): POST /api/conversas/encaminhar.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -51,29 +53,19 @@ export async function POST(
     return jsonError('Não foi possível baixar o anexo de origem', origem.status)
   }
   if (origem.buffer.length > LIMITE_ANEXO_SERVIDOR_BYTES) {
-    return jsonError('Anexo excede o limite de 25 MB', 413)
+    return jsonError('Anexo excede o limite de 45 MB', 413)
   }
 
-  const nome = filename?.trim() || nomeDaUrl(anexoUrl) || 'anexo'
-
-  // Tipo confiável = o do relay; o hint do cliente é fallback. Quando o Chatwoot
-  // guarda docs como application/octet-stream, cai na extensão do nome (a allowlist
-  // ainda gateia) — senão .docx/.xls legítimos seriam recusados.
-  let contentType = tipoBase(origem.contentType ?? ctHint)
-  if (!tipoAnexoPermitido(contentType)) {
-    const porNome = mimePorNomeArquivo(nome)
-    if (porNome) contentType = porNome
-  }
-  if (!tipoAnexoPermitido(contentType)) {
-    return jsonError('Tipo de arquivo não permitido', 400)
-  }
+  const nome = nomeParaEncaminhar(filename, anexoUrl)
+  const tipo = resolverTipoEncaminhado({ contentTypeRelay: origem.contentType, hint: ctHint, nome })
+  if (!tipo.ok) return jsonError(tipo.erro, tipo.status)
 
   const { status, data } = await relaySendAttachment({
     email,
     conversaId: id,
     bytes: origem.buffer,
     filename: nome,
-    contentType,
+    contentType: tipo.contentType,
     caption,
   })
 
@@ -84,20 +76,9 @@ export async function POST(
       action: 'conversas.anexo_encaminhado',
       resourceType: 'conversa',
       resourceId: id,
-      metadata: { contentType, tamanho: origem.buffer.length },
+      metadata: { destino: 'conversa', contentType: tipo.contentType, tamanho: origem.buffer.length },
     })
   }
 
   return NextResponse.json(data, { status })
-}
-
-/** Extrai o último segmento (nome do arquivo) do path de uma URL, se houver. */
-function nomeDaUrl(url: string): string | null {
-  try {
-    const p = new URL(url).pathname
-    const seg = decodeURIComponent(p.split('/').filter(Boolean).pop() ?? '')
-    return seg || null
-  } catch {
-    return null
-  }
 }

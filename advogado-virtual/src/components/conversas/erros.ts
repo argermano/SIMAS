@@ -40,6 +40,21 @@ export function mensagemErroRelay(status: number, data: unknown): string {
   return 'Não foi possível completar a ação. Tente novamente.'
 }
 
+/**
+ * Erro de uma rota do SIMAS (corpo padronizado { error }), com o mapa do relay
+ * como rede de segurança. Existe porque mensagens NOSSAS são mais úteis que o
+ * genérico ("Tipo de arquivo não permitido", "Anexo excede o limite de 45 MB") —
+ * mas um `code` do relay continua tendo precedência, e "Dados inválidos" (zod)
+ * não diz nada ao usuário, então cai no mapa.
+ */
+export function mensagemErroApi(status: number, data: unknown): string {
+  if (!codeDoErro(data) && data && typeof data === 'object' && 'error' in data) {
+    const e = (data as { error?: unknown }).error
+    if (typeof e === 'string' && e.trim() && e !== 'Dados inválidos') return e
+  }
+  return mensagemErroRelay(status, data)
+}
+
 /** "2024-03-15" (chave de agrupadorDia) -> "15/03/2024" para o cabeçalho do dia. */
 export function rotuloDia(chave: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(chave)

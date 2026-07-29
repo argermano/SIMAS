@@ -2,6 +2,11 @@
 // pelas três rotas de anexo (upload do PC, encaminhar, anexar documento do SIMAS).
 // Alinhada com /api/conversas/anexos (render inline) + docs comuns de escritório.
 // Nunca aceitar SVG/HTML (script embutido) nem tipos executáveis.
+//
+// MÍDIA (áudio/vídeo) entra por REGRA, não por lista (ver ehMidiaInerte): o caso
+// real do dono era não conseguir encaminhar um vídeo recebido no grupo. O conjunto
+// abaixo segue sendo a lista de DOCUMENTOS/IMAGENS (é ele que a rota
+// /api/conversas/documentos usa para filtrar o dossiê por mime_type).
 
 export const TIPOS_ANEXO_PERMITIDOS = new Set<string>([
   'image/jpeg',
@@ -51,6 +56,18 @@ const MIME_POR_EXTENSAO: Record<string, string> = {
   xls: 'application/vnd.ms-excel',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   txt: 'text/plain',
+  // Mídia do WhatsApp (vídeo/áudio recebido que se quer encaminhar, e também o
+  // upload do PC). O Chatwoot guarda muita mídia como application/octet-stream —
+  // sem estas extensões o fallback por nome não salvava o encaminhamento.
+  // Ordem importa para extensaoPorMime: a 1ª extensão de cada MIME é a canônica
+  // (ogg antes de opus).
+  mp4: 'video/mp4',
+  '3gp': 'video/3gpp',
+  mov: 'video/quicktime',
+  ogg: 'audio/ogg',
+  opus: 'audio/ogg',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
 }
 
 /** Normaliza um Content-Type ("image/png; charset=x") para o tipo base minúsculo. */
@@ -58,9 +75,23 @@ export function tipoBase(contentType: string | null | undefined): string {
   return (contentType ?? '').split(';')[0].trim().toLowerCase()
 }
 
-/** True se o Content-Type (com ou sem params) estiver na allowlist. */
+/**
+ * Áudio/vídeo: mídia INERTE (não executa script), aceita por REGRA de prefixo em
+ * vez de lista fechada — o zoo de codecs do WhatsApp é grande demais para
+ * enumerar ("audio/ogg; codecs=opus", audio/x-m4a, audio/webm, video/quicktime…)
+ * e uma lista curta recusava vídeo legítimo. Mesmo raciocínio (e mesma conclusão)
+ * do proxy GET /api/conversas/anexos, que já serve esses tipos inline.
+ */
+export function ehMidiaInerte(contentType: string | null | undefined): boolean {
+  const base = tipoBase(contentType)
+  return base.startsWith('audio/') || base.startsWith('video/')
+}
+
+/** True se o Content-Type (com ou sem params) estiver na allowlist (docs/imagens
+ *  enumerados) OU for mídia inerte (áudio/vídeo). */
 export function tipoAnexoPermitido(contentType: string | null | undefined): boolean {
-  return TIPOS_ANEXO_PERMITIDOS.has(tipoBase(contentType))
+  const base = tipoBase(contentType)
+  return TIPOS_ANEXO_PERMITIDOS.has(base) || ehMidiaInerte(base)
 }
 
 /** MIME da allowlist deduzido pela extensão do nome ('' se desconhecida). */
