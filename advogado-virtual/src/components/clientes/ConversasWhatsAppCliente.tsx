@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   MessageCircle, ChevronDown, ChevronRight, ArrowLeft,
@@ -14,6 +14,7 @@ import { AvatarContato } from '@/components/conversas/AvatarContato'
 import { MensagemBolha } from '@/components/conversas/MensagemBolha'
 import { mensagemErroRelay, rotuloDia } from '@/components/conversas/erros'
 import { agrupadorDia, dataHoraCurta } from '@/lib/conversas/formato'
+import { indexarPorId } from '@/lib/conversas/citacao'
 import type { Conversa, Mensagem, RespostaMensagens } from '@/lib/conversas/tipos'
 
 // Card "Conversas no WhatsApp" do dossiê. Carrega SOB DEMANDA (lazy): só busca o
@@ -225,6 +226,11 @@ function ThreadLeitura({
 }) {
   const nome = conversa.contato.nome || conversa.contato.telefone || `Conversa #${conversa.id}`
   const grupos = agruparPorDia(mensagens)
+  // Citações: resolvidas LOCALMENTE, como na thread viva. Sem este índice toda
+  // resposta do histórico cairia no bloco genérico "Mensagem anterior" — com a
+  // mensagem citada visível logo acima, na mesma lista. Leitura pura: o bloco
+  // não é clicável aqui (nada de rolagem/realce neste card).
+  const porId = useMemo(() => indexarPorId(mensagens), [mensagens])
 
   return (
     <div>
@@ -277,7 +283,15 @@ function ThreadLeitura({
                 </span>
               </div>
               {g.mensagens.map((m) => (
-                <MensagemBolha key={m.id} mensagem={m} somenteLeitura />
+                <MensagemBolha
+                  key={m.id}
+                  mensagem={m}
+                  somenteLeitura
+                  nomeContato={conversa.contato.nome}
+                  citada={
+                    typeof m.emRespostaA === 'number' ? (porId.get(m.emRespostaA) ?? null) : null
+                  }
+                />
               ))}
             </div>
           ))

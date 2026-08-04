@@ -61,6 +61,13 @@ export interface Mensagem {
   anexos: Anexo[]
   sender: Sender
   timestamp: number
+  /**
+   * Id da mensagem CITADA (resposta no padrão WhatsApp) — vem de
+   * content_attributes.in_reply_to no Chatwoot, normalizado pelo relay. É sempre
+   * uma mensagem da MESMA conversa. Ausente em relays antigos e em mensagens
+   * vindas do espelho no banco; null quando a mensagem não responde ninguém.
+   */
+  emRespostaA?: number | null
 }
 
 export interface Agente {

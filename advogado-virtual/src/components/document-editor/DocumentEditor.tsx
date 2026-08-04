@@ -25,6 +25,7 @@ import { PreencherSidebar } from './PreencherSidebar'
 import { AiComandoDialog } from './AiComandoDialog'
 import { JurisprudenciaDialog } from './JurisprudenciaDialog'
 import { useToast } from '@/components/ui/toast'
+import { baixarGerado, mensagemErroDownload } from '@/lib/download'
 
 // Markdown → HTML (entrada) — limpa os mesmos artefatos que a exportação remove,
 // para a prévia refletir o documento final (Word).
@@ -144,30 +145,39 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
     success('Copiado!', 'Conteúdo copiado para a área de transferência')
   }, [editor])
 
+  // Exportar .docx. O seletor de pasta (Chromium) abre ANTES do POST — o gesto do
+  // clique se perderia na espera da geração. Safari/Firefox: download de sempre.
   const baixarDocx = useCallback(async () => {
     setBaixando(true)
     try {
       const md = getMarkdown()
-      const res = await fetch('/api/exportar-documento', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ conteudo: md, titulo, ...exportOpts }),
+      const baixou = await baixarGerado({
+        filename: `${titulo.replace(/\s+/g, '_')}.docx`,
+        mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        obterBlob: async () => {
+          let res: Response
+          try {
+            res = await fetch('/api/exportar-documento', {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body:    JSON.stringify({ conteudo: md, titulo, ...exportOpts }),
+            })
+          } catch {
+            toastError('Erro', 'Falha de rede')
+            return null
+          }
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}))
+            toastError('Erro', (data as { error?: string }).error ?? 'Não foi possível exportar')
+            return null
+          }
+          return res.blob()
+        },
       })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        toastError('Erro', (data as { error?: string }).error ?? 'Não foi possível exportar')
-        return
-      }
-      const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `${titulo.replace(/\s+/g, '_')}.docx`
-      a.click()
-      URL.revokeObjectURL(url)
-      success('Exportado!', 'Arquivo .docx baixado com sucesso')
-    } catch {
-      toastError('Erro', 'Falha de rede')
+      // Cancelar o seletor é silêncio: nada de "exportado" que não aconteceu.
+      if (baixou) success('Exportado!', 'Arquivo .docx baixado com sucesso')
+    } catch (e) {
+      toastError('Não foi possível salvar o arquivo', mensagemErroDownload(e))
     } finally {
       setBaixando(false)
     }

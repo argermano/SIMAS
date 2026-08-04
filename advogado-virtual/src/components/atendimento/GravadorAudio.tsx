@@ -6,6 +6,7 @@ import { Dialog } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import { Mic, Square, Pause, Play, Loader2, ShieldCheck, CloudOff, RefreshCw, Download } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { baixarBlob, baixarPorAncora, mensagemErroDownload } from '@/lib/download'
 import {
   salvarChunkPendente,
   removerChunkPendente,
@@ -427,20 +428,31 @@ export function GravadorAudio({ onTranscricao, atendimentoId, disabled, requerCo
     if (!atendimentoId) return
     const itens = await listarChunksPendentes(atendimentoId)
     if (itens.length === 0) return
-    for (const item of itens) {
-      const url = URL.createObjectURL(item.blob)
-      const a   = document.createElement('a')
-      a.href     = url
-      a.download = `gravacao_trecho_${item.chunkNum}.webm`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      // Revoga só depois de um tempo — revogar na hora cancelaria o download.
-      setTimeout(() => URL.revokeObjectURL(url), 4000)
-      // Intervalo entre downloads: navegadores agrupam cliques simultâneos.
-      await new Promise(r => setTimeout(r, 300))
+    // UM trecho: dá para escolher a pasta (Chrome/Edge) — o gesto do clique
+    // ainda vale. VÁRIOS trechos: um seletor por arquivo seria pior que o
+    // download direto (só o primeiro teria o gesto), então mantemos a fila
+    // clássica de sempre — resgate nunca pode falhar.
+    try {
+      if (itens.length === 1) {
+        await baixarBlob({
+          blob: itens[0].blob,
+          filename: `gravacao_trecho_${itens[0].chunkNum}.webm`,
+          mimetype: 'audio/webm',
+        })
+        return
+      }
+      for (const item of itens) {
+        const url = URL.createObjectURL(item.blob)
+        baixarPorAncora(url, `gravacao_trecho_${item.chunkNum}.webm`)
+        // Revoga só depois de um tempo — revogar na hora cancelaria o download.
+        setTimeout(() => URL.revokeObjectURL(url), 4000)
+        // Intervalo entre downloads: navegadores agrupam cliques simultâneos.
+        await new Promise(r => setTimeout(r, 300))
+      }
+    } catch (e) {
+      toastError('Não foi possível salvar o arquivo', mensagemErroDownload(e))
     }
-  }, [atendimentoId])
+  }, [atendimentoId, toastError])
 
   const desabilitado = disabled || !atendimentoId
 

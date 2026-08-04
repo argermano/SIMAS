@@ -8,6 +8,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { useToast } from '@/components/ui/toast'
 import { formatarData } from '@/lib/utils'
 import { formatarValor } from '@/lib/financeiro/parcelas'
+import { baixarComprovante } from './baixar-comprovante'
 import { type Parcela, LABELS_MEIO } from './tipos'
 
 // Dados extraídos pela IA (mesma forma de DadosComprovante). Só chegam quando o
@@ -317,7 +318,10 @@ export function PagamentoModal({
                 )}
                 {comp.downloadUrl && (
                   <Button asChild variant="secondary" size="sm">
-                    <a href={comp.downloadUrl}>
+                    <a
+                      href={comp.downloadUrl}
+                      onClick={(e) => baixarComprovante(e, comp.downloadUrl!, comp.contentType, toastError)}
+                    >
                       <Download className="h-4 w-4" /> Baixar
                     </a>
                   </Button>

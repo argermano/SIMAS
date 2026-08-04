@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 import { formatarData, formatarMoedaInput, moedaParaNumero } from '@/lib/utils'
 import { formatarValor } from '@/lib/financeiro/parcelas'
+import { baixarComprovante } from './baixar-comprovante'
 import { type Parcela, LABELS_MEIO } from './tipos'
 
 // Dados extraídos pela IA (mesma forma de DadosComprovante) + o contentType do
@@ -263,7 +264,12 @@ export function ConferirComprovanteModal({
                 )}
                 {pendente.downloadUrl && (
                   <Button asChild variant="secondary" size="sm">
-                    <a href={pendente.downloadUrl}>
+                    <a
+                      href={pendente.downloadUrl}
+                      onClick={(e) =>
+                        baixarComprovante(e, pendente.downloadUrl!, pendente.contentType, toastError)
+                      }
+                    >
                       <Download className="h-4 w-4" /> Baixar
                     </a>
                   </Button>

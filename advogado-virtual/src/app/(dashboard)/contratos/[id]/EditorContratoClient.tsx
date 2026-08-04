@@ -11,6 +11,7 @@ import { EnviarAssinaturaModal } from '@/components/contratos/EnviarAssinaturaMo
 import { PainelAssinatura } from '@/components/contratos/PainelAssinatura'
 import { createClient } from '@/lib/supabase/client'
 import { formatarDataHora } from '@/lib/utils'
+import { baixarGerado, baixarUrlSobDemanda, mensagemErroDownload } from '@/lib/download'
 import { CheckCircle, Loader2, PenLine, ChevronDown, FileDown, Monitor, FileText, Upload, Download, FileSignature, X } from 'lucide-react'
 
 interface Signer {
@@ -165,20 +166,34 @@ export function EditorContratoClient({
     }
   }, [contratoId, router, success, toastError])
 
-  // Baixa o contrato assinado importado
+  // Baixa o contrato assinado importado. No Chromium o seletor de pasta abre
+  // ANTES de pedir a signed URL (o gesto do clique não sobrevive à rede); em
+  // Safari/Firefox segue exatamente como antes: abre em nova aba.
   const baixarAssinado = useCallback(async () => {
     try {
-      const res  = await fetch(`/api/contratos/${contratoId}/arquivo-assinado`)
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data.url) {
-        toastError('Erro', data.error ?? 'Não foi possível baixar o arquivo')
-        return
-      }
-      window.open(data.url, '_blank', 'noopener')
-    } catch {
-      toastError('Erro', 'Falha de rede')
+      await baixarUrlSobDemanda({
+        filename: arquivoNome || `${contrato.titulo.replace(/\s+/g, '_')}_assinado.pdf`,
+        obterUrl: async () => {
+          let res: Response
+          try {
+            res = await fetch(`/api/contratos/${contratoId}/arquivo-assinado`)
+          } catch {
+            toastError('Erro', 'Falha de rede')
+            return null
+          }
+          const data = await res.json().catch(() => ({}))
+          if (!res.ok || !data.url) {
+            toastError('Erro', data.error ?? 'Não foi possível baixar o arquivo')
+            return null
+          }
+          return data.url as string
+        },
+        aoSemSuporte: (url) => { window.open(url, '_blank', 'noopener') },
+      })
+    } catch (e) {
+      toastError('Não foi possível salvar o arquivo', mensagemErroDownload(e))
     }
-  }, [contratoId, toastError])
+  }, [contratoId, arquivoNome, contrato.titulo, toastError])
 
   const handleSalvar = useCallback(async (conteudo: string, opts?: { silencioso?: boolean }) => {
     const silencioso = opts?.silencioso ?? false
@@ -225,22 +240,28 @@ export function EditorContratoClient({
   const handleBaixarPdf = useCallback(async () => {
     setBaixandoPdf(true)
     try {
-      const res = await fetch(`/api/contratos/${contratoId}/exportar-pdf`, { method: 'POST' })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        toastError('Erro', d.error ?? 'Não foi possível gerar o PDF')
-        return
-      }
-      const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `${contrato.titulo.replace(/\s+/g, '_')}.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
-      success('PDF gerado!', 'Arquivo baixado para assinatura manual')
-    } catch {
-      toastError('Erro', 'Falha de rede')
+      const baixou = await baixarGerado({
+        filename: `${contrato.titulo.replace(/\s+/g, '_')}.pdf`,
+        mimetype: 'application/pdf',
+        obterBlob: async () => {
+          let res: Response
+          try {
+            res = await fetch(`/api/contratos/${contratoId}/exportar-pdf`, { method: 'POST' })
+          } catch {
+            toastError('Erro', 'Falha de rede')
+            return null
+          }
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}))
+            toastError('Erro', d.error ?? 'Não foi possível gerar o PDF')
+            return null
+          }
+          return res.blob()
+        },
+      })
+      if (baixou) success('PDF gerado!', 'Arquivo baixado para assinatura manual')
+    } catch (e) {
+      toastError('Não foi possível salvar o arquivo', mensagemErroDownload(e))
     } finally {
       setBaixandoPdf(false)
     }
@@ -250,22 +271,28 @@ export function EditorContratoClient({
   const handleBaixarModelo = useCallback(async () => {
     setBaixandoModelo(true)
     try {
-      const res = await fetch(`/api/contratos/${contratoId}/exportar-modelo`, { method: 'POST' })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        toastError('Modelo não disponível', d.error ?? 'Não foi possível gerar o documento')
-        return
-      }
-      const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `${contrato.titulo.replace(/\s+/g, '_')}_modelo.docx`
-      a.click()
-      URL.revokeObjectURL(url)
-      success('DOCX gerado!', 'Modelo do escritório preenchido')
-    } catch {
-      toastError('Erro', 'Falha de rede')
+      const baixou = await baixarGerado({
+        filename: `${contrato.titulo.replace(/\s+/g, '_')}_modelo.docx`,
+        mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        obterBlob: async () => {
+          let res: Response
+          try {
+            res = await fetch(`/api/contratos/${contratoId}/exportar-modelo`, { method: 'POST' })
+          } catch {
+            toastError('Erro', 'Falha de rede')
+            return null
+          }
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}))
+            toastError('Modelo não disponível', d.error ?? 'Não foi possível gerar o documento')
+            return null
+          }
+          return res.blob()
+        },
+      })
+      if (baixou) success('DOCX gerado!', 'Modelo do escritório preenchido')
+    } catch (e) {
+      toastError('Não foi possível salvar o arquivo', mensagemErroDownload(e))
     } finally {
       setBaixandoModelo(false)
     }

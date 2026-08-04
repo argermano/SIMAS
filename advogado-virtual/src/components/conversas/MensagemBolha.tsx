@@ -11,6 +11,7 @@ import {
   Image as ImageIcon,
   MapPin,
   Mic,
+  Reply,
   RotateCw,
   ScanLine,
   StickyNote,
@@ -26,7 +27,11 @@ import {
   pareceAudio,
 } from '@/lib/conversas/audio'
 import { anexoEncaminhavel } from '@/lib/conversas/encaminhar'
+import { autorCitacao, podeResponder, resumoCitacao } from '@/lib/conversas/citacao'
+import { baixarArquivo, mensagemErroDownload } from '@/lib/download'
+import { useToast } from '@/components/ui/toast'
 import type { Anexo, Mensagem } from '@/lib/conversas/tipos'
+import { BlocoCitacao } from './BlocoCitacao'
 import { ComprovanteModal } from './ComprovanteModal'
 import { EncaminharModal } from './EncaminharModal'
 import { SalvarNoClienteModal } from './SalvarNoClienteModal'
@@ -50,6 +55,40 @@ function nomeDoAnexo(a: Anexo): string {
   } catch {
     return ''
   }
+}
+
+/** Nome do arquivo ao BAIXAR: o da URL do Chatwoot; sem ele, um nome honesto
+ * pelo tipo (o seletor de pasta exige um nome sugerido). */
+function nomeParaBaixar(a: Anexo): string {
+  return nomeDoAnexo(a) || `anexo-${a.tipo || 'arquivo'}`
+}
+
+/**
+ * Baixar anexo COM escolha de pasta (Chromium) — o proxy é da mesma origem, o
+ * fetch vai com o cookie de sessão. Safari/Firefox caem no download clássico.
+ * Cancelar o seletor é silêncio; falha real vira toast honesto.
+ */
+function useBaixarAnexo() {
+  const { error: toastError } = useToast()
+  const [baixando, setBaixando] = useState(false)
+  const baixar = useCallback(
+    async (anexo: Anexo) => {
+      setBaixando(true)
+      try {
+        await baixarArquivo({
+          url: srcProxy(anexo),
+          filename: nomeParaBaixar(anexo),
+          mimetype: mimeAudioDoAnexo(anexo) || null,
+        })
+      } catch (erro) {
+        toastError('Não foi possível salvar o arquivo', mensagemErroDownload(erro))
+      } finally {
+        setBaixando(false)
+      }
+    },
+    [toastError],
+  )
+  return { baixar, baixando }
 }
 
 /** Ícone + rótulo pt-BR por tipo de anexo (file_type do Chatwoot normalizado pelo relay). */
@@ -85,9 +124,22 @@ function anexoAbrivel(anexo: Anexo): boolean {
 
 /** Card de anexo (tipos sem preview inline, e fallback das imagens/áudios que
  * falham). Clicável quando há binário: abre em nova aba via proxy (pdf/vídeo no
- * navegador; desconhecido baixa). Localização/contato ficam estáticos. */
-function AnexoCard({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
+ * navegador; desconhecido baixa). Localização/contato ficam estáticos.
+ *
+ * `modo='baixar'` (card do áudio que não toca) troca o abrir pelo SALVAR com
+ * escolha de pasta — é o que o texto ao lado promete. A âncora e o visual são os
+ * mesmos: sem suporte ao seletor, o clique segue pelo href de sempre. */
+function AnexoCard({
+  anexo,
+  escuro,
+  modo = 'abrir',
+}: {
+  anexo: Anexo
+  escuro: boolean
+  modo?: 'abrir' | 'baixar'
+}) {
   const { Icone, rotulo } = infoAnexo(anexo.tipo)
+  const { baixar } = useBaixarAnexo()
   const abrivel = anexoAbrivel(anexo)
   const classe = cn(
     'inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs',
@@ -107,6 +159,21 @@ function AnexoCard({ anexo, escuro }: { anexo: Anexo; escuro: boolean }) {
     </>
   )
   if (!abrivel) return <div className={classe}>{conteudo}</div>
+  if (modo === 'baixar') {
+    return (
+      <a
+        href={srcProxy(anexo)}
+        onClick={(e) => {
+          e.preventDefault()
+          void baixar(anexo)
+        }}
+        title="Baixar o anexo"
+        className={classe}
+      >
+        {conteudo}
+      </a>
+    )
+  }
   return (
     <a href={srcProxy(anexo)} target="_blank" rel="noreferrer" title="Abrir ou baixar o anexo em nova aba" className={classe}>
       {conteudo}
@@ -174,8 +241,30 @@ function AudioCardDownload({ anexo, escuro }: { anexo: Anexo; escuro: boolean })
       >
         Este áudio não pôde ser reproduzido aqui — baixe para ouvir.
       </span>
-      <AnexoCard anexo={anexo} escuro={escuro} />
+      <AnexoCard anexo={anexo} escuro={escuro} modo="baixar" />
     </div>
+  )
+}
+
+/** Ação "Baixar" do anexo: mesma cara dos outros botões da linha (Encaminhar /
+ * Salvar no cliente). É leitura pura — aparece inclusive no modo somente leitura
+ * e não depende de token pessoal. */
+function BotaoBaixarAnexo({ anexo }: { anexo: Anexo }) {
+  const { baixar, baixando } = useBaixarAnexo()
+  return (
+    <button
+      type="button"
+      onClick={() => void baixar(anexo)}
+      disabled={baixando}
+      className={cn(
+        'inline-flex items-center gap-1 self-start rounded-md border border-border bg-background/70 px-2 py-0.5',
+        'text-[11px] font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground',
+        'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-border disabled:hover:text-muted-foreground',
+      )}
+      title="Baixar o anexo (no Chrome/Edge você escolhe a pasta)"
+    >
+      <Download className="h-3 w-3" aria-hidden /> {baixando ? 'Baixando…' : 'Baixar'}
+    </button>
   )
 }
 
@@ -278,6 +367,13 @@ export function MensagemBolha({
   telefone,
   conectado = true,
   somenteLeitura = false,
+  citada = null,
+  nomeContato,
+  nomeAgente,
+  onResponder,
+  onIrParaCitada,
+  ancoraId,
+  destacada = false,
 }: {
   mensagem: Mensagem
   /** Id da conversa — habilita "Ler comprovante (IA)" nas imagens de entrada. */
@@ -287,8 +383,23 @@ export function MensagemBolha({
   /** Encaminhar exige token pessoal (escrita): desabilita quando não conectado. */
   conectado?: boolean
   /** Leitura pura (ex.: histórico no dossiê): oculta ações de escrita
-   * (Encaminhar e "Ler comprovante"). Retrocompatível: default mantém tudo. */
+   * (Encaminhar, "Ler comprovante" e Responder). Retrocompatível: default mantém tudo. */
   somenteLeitura?: boolean
+  /** Mensagem CITADA já resolvida pela thread (null = fora da página carregada:
+   * cai no bloco genérico, sem nenhuma busca extra ao servidor). */
+  citada?: Mensagem | null
+  /** Nome do contato da conversa — autor da citação quando ela é de entrada. */
+  nomeContato?: string | null
+  /** Nome do agente conectado — citação da própria saída dele vira "Você". */
+  nomeAgente?: string | null
+  /** Habilita a ação "Responder" (a thread entra em modo resposta). */
+  onResponder?: (mensagem: Mensagem) => void
+  /** Clique no bloco de citação: rola até a mensagem citada. */
+  onIrParaCitada?: (id: number) => void
+  /** id no DOM da âncora desta bolha (a thread usa para rolar até ela). */
+  ancoraId?: string
+  /** Destaque breve depois de chegar aqui por um clique na citação. */
+  destacada?: boolean
 }) {
   const { direcao, privada, conteudo, anexos, sender, timestamp } = mensagem
   const hora = horaCurta(timestamp)
@@ -329,9 +440,48 @@ export function MensagemBolha({
       ? (anexos ?? []).find((a) => a.tipo === 'image')
       : undefined
 
+  // "Responder": vale para entrada E saída (no WhatsApp responde-se qualquer
+  // mensagem), fora do modo leitura. Nota interna e atividade ficam de fora.
+  const mostraResponder = !somenteLeitura && !!onResponder && podeResponder(mensagem)
+
+  // Citação: a thread já resolveu (ou não) a mensagem citada nesta página.
+  const temCitacao = typeof mensagem.emRespostaA === 'number'
+  const resumo = citada ? resumoCitacao(citada) : null
+
+  const botaoResponder = mostraResponder && (
+    <button
+      type="button"
+      onClick={() => onResponder?.(mensagem)}
+      disabled={!conectado}
+      aria-label="Responder a esta mensagem"
+      title={conectado ? 'Responder a esta mensagem' : 'Conecte sua conta para responder'}
+      className={cn(
+        'mt-5 shrink-0 self-start rounded-full border border-border bg-card p-1.5 text-muted-foreground shadow-card',
+        'transition-opacity hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40',
+        // Sem hover no toque: fica discreto porém alcançável no celular e some
+        // no desktop até o cursor/teclado chegar na bolha.
+        'opacity-60 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 focus-visible:opacity-100',
+      )}
+    >
+      <Reply className="h-3.5 w-3.5" aria-hidden />
+    </button>
+  )
+
   return (
-    <div className={cn('flex w-full', alinhaDireita ? 'justify-end' : 'justify-start')}>
-      <div className={cn('max-w-[85%] sm:max-w-[75%]', alinhaDireita ? 'items-end' : 'items-start')}>
+    <div
+      className={cn(
+        'group flex w-full items-start gap-1.5',
+        alinhaDireita ? 'justify-end' : 'justify-start',
+      )}
+    >
+      {alinhaDireita && botaoResponder}
+      <div
+        id={ancoraId}
+        className={cn(
+          'min-w-0 max-w-[85%] sm:max-w-[75%]',
+          alinhaDireita ? 'items-end' : 'items-start',
+        )}
+      >
         {/* Rótulo do remetente + nota interna */}
         <div
           className={cn(
@@ -347,7 +497,28 @@ export function MensagemBolha({
           {sender.nome && <span className="truncate">{sender.nome}</span>}
         </div>
 
-        <div className={cn('rounded-2xl px-3.5 py-2 text-sm shadow-card', estilo)}>
+        <div
+          className={cn(
+            'rounded-2xl px-3.5 py-2 text-sm shadow-card transition-shadow duration-300',
+            estilo,
+            destacada && 'ring-2 ring-ring ring-offset-2 ring-offset-background',
+          )}
+        >
+          {/* Citação (padrão WhatsApp): acima do texto. Clicável só quando a
+              citada está nesta página; senão, bloco genérico honesto. */}
+          {temCitacao &&
+            (citada && resumo ? (
+              <BlocoCitacao
+                autor={autorCitacao(citada, { nomeContato, nomeAgente })}
+                trecho={resumo.trecho}
+                midia={resumo.midia}
+                escuro={saidaEscura}
+                className="mb-1.5"
+                aoClicar={onIrParaCitada ? () => onIrParaCitada(citada.id) : undefined}
+              />
+            ) : (
+              <BlocoCitacao trecho="Mensagem anterior" escuro={saidaEscura} className="mb-1.5" />
+            ))}
           {conteudo && <p className="whitespace-pre-wrap break-words">{conteudo}</p>}
           {anexos && anexos.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -356,7 +527,11 @@ export function MensagemBolha({
                 // cliente vale para TODOS os anexos (dono, 2026-07-17); Encaminhar
                 // vale para todo anexo com binário (mídia inclusive).
                 const podeSalvar = !somenteLeitura && conversaId !== undefined && !!a.url
-                const temAcoes = (!somenteLeitura && podeEncaminhar(a)) || podeSalvar
+                // Baixar para o computador ESCOLHENDO A PASTA (pedido do dono):
+                // leitura pura, vale em qualquer anexo com binário e também no
+                // modo somente leitura.
+                const podeBaixar = anexoAbrivel(a)
+                const temAcoes = (!somenteLeitura && podeEncaminhar(a)) || podeSalvar || podeBaixar
                 const salvo = salvos.has(a.url)
                 return (
                   <div key={i} className="flex flex-col gap-1">
@@ -369,6 +544,9 @@ export function MensagemBolha({
                     )}
                     {temAcoes && (
                       <div className="flex flex-wrap items-center gap-1">
+                        {/* Baixar: escolhe a pasta no Chrome/Edge; nos demais cai
+                            no download clássico do navegador. */}
+                        {podeBaixar && <BotaoBaixarAnexo anexo={a} />}
                         {/* Encaminhar: só no anexo RECEBIDO do cliente (envio ao WhatsApp). */}
                         {cliente && podeEncaminhar(a) && (
                           <button
@@ -454,6 +632,7 @@ export function MensagemBolha({
           )}
         </div>
       </div>
+      {!alinhaDireita && botaoResponder}
 
       {conversaId !== undefined && comprovanteUrl && (
         <ComprovanteModal

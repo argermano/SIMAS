@@ -16,6 +16,7 @@ import { camposFaltantes } from '@/lib/documentos/campos-cliente'
 import { TIPOS_COM_MODELO_DOCX } from '@/lib/export/tipos-modelo-docx'
 import { Users, FileText, CheckCircle, AlertCircle, Loader2, Zap } from 'lucide-react'
 import { formatarMoedaInput } from '@/lib/utils'
+import { baixarGerado, mensagemErroDownload } from '@/lib/download'
 
 // ── Tipos e constantes ────────────────────────────────────────────────────────
 
@@ -171,26 +172,34 @@ export function ModeloProntoClient({ tipo, tipoNome, clienteIdInicial, atendimen
     if (!cliente) return
     setBaixandoModelo(true)
     try {
-      const res = await fetch('/api/documentos/exportar-modelo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: tipoModelo, clienteId: cliente.id, camposExtras: montarCamposExtras() }),
+      // Seletor de pasta (Chromium) ANTES do POST: o gesto do clique não
+      // sobrevive à geração do .docx. Safari/Firefox seguem no download clássico.
+      const baixou = await baixarGerado({
+        filename: `${tipoNome.replace(/\s+/g, '_')}_${cliente.nome.replace(/\s+/g, '_')}.docx`,
+        mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        obterBlob: async () => {
+          let res: Response
+          try {
+            res = await fetch('/api/documentos/exportar-modelo', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tipo: tipoModelo, clienteId: cliente.id, camposExtras: montarCamposExtras() }),
+            })
+          } catch {
+            toastError('Erro', 'Falha de rede')
+            return null
+          }
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}))
+            toastError('Modelo não disponível', d.error ?? 'Não foi possível gerar o documento')
+            return null
+          }
+          return res.blob()
+        },
       })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        toastError('Modelo não disponível', d.error ?? 'Não foi possível gerar o documento')
-        return
-      }
-      const blob = await res.blob()
-      const url  = URL.createObjectURL(blob)
-      const a    = document.createElement('a')
-      a.href     = url
-      a.download = `${tipoNome.replace(/\s+/g, '_')}_${cliente.nome.replace(/\s+/g, '_')}.docx`
-      a.click()
-      URL.revokeObjectURL(url)
-      success('DOCX gerado!', 'Modelo do escritório preenchido.')
-    } catch {
-      toastError('Erro', 'Falha de rede')
+      if (baixou) success('DOCX gerado!', 'Modelo do escritório preenchido.')
+    } catch (e) {
+      toastError('Não foi possível salvar o arquivo', mensagemErroDownload(e))
     } finally {
       setBaixandoModelo(false)
     }

@@ -21,6 +21,7 @@ import { formatarBytes } from '@/lib/documentos/tamanho'
 import { formatarDataRelativa } from '@/lib/utils'
 import { rotularArea, formatarCnj } from '@/lib/tarefas/vinculo'
 import { TIPOS_PECA } from '@/lib/constants/tipos-peca'
+import { baixarArquivo, mensagemErroDownload } from '@/lib/download'
 import type { VinculoDoc } from '@/lib/documentos/vinculos'
 
 // Aba "Documentos" do dossiê: o dono quer que ela SUBSTITUA o Google Drive — os
@@ -140,6 +141,20 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
   const inputRef = useRef<HTMLInputElement>(null)
   // Alvo do próximo upload: null = geral; senão vincula à pasta escolhida.
   const alvoUploadRef = useRef<AlvoUpload>(null)
+
+  // Baixar escolhendo a pasta (Chromium) — em Safari/Firefox o clique segue no
+  // href da âncora, exatamente como antes. Cancelar o seletor é silêncio.
+  const baixar = useCallback(
+    async (e: React.MouseEvent, url: string, filename: string, mime?: string | null) => {
+      e.preventDefault()
+      try {
+        await baixarArquivo({ url, filename, mimetype: mime })
+      } catch (erro) {
+        toastError('Não foi possível salvar o arquivo', mensagemErroDownload(erro))
+      }
+    },
+    [toastError],
+  )
 
   // Expandido: 1º nível (categorias) aberto por padrão; pastas fechadas.
   const [expandido, setExpandido] = useState<Set<string>>(
@@ -468,7 +483,10 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
               )}
               {downloadUrl && (
                 <DropdownMenuItem asChild>
-                  <a href={downloadUrl}>
+                  <a
+                    href={downloadUrl}
+                    onClick={(e) => baixar(e, downloadUrl, doc.file_name, doc.mime_type)}
+                  >
                     <Download className="h-4 w-4" /> Baixar
                   </a>
                 </DropdownMenuItem>
@@ -527,6 +545,7 @@ export function DocumentosDossie({ clienteId }: { clienteId: string }) {
         {downloadUrl ? (
           <a
             href={downloadUrl}
+            onClick={(e) => baixar(e, downloadUrl, c.arquivoNome ?? `${c.titulo}.pdf`, 'application/pdf')}
             className="shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:bg-muted hover:text-primary group-hover:opacity-100"
             title="Baixar contrato assinado"
           >

@@ -5,8 +5,10 @@ import Link from 'next/link'
 import { Download, ExternalLink, FileText, HandCoins, Phone, Trash2, User } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/components/ui/toast'
 import { formatarValor } from '@/lib/financeiro/parcelas'
 import { formatarDataRelativa } from '@/lib/utils'
+import { baixarComprovante } from './baixar-comprovante'
 import type { ComprovanteRecebido } from './InboxComprovantes'
 
 /** "2026-07-11T…" | "2026-07-11" -> "11/07/2026" (fallback: original). */
@@ -34,6 +36,7 @@ export function DetalheComprovanteModal({
   onAtribuir: () => void
   onDescartar: () => void
 }) {
+  const { error: toastError } = useToast()
   // Falha ao carregar a <img> da signed URL → fallback textual.
   const [imgErro, setImgErro] = useState(false)
 
@@ -107,7 +110,17 @@ export function DetalheComprovanteModal({
             )}
             {c.downloadUrl && (
               <Button asChild variant="secondary" size="sm">
-                <a href={c.downloadUrl}>
+                <a
+                  href={c.downloadUrl}
+                  onClick={(e) =>
+                    baixarComprovante(
+                      e,
+                      c.downloadUrl!,
+                      c.content_type ?? c.dados?.contentType ?? null,
+                      toastError,
+                    )
+                  }
+                >
                   <Download className="h-4 w-4" /> Baixar
                 </a>
               </Button>

@@ -820,6 +820,7 @@ export function Conversas({ email }: { email: string }) {
               conversa={selecionada}
               conectado={conectado}
               modo="inline"
+              nomeAgente={agente?.agentName ?? null}
               onListaMudou={() => void revalidar(true)}
               onAgenteDesconectado={marcarDesconectado}
               onAbrirContexto={() => setContextoAberto(true)}
@@ -864,6 +865,7 @@ export function Conversas({ email }: { email: string }) {
           conversa={selecionada}
           conectado={conectado}
           modo="overlay"
+          nomeAgente={agente?.agentName ?? null}
           onListaMudou={() => void revalidar(true)}
           onAgenteDesconectado={marcarDesconectado}
           onFechar={() => setMobileAberto(false)}

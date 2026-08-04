@@ -2,8 +2,11 @@
 
 import { useState, useCallback } from 'react'
 import { Check, ClipboardCopy, Download } from 'lucide-react'
+import { useToast } from '@/components/ui/toast'
+import { baixarBlob, mensagemErroDownload } from '@/lib/download'
 
 export function TranscricaoActions({ texto }: { texto: string }) {
+  const { error: toastError } = useToast()
   const [copiado, setCopiado] = useState(false)
 
   const copiar = useCallback(async () => {
@@ -12,15 +15,19 @@ export function TranscricaoActions({ texto }: { texto: string }) {
     setTimeout(() => setCopiado(false), 2000)
   }, [texto])
 
-  const exportar = useCallback(() => {
+  // .txt da transcrição: no Chrome/Edge o seletor deixa escolher a pasta; nos
+  // demais navegadores é o download clássico de sempre.
+  const exportar = useCallback(async () => {
     const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `transcricao_${new Date().toISOString().slice(0, 10)}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [texto])
+    try {
+      await baixarBlob({
+        blob,
+        filename: `transcricao_${new Date().toISOString().slice(0, 10)}.txt`,
+      })
+    } catch (e) {
+      toastError('Não foi possível salvar o arquivo', mensagemErroDownload(e))
+    }
+  }, [texto, toastError])
 
   return (
     <div className="flex items-center gap-1">

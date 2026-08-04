@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2,
   Lock,
@@ -19,7 +19,9 @@ import { useToast } from '@/components/ui/toast'
 import { cn } from '@/lib/utils'
 import { AvatarContato } from './AvatarContato'
 import { agrupadorDia } from '@/lib/conversas/formato'
+import { autorCitacao, indexarPorId, resumoCitacao } from '@/lib/conversas/citacao'
 import type { Conversa, Mensagem, RespostaMensagens } from '@/lib/conversas/tipos'
+import { BlocoCitacao } from './BlocoCitacao'
 import { MensagemBolha } from './MensagemBolha'
 import { codeDoErro, mensagemErroRelay, rotuloDia } from './erros'
 import { createClient } from '@/lib/supabase/client'
@@ -67,6 +69,7 @@ export function Thread({
   conversa,
   conectado,
   modo,
+  nomeAgente,
   onListaMudou,
   onAgenteDesconectado,
   onFechar,
@@ -77,6 +80,8 @@ export function Thread({
   conversa: Conversa
   conectado: boolean
   modo: 'inline' | 'overlay'
+  /** Nome do agente conectado — citação da própria saída dele vira "Você". */
+  nomeAgente?: string | null
   onListaMudou: () => void
   onAgenteDesconectado: () => void
   onFechar?: () => void
@@ -100,9 +105,15 @@ export function Thread({
   const [acao, setAcao] = useState<'assumir' | 'status' | null>(null)
   // Arquivo do PC selecionado no clipe (envio como anexo; a legenda é o próprio textarea).
   const [arquivo, setArquivo] = useState<File | null>(null)
+  // Modo RESPOSTA (citação no padrão WhatsApp): mensagem que está sendo citada.
+  const [respondendo, setRespondendo] = useState<Mensagem | null>(null)
+  // Mensagem destacada por um clique numa citação (realce breve).
+  const [destaque, setDestaque] = useState<number | null>(null)
 
   const fimRef = useRef<HTMLDivElement>(null)
   const inputFileRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const destaqueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const id = conversa.id
 
   const carregar = useCallback(async (silencioso = false) => {
@@ -170,6 +181,65 @@ export function Thread({
     }
   }, [mensagens])
 
+  // O modo resposta é da CONVERSA aberta: trocar de conversa zera a citação.
+  // (O shell já remonta a Thread por `key`; a guarda existe para o dia em que
+  // isso mudar — citar a mensagem de outra conversa seria erro silencioso.)
+  useEffect(() => {
+    setRespondendo(null)
+    setDestaque(null)
+  }, [id])
+
+  // Esc cancela a resposta (padrão WhatsApp), com o foco em qualquer ponto da tela.
+  useEffect(() => {
+    if (!respondendo) return
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key === 'Escape') setRespondendo(null)
+    }
+    document.addEventListener('keydown', aoTeclar)
+    return () => document.removeEventListener('keydown', aoTeclar)
+  }, [respondendo])
+
+  useEffect(() => () => {
+    if (destaqueTimerRef.current) clearTimeout(destaqueTimerRef.current)
+  }, [])
+
+  /** Entra em modo resposta e devolve o foco ao campo de texto. */
+  const responder = useCallback((m: Mensagem) => {
+    setRespondendo(m)
+    // O anexo sai por outro endpoint, que não leva citação: descartamos o arquivo
+    // pendente (mesma regra que a nota interna já aplicava) para o que está na
+    // tela ser exatamente o que vai ser enviado.
+    setArquivo(null)
+    textareaRef.current?.focus()
+  }, [])
+
+  /** Clique no bloco de citação: rola até a mensagem citada e a destaca. */
+  const irParaCitada = useCallback(
+    (idCitada: number) => {
+      const el = document.getElementById(`msg-${id}-${idCitada}`)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setDestaque(idCitada)
+      if (destaqueTimerRef.current) clearTimeout(destaqueTimerRef.current)
+      destaqueTimerRef.current = setTimeout(() => setDestaque(null), 1800)
+    },
+    [id],
+  )
+
+  // Índice id → mensagem: resolve as citações da página em O(N), não O(N²).
+  const porId = useMemo(() => indexarPorId(mensagens), [mensagens])
+
+  // Resumo da citação da faixa do composer (autor + trecho), calculado uma vez.
+  const citacaoComposer = useMemo(() => {
+    if (!respondendo) return null
+    const { midia, trecho } = resumoCitacao(respondendo)
+    return {
+      autor: autorCitacao(respondendo, { nomeContato: conversa.contato.nome, nomeAgente }),
+      midia,
+      trecho,
+    }
+  }, [respondendo, conversa.contato.nome, nomeAgente])
+
   /** Trata um 428 (agente não conectado) de qualquer escrita. */
   function tratou428(status: number, data: unknown): boolean {
     if (status === 428 || codeDoErro(data) === 'AGENT_NOT_CONNECTED') {
@@ -195,6 +265,9 @@ export function Thread({
       toastError('Arquivo muito grande', 'O limite é 40 MB.')
       return
     }
+    // O envio de ANEXO é outro endpoint (não leva citação): sair do modo resposta
+    // aqui é honesto — a faixa some na hora, em vez de a citação se perder calada.
+    setRespondendo(null)
     setArquivo(f)
   }
 
@@ -274,7 +347,12 @@ export function Thread({
       const r = await fetch(`/api/conversas/${id}/mensagens`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, private: notaInterna }),
+        body: JSON.stringify({
+          content,
+          private: notaInterna,
+          // Só vai quando há citação — o corpo de sempre continua idêntico.
+          ...(respondendo ? { emRespostaA: respondendo.id } : {}),
+        }),
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) {
@@ -282,6 +360,7 @@ export function Thread({
         return
       }
       setTexto('')
+      setRespondendo(null)
       success(notaInterna ? 'Nota interna salva' : 'Mensagem enviada')
       await carregar(true)
       onListaMudou()
@@ -447,6 +526,15 @@ export function Thread({
                   conversaId={id}
                   telefone={conversa.contato.telefone}
                   conectado={conectado}
+                  ancoraId={`msg-${id}-${m.id}`}
+                  destacada={destaque === m.id}
+                  citada={
+                    typeof m.emRespostaA === 'number' ? (porId.get(m.emRespostaA) ?? null) : null
+                  }
+                  nomeContato={conversa.contato.nome}
+                  nomeAgente={nomeAgente}
+                  onResponder={responder}
+                  onIrParaCitada={irParaCitada}
                 />
               ))}
             </div>
@@ -493,7 +581,22 @@ export function Thread({
           </div>
         )}
 
+        {/* Modo RESPOSTA: faixa de citação acima do campo (padrão WhatsApp).
+            aria-live: quem usa leitor de tela clica "Responder" e o foco vai pro
+            campo — sem o aviso, a faixa apareceria calada. */}
+        {citacaoComposer && (
+          <div className="mb-2" aria-live="polite">
+            <BlocoCitacao
+              autor={citacaoComposer.autor}
+              trecho={citacaoComposer.trecho}
+              midia={citacaoComposer.midia}
+              aoCancelar={() => setRespondendo(null)}
+            />
+          </div>
+        )}
+
         <Textarea
+          ref={textareaRef}
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           disabled={!conectado || enviando}
