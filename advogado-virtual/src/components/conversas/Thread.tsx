@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   CheckCircle2,
   Lock,
@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { AvatarContato } from './AvatarContato'
 import { agrupadorDia } from '@/lib/conversas/formato'
 import { autorCitacao, indexarPorId, resumoCitacao } from '@/lib/conversas/citacao'
+import { menorId, mesclarMensagens } from '@/lib/conversas/paginacao'
 import type { Conversa, Mensagem, RespostaMensagens } from '@/lib/conversas/tipos'
 import { BlocoCitacao } from './BlocoCitacao'
 import { MensagemBolha } from './MensagemBolha'
@@ -40,6 +41,9 @@ const ACCEPT_ANEXO = [
   '.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt',
   '.mp4', '.3gp', '.mov', '.ogg', '.opus', '.mp3', '.m4a',
 ].join(',')
+
+/** Distância do topo (px) que dispara a busca da página anterior do histórico. */
+const LIMIAR_TOPO_PX = 80
 
 /** Tamanho legível para o chip do anexo (B/KB/MB). */
 function formatarTamanho(bytes: number): string {
@@ -99,6 +103,11 @@ export function Thread({
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
+  // Paginação retroativa do histórico (o relay entrega ~20 por página).
+  const [carregandoAntigas, setCarregandoAntigas] = useState(false)
+  const [fimDoHistorico, setFimDoHistorico] = useState(false)
+  const [erroAntigas, setErroAntigas] = useState<string | null>(null)
+
   const [texto, setTexto] = useState('')
   const [notaInterna, setNotaInterna] = useState(false)
   const [enviando, setEnviando] = useState(false)
@@ -111,9 +120,16 @@ export function Thread({
   const [destaque, setDestaque] = useState<number | null>(null)
 
   const fimRef = useRef<HTMLDivElement>(null)
+  const rolagemRef = useRef<HTMLDivElement>(null)
   const inputFileRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const destaqueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Reentrância: o onScroll dispara várias vezes no mesmo frame, antes de
+  // `carregandoAntigas` chegar ao próximo render — só o ref segura a 2ª chamada.
+  const buscandoAntigasRef = useRef(false)
+  // Distância do topo da viewport até o FIM do conteúdo, medida logo antes do
+  // prepend e restaurada no layout effect (âncora de rolagem).
+  const ancoraRef = useRef<number | null>(null)
   const id = conversa.id
 
   const carregar = useCallback(async (silencioso = false) => {
@@ -133,7 +149,11 @@ export function Thread({
         }
         return
       }
-      setMensagens((d as RespostaMensagens).mensagens ?? [])
+      // MESCLA (não substitui): esta rota só devolve a página MAIS RECENTE, e
+      // trocar a lista inteira por ela jogaria fora o histórico que o usuário já
+      // puxou rolando para cima (o refresh roda a cada 3s e após cada envio).
+      const novas = (d as RespostaMensagens).mensagens ?? []
+      setMensagens((prev) => mesclarMensagens(prev, novas))
     } catch {
       if (!silencioso) {
         setErro('Falha de rede ao carregar as mensagens.')
@@ -181,12 +201,77 @@ export function Thread({
     }
   }, [mensagens])
 
-  // O modo resposta é da CONVERSA aberta: trocar de conversa zera a citação.
+  /** Página ANTERIOR do histórico (?before=<menor id carregado>) — estilo WhatsApp. */
+  async function carregarAntigas() {
+    const cont = rolagemRef.current
+    const cursor = menorId(mensagens)
+    if (!cont || cursor === null || buscandoAntigasRef.current) return
+    buscandoAntigasRef.current = true
+    setCarregandoAntigas(true)
+    setErroAntigas(null)
+    try {
+      const r = await fetch(`/api/conversas/${id}/mensagens?before=${cursor}`)
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        setErroAntigas(mensagemErroRelay(r.status, d))
+        return
+      }
+      const novas = (d as RespostaMensagens).mensagens ?? []
+      // Vazia — ou sem nada mais antigo que o cursor — é o começo da conversa.
+      // Sem esta 2ª guarda, uma página só de repetidos não mudaria a altura e o
+      // gatilho do topo dispararia de novo, em laço.
+      const menorNova = menorId(novas)
+      if (menorNova === null || menorNova >= cursor) {
+        setFimDoHistorico(true)
+        return
+      }
+      // Mede AGORA (DOM ainda sem as antigas) e restaura no layout effect: sem a
+      // âncora a tela pula para o topo e dispara fetch em cascata.
+      ancoraRef.current = cont.scrollHeight - cont.scrollTop
+      setMensagens((prev) => mesclarMensagens(prev, novas))
+    } catch {
+      setErroAntigas('Falha de rede ao carregar as mensagens anteriores.')
+    } finally {
+      buscandoAntigasRef.current = false
+      setCarregandoAntigas(false)
+    }
+  }
+
+  /** Gatilho do histórico: perto do topo, puxa a página anterior. O erro trava o
+   *  gatilho de propósito — quem destrava é o clique em "Tentar de novo". */
+  function aoRolar() {
+    const cont = rolagemRef.current
+    if (!cont || fimDoHistorico || erroAntigas || buscandoAntigasRef.current) return
+    if (cont.scrollTop < LIMIAR_TOPO_PX) void carregarAntigas()
+  }
+
+  // Âncora de rolagem do prepend: repõe a distância até o fim medida antes do
+  // render, mantendo na tela a mensagem que estava sendo lida. Roda antes do
+  // efeito de "rolar para o fim" (layout effect vem antes do passivo), que de
+  // toda forma não dispara aqui — ele é chaveado pela ÚLTIMA mensagem, e o
+  // prepend só mexe no começo da lista.
+  useLayoutEffect(() => {
+    const cont = rolagemRef.current
+    const distanciaDoFim = ancoraRef.current
+    if (!cont || distanciaDoFim === null) return
+    ancoraRef.current = null
+    cont.scrollTop = cont.scrollHeight - distanciaDoFim
+  }, [mensagens])
+
+  // O modo resposta e o histórico paginado são da CONVERSA aberta: trocar de
+  // conversa zera a citação e volta a paginação ao começo.
   // (O shell já remonta a Thread por `key`; a guarda existe para o dia em que
-  // isso mudar — citar a mensagem de outra conversa seria erro silencioso.)
+  // isso mudar — citar a mensagem de outra conversa, ou misturar históricos,
+  // seria erro silencioso.)
   useEffect(() => {
     setRespondendo(null)
     setDestaque(null)
+    setMensagens([])
+    setFimDoHistorico(false)
+    setErroAntigas(null)
+    setCarregandoAntigas(false)
+    buscandoAntigasRef.current = false
+    ancoraRef.current = null
   }, [id])
 
   // Esc cancela a resposta (padrão WhatsApp), com o foco em qualquer ponto da tela.
@@ -500,7 +585,39 @@ export function Thread({
       </div>
 
       {/* Thread de mensagens */}
-      <div className="flex-1 space-y-3 overflow-y-auto bg-background/40 px-4 py-4">
+      <div
+        ref={rolagemRef}
+        onScroll={aoRolar}
+        className="flex-1 space-y-3 overflow-y-auto bg-background/40 px-4 py-4"
+      >
+        {/* Topo da paginação retroativa (histórico). Só aparece com a thread já
+            carregada — durante o spinner de tela cheia não há o que paginar. */}
+        {!loading && !erro && mensagens.length > 0 && (
+          <>
+            {carregandoAntigas && (
+              <div className="flex items-center justify-center gap-2 py-1 text-xs text-muted-foreground">
+                <Spinner className="h-3.5 w-3.5" /> Carregando mensagens anteriores…
+              </div>
+            )}
+            {erroAntigas && (
+              <div className="flex flex-wrap items-center justify-center gap-2 py-1 text-xs text-muted-foreground">
+                <span>{erroAntigas}</span>
+                <button
+                  type="button"
+                  onClick={() => void carregarAntigas()}
+                  className="rounded-md border border-border px-2 py-0.5 font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  Tentar de novo
+                </button>
+              </div>
+            )}
+            {fimDoHistorico && (
+              <p className="py-1 text-center text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                Início da conversa
+              </p>
+            )}
+          </>
+        )}
         {loading ? (
           <div className="flex items-center gap-2 py-10 text-sm text-muted-foreground">
             <Spinner className="h-4 w-4" /> Carregando mensagens…
