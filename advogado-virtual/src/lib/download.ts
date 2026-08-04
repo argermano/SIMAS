@@ -74,8 +74,22 @@ export function extensaoDe(nome: string): string {
   return /^\.[a-z0-9]{1,8}$/.test(ext) ? ext : ''
 }
 
+/**
+ * Encurta o nome PRESERVANDO a extensão (um `.docx` cortado fora vira arquivo
+ * que o Word não abre) e sem partir emoji ao meio — `slice` quebra par
+ * surrogado e o seletor receberia um nome inválido.
+ */
+function encurtarNome(nome: string, limite: number): string {
+  if (nome.length <= limite) return nome
+  const ext = extensaoDe(nome)
+  const corpo = ext ? nome.slice(0, nome.length - ext.length) : nome
+  const cabem = Math.max(1, limite - ext.length)
+  return Array.from(corpo).slice(0, cabem).join('').trimEnd() + ext
+}
+
 /** Nome sugerido seguro para o seletor: o Chromium recusa caminho, controle e
- * caracteres proibidos do sistema de arquivos. Vazio vira 'arquivo'. */
+ * caracteres proibidos do sistema de arquivos. Nome longo é encurtado sem
+ * perder a extensão. Vazio vira 'arquivo'. */
 export function nomeSeguro(nome: string, padrao = 'arquivo'): string {
   const base = (nome ?? '').split(/[\\/]/).pop() ?? ''
   const limpo = base
@@ -84,8 +98,7 @@ export function nomeSeguro(nome: string, padrao = 'arquivo'): string {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^\.+/, '')
-    .slice(0, 120)
-  return limpo || padrao
+  return encurtarNome(limpo, 120) || padrao
 }
 
 // Extensão → mimetype dos formatos que o SIMAS realmente entrega/recebe.
@@ -294,6 +307,19 @@ export function baixarPorAncora(url: string, filename?: string): void {
   a.remove()
 }
 
+/** Busca os bytes com o cookie de sessão (mesma origem) e traduz a falha para
+ * uma frase que o usuário entende — o toast do chamador usa essa mensagem. */
+async function buscarBytes(url: string): Promise<Blob> {
+  let resp: Response
+  try {
+    resp = await fetch(url, { credentials: 'same-origin' })
+  } catch {
+    throw new Error('Não foi possível buscar o arquivo (verifique a conexão e tente de novo)')
+  }
+  if (!resp.ok) throw new Error(`O servidor recusou o arquivo (HTTP ${resp.status})`)
+  return resp.blob()
+}
+
 function baixarBlobPorAncora(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   baixarPorAncora(url, filename)
@@ -325,9 +351,7 @@ export async function baixarArquivo({ url, filename, mimetype }: ArquivoParaBaix
     baixarPorAncora(url, filename)
     return true
   }
-  const resp = await fetch(url, { credentials: 'same-origin' })
-  if (!resp.ok) throw new Error(`O servidor recusou o arquivo (HTTP ${resp.status})`)
-  await gravarNoDestino(destino.handle, await resp.blob())
+  await gravarNoDestino(destino.handle, await buscarBytes(url))
   return true
 }
 
@@ -361,9 +385,7 @@ export async function baixarUrlSobDemanda({
     else baixarPorAncora(url, filename)
     return true
   }
-  const resp = await fetch(url, { credentials: 'same-origin' })
-  if (!resp.ok) throw new Error(`O servidor recusou o arquivo (HTTP ${resp.status})`)
-  await gravarNoDestino(destino.handle, await resp.blob())
+  await gravarNoDestino(destino.handle, await buscarBytes(url))
   return true
 }
 

@@ -72,6 +72,20 @@ describe('nomeSeguro', () => {
     expect(nomeSeguro('C:\\Users\\ana\\a<b>c.txt')).toBe('abc.txt')
   })
 
+  it('encurta nome comprido SEM perder a extensão', () => {
+    const comprido = `${'a'.repeat(200)}.docx`
+    const curto = nomeSeguro(comprido)
+    expect(curto.endsWith('.docx')).toBe(true)
+    expect(curto.length).toBeLessThanOrEqual(120)
+  })
+
+  it('não parte emoji ao meio ao encurtar', () => {
+    // 130 emojis (2 code units cada): cortar por índice deixaria meio surrogado.
+    const curto = nomeSeguro(`${'😀'.repeat(130)}.pdf`)
+    expect(curto.endsWith('.pdf')).toBe(true)
+    expect(/[\uD800-\uDFFF]/.test(curto.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, ''))).toBe(false)
+  })
+
   it('cai no padrão quando sobra nada', () => {
     expect(nomeSeguro('')).toBe('arquivo')
     expect(nomeSeguro('???')).toBe('arquivo')
