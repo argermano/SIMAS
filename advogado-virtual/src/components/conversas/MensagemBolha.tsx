@@ -11,6 +11,7 @@ import {
   Image as ImageIcon,
   MapPin,
   Mic,
+  Pencil,
   Reply,
   RotateCw,
   ScanLine,
@@ -28,6 +29,7 @@ import {
 } from '@/lib/conversas/audio'
 import { anexoEncaminhavel } from '@/lib/conversas/encaminhar'
 import { autorCitacao, podeResponder, resumoCitacao } from '@/lib/conversas/citacao'
+import { podeEditar, restanteEdicaoMs } from '@/lib/conversas/edicao'
 import { baixarArquivo, mensagemErroDownload } from '@/lib/download'
 import { useToast } from '@/components/ui/toast'
 import type { Anexo, Mensagem } from '@/lib/conversas/tipos'
@@ -371,6 +373,7 @@ export function MensagemBolha({
   nomeContato,
   nomeAgente,
   onResponder,
+  onEditar,
   onIrParaCitada,
   ancoraId,
   destacada = false,
@@ -394,6 +397,9 @@ export function MensagemBolha({
   nomeAgente?: string | null
   /** Habilita a ação "Responder" (a thread entra em modo resposta). */
   onResponder?: (mensagem: Mensagem) => void
+  /** Habilita a ação "Editar" (a thread entra em modo edição). Só aparece
+   * enquanto a mensagem PODE ser editada — ver podeEditar em lib/conversas/edicao. */
+  onEditar?: (mensagem: Mensagem) => void
   /** Clique no bloco de citação: rola até a mensagem citada. */
   onIrParaCitada?: (id: number) => void
   /** id no DOM da âncora desta bolha (a thread usa para rolar até ela). */
@@ -412,6 +418,21 @@ export function MensagemBolha({
   const [salvarAnexo, setSalvarAnexo] = useState<Anexo | null>(null)
   // URLs já salvas nesta sessão do componente — desabilita o botão pós-sucesso.
   const [salvos, setSalvos] = useState<Set<string>>(() => new Set())
+
+  // "Editar": a janela do WhatsApp EXPIRA sozinha, então a idade não pode ser
+  // congelada no primeiro render — um botão que promete e falha é pior do que
+  // botão nenhum. `agora` é reavaliado por um único timer armado para o instante
+  // exato em que a janela fecha (só nas bolhas que hoje são editáveis: no máximo
+  // uma ou duas por thread, nunca um relógio global batendo em toda mensagem).
+  const [agora, setAgora] = useState(() => Date.now())
+  const mostraEditar = !somenteLeitura && !!onEditar && podeEditar(mensagem, agora)
+  useEffect(() => {
+    if (!mostraEditar) return
+    const restante = restanteEdicaoMs(mensagem, Date.now())
+    // +500 ms: acorda já do lado de fora da janela, sem depender do arredondamento.
+    const t = setTimeout(() => setAgora(Date.now()), Math.max(restante, 0) + 500)
+    return () => clearTimeout(t)
+  }, [mostraEditar, mensagem])
 
   // Atividade do sistema: linha central discreta.
   if (direcao === 'atividade') {
@@ -467,6 +488,26 @@ export function MensagemBolha({
     </button>
   )
 
+  // "Editar" (padrão WhatsApp): mesma casa visual do Responder, ao lado dele.
+  // Some sozinho quando a janela fecha — quem estiver com a tela aberta vê o
+  // botão desaparecer em vez de descobrir o limite tomando um erro.
+  const botaoEditar = mostraEditar && (
+    <button
+      type="button"
+      onClick={() => onEditar?.(mensagem)}
+      disabled={!conectado}
+      aria-label="Editar esta mensagem"
+      title={conectado ? 'Editar esta mensagem' : 'Conecte sua conta para editar'}
+      className={cn(
+        'mt-5 shrink-0 self-start rounded-full border border-border bg-card p-1.5 text-muted-foreground shadow-card',
+        'transition-opacity hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40',
+        'opacity-60 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 focus-visible:opacity-100',
+      )}
+    >
+      <Pencil className="h-3.5 w-3.5" aria-hidden />
+    </button>
+  )
+
   return (
     <div
       className={cn(
@@ -474,6 +515,7 @@ export function MensagemBolha({
         alinhaDireita ? 'justify-end' : 'justify-start',
       )}
     >
+      {alinhaDireita && botaoEditar}
       {alinhaDireita && botaoResponder}
       <div
         id={ancoraId}

@@ -68,6 +68,13 @@ export interface Mensagem {
    * vindas do espelho no banco; null quando a mensagem não responde ninguém.
    */
   emRespostaA?: number | null
+  /**
+   * source_id do Chatwoot, como o relay entrega. Quando veio da ponte nativa da
+   * Evolution é 'WAID:<key.id>' — o primeiro degrau para achar a mensagem no
+   * WhatsApp (editar/reconciliar). Ausente em relays antigos; null quando a
+   * mensagem nasceu no painel do Chatwoot. Ver src/lib/conversas/edicao.ts.
+   */
+  sourceId?: string | null
 }
 
 export interface Agente {

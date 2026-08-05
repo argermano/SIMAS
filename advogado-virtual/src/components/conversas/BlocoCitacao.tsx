@@ -40,6 +40,7 @@ export function BlocoCitacao({
   escuro = false,
   aoClicar,
   aoCancelar,
+  rotuloCancelar = 'Cancelar resposta',
   titulo,
   className,
 }: {
@@ -49,6 +50,8 @@ export function BlocoCitacao({
   escuro?: boolean
   aoClicar?: () => void
   aoCancelar?: () => void
+  /** Rótulo do X — o modo EDIÇÃO reusa a faixa e cancela outra coisa. */
+  rotuloCancelar?: string
   /** title/aria do bloco clicável. */
   titulo?: string
   className?: string
@@ -116,8 +119,8 @@ export function BlocoCitacao({
         <button
           type="button"
           onClick={aoCancelar}
-          aria-label="Cancelar resposta"
-          title="Cancelar resposta (Esc)"
+          aria-label={rotuloCancelar}
+          title={`${rotuloCancelar} (Esc)`}
           className="shrink-0 self-start rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <X className="h-4 w-4" />

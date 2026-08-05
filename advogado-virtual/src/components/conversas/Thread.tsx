@@ -6,6 +6,7 @@ import {
   Lock,
   PanelRightOpen,
   Paperclip,
+  Pencil,
   RotateCcw,
   Send,
   StickyNote,
@@ -116,6 +117,9 @@ export function Thread({
   const [arquivo, setArquivo] = useState<File | null>(null)
   // Modo RESPOSTA (citação no padrão WhatsApp): mensagem que está sendo citada.
   const [respondendo, setRespondendo] = useState<Mensagem | null>(null)
+  // Modo EDIÇÃO (padrão WhatsApp): mensagem própria sendo corrigida. Exclusivo
+  // com o modo resposta — entrar num sai do outro (o composer só faz uma coisa).
+  const [editando, setEditando] = useState<Mensagem | null>(null)
   // Mensagem destacada por um clique numa citação (realce breve).
   const [destaque, setDestaque] = useState<number | null>(null)
 
@@ -124,6 +128,9 @@ export function Thread({
   const inputFileRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const destaqueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Rascunho que estava no campo quando o modo edição começou: cancelar a edição
+  // devolve o que a pessoa tinha escrito, em vez de comê-lo em silêncio.
+  const rascunhoRef = useRef('')
   // Reentrância: o onScroll dispara várias vezes no mesmo frame, antes de
   // `carregandoAntigas` chegar ao próximo render — só o ref segura a 2ª chamada.
   const buscandoAntigasRef = useRef(false)
@@ -265,6 +272,7 @@ export function Thread({
   // seria erro silencioso.)
   useEffect(() => {
     setRespondendo(null)
+    setEditando(null)
     setDestaque(null)
     setMensagens([])
     setFimDoHistorico(false)
@@ -274,15 +282,25 @@ export function Thread({
     ancoraRef.current = null
   }, [id])
 
-  // Esc cancela a resposta (padrão WhatsApp), com o foco em qualquer ponto da tela.
+  /** Sai do modo edição devolvendo ao campo o rascunho que havia antes. */
+  const cancelarEdicao = useCallback(() => {
+    setEditando(null)
+    setTexto(rascunhoRef.current)
+    rascunhoRef.current = ''
+  }, [])
+
+  // Esc cancela a resposta OU a edição (padrão WhatsApp), com o foco em qualquer
+  // ponto da tela. Os dois modos são exclusivos, então nunca há ambiguidade.
   useEffect(() => {
-    if (!respondendo) return
+    if (!respondendo && !editando) return
     function aoTeclar(e: KeyboardEvent) {
-      if (e.key === 'Escape') setRespondendo(null)
+      if (e.key !== 'Escape') return
+      if (editando) cancelarEdicao()
+      else setRespondendo(null)
     }
     document.addEventListener('keydown', aoTeclar)
     return () => document.removeEventListener('keydown', aoTeclar)
-  }, [respondendo])
+  }, [respondendo, editando, cancelarEdicao])
 
   useEffect(() => () => {
     if (destaqueTimerRef.current) clearTimeout(destaqueTimerRef.current)
@@ -290,6 +308,7 @@ export function Thread({
 
   /** Entra em modo resposta e devolve o foco ao campo de texto. */
   const responder = useCallback((m: Mensagem) => {
+    setEditando(null) // exclusivo com o modo edição
     setRespondendo(m)
     // O anexo sai por outro endpoint, que não leva citação: descartamos o arquivo
     // pendente (mesma regra que a nota interna já aplicava) para o que está na
@@ -297,6 +316,21 @@ export function Thread({
     setArquivo(null)
     textareaRef.current?.focus()
   }, [])
+
+  /** Entra em modo edição: o campo passa a conter o texto ATUAL da mensagem. */
+  const editar = useCallback((m: Mensagem) => {
+    setRespondendo(null) // exclusivo com o modo resposta
+    setArquivo(null)
+    setNotaInterna(false) // editar é sempre no WhatsApp, nunca nota interna
+    setEditando((anterior) => {
+      // Só guarda o rascunho na PRIMEIRA entrada: trocar de mensagem no meio da
+      // edição não pode substituir o rascunho pelo texto da mensagem anterior.
+      if (!anterior) rascunhoRef.current = texto
+      return m
+    })
+    setTexto(m.conteudo)
+    textareaRef.current?.focus()
+  }, [texto])
 
   /** Clique no bloco de citação: rola até a mensagem citada e a destaca. */
   const irParaCitada = useCallback(
@@ -422,8 +456,59 @@ export function Thread({
     }
   }
 
+  /**
+   * Salva a EDIÇÃO da mensagem no WhatsApp (PATCH → VPS → Evolution).
+   * Nada é postado no Chatwoot daqui: o acompanhamento "Editada: <novo texto>"
+   * é publicado pelo próprio Evolution, então o recarregar silencioso já o traz.
+   */
+  async function salvarEdicao() {
+    if (!editando) return
+    const novo = texto.trim()
+    if (!novo) return
+    if (novo === editando.conteudo.trim()) {
+      cancelarEdicao()
+      return
+    }
+    setEnviando(true)
+    try {
+      const r = await fetch(`/api/conversas/${id}/mensagens/${editando.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: novo }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        if (tratou428(r.status, d)) return
+        // A rota devolve a falha TIPADA: o 'timeout' é a janela "talvez editou" e
+        // JAMAIS pode virar "tente novamente" — reenviar às cegas não conserta
+        // nada e ainda confunde quem está com o cliente na linha.
+        const motivo = (d as { motivo?: string }).motivo
+        if (motivo === 'timeout') {
+          toastError(
+            'Edição não confirmada',
+            'Não deu para confirmar a edição — confira no WhatsApp antes de tentar de novo.',
+          )
+        } else {
+          toastError('Não editada', mensagemErroRelay(r.status, d))
+        }
+        return
+      }
+      setEditando(null)
+      setTexto(rascunhoRef.current)
+      rascunhoRef.current = ''
+      success('Mensagem editada')
+      await carregar(true)
+      onListaMudou()
+    } catch {
+      toastError('Não editada', 'Falha de rede. Tente novamente.')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
   async function enviar() {
     if (enviando) return
+    if (editando) return salvarEdicao() // no modo edição o campo salva, não envia
     if (arquivo) return enviarAnexo() // com arquivo, o textarea vira legenda
     const content = texto.trim()
     if (!content) return
@@ -651,6 +736,7 @@ export function Thread({
                   nomeContato={conversa.contato.nome}
                   nomeAgente={nomeAgente}
                   onResponder={responder}
+                  onEditar={editar}
                   onIrParaCitada={irParaCitada}
                 />
               ))}
@@ -712,17 +798,33 @@ export function Thread({
           </div>
         )}
 
+        {/* Modo EDIÇÃO: mesma faixa da citação (mesma peça, mesmo lugar), com o
+            texto ATUAL da mensagem — a referência de "o que estou corrigindo"
+            continua visível mesmo depois de o campo ser todo reescrito. */}
+        {editando && (
+          <div className="mb-2" aria-live="polite">
+            <BlocoCitacao
+              autor="Editando mensagem"
+              trecho={editando.conteudo}
+              aoCancelar={cancelarEdicao}
+              rotuloCancelar="Cancelar edição"
+            />
+          </div>
+        )}
+
         <Textarea
           ref={textareaRef}
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           disabled={!conectado || enviando}
           placeholder={
-            notaInterna
-              ? 'Escreva uma nota interna (não vai pro WhatsApp)…'
-              : arquivo
-                ? 'Legenda do documento (opcional)…'
-                : 'Digite sua mensagem...'
+            editando
+              ? 'Corrija o texto da mensagem…'
+              : notaInterna
+                ? 'Escreva uma nota interna (não vai pro WhatsApp)…'
+                : arquivo
+                  ? 'Legenda do documento (opcional)…'
+                  : 'Digite sua mensagem...'
           }
           className={cn('min-h-[70px] rounded-xl', notaInterna && 'border-warning/50 bg-warning/5')}
           onKeyDown={(e) => {
@@ -739,8 +841,12 @@ export function Thread({
             // Nota interna não leva anexo: ao ligar, descarta o arquivo pendente.
             onClick={() => setNotaInterna((v) => { if (!v) setArquivo(null); return !v })}
             aria-pressed={notaInterna}
+            // Editar mexe numa mensagem que JÁ está no WhatsApp: nota interna não
+            // se aplica (e trocaria o destino do que está no campo).
+            disabled={!!editando}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors',
+              'disabled:cursor-not-allowed disabled:opacity-50',
               notaInterna
                 ? 'border-warning/50 bg-warning/10 text-warning'
                 : 'border-border bg-background text-muted-foreground hover:border-ring',
@@ -759,14 +865,16 @@ export function Thread({
               variant="ghost"
               size="icon"
               onClick={() => inputFileRef.current?.click()}
-              disabled={!conectado || enviando || notaInterna}
+              disabled={!conectado || enviando || notaInterna || !!editando}
               className="border border-border bg-transparent hover:bg-muted"
               title={
-                notaInterna
-                  ? 'Anexos não vão em nota interna'
-                  : conectado
-                    ? 'Anexar arquivo do computador'
-                    : 'Conecte sua conta para anexar'
+                editando
+                  ? 'Termine ou cancele a edição para anexar'
+                  : notaInterna
+                    ? 'Anexos não vão em nota interna'
+                    : conectado
+                      ? 'Anexar arquivo do computador'
+                      : 'Conecte sua conta para anexar'
               }
               aria-label="Anexar arquivo"
             >
@@ -780,10 +888,16 @@ export function Thread({
               loading={enviando}
               disabled={!conectado || (!texto.trim() && !arquivo)}
               className="bg-foreground text-background hover:bg-foreground/90"
-              title={conectado ? 'Enviar (Ctrl/Cmd+Enter)' : 'Conecte sua conta para responder'}
+              title={
+                conectado
+                  ? editando
+                    ? 'Salvar edição (Ctrl/Cmd+Enter)'
+                    : 'Enviar (Ctrl/Cmd+Enter)'
+                  : 'Conecte sua conta para responder'
+              }
             >
-              {!enviando && <Send className="h-4 w-4" />}
-              {notaInterna ? 'Salvar nota' : 'Enviar'}
+              {!enviando && (editando ? <Pencil className="h-4 w-4" /> : <Send className="h-4 w-4" />)}
+              {editando ? 'Salvar edição' : notaInterna ? 'Salvar nota' : 'Enviar'}
             </Button>
           </div>
         </div>
