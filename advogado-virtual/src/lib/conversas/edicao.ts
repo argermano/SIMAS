@@ -87,6 +87,19 @@ export function normalizarTextoComparacao(texto: string | null | undefined): str
   return (texto ?? '').replace(/\s+/g, ' ').trim()
 }
 
+/**
+ * O eco do WhatsApp pode vir com a ASSINATURA DO AGENTE na frente ("*Katlen
+ * Germano:*\n<texto>") — o Chatwoot prefixa quando a conta do agente tem
+ * assinatura ligada, mas o `content` da mensagem no Chatwoot fica SEM ela (caso
+ * real: o BOM DIA que não casava). Remove UMA assinatura no começo — a linha
+ * inteira em negrito terminada em ':' — e nada mais: um texto legítimo que
+ * comece com "*algo:*" no meio da conversa não perde conteúdo, só perde o match
+ * por assinatura (e o degrau do Δt continua obrigatório).
+ */
+export function semAssinaturaDeAgente(texto: string | null | undefined): string {
+  return (texto ?? '').replace(/^\s*\*[^*\n]{1,80}:\*\s*\n/, '')
+}
+
 /** Linha de conversa_mensagens, no recorte que o casamento consulta. */
 export interface LinhaAcervoMatch {
   mensagem_id: string
@@ -127,7 +140,10 @@ export function acharWaidNoAcervo(
   for (const l of linhas ?? []) {
     if (!l || l.de_mim !== true || l.tipo !== 'texto') continue
     if (!l.mensagem_id) continue
-    if (normalizarTextoComparacao(l.texto) !== alvoTexto) continue
+    // Igualdade direta OU ignorando a assinatura de agente que o eco carrega e o
+    // content do Chatwoot não ("*Katlen Germano:*\nBOM DIA" ≠ "BOM DIA" sem isto).
+    const doAcervo = normalizarTextoComparacao(l.texto)
+    if (doAcervo !== alvoTexto && normalizarTextoComparacao(semAssinaturaDeAgente(l.texto)) !== alvoTexto) continue
     const ms = Date.parse(l.timestamp_msg)
     if (!Number.isFinite(ms)) continue
     const delta = Math.abs(ms - alvoMs)

@@ -8,6 +8,7 @@ import {
   restanteEdicaoMs,
   waIdDoSourceId,
   type LinhaAcervoMatch,
+  semAssinaturaDeAgente,
 } from './edicao'
 import type { Mensagem } from './tipos'
 
@@ -187,5 +188,30 @@ describe('acharWaidNoAcervo — casamento por conteúdo + tempo', () => {
   it('ignora linha com timestamp ilegível sem derrubar a busca', () => {
     const ruim = linha({ mensagem_id: 'RUIM', timestamp_msg: 'xx' })
     expect(acharWaidNoAcervo([ruim, linha()], alvo)).toBe('WA1')
+  })
+
+  // Caso real (BOM DIA, 2026-08-10): o eco do WhatsApp chega com a assinatura
+  // do agente que o content do Chatwoot não tem.
+  it('casa eco com assinatura de agente na frente', () => {
+    const assinado = linha({ texto: '*Katlen Germano:*\nBom dia, seguem os documentos' })
+    expect(acharWaidNoAcervo([assinado], alvo)).toBe('WA1')
+  })
+
+  it('assinatura só é ignorada no INÍCIO — no meio do texto não casa', () => {
+    const meio = linha({ texto: 'Bom dia\n*Katlen Germano:*\nseguem os documentos' })
+    expect(acharWaidNoAcervo([meio], alvo)).toBeNull()
+  })
+})
+
+describe('semAssinaturaDeAgente', () => {
+  it('remove a assinatura padrão do Chatwoot', () => {
+    expect(semAssinaturaDeAgente('*Katlen Germano:*\nBOM DIA')).toBe('BOM DIA')
+  })
+  it('não mexe em texto sem assinatura ou com negrito legítimo no meio', () => {
+    expect(semAssinaturaDeAgente('BOM DIA')).toBe('BOM DIA')
+    expect(semAssinaturaDeAgente('Veja *isto:* aqui')).toBe('Veja *isto:* aqui')
+  })
+  it('remove UMA assinatura só (nunca duas linhas)', () => {
+    expect(semAssinaturaDeAgente('*A:*\n*B:*\ntexto')).toBe('*B:*\ntexto')
   })
 })
