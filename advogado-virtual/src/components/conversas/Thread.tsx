@@ -25,7 +25,7 @@ import { menorId, mesclarMensagens } from '@/lib/conversas/paginacao'
 import type { Conversa, Mensagem, RespostaMensagens } from '@/lib/conversas/tipos'
 import { BlocoCitacao } from './BlocoCitacao'
 import { MensagemBolha } from './MensagemBolha'
-import { codeDoErro, mensagemErroRelay, rotuloDia } from './erros'
+import { codeDoErro, mensagemErroApi, mensagemErroRelay, rotuloDia } from './erros'
 import { createClient } from '@/lib/supabase/client'
 import {
   LIMITE_UPLOAD_BYTES,
@@ -489,7 +489,10 @@ export function Thread({
             'Não deu para confirmar a edição — confira no WhatsApp antes de tentar de novo.',
           )
         } else {
-          toastError('Não editada', mensagemErroRelay(r.status, d))
+          // mensagemErroApi, não o mapa do relay: os 404/422 desta rota vêm com
+          // explicação própria ("Não localizei essa mensagem no WhatsApp…") que o
+          // mapa genérico achataria num "Não encontrado." inútil.
+          toastError('Não editada', mensagemErroApi(r.status, d))
         }
         return
       }

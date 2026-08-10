@@ -295,13 +295,20 @@ export async function PATCH(
   }
 
   // 3) Onde essa mensagem vive no WhatsApp (id + instância + chat).
+  //    COM RE-TENTATIVA: o caso nº 1 de edição é corrigir um typo SEGUNDOS após
+  //    enviar — e o eco do WhatsApp leva ~5–10 s para entrar no acervo (medido em
+  //    produção). Sem esperar, a corrida perde exatamente o uso mais comum.
   const db = admin()
   const tenantId = auth.usuario.tenant_id
-  const destino = await resolverAlvo(db, tenantId, alvo, pagina)
+  let destino = await resolverAlvo(db, tenantId, alvo, pagina)
+  for (let i = 0; !destino && i < 3; i++) {
+    await new Promise((r) => setTimeout(r, 3_000))
+    destino = await resolverAlvo(db, tenantId, alvo, pagina)
+  }
   if (!destino) {
     logger.error('conversas.editar.sem_waid', { conversaId: id, mensagemId: alvoId })
     return jsonError(
-      'Não localizei essa mensagem no WhatsApp para editar. Se ela foi enviada por fora do SIMAS, edite pelo próprio celular.',
+      'Não localizei essa mensagem no WhatsApp para editar — ela pode não ter chegado ao WhatsApp (confira no celular se foi entregue). Se foi enviada por fora do SIMAS, edite pelo próprio aparelho.',
       404,
     )
   }
