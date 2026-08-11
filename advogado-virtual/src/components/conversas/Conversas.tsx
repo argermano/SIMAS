@@ -98,7 +98,10 @@ export function Conversas({ email }: { email: string }) {
 
   // Layout responsivo (um único painel de detalhe/contexto montado por vez)
   const [desktop, setDesktop] = useState(true) // lg: thread inline
-  const [xlUp, setXlUp] = useState(true) // xl: coluna de contexto fixa
+  // 2xl (1536px): só aí a 3ª coluna cabe DOCADA. Abaixo disso ela vira overlay —
+  // com a sidebar (240px) + lista (330px) + os 300px do contexto, um notebook
+  // 1366 deixava ~415px para a thread e o cabeçalho dela era cortado.
+  const [contextoDocado, setContextoDocado] = useState(true)
   const [mobileAberto, setMobileAberto] = useState(false)
   const [contextoAberto, setContextoAberto] = useState(false)
 
@@ -121,7 +124,7 @@ export function Conversas({ email }: { email: string }) {
   }, [])
   const inserirNoComposer = useCallback((texto: string) => {
     inserirTextoRef.current?.(texto)
-    // Fecha o overlay de contexto (< xl) para o composer ficar visível.
+    // Fecha o overlay de contexto (< 2xl) para o composer ficar visível.
     setContextoAberto(false)
   }, [])
 
@@ -141,20 +144,22 @@ export function Conversas({ email }: { email: string }) {
     return () => clearInterval(t)
   }, [])
 
-  // Rastreia os breakpoints lg (1024px) e xl (1280px).
+  // Rastreia os breakpoints lg (1024px) e 2xl (1536px). Os valores TÊM de casar
+  // com as classes `lg:` / `2xl:` usadas abaixo (e com o `2xl:hidden` do botão
+  // de contexto na Thread), senão sobra painel duplicado ou nenhum.
   useEffect(() => {
     const lg = window.matchMedia('(min-width: 1024px)')
-    const xl = window.matchMedia('(min-width: 1280px)')
+    const xxl = window.matchMedia('(min-width: 1536px)')
     const upd = () => {
       setDesktop(lg.matches)
-      setXlUp(xl.matches)
+      setContextoDocado(xxl.matches)
     }
     upd()
     lg.addEventListener('change', upd)
-    xl.addEventListener('change', upd)
+    xxl.addEventListener('change', upd)
     return () => {
       lg.removeEventListener('change', upd)
-      xl.removeEventListener('change', upd)
+      xxl.removeEventListener('change', upd)
     }
   }, [])
 
@@ -838,12 +843,13 @@ export function Conversas({ email }: { email: string }) {
           )}
         </div>
 
-        {/* COLUNA 3 — CONTEXTO (~300px, só xl+; abaixo vira overlay).
-            A guarda CSS (hidden xl:block) evita a coluna no primeiro paint do
-            mobile (SSR/pré-hydration, antes do matchMedia corrigir xlUp);
-            o {xlUp && ...} continua evitando painel duplicado com o overlay. */}
-        {xlUp && (
-          <aside className="hidden w-[300px] shrink-0 xl:block">
+        {/* COLUNA 3 — CONTEXTO (~300px, só 2xl+; abaixo vira overlay pelo botão
+            do cabeçalho da thread).
+            A guarda CSS (hidden 2xl:block) evita a coluna no primeiro paint do
+            mobile (SSR/pré-hydration, antes do matchMedia corrigir o estado);
+            o {contextoDocado && ...} evita painel duplicado com o overlay. */}
+        {contextoDocado && (
+          <aside className="hidden w-[300px] shrink-0 2xl:block">
             <PainelContexto
               key={selecionada?.id ?? 'vazio'}
               conversa={selecionada}
@@ -875,8 +881,8 @@ export function Conversas({ email }: { email: string }) {
         />
       )}
 
-      {/* Overlay do CONTEXTO (< xl), aberto pelo botão do cabeçalho da thread */}
-      {!xlUp && contextoAberto && selecionada && (
+      {/* Overlay do CONTEXTO (< 2xl), aberto pelo botão do cabeçalho da thread */}
+      {!contextoDocado && contextoAberto && selecionada && (
         <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Contexto da conversa">
           <button
             type="button"

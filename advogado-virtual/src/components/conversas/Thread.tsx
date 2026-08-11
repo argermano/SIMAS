@@ -90,7 +90,7 @@ export function Thread({
   onListaMudou: () => void
   onAgenteDesconectado: () => void
   onFechar?: () => void
-  /** Abre o painel de contexto como overlay (visível só abaixo de xl). */
+  /** Abre o painel de contexto como overlay (visível só abaixo de 2xl). */
   onAbrirContexto?: () => void
   /** Plumbing do shell: registra uma função que preenche o composer (usada
    * pelo "Inserir cobrança no chat" do PainelContexto). null ao desmontar. */
@@ -592,6 +592,13 @@ export function Thread({
   const nome = conversa.contato.nome || conversa.contato.telefone || `Conversa #${id}`
   const grupos = agruparPorDia(mensagens)
   const resolvida = conversa.status === 'resolved'
+  // Cabeçalho compacto (coluna estreita) esconde o rótulo: o título/aria-label
+  // é a única pista do que o botão faz, então tem de valer nos dois estados.
+  const tituloStatus = !conectado
+    ? `Conecte sua conta para ${resolvida ? 'reabrir' : 'resolver'}`
+    : resolvida
+      ? 'Reabrir a conversa'
+      : 'Resolver a conversa'
 
   return (
     <div
@@ -600,48 +607,50 @@ export function Thread({
         modo === 'overlay' ? 'fixed inset-0 z-50 rounded-none' : 'h-full',
       )}
     >
-      {/* Cabeçalho do contato */}
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+      {/* Cabeçalho do contato. `container-type: inline-size` faz o cabeçalho
+          responder à LARGURA DESTA COLUNA, não à da janela: num notebook 1366 a
+          janela é "grande" mas a coluna do meio fica estreita — é ela que decide
+          entre rótulo e só ícone. Regra: Assumir/Resolver NUNCA saem da tela;
+          quem some/trunca primeiro é o texto (nome e responsável). */}
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3 [container-type:inline-size]">
         <AvatarContato nome={nome} avatarUrl={conversa.contato.avatarUrl} className="h-9 w-9" />
         <div className="min-w-0 flex-1">
           <h2 className="min-w-0 truncate font-semibold text-foreground">{nome}</h2>
           <p className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
             {conversa.contato.telefone ? `${conversa.contato.telefone} · ` : ''}
             WhatsApp · {conversa.inbox}
-            {/* No overlay (< lg) o "Responsável" do lado direito fica oculto;
-                mostra aqui para a informação existir no mobile. */}
-            {modo === 'overlay' &&
-              ` · ${conversa.assignee ? `Resp.: ${conversa.assignee.nome}` : 'Sem responsável'}`}
+            {/* Sem largura para o "Responsável" ao lado dos botões, ele vem
+                aqui — as duas formas se excluem pela MESMA container query. */}
+            <span className="[@container(min-width:38rem)]:hidden">
+              {` · ${conversa.assignee ? `Resp.: ${conversa.assignee.nome}` : 'Sem responsável'}`}
+            </span>
           </p>
         </div>
+        {/* Encolhe/trunca antes dos botões (que são shrink-0). */}
+        <span className="hidden min-w-0 max-w-[11rem] truncate text-xs text-muted-foreground [@container(min-width:38rem)]:inline">
+          {conversa.assignee ? `Responsável: ${conversa.assignee.nome}` : 'Sem responsável'}
+        </span>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground lg:inline">
-            {conversa.assignee ? `Responsável: ${conversa.assignee.nome}` : 'Sem responsável'}
-          </span>
           <Button
             variant="ghost"
             size="sm"
             onClick={assumir}
             disabled={acao !== null || !conectado}
-            className="border border-border bg-transparent hover:bg-muted"
+            className="border border-border bg-transparent px-2.5 hover:bg-muted [@container(min-width:26rem)]:px-4"
             title={conectado ? 'Assumir a conversa' : 'Conecte sua conta para assumir'}
+            aria-label={conectado ? 'Assumir a conversa' : 'Conecte sua conta para assumir'}
           >
             {acao === 'assumir' ? <Spinner className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-            <span className="hidden sm:inline">Assumir</span>
+            <span className="hidden [@container(min-width:26rem)]:inline">Assumir</span>
           </Button>
           <Button
             variant="default"
             size="sm"
             onClick={alternarStatus}
             disabled={acao !== null || !conectado}
-            className="bg-foreground text-background hover:bg-foreground/90"
-            title={
-              !conectado
-                ? `Conecte sua conta para ${resolvida ? 'reabrir' : 'resolver'}`
-                : resolvida
-                  ? 'Reabrir a conversa'
-                  : 'Resolver a conversa'
-            }
+            className="bg-foreground px-2.5 text-background hover:bg-foreground/90 [@container(min-width:26rem)]:px-4"
+            title={tituloStatus}
+            aria-label={tituloStatus}
           >
             {acao === 'status' ? (
               <Spinner className="h-4 w-4" />
@@ -650,14 +659,16 @@ export function Thread({
             ) : (
               <CheckCircle2 className="h-4 w-4" />
             )}
-            <span className="hidden sm:inline">{resolvida ? 'Reabrir' : 'Resolver'}</span>
+            <span className="hidden [@container(min-width:26rem)]:inline">
+              {resolvida ? 'Reabrir' : 'Resolver'}
+            </span>
           </Button>
           {onAbrirContexto && (
             <Button
               variant="ghost"
               size="icon"
               onClick={onAbrirContexto}
-              className="xl:hidden"
+              className="h-9 w-9 2xl:hidden"
               title="Contexto do contato"
               aria-label="Abrir contexto do contato"
             >
@@ -665,7 +676,14 @@ export function Thread({
             </Button>
           )}
           {modo === 'overlay' && onFechar && (
-            <Button variant="ghost" size="icon" onClick={onFechar} title="Fechar" aria-label="Fechar conversa">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onFechar}
+              className="h-9 w-9"
+              title="Fechar"
+              aria-label="Fechar conversa"
+            >
               <X className="h-4 w-4" />
             </Button>
           )}
