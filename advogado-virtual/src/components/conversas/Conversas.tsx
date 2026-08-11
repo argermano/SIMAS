@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Bell, BellOff, Bot, Clock, Inbox, MessageSquare, RefreshCw, Search, UserX, X } from 'lucide-react'
+import { Bell, BellOff, Bot, Clock, Inbox, MessageSquare, PanelRightClose, RefreshCw, Search, UserX, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
@@ -31,6 +31,18 @@ type FiltroChip = 'todos' | 'transferidas' | 'aguardando' | 'nao_atribuidas'
 // Teto generoso da varredura global por status: 12 páginas × 25 = 300 conversas
 // mais ativas/status. Ao esgotar sem achar, a UI sugere refinar a busca.
 const MAX_PAGINAS_VARREDURA = 12
+
+// Preferência por navegador: quem recolhe a 3ª coluna não quer reabri-la a cada
+// conversa. Fora do React (localStorage pode falhar em modo privado/iframe).
+const CONTEXTO_RECOLHIDO_KEY = 'conversas.contexto.recolhido'
+
+function lerContextoRecolhido(): boolean {
+  try {
+    return localStorage.getItem(CONTEXTO_RECOLHIDO_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export function Conversas({ email }: { email: string }) {
   void email // e-mail (auth) é injetado server-side no header X-Simas-User-Email; aqui é só informativo.
@@ -98,12 +110,40 @@ export function Conversas({ email }: { email: string }) {
 
   // Layout responsivo (um único painel de detalhe/contexto montado por vez)
   const [desktop, setDesktop] = useState(true) // lg: thread inline
-  // 2xl (1536px): só aí a 3ª coluna cabe DOCADA. Abaixo disso ela vira overlay —
+  // 2xl (1536px): só aí a 3ª coluna CABE docada. Abaixo disso ela vira overlay —
   // com a sidebar (240px) + lista (330px) + os 300px do contexto, um notebook
   // 1366 deixava ~415px para a thread e o cabeçalho dela era cortado.
-  const [contextoDocado, setContextoDocado] = useState(true)
+  const [contextoCabeDocado, setContextoCabeDocado] = useState(true)
+  // Recolher o painel docado (pedido do dono): preferência por navegador.
+  const [contextoRecolhido, setContextoRecolhido] = useState(false)
+  // Docado de verdade = cabe E o usuário não recolheu.
+  const contextoDocado = contextoCabeDocado && !contextoRecolhido
+  // Só neste caso o botão da thread deixa de ser `2xl:hidden`: a coluna caberia,
+  // mas está recolhida — abaixo de 2xl a preferência não muda nada (é overlay).
+  const contextoDocadoRecolhido = contextoCabeDocado && contextoRecolhido
   const [mobileAberto, setMobileAberto] = useState(false)
   const [contextoAberto, setContextoAberto] = useState(false)
+
+  // A preferência entra num LAYOUT effect (antes do paint): numa navegação
+  // client-side isso é invisível. Ler no initializer do useState quebraria a
+  // hidratação (o HTML do servidor não tem localStorage e já traz a coluna).
+  useLayoutEffect(() => {
+    setContextoRecolhido(lerContextoRecolhido())
+  }, [])
+
+  const definirContextoRecolhido = useCallback((recolhido: boolean) => {
+    setContextoRecolhido(recolhido)
+    try {
+      localStorage.setItem(CONTEXTO_RECOLHIDO_KEY, recolhido ? '1' : '0')
+    } catch { /* ignore */ }
+  }, [])
+
+  // Botão de contexto do cabeçalho da thread: em 2xl+ ele REABRE a coluna
+  // docada; abaixo disso o painel só existe como overlay.
+  const mostrarContexto = useCallback(() => {
+    if (contextoCabeDocado) definirContextoRecolhido(false)
+    else setContextoAberto(true)
+  }, [contextoCabeDocado, definirContextoRecolhido])
 
   // Conexão do agente
   const [agente, setAgente] = useState<AgenteMe | null>(null)
@@ -152,7 +192,7 @@ export function Conversas({ email }: { email: string }) {
     const xxl = window.matchMedia('(min-width: 1536px)')
     const upd = () => {
       setDesktop(lg.matches)
-      setContextoDocado(xxl.matches)
+      setContextoCabeDocado(xxl.matches)
     }
     upd()
     lg.addEventListener('change', upd)
@@ -828,7 +868,8 @@ export function Conversas({ email }: { email: string }) {
               nomeAgente={agente?.agentName ?? null}
               onListaMudou={() => void revalidar(true)}
               onAgenteDesconectado={marcarDesconectado}
-              onAbrirContexto={() => setContextoAberto(true)}
+              onAbrirContexto={mostrarContexto}
+              contextoRecolhido={contextoDocadoRecolhido}
               registrarInserirTexto={registrarInserirTexto}
               registrarRecarregar={registrarRecarregar}
             />
@@ -847,9 +888,23 @@ export function Conversas({ email }: { email: string }) {
             do cabeçalho da thread).
             A guarda CSS (hidden 2xl:block) evita a coluna no primeiro paint do
             mobile (SSR/pré-hydration, antes do matchMedia corrigir o estado);
-            o {contextoDocado && ...} evita painel duplicado com o overlay. */}
+            o {contextoDocado && ...} evita painel duplicado com o overlay e
+            some com a coluna quando o usuário a recolhe (a thread ganha a
+            largura). Reabrir: botão de contexto no cabeçalho da thread. */}
         {contextoDocado && (
-          <aside className="hidden w-[300px] shrink-0 2xl:block">
+          <aside className="relative hidden w-[300px] shrink-0 2xl:block">
+            {/* Flutua sobre o topo do painel (que rola por baixo) — por isso o
+                fundo translúcido com blur, para continuar legível. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => definirContextoRecolhido(true)}
+              title="Recolher o painel de contexto"
+              aria-label="Recolher o painel de contexto"
+              className="absolute right-2 top-2 z-10 h-9 w-9 rounded-full bg-card/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </Button>
             <PainelContexto
               key={selecionada?.id ?? 'vazio'}
               conversa={selecionada}
@@ -875,14 +930,16 @@ export function Conversas({ email }: { email: string }) {
           onListaMudou={() => void revalidar(true)}
           onAgenteDesconectado={marcarDesconectado}
           onFechar={() => setMobileAberto(false)}
-          onAbrirContexto={() => setContextoAberto(true)}
+          onAbrirContexto={mostrarContexto}
           registrarInserirTexto={registrarInserirTexto}
           registrarRecarregar={registrarRecarregar}
         />
       )}
 
-      {/* Overlay do CONTEXTO (< 2xl), aberto pelo botão do cabeçalho da thread */}
-      {!contextoDocado && contextoAberto && selecionada && (
+      {/* Overlay do CONTEXTO (< 2xl), aberto pelo botão do cabeçalho da thread.
+          A guarda é `cabeDocado` (não `docado`): em 2xl+ com o painel recolhido
+          o mesmo botão reabre a COLUNA, nunca um overlay por cima dela. */}
+      {!contextoCabeDocado && contextoAberto && selecionada && (
         <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Contexto da conversa">
           <button
             type="button"

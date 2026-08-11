@@ -79,6 +79,7 @@ export function Thread({
   onAgenteDesconectado,
   onFechar,
   onAbrirContexto,
+  contextoRecolhido = false,
   registrarInserirTexto,
   registrarRecarregar,
 }: {
@@ -90,8 +91,12 @@ export function Thread({
   onListaMudou: () => void
   onAgenteDesconectado: () => void
   onFechar?: () => void
-  /** Abre o painel de contexto como overlay (visível só abaixo de 2xl). */
+  /** Mostra o painel de contexto: overlay abaixo de 2xl, docado em 2xl+. */
   onAbrirContexto?: () => void
+  /** A COLUNA docada (2xl+) está recolhida: o botão acima é a única forma de
+   * trazê-la de volta, então ele deixa de ser `2xl:hidden`. Abaixo de 2xl é
+   * sempre false — lá o painel é overlay e o botão já aparece. */
+  contextoRecolhido?: boolean
   /** Plumbing do shell: registra uma função que preenche o composer (usada
    * pelo "Inserir cobrança no chat" do PainelContexto). null ao desmontar. */
   registrarInserirTexto?: (fn: ((texto: string) => void) | null) => void
@@ -668,9 +673,9 @@ export function Thread({
               variant="ghost"
               size="icon"
               onClick={onAbrirContexto}
-              className="h-9 w-9 2xl:hidden"
-              title="Contexto do contato"
-              aria-label="Abrir contexto do contato"
+              className={cn('h-9 w-9', !contextoRecolhido && '2xl:hidden')}
+              title={contextoRecolhido ? 'Mostrar o painel de contexto' : 'Contexto do contato'}
+              aria-label={contextoRecolhido ? 'Mostrar o painel de contexto' : 'Abrir contexto do contato'}
             >
               <PanelRightOpen className="h-4 w-4" />
             </Button>
