@@ -339,6 +339,22 @@ export async function PATCH(
         { status: 504 },
       )
     }
+    // 404 do Evolution: laudo do caso 2026-08-14 — o updateMessage do 2.3.7 NÃO
+    // funciona em chat que o WhatsApp já migrou para @lid (a edição não chega ao
+    // aparelho) e, mesmo quando envia, a contabilidade interna dele pode estourar
+    // 404 depois do fato. Não dá para distinguir daqui — o aviso manda conferir o
+    // aparelho e dá a saída prática (mensagem nova), sem culpar a janela de 15 min.
+    if (envio.motivo === 'http' && envio.status === 404) {
+      return NextResponse.json(
+        {
+          ok: false,
+          motivo: 'http',
+          error:
+            'O WhatsApp não confirmou a edição — confira no aparelho. Alguns contatos já usam o formato novo do WhatsApp, onde a edição por sistema ainda não funciona; se o texto não mudou lá, corrija enviando uma nova mensagem.',
+        },
+        { status: 502 },
+      )
+    }
     return NextResponse.json(
       { ok: false, motivo: 'http', error: 'O WhatsApp recusou a edição. A janela de 15 minutos pode ter fechado.' },
       { status: 502 },
