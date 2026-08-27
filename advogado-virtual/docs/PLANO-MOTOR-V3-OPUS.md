@@ -14,7 +14,7 @@
 ## Pacotes da Fase 0 (ordem)
 - F0.1 ✅ 86b98bd — Fundação API: upgrade @anthropic-ai/sdk 0.78→0.121; client.ts multi-turno + cache_control + thinking adaptive/effort (avançado) + remover header output-128k; usage.ts → PRECOS_MTOK (opus-5, sonnet-5 c/ vigência intro, fable, cache read/write) + logUsage com cache/sessão/turno; migration 085 (§5 do plano).
 - F0.2 ✅ c22fe89 — Motor único: montarContextoPeca extraído de gerar-peca; ModoMotor criar|refinar|corrigir; refinar-peca reescrita (versiona a peça; origem='refino'+instrucao); correcao-auto no núcleo; editor-documento com pecaId+cota.
-- F0.3 Sessão (driver messages): pecas_sessoes/turnos/propostas; rotas /api/pecas/[id]/sessao/**; structured output {resumo, secoes[]} → propostas; aplicarPatchSecoes (lib pura+tests); verificar_citacoes por rodada; resumo Haiku dos grandes.
+- F0.3 ✅ 909c623 — Sessão (driver messages): pecas_sessoes/turnos/propostas; rotas /api/pecas/[id]/sessao/**; structured output {resumo, secoes[]} → propostas; aplicarPatchSecoes (lib pura+tests); verificar_citacoes por rodada; resumo Haiku dos grandes.
 - F0.4 UI: painelLateral no DocumentEditor; PainelSessaoPeca (turnos, composer c/ anexo, CardProposta→ComparadorSecoes, BarraCusto, CardArtefato); useSessaoPeca (SSE+retomada).
 - F0.5 Artefatos automáticos: code_execution (server tool) no driver messages; src/lib/ia/sessao/artefatos.ts — todo arquivo gerado (xlsx/csv/docx/pdf/md/png, ≤25MB) vai SEM confirmação ao dossiê (tipo apoio_ia, vínculos caso/processo, Drive), versionando por nome lógico (regerar substitui). Validação da Fase 0 pelo dono.
 
@@ -36,6 +36,25 @@
 > Pendências deixadas para o F0.4 (UI): passar `pecaId` do editor aos diálogos de IA — sem isso o contexto do
 > caso no editor-documento fica disponível mas não é acionado pela tela; e o cliente do `refinar-peca` (hoje a
 > rota existe e funciona por SSE, mas nenhuma tela a chama ainda).
+
+> **F0.3 (2026-08-27, 909c623)** — entregue: abstração `SessaoDriver` (`src/lib/ia/sessao/driver.ts`) +
+> `driver-messages.ts` (1 chamada streaming multi-turno por rodada, cache no prefixo system+contexto,
+> modelo FIXO por sessão — `ANTHROPIC_MODEL_SESSAO` ?? sonnet-5 / `..._AVANCADO` ?? opus-5 só na criação);
+> envelope `{resposta_markdown, proposta{resumo, secoes[]}}` por **structured output** (`output_config.format`)
+> + extrator incremental que desembrulha o texto ao vivo do JSON (`extrator-campo.ts`) e fallback degradado;
+> `aplicarPatchSecoes` puro em `src/lib/diff/patch-secoes.ts` (idempotente, título inexistente = erro claro);
+> rotas `/api/pecas/[id]/sessao/**` (criar/listar, retomar, mensagem em SSE, decidir proposta, anexos, encerrar)
+> com handlers finos e a lógica em `src/lib/ia/sessao/` (`sessoes.ts`, `rodada.ts`, `decidir.ts`, `custo.ts`,
+> `montagem.ts`, `prompts.ts`); `verificarCitacoes` por rodada no payload do turno; custo/tokens da rodada em
+> `api_usage_log` (sessão+turno+cache) e acumulados em `pecas_sessoes`; `garantirResumoIA` (Haiku) para docs
+> acima de 30k chars; compactação LOCAL do histórico ao bater MAX_PROMPT_CHARS (turno de sistema registra o corte).
+> Prompts curados intocados (40+10 snapshots inalterados; 3 snapshots novos da composição da sessão).
+> **Invariante**: a sessão só grava `pecas.conteudo_markdown` no endpoint de decisão da proposta.
+> Decisões de desenho: a PEÇA fica no último turno (fora do prefixo cacheado) — assim o aceite não invalida o
+> cache do dossiê e o agente nunca vê uma cópia velha da peça; a criação da sessão NÃO chama `montarContextoPeca`
+> (seria uma triagem de IA jogada fora — o contexto é montado por rodada, onde precisa estar fresco).
+> Pendências para o F0.4 (UI): nenhuma tela chama estas rotas ainda; a 1ª estimativa de custo do GET é um piso
+> (não mede o dossiê antes da 1ª rodada). TODO futuro: trocar o corte local pela compaction server-side (beta).
 
 (Fases 1–3: pacotes detalhados no plano abaixo; F1 = Managed Agents driver, F2 = escala documental+pesquisa+biblioteca de acórdãos, F3 = créditos/cobrança/admin.)
 
