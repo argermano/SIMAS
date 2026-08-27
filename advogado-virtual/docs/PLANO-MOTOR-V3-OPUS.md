@@ -15,7 +15,7 @@
 - F0.1 ✅ 86b98bd — Fundação API: upgrade @anthropic-ai/sdk 0.78→0.121; client.ts multi-turno + cache_control + thinking adaptive/effort (avançado) + remover header output-128k; usage.ts → PRECOS_MTOK (opus-5, sonnet-5 c/ vigência intro, fable, cache read/write) + logUsage com cache/sessão/turno; migration 085 (§5 do plano).
 - F0.2 ✅ c22fe89 — Motor único: montarContextoPeca extraído de gerar-peca; ModoMotor criar|refinar|corrigir; refinar-peca reescrita (versiona a peça; origem='refino'+instrucao); correcao-auto no núcleo; editor-documento com pecaId+cota.
 - F0.3 ✅ 909c623 — Sessão (driver messages): pecas_sessoes/turnos/propostas; rotas /api/pecas/[id]/sessao/**; structured output {resumo, secoes[]} → propostas; aplicarPatchSecoes (lib pura+tests); verificar_citacoes por rodada; resumo Haiku dos grandes.
-- F0.4 UI: painelLateral no DocumentEditor; PainelSessaoPeca (turnos, composer c/ anexo, CardProposta→ComparadorSecoes, BarraCusto, CardArtefato); useSessaoPeca (SSE+retomada).
+- F0.4 ✅ 40e9bb7 — UI: painelLateral no DocumentEditor; PainelSessaoPeca (turnos, composer c/ anexo, CardProposta→ComparadorSecoes, BarraCusto, CardArtefato); useSessaoPeca (SSE+retomada).
 - F0.5 Artefatos automáticos: code_execution (server tool) no driver messages; src/lib/ia/sessao/artefatos.ts — todo arquivo gerado (xlsx/csv/docx/pdf/md/png, ≤25MB) vai SEM confirmação ao dossiê (tipo apoio_ia, vínculos caso/processo, Drive), versionando por nome lógico (regerar substitui). Validação da Fase 0 pelo dono.
 
 > **F0.1 (2026-08-27, 86b98bd)** — entregue: SDK 0.121; client.ts multi-turno + `cache_control` (TTL 1h, opt-in) +
@@ -55,6 +55,25 @@
 > (seria uma triagem de IA jogada fora — o contexto é montado por rodada, onde precisa estar fresco).
 > Pendências para o F0.4 (UI): nenhuma tela chama estas rotas ainda; a 1ª estimativa de custo do GET é um piso
 > (não mede o dossiê antes da 1ª rodada). TODO futuro: trocar o corte local pela compaction server-side (beta).
+
+> **F0.4 (2026-08-27, 40e9bb7)** — entregue: `painelLateral` no `DocumentEditor` (coluna ~420px em xl+, gaveta
+> abaixo de 1280px — mesmo padrão do painel de contexto do Conversas; as duas barras do editor recolhem enquanto
+> a coluna está aberta e voltam como estavam); `src/components/pecas/sessao/` com `useSessaoPeca` (GET da lista +
+> retomada da ativa, rodada por SSE com `createSSEParser`, polling de retomada quando o fetch cai — o servidor
+> persiste a rodada de qualquer jeito), `ListaTurnos` (markdown, selo de citações do payload, turno de sistema
+> discreto), `Composer` (Enter envia / Shift+Enter quebra; clipe = upload normal do caso + `.../anexos`),
+> `CardProposta` (→ `ComparadorSecoes` existente) e `BarraCusto` (sessão + próxima rodada em R$).
+> `EditorPecaClient` ganhou "Lapidar com IA" (preferência `pecas.sessao.recolhido`), badge de proposta pendente e
+> o recarregamento da peça + remount por `editorKey` no aceite; `TelaRefinamento` manda `?abrirSessao=1`.
+> Plumbing do F0.2 fechado: `pecaId` chega aos 3 diálogos de IA e, com sessão ATIVA, o comando livre oferece
+> "enviar para a sessão". Helpers puros novos com teste: `custo-brl.ts` (USD→R$, `NEXT_PUBLIC_USD_BRL` ?? 5,70) e
+> `proposta-ui.ts` (prévia do patch com a MESMA função do servidor + tradução das escolhas do comparador em
+> decisões por seção — `inserir_apos` aparece no diff com o título do bloco NOVO, não o da âncora).
+> Decisão de desenho: o hook mora no `EditorPecaClient`, não no painel — assim a conversa sobrevive ao remount do
+> editor (que acontece a cada proposta aplicada) e o badge existe com o painel fechado.
+> Único ajuste fora do F0.4: `ComparadorSecoes.onAplicar` passou a receber TAMBÉM as escolhas por seção
+> (aditivo; quem compara versões ignora o 2º argumento). Nada do backend F0.3 precisou mudar.
+> Pendências para o F0.5: `CardArtefato`/`CardFerramenta` (o painel já ignora o evento `ferramenta` sem quebrar).
 
 (Fases 1–3: pacotes detalhados no plano abaixo; F1 = Managed Agents driver, F2 = escala documental+pesquisa+biblioteca de acórdãos, F3 = créditos/cobrança/admin.)
 
