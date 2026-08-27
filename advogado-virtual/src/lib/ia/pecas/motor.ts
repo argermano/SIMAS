@@ -190,12 +190,16 @@ export function respostaStreamPeca(stream: ReadableStream, pecaId?: string): Res
  * Reproduz o padrão getUsage().then(logUsage).catch(console.error).
  */
 export function logUsagePosStream(params: {
-  getUsage: () => Promise<{ input: number; output: number }>
+  // As parcelas de cache são opcionais: só chegam preenchidas quando a chamada
+  // pediu `cache` no client (rodadas 2+ da sessão de lapidação).
+  getUsage: () => Promise<{ input: number; output: number; cacheRead?: number; cacheWrite?: number }>
   tenantId: string
   userId: string
   endpoint: string
   modelo: string
   start: number
+  sessaoId?: string | null
+  turnoId?: string | null
 }): void {
   params.getUsage().then(async (usage) => {
     await logUsage({
@@ -205,6 +209,10 @@ export function logUsagePosStream(params: {
       modelo: params.modelo,
       tokensInput: usage.input,
       tokensOutput: usage.output,
+      tokensCacheRead: usage.cacheRead,
+      tokensCacheWrite: usage.cacheWrite,
+      sessaoId: params.sessaoId,
+      turnoId: params.turnoId,
       latenciaMs: Date.now() - params.start,
     })
   }).catch((e) => console.error(`[logUsage] erro pós-stream (${params.endpoint}):`, e))

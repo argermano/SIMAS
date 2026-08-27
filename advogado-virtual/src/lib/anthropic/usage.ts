@@ -1,23 +1,92 @@
 import { createClient } from '@/lib/supabase/server'
 
-// Preço estimado por 1K tokens (USD), por modelo. Fonte: docs.claude.com
-// (jul/2026). Antes o custo era fixo em Sonnet — o Opus 4.8 ($5/$25 MTok)
-// ficava ~40% subestimado e o Haiku de OCR superestimado.
-const PRECOS_1K: Record<string, { input: number; output: number }> = {
-  'claude-opus-4-8':   { input: 0.005, output: 0.025 },
-  'claude-opus-4-7':   { input: 0.005, output: 0.025 },
-  'claude-sonnet-5':   { input: 0.003, output: 0.015 },
-  'claude-sonnet-4-6': { input: 0.003, output: 0.015 },
-  'claude-haiku-4-5':  { input: 0.001, output: 0.005 },
+/**
+ * Preço de um modelo. `intro` é um preço promocional VIGENTE ATÉ a data `ate`
+ * (inclusive) — depois dela o preço cheio volta sozinho, sem deploy.
+ */
+export interface PrecoModelo {
+  /** USD por milhão de tokens de entrada. */
+  input: number
+  /** USD por milhão de tokens de saída. */
+  output: number
+  intro?: { input: number; output: number; ate: string }
 }
-const PRECO_PADRAO = { input: 0.003, output: 0.015 } // Sonnet — fallback
 
-/** Preço por 1K tokens do modelo (tolera sufixo de data, ex.: -20251001). */
-function precoDe(modelo: string): { input: number; output: number } {
-  for (const [id, preco] of Object.entries(PRECOS_1K)) {
-    if (modelo.startsWith(id)) return preco
+/**
+ * Preço de LISTA por MILHÃO de tokens (USD). Fonte: documentação oficial da
+ * Anthropic (ago/2026). Substitui a antiga tabela PRECOS_1K, que não conhecia
+ * opus-5/sonnet-5/fable-5 nem as parcelas de cache (§10 do
+ * docs/PLANO-MOTOR-V3-OPUS.md — o medidor é pré-requisito da cobrança).
+ *
+ * O casamento é por PREFIXO do id do modelo (tolera sufixo de data, ex.:
+ * `claude-haiku-4-5-20251001`), sempre pela chave MAIS LONGA que casa.
+ */
+export const PRECOS_MTOK: Record<string, PrecoModelo> = {
+  'claude-opus-5':     { input: 5,  output: 25 },
+  'claude-fable-5':    { input: 10, output: 50 },
+  // Sonnet 5 tem preço de introdução (2/10) até 31/08/2026 INCLUSIVE.
+  'claude-sonnet-5':   { input: 3,  output: 15, intro: { input: 2, output: 10, ate: '2026-08-31' } },
+  'claude-opus-4-8':   { input: 5,  output: 25 },
+  'claude-opus-4-7':   { input: 5,  output: 25 },
+  'claude-sonnet-4-6': { input: 3,  output: 15 },
+  'claude-haiku-4-5':  { input: 1,  output: 5 },
+}
+
+/** Fallback (Sonnet) para modelo desconhecido — nunca zera o custo do painel. */
+export const PRECO_PADRAO_MTOK: PrecoModelo = { input: 3, output: 15 }
+
+/**
+ * Multiplicadores do cache de prompt sobre o preço de INPUT do modelo:
+ *  - LEITURA (`cache_read_input_tokens`): 0,1× — é a economia das rodadas 2+.
+ *  - ESCRITA (`cache_creation_input_tokens`): 2× no TTL de 1 HORA (o que o
+ *    client.ts usa; a escrita de 5 min custaria 1,25×).
+ */
+export const MULT_CACHE_LEITURA = 0.1
+export const MULT_CACHE_ESCRITA_1H = 2
+
+/**
+ * Preço por milhão de tokens do modelo na data indicada.
+ * A vigência do preço de introdução é comparada em UTC no formato AAAA-MM-DD
+ * (comparação lexicográfica = cronológica), incluindo o próprio dia `ate`.
+ */
+export function precoDe(modelo: string, quando: Date = new Date()): { input: number; output: number } {
+  const id = modelo ?? ''
+  let achado: PrecoModelo | null = null
+  let tamanho = -1
+  for (const [prefixo, preco] of Object.entries(PRECOS_MTOK)) {
+    if (id.startsWith(prefixo) && prefixo.length > tamanho) {
+      achado = preco
+      tamanho = prefixo.length
+    }
   }
-  return PRECO_PADRAO
+  const preco = achado ?? PRECO_PADRAO_MTOK
+  if (preco.intro && quando.toISOString().slice(0, 10) <= preco.intro.ate) {
+    return { input: preco.intro.input, output: preco.intro.output }
+  }
+  return { input: preco.input, output: preco.output }
+}
+
+/** Tokens de uma chamada, já separados pelas parcelas que têm preço distinto. */
+export interface TokensChamada {
+  modelo: string
+  tokensInput: number
+  tokensOutput: number
+  tokensCacheRead?: number
+  tokensCacheWrite?: number
+  /** Data de referência do preço (default: agora) — usada pelos testes de vigência. */
+  quando?: Date
+}
+
+/** Custo de LISTA em USD (input + output + leitura e escrita de cache). */
+export function custoEstimadoUSD(t: TokensChamada): number {
+  const preco = precoDe(t.modelo, t.quando ?? new Date())
+  const mi = (n: number | undefined) => Math.max(0, n ?? 0) / 1_000_000
+  return (
+    mi(t.tokensInput) * preco.input +
+    mi(t.tokensOutput) * preco.output +
+    mi(t.tokensCacheRead) * preco.input * MULT_CACHE_LEITURA +
+    mi(t.tokensCacheWrite) * preco.input * MULT_CACHE_ESCRITA_1H
+  )
 }
 
 export async function logUsage(params: {
@@ -28,11 +97,24 @@ export async function logUsage(params: {
   tokensInput: number
   tokensOutput: number
   latenciaMs: number
+  /** Tokens servidos pelo cache de prompt (0,1× do input). */
+  tokensCacheRead?: number
+  /** Tokens gravados no cache de prompt (2× do input no TTL de 1h). */
+  tokensCacheWrite?: number
+  /** Sessão de lapidação a que a chamada pertence (Motor v3). */
+  sessaoId?: string | null
+  /** Turno da sessão a que a chamada pertence (Motor v3). */
+  turnoId?: string | null
+  /** Driver/origem do custo: 'messages' (default) | 'managed' | 'transcricao'. */
+  origem?: string
 }) {
-  const preco = precoDe(params.modelo)
-  const custoEstimado =
-    (params.tokensInput / 1000) * preco.input +
-    (params.tokensOutput / 1000) * preco.output
+  const custoEstimado = custoEstimadoUSD({
+    modelo: params.modelo,
+    tokensInput: params.tokensInput,
+    tokensOutput: params.tokensOutput,
+    tokensCacheRead: params.tokensCacheRead,
+    tokensCacheWrite: params.tokensCacheWrite,
+  })
 
   const supabase = await createClient()
 
@@ -43,8 +125,13 @@ export async function logUsage(params: {
     modelo: params.modelo,
     tokens_input: params.tokensInput,
     tokens_output: params.tokensOutput,
+    tokens_cache_read: params.tokensCacheRead ?? 0,
+    tokens_cache_write: params.tokensCacheWrite ?? 0,
     custo_estimado: custoEstimado,
     latencia_ms: params.latenciaMs,
+    sessao_id: params.sessaoId ?? null,
+    turno_id: params.turnoId ?? null,
+    origem: params.origem ?? 'messages',
   })
 
   if (error) {
@@ -85,19 +172,24 @@ export async function logTranscricao(params: {
   segundosAudio: number
   latenciaMs: number
   modelo?: string
+  /** Driver/origem do custo. Default 'transcricao' (não é uma chamada Messages). */
+  origem?: string
 }): Promise<void> {
   try {
     const custoEstimado = Math.max(0, params.segundosAudio || 0) * PRECO_WHISPER_SEG
     const supabase = await createClient()
     const { error } = await supabase.from('api_usage_log').insert({
-      tenant_id:      params.tenantId,
-      user_id:        params.userId,
-      endpoint:       params.endpoint,
-      modelo:         params.modelo ?? 'groq-whisper-large-v3',
-      tokens_input:   0,
-      tokens_output:  0,
-      custo_estimado: custoEstimado,
-      latencia_ms:    params.latenciaMs,
+      tenant_id:          params.tenantId,
+      user_id:            params.userId,
+      endpoint:           params.endpoint,
+      modelo:             params.modelo ?? 'groq-whisper-large-v3',
+      tokens_input:       0,
+      tokens_output:      0,
+      tokens_cache_read:  0,
+      tokens_cache_write: 0,
+      custo_estimado:     custoEstimado,
+      latencia_ms:        params.latenciaMs,
+      origem:             params.origem ?? 'transcricao',
     })
     if (error) {
       console.error(`[logTranscricao] falha ao registrar (${params.endpoint}, tenant ${params.tenantId}):`, error.message)

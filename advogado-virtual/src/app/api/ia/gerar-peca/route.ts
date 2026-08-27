@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, completionJSON } from '@/lib/anthropic/client'
-import { modeloDaVersao } from '@/lib/anthropic/versoes'
+import { modeloDaVersao, normalizarVersao } from '@/lib/anthropic/versoes'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { decryptClienteFields, decryptField } from '@/lib/encryption'
 import { buscarJurisprudencia, formatarParaPrompt, type ResultadoJurisprudencia } from '@/lib/jurisprudencia/datajud'
@@ -46,7 +46,10 @@ export async function POST(req: NextRequest) {
       return jsonError('atendimentoId, tipo e area são obrigatórios', 400)
     }
 
-    // Versão escolhida pelo usuário (Padrão x Raciocínio estendido) → modelo
+    // Versão escolhida pelo usuário (Padrão x Raciocínio estendido) → modelo.
+    // A versão também vai ao client: 'avancado' liga raciocínio adaptativo +
+    // esforço alto (o modo padrão segue exatamente como antes).
+    const versaoIA = normalizarVersao(versao)
     const modelo = modeloDaVersao(versao)
 
     const auth = await getAuthContext()
@@ -235,7 +238,7 @@ export async function POST(req: NextRequest) {
         return jsonError('Erro ao criar registro da peça', 500)
       }
 
-      const { stream, getUsage, getFinal } = await streamCompletion({ system: SYSTEM_PECA_GENERICA, prompt, maxTokens: 32768, model: modelo })
+      const { stream, getUsage, getFinal } = await streamCompletion({ system: SYSTEM_PECA_GENERICA, prompt, maxTokens: 32768, model: modelo, versao: versaoIA })
 
       // Loga o uso também no caminho de fallback genérico (antes escapava do dashboard).
       logUsagePosStream({ getUsage, tenantId: usuario.tenant_id, userId: usuario.id, endpoint: 'gerar_peca', modelo, start })
@@ -284,6 +287,7 @@ export async function POST(req: NextRequest) {
       prompt,
       maxTokens: 32768,
       model: modelo,
+      versao: versaoIA,
     })
 
     // Log assíncrono (não bloqueia o stream)

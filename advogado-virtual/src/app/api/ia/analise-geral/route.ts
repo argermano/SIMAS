@@ -3,13 +3,17 @@ import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { completionJSON } from '@/lib/anthropic/client'
-import { modeloDaVersao } from '@/lib/anthropic/versoes'
+import { modeloDaVersao, normalizarVersao } from '@/lib/anthropic/versoes'
 import { logUsage } from '@/lib/anthropic/usage'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
 import { buildPromptAnaliseGeral, SYSTEM_ANALISE_GERAL } from '@/lib/prompts/analise/geral'
 import { logger } from '@/lib/logger'
 
-export const maxDuration = 120
+// 300s (era 120): na versão 'avancado' o client passou a mandar raciocínio
+// adaptativo + esforço alto (F0.1 do Motor v3), que acrescenta latência à
+// análise. 300 é o mesmo teto da geração de peça — a rota some antes de a
+// IA responder se ficar em 120.
+export const maxDuration = 300
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -52,7 +56,10 @@ export async function POST(req: NextRequest) {
       return jsonError('Descreva o caso para análise', 400)
     }
 
-    // Versão escolhida pelo usuário (Padrão x Raciocínio estendido) → modelo
+    // Versão escolhida pelo usuário (Padrão x Raciocínio estendido) → modelo.
+    // No 'avancado' o client liga raciocínio adaptativo + esforço alto — o que
+    // acrescenta latência (daí a maxDuration de 300s acima).
+    const versaoIA = normalizarVersao(versao)
     const modelo = modeloDaVersao(versao)
 
     const auth = await getAuthContext()
@@ -69,6 +76,7 @@ export async function POST(req: NextRequest) {
       prompt,
       maxTokens: 4096,
       model: modelo,
+      versao: versaoIA,
     })
 
     await logUsage({

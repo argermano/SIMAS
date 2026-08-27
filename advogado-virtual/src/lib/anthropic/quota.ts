@@ -20,6 +20,9 @@ export const CATEGORIAS: Record<string, { label: string; grupo: string; chave: s
   correcao:        { label: 'Correção automática',      grupo: 'Editor',    chave: 'correcao' },
   editor_documento:{ label: 'Edição por IA no editor',  grupo: 'Editor',    chave: 'editor_documento' },
   extrair_teses:   { label: 'Extração de teses',        grupo: 'Análise',   chave: 'extrair_teses' },
+  // Sessão de lapidação de peça (Motor v3). Sem limite por CONTAGEM: a
+  // sessão é medida por CUSTO (teto por sessão/mês), não por nº de chamadas.
+  sessao_peca:     { label: 'Sessão de lapidação',      grupo: 'Documentos', chave: 'sessao_peca' },
 }
 
 /** Limites por plano (chamadas permitidas por categoria, por mês corrente). */

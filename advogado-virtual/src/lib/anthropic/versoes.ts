@@ -15,9 +15,17 @@ export const VERSOES_IA: ReadonlyArray<{ id: VersaoIA; label: string; descricao:
   { id: 'avancado', label: 'Raciocínio estendido', descricao: 'Análise mais profunda e fundamentada — pode demorar um pouco mais' },
 ]
 
+// Normaliza a string crua vinda da UI para uma VersaoIA (default: padrão).
+// Existe para as rotas poderem repassar a versão ao client de IA (que liga
+// raciocínio adaptativo + esforço alto no 'avancado') sem espalhar comparações
+// de string por aí.
+export function normalizarVersao(versao?: string | null): VersaoIA {
+  return versao === 'avancado' ? 'avancado' : VERSAO_IA_PADRAO
+}
+
 // Resolve a versão (string vinda da UI) para o modelo. Usado SOMENTE no servidor.
 export function modeloDaVersao(versao?: string | null): string {
   const padrao   = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-6'
   const avancado = process.env.ANTHROPIC_MODEL_AVANCADO ?? 'claude-opus-4-8'
-  return versao === 'avancado' ? avancado : padrao
+  return normalizarVersao(versao) === 'avancado' ? avancado : padrao
 }
