@@ -17,6 +17,8 @@
 // (F0.4) só conhecem esta união.
 
 import type { UsoTokens } from '@/lib/anthropic/client'
+import type { ArquivoAnthropic } from '@/lib/anthropic/files'
+import type { MotivoIgnorado } from './artefatos'
 import type { PropostaRodada } from './envelope'
 
 /** Implementações possíveis (coluna `pecas_sessoes.driver`). */
@@ -33,10 +35,28 @@ export type EventoSessao =
   | { tipo: 'proposta'; proposta: PropostaRodada }
   /** Uma ferramenta foi usada (Fase 1/F0.5). Aqui só para o painel mostrar. */
   | { tipo: 'ferramenta'; nome: string; estado: 'inicio' | 'fim'; resumo?: string }
+  /**
+   * Arquivos que a rodada PRODUZIU (F0.5) — já baixados da Files API e prontos
+   * para virar documentos do dossiê. O driver só os entrega; quem grava é a
+   * rodada (o driver não escreve no banco).
+   */
+  | {
+      tipo: 'arquivos'
+      arquivos: ArquivoAnthropic[]
+      /** Recusados antes do download (extensão fora da lista, acima do teto). */
+      recusados: Array<{ titulo: string; motivo: MotivoIgnorado }>
+    }
   /** Uso e custo de LISTA da rodada, assim que a API os informa. */
   | { tipo: 'custo'; uso: UsoTokens; custoUsd: number; modelo: string }
   /** Fim normal: o texto completo da resposta e por que o modelo parou. */
-  | { tipo: 'fim'; respostaMarkdown: string; stopReason: string | null; degradado: boolean }
+  | {
+      tipo: 'fim'
+      respostaMarkdown: string
+      stopReason: string | null
+      degradado: boolean
+      /** Quantas vezes o modelo rodou código no sandbox nesta rodada (F0.5). */
+      execucoes?: number
+    }
   /** Fim com falha. A rodada não produz proposta; o turno de erro é gravado. */
   | { tipo: 'erro'; mensagem: string }
 

@@ -61,15 +61,60 @@ Você PROPÕE; quem aplica é o advogado, seção por seção. Ele pode aceitar 
 - Nunca apresente como confirmada uma decisão que você não leu no material do caso.`
 
 /**
+ * CÁLCULOS E ARQUIVOS DE APOIO (F0.5). Bloco NOVO — os anteriores continuam
+ * byte a byte como estavam (snapshots intactos); este entra só quando a rodada
+ * declara o server tool `code_execution`, e tem snapshot próprio.
+ *
+ * O que ele resolve: o advogado pedia a planilha dos 3 cenários no claude.ai e
+ * baixava o arquivo na mão. Aqui o arquivo nasce no sandbox e cai sozinho no
+ * dossiê do caso — por isso o prompt insiste em NOME DESCRITIVO (é o nome que
+ * o escritório vai ver na pasta, e é a chave que faz regerar SUBSTITUIR em vez
+ * de duplicar) e em explicar no texto o que cada arquivo contém.
+ */
+export const SYSTEM_ARTEFATOS = `## CÁLCULOS E ARQUIVOS DE APOIO (FERRAMENTA DE EXECUÇÃO DE CÓDIGO)
+
+Você tem um ambiente Python isolado (sem internet) para CALCULAR e para PRODUZIR ARQUIVOS de apoio à peça. Bibliotecas disponíveis: openpyxl (.xlsx), python-docx (.docx), matplotlib (gráficos .png), pypdf, além da biblioteca padrão.
+
+### Quando usar
+- Sempre que a rodada envolver CONTA: diferenças salariais, correção e juros, RMI e benefícios, verbas rescisórias, partilha, honorários, cenários alternativos, totalizações de fichas financeiras.
+- Sempre que o advogado pedir planilha, tabela de cálculo, memória de cálculo, comparativo de cenários ou gráfico.
+- NÃO use para responder pergunta jurídica, redigir seção da peça ou "organizar" texto — isso é conversa e proposta, não código.
+
+### Como usar
+- Faça a conta em Python de verdade; não estime de cabeça e não apresente número que o código não produziu.
+- Nunca invente valores de entrada: os números vêm dos DOCUMENTOS DO CASO ou do que o advogado informou nesta sessão. Se faltar um dado, diga o que falta em vez de arbitrar.
+- Salve os arquivos com NOME DESCRITIVO EM PORTUGUÊS, começando pelo assunto (ex.: \`calculos-rescisao-tres-cenarios.xlsx\`, \`memoria-de-calculo-diferencas.md\`, \`evolucao-remuneratoria.png\`). Nada de \`output.xlsx\`, \`resultado.csv\` ou \`tmp1.png\`.
+- Formatos aceitos no dossiê: .xlsx, .csv, .docx, .pdf, .md e .png. Qualquer outro formato é descartado.
+- REGERAR com o MESMO nome de arquivo SUBSTITUI a versão anterior — use isso de propósito quando corrigir uma premissa. Nome diferente cria um arquivo novo ao lado do antigo.
+- Uma planilha com as premissas em uma aba e o resultado em outra vale mais do que três arquivos soltos.
+
+### O que dizer ao advogado
+Todo arquivo que você gerar é anexado AUTOMATICAMENTE ao dossiê do caso, sem precisar de confirmação. Portanto, em \`resposta_markdown\`:
+- diga o que cada arquivo contém, em uma linha por arquivo;
+- traga no texto os NÚMEROS QUE IMPORTAM (o total, a diferença, o valor de cada cenário) — o advogado precisa poder ler a resposta sem abrir a planilha;
+- declare as PREMISSAS usadas (índice de correção, período, taxa) e o que ficou de fora;
+- não prometa arquivo que você não gerou nem descreva conteúdo que não está nele.
+
+Se o cálculo alimentar a peça, use os valores calculados na \`proposta\` — sem inventar arredondamentos diferentes dos da planilha.`
+
+/**
  * Compõe o system da sessão. `ctx` null (ou sem prompt curado para a área/tipo,
  * caso da peça colada de fora) cai no par modo-refinar + sessão — exatamente a
  * mesma regra do modo 'refinar' do motor.
+ *
+ * `artefatos` acrescenta o bloco do sandbox (F0.5) NO FIM — a composição sem
+ * ele continua idêntica byte a byte à da F0.3 (é o que preserva os snapshots
+ * existentes; a composição nova tem snapshot próprio).
  *
  * PURA: é o que permite travar a composição por snapshot. O ANTI_INJECTION NÃO
  * entra aqui — o client de IA o acrescenta a todo system, e duplicá-lo só
  * queimaria tokens do prefixo cacheado.
  */
-export function montarSystemSessao(ctx: ContextoPeca | null): string {
+export function montarSystemSessao(
+  ctx: ContextoPeca | null,
+  opcoes?: { artefatos?: boolean },
+): string {
   const curado = ctx?.meta.curado ? `${ctx.system}\n\n` : ''
-  return `${curado}${SYSTEM_MODO_REFINAR}\n\n${SYSTEM_SESSAO}`
+  const base = `${curado}${SYSTEM_MODO_REFINAR}\n\n${SYSTEM_SESSAO}`
+  return opcoes?.artefatos ? `${base}\n\n${SYSTEM_ARTEFATOS}` : base
 }

@@ -191,6 +191,13 @@ interface EntradaIA {
    * O texto transmitido passa a ser o JSON — quem chama decide como exibi-lo.
    */
   formato?: Anthropic.JSONOutputFormat | null
+  /**
+   * Ferramentas da chamada. Hoje só SERVER TOOLS (executados na Anthropic, sem
+   * loop do nosso lado) — o `code_execution` da sessão de lapidação (F0.5).
+   * Ferramentas entram ANTES do system na montagem do prompt: uma lista
+   * instável invalidaria o cache, então quem passa isto mantém a lista fixa.
+   */
+  tools?: Anthropic.ToolUnion[]
   /** Cancela a chamada quando o cliente desiste da rodada. */
   signal?: AbortSignal
 }
@@ -311,8 +318,18 @@ function textoDosBlocos(blocos: Anthropic.ContentBlock[]): string {
 export async function streamCompletion(params: EntradaIA): Promise<{
   stream: ReadableStream
   getUsage: () => Promise<UsoTokens>
-  /** Texto completo + uso após o término do stream (independe do cliente ter consumido). */
-  getFinal: () => Promise<{ text: string; usage: UsoTokens; stopReason: string | null }>
+  /**
+   * Texto completo + uso após o término do stream (independe do cliente ter
+   * consumido). `content` traz os BLOCOS da resposta — é onde vivem os
+   * resultados de server tools (arquivos gerados pelo `code_execution`) e o que
+   * precisa ser devolvido à API para retomar um `pause_turn`.
+   */
+  getFinal: () => Promise<{
+    text: string
+    usage: UsoTokens
+    stopReason: string | null
+    content: Anthropic.ContentBlock[]
+  }>
 }> {
   const client = getAnthropicClient()
 
@@ -328,6 +345,7 @@ export async function streamCompletion(params: EntradaIA): Promise<{
     max_tokens: maxTokens,
     system: montarSystem(comGuardrail(params.system), params.cache),
     messages,
+    ...(params.tools && params.tools.length > 0 ? { tools: params.tools } : {}),
     ...extrasVersao(params.versao, params.formato),
   }, {
     // Piso de 10 min (default de streaming do SDK) + escala p/ peças grandes: sem
@@ -344,6 +362,28 @@ export async function streamCompletion(params: EntradaIA): Promise<{
       // 'thinking' e NÃO entram no SSE (o cliente monta a peça com o que recebe).
       anthropicStream.on('text', (text) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'text', text })}\n\n`))
+      })
+
+      // SERVER TOOLS: os blocos de uso/resultado chegam completos (não em
+      // deltas). Repassá-los como um evento próprio é o que permite ao painel
+      // dizer "calculando no sandbox..." enquanto o modelo roda o python — sem
+      // isso o advogado veria só uma pausa longa antes do texto.
+      anthropicStream.on('contentBlock', (bloco) => {
+        if (bloco.type === 'server_tool_use') {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'ferramenta', nome: bloco.name, estado: 'inicio' })}\n\n`))
+        } else if (
+          bloco.type === 'bash_code_execution_tool_result' ||
+          bloco.type === 'code_execution_tool_result'
+        ) {
+          const conteudo = bloco.content as { type?: string; return_code?: number } | undefined
+          const erro = typeof conteudo?.type === 'string' && conteudo.type.endsWith('_error')
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'ferramenta',
+            nome: 'code_execution',
+            estado: 'fim',
+            erro,
+          })}\n\n`))
+        }
       })
 
       anthropicStream.on('message', (message) => {
@@ -375,6 +415,7 @@ export async function streamCompletion(params: EntradaIA): Promise<{
         text: textoDosBlocos(message.content),
         usage: usoDe(message.usage),
         stopReason: message.stop_reason,
+        content: message.content,
       }
     },
   }

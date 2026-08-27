@@ -275,6 +275,11 @@ export async function tocarSessao(
  * relevância pelo contexto) MAIS os anexados nesta sessão — que entram sempre,
  * mesmo que a triagem os tivesse descartado (o advogado anexou por um motivo).
  * Ordem determinística por id: o bloco é prefixo cacheado, não pode variar.
+ *
+ * ARTEFATOS DA IA FICAM DE FORA (origem='gerado', 086): a planilha que o próprio
+ * agente acabou de escrever já está na conversa dele; reinjetá-la no contexto
+ * custaria tokens e, pior, invalidaria o cache do dossiê a cada rodada que
+ * gerasse arquivo. Quem precisa dela é o advogado, no dossiê.
  */
 export async function documentosDaSessao(
   admin: SupabaseAdmin,
@@ -289,6 +294,7 @@ export async function documentosDaSessao(
     .from('pecas_sessoes_anexos')
     .select('documento_id')
     .eq('sessao_id', params.sessaoId)
+    .neq('origem', 'gerado')
 
   const idsAnexados = new Set(((anexos ?? []) as Array<{ documento_id: string }>).map((a) => a.documento_id))
   const ids = [...new Set([...params.idsDoContexto, ...idsAnexados])]

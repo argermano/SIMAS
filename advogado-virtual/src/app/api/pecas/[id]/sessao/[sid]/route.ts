@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
+import { marcarArtefatosRemovidos } from '@/lib/ia/sessao/artefatos'
 import { estimarProximaRodada, lerTokensSessao } from '@/lib/ia/sessao/custo'
 import { montarSystemSessao } from '@/lib/ia/sessao/prompts'
 import {
@@ -31,10 +32,14 @@ export async function GET(
   const sessao = await carregarSessao(admin, { sessaoId: sid, pecaId, tenantId: usuario.tenant_id })
   if (!sessao) return jsonError('Sessão não encontrada', 404)
 
-  const [turnos, propostas] = await Promise.all([
+  const [turnosCrus, propostas] = await Promise.all([
     listarTurnos(admin, sessao.id),
     listarPropostas(admin, sessao.id),
   ])
+
+  // Artefato que o advogado já apagou do dossiê não pode aparecer no painel
+  // oferecendo "abrir" (F0.5). Uma consulta só, sobre os ids dos turnos.
+  const turnos = await marcarArtefatosRemovidos(admin, { tenantId: usuario.tenant_id, turnos: turnosCrus })
 
   // Estimativa da próxima rodada. A base boa é o uso REAL da última rodada
   // (guardado em tokens.ultima_entrada); antes da primeira, cai na conta por
@@ -44,7 +49,7 @@ export async function GET(
   const tokens = lerTokensSessao(sessao.tokens)
   const charsHistorico = turnos.reduce((soma, t) => soma + (t.conteudo?.length ?? 0), 0)
   const chars =
-    montarSystemSessao(null).length + (peca.conteudo_markdown?.length ?? 0) + charsHistorico
+    montarSystemSessao(null, { artefatos: true }).length + (peca.conteudo_markdown?.length ?? 0) + charsHistorico
 
   const estimativa = estimarProximaRodada({ modelo: sessao.modelo, tokens, chars })
 

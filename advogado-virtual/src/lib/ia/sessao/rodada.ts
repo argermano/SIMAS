@@ -17,6 +17,12 @@ import { logger } from '@/lib/logger'
 import { montarContextoPeca, type ContextoPeca } from '@/lib/ia/pecas/contexto'
 import { descreverPatch } from '@/lib/diff/patch-secoes'
 import { garantirResumosDosGrandes } from '@/lib/documentos/resumir'
+import {
+  materializarArtefatosDaSessao,
+  motivoLegivel,
+  type ArtefatoTurno,
+  type MotivoIgnorado,
+} from './artefatos'
 import { acumularTokens, lerTokensSessao } from './custo'
 import { driverDaSessao, MAX_TOKENS_RODADA } from './driver-messages'
 import { textoDaProposta, type PropostaRodada } from './envelope'
@@ -39,6 +45,7 @@ import {
   type SupabaseAdmin,
   type TurnoPeca,
 } from './sessoes'
+import type { ArquivoAnthropic } from '@/lib/anthropic/files'
 import type { EventoSessao } from './driver'
 import type { createClient } from '@/lib/supabase/server'
 
@@ -112,7 +119,10 @@ export async function prepararRodada(params: {
   }
 
   const { areaNome, tipoNome } = rotulosDaPeca(params.peca)
-  const system = montarSystemSessao(ctx)
+  // `artefatos: true` acrescenta o bloco do sandbox (F0.5) ao system — o mesmo
+  // que a rodada declara em `tools`. Sem ele, o modelo teria a ferramenta e não
+  // saberia as regras de nome/formato dos arquivos que caem no dossiê.
+  const system = montarSystemSessao(ctx, { artefatos: true })
   const prefixoContexto = montarPrefixoContexto({ ctx, documentos, areaNome, tipoNome })
 
   const turnos = params.turnos ?? (await listarTurnos(params.admin, params.sessao.id))
@@ -202,10 +212,20 @@ export async function executarRodada(params: ParametrosRodada): Promise<Response
   let stopReason: string | null = null
   let degradado = false
   let erro: string | null = null
+  /** Arquivos que o agente produziu no sandbox, já baixados (F0.5). */
+  let arquivosGerados: ArquivoAnthropic[] = []
+  /** Recusados pela política (extensão/tamanho) — viram aviso ao advogado. */
+  let recusados: Array<{ titulo: string; motivo: MotivoIgnorado }> = []
+  /** Quantas execuções de código a rodada gastou (entra no turno). */
+  let execucoes = 0
 
-  /** Grava turno do agente + proposta + custo. Roda uma vez só. */
-  async function persistir(): Promise<{ turnoId: string | null; propostaId: string | null }> {
-    if (persistido) return { turnoId: null, propostaId: null }
+  /** Grava turno do agente + artefatos + proposta + custo. Roda uma vez só. */
+  async function persistir(): Promise<{
+    turnoId: string | null
+    propostaId: string | null
+    artefatos: ArtefatoTurno[]
+  }> {
+    if (persistido) return { turnoId: null, propostaId: null, artefatos: [] }
     persistido = true
 
     if (erro) {
@@ -217,13 +237,37 @@ export async function executarRodada(params: ParametrosRodada): Promise<Response
         payload: { erro: true },
       })
       await tocarSessao(admin, sessao.id)
-      return { turnoId: null, propostaId: null }
+      return { turnoId: null, propostaId: null, artefatos: [] }
     }
 
     // Verificação determinística de citações sobre a resposta E a proposta —
     // grátis, síncrona e por rodada (§7 do plano): o selo aparece antes de o
     // advogado aceitar qualquer coisa.
     const citacoes = verificarCitacoes(`${resposta}\n\n${textoDaProposta(proposta)}`)
+
+    // ARTEFATOS (F0.5): a planilha que o agente calculou vai para o dossiê SEM
+    // confirmação do advogado — exigência do dono. Antes do turno, porque é o
+    // payload do turno que guarda os ids dos documentos criados. Best-effort
+    // total: `materializarArtefatosDaSessao` nunca lança.
+    let artefatos: ArtefatoTurno[] = []
+    const avisos: string[] = [...recusados.map((r) => `"${r.titulo}" (${motivoLegivel(r.motivo)})`)]
+    if (arquivosGerados.length > 0) {
+      const materializados = await materializarArtefatosDaSessao(admin, {
+        tenantId: params.tenantId,
+        sessaoId: sessao.id,
+        atendimentoId: peca.atendimento_id,
+        arquivos: arquivosGerados,
+      })
+      artefatos = materializados.artefatos
+      avisos.push(
+        ...materializados.ignorados.map((i) => `"${i.titulo}" (${motivoLegivel(i.motivo)})`),
+      )
+      if (materializados.falhas > 0) {
+        avisos.push(
+          `${materializados.falhas} arquivo(s) não puderam ser gravados no dossiê — peça para o agente gerar de novo.`,
+        )
+      }
+    }
 
     const blocoHistorico = proposta
       ? `${resposta}\n\n(Proposta enviada ao advogado — aguardando decisão)\n${descreverPatch(proposta.secoes)}`
@@ -241,6 +285,10 @@ export async function executarRodada(params: ParametrosRodada): Promise<Response
         stop_reason: stopReason,
         modelo: sessao.modelo,
         ...(proposta ? { proposta_resumo: proposta.resumo, secoes: proposta.secoes.length } : {}),
+        // F0.5: os arquivos de apoio já materializados no dossiê + o custo de
+        // execução da rodada (o card do painel se desenha só com isto).
+        ...(artefatos.length > 0 ? { artefatos } : {}),
+        ...(execucoes > 0 ? { execucoes } : {}),
       },
       custoUsd,
       tokens: {
@@ -250,6 +298,19 @@ export async function executarRodada(params: ParametrosRodada): Promise<Response
         cache_write: uso.cacheWrite,
       },
     })
+
+    // Aviso honesto quando algum arquivo NÃO entrou no dossiê: o advogado
+    // precisa saber que a planilha citada na resposta não está na pasta.
+    if (avisos.length > 0) {
+      const texto = `Arquivo(s) gerados pela IA que não foram anexados ao dossiê: ${avisos.join('; ')}.`
+      await inserirTurno(admin, {
+        sessaoId: sessao.id,
+        papel: 'sistema',
+        tipo: 'ferramenta',
+        conteudo: texto,
+        payload: { artefatos_recusados: avisos.length },
+      })
+    }
 
     let propostaId: string | null = null
     if (proposta && turno) {
@@ -301,12 +362,14 @@ export async function executarRodada(params: ParametrosRodada): Promise<Response
       secoes: proposta?.secoes.length ?? 0,
       citacoes: citacoes.total,
       citacoesProblema: citacoes.problemas,
+      artefatos: artefatos.length,
+      execucoes,
       cacheRead: uso.cacheRead,
       degradado,
       ms: Date.now() - inicio,
     })
 
-    return { turnoId: turno?.id ?? null, propostaId }
+    return { turnoId: turno?.id ?? null, propostaId, artefatos }
   }
 
   const stream = new ReadableStream({
@@ -333,6 +396,12 @@ export async function executarRodada(params: ParametrosRodada): Promise<Response
             case 'ferramenta':
               enviar({ type: 'ferramenta', nome: ev.nome, estado: ev.estado, resumo: ev.resumo })
               break
+            case 'arquivos':
+              // Só COLETA aqui: a gravação no dossiê acontece em persistir(),
+              // junto com o turno que vai carregar os ids dos documentos.
+              arquivosGerados = ev.arquivos
+              recusados = ev.recusados
+              break
             case 'custo':
               uso = ev.uso
               custoUsd = ev.custoUsd
@@ -349,6 +418,7 @@ export async function executarRodada(params: ParametrosRodada): Promise<Response
               resposta = ev.respostaMarkdown || resposta
               stopReason = ev.stopReason
               degradado = ev.degradado
+              execucoes = ev.execucoes ?? 0
               break
             case 'erro':
               erro = ev.mensagem
@@ -369,6 +439,8 @@ export async function executarRodada(params: ParametrosRodada): Promise<Response
             turnoId: ids.turnoId,
             propostaId: ids.propostaId,
             proposta: proposta ?? null,
+            artefatos: ids.artefatos,
+            execucoes,
             respostaMarkdown: resposta,
             custoUsd,
             tokens: { input: uso.input, output: uso.output, cacheRead: uso.cacheRead, cacheWrite: uso.cacheWrite },

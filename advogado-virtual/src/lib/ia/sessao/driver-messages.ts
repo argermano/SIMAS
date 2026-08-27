@@ -21,8 +21,18 @@
 //    proposta e custo é rodada.ts — é o que permite a Fase 1 trocar o driver
 //    sem tocar em nada de persistência.
 
-import { streamCompletion } from '@/lib/anthropic/client'
-import { createSSEParser } from '@/lib/sse-parser'
+import type Anthropic from '@anthropic-ai/sdk'
+import { streamCompletion, type MensagemIA } from '@/lib/anthropic/client'
+import { baixarArquivo, metadadosArquivo, type ArquivoAnthropic } from '@/lib/anthropic/files'
+import { createSSEParser, type SSEEvent } from '@/lib/sse-parser'
+import { logger } from '@/lib/logger'
+import {
+  arquivoPermitido,
+  arquivosDaResposta,
+  tituloArtefato,
+  MAX_ARTEFATOS_POR_RODADA,
+  type MotivoIgnorado,
+} from './artefatos'
 import { custoDaRodada } from './custo'
 import { CAMPO_RESPOSTA, ESQUEMA_ENVELOPE, lerEnvelope } from './envelope'
 import { criarExtratorCampo } from './extrator-campo'
@@ -50,6 +60,47 @@ export const MODELO_SESSAO_AVANCADO = process.env.ANTHROPIC_MODEL_SESSAO_AVANCAD
  * seção (o que estragaria o JSON e cairia no modo degradado).
  */
 export const MAX_TOKENS_RODADA = 32_768
+
+/**
+ * SERVER TOOL de execução de código (F0.5). É o que permite ao agente CALCULAR
+ * de verdade (python no sandbox da Anthropic, sem internet) e produzir a
+ * planilha de cálculos — que a rodada materializa sozinha no dossiê.
+ *
+ * Forma exata: `{ type: 'code_execution_20260521', name: 'code_execution' }` na
+ * chamada NORMAL (`client.messages.stream`), sem header beta — skill claude-api,
+ * "Server Tools (Quick Reference)": o tipo mais novo que o modelo suporta, e a
+ * ressalva de beta vale só para o SDK Go. O resultado volta em blocos
+ * `bash_code_execution_tool_result` (ver artefatos.ts).
+ *
+ * A env existe como válvula: se a Anthropic aposentar o tipo novo, dá para
+ * voltar ao `code_execution_20260120` sem deploy de código.
+ */
+export const TIPO_CODE_EXECUTION = (process.env.ANTHROPIC_CODE_EXECUTION_TOOL ??
+  'code_execution_20260521') as 'code_execution_20260521'
+
+/**
+ * Ferramentas da rodada. Lista CONSTANTE de propósito: as tools são o primeiro
+ * bloco do prompt (tools → system → messages) e uma lista que variasse
+ * invalidaria o cache do dossiê inteiro a cada rodada.
+ *
+ * Sem web tools na Fase 0 (§7 do plano): pesquisa em portais é da Fase 2, e
+ * declarar `web_search`/`web_fetch` junto do code_execution confundiria o
+ * modelo com dois ambientes de execução.
+ */
+export const FERRAMENTAS_SESSAO: Anthropic.ToolUnion[] = [
+  { type: TIPO_CODE_EXECUTION, name: 'code_execution' },
+]
+
+/**
+ * Quantas vezes uma rodada pode ser RETOMADA após `pause_turn`. O laço de
+ * server tools da Anthropic pausa a cada ~10 iterações e espera que a gente
+ * reenvie a conversa com a resposta parcial do assistente — sem "Continue.",
+ * que o servidor detecta o bloco de ferramenta pendente e retoma sozinho
+ * (skill claude-api → shared/tool-use-concepts.md, "Stop reasons for
+ * server-side tools"). O teto existe para um modelo teimoso não gastar a
+ * sessão inteira calculando.
+ */
+export const MAX_CONTINUACOES = 3
 
 /** Modelo (e versão) da sessão a partir da escolha do advogado na criação. */
 export function modeloDaSessao(versao?: string | null): { modelo: string; versao: 'padrao' | 'avancado' } {
@@ -80,92 +131,144 @@ export class DriverMessages implements SessaoDriver {
 
   async *enviarMensagem(entrada: EntradaRodada): AsyncIterable<EventoSessao> {
     const extrator = criarExtratorCampo(CAMPO_RESPOSTA)
+
+    // A conversa da rodada. Ela é REENVIADA inteira em cada retomada de
+    // `pause_turn`, com a resposta parcial do assistente no fim — e nada mais:
+    // um "Continue." nosso atrapalharia, porque o servidor reconhece o bloco de
+    // ferramenta pendente e retoma sozinho.
+    const mensagensBase: MensagemIA[] = [
+      { role: 'user', content: entrada.prefixoContexto },
+      ...entrada.historico,
+      { role: 'user', content: entrada.turnoAtual },
+    ]
+
+    /** Texto acumulado do SSE (rede de segurança se o `getFinal` vier vazio). */
     let bruto = ''
+    /** Texto autoritativo, somado através das retomadas. */
+    let textoFinal = ''
     let stopReason: string | null = null
+    const uso = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+    /** Blocos de TODAS as chamadas — é neles que estão os arquivos gerados. */
+    const blocos: unknown[] = []
+    /** Só os blocos do assistente, para devolver à API na retomada. */
+    const blocosAssistente: Anthropic.ContentBlock[] = []
+    /**
+     * Ferramentas da chamada. Vira `undefined` na rede de segurança abaixo: se a
+     * API recusar a rodada ANTES de qualquer texto com as tools declaradas, a
+     * sessão degrada para o comportamento da F0.4 (sem cálculos) em vez de
+     * simplesmente falhar na cara do advogado.
+     */
+    let ferramentas: Anthropic.ToolUnion[] | undefined = FERRAMENTAS_SESSAO
+    let degradouFerramentas = false
 
-    let chamada: Awaited<ReturnType<typeof streamCompletion>>
-    try {
-      chamada = await streamCompletion({
-        system: entrada.system,
-        messages: [
-          { role: 'user', content: entrada.prefixoContexto },
-          ...entrada.historico,
-          { role: 'user', content: entrada.turnoAtual },
-        ],
-        model: entrada.modelo,
-        versao: entrada.versao ?? 'padrao',
-        maxTokens: entrada.maxTokens ?? MAX_TOKENS_RODADA,
-        // O prefixo estável da sessão: system + contexto do caso.
-        cache: { system: true, primeiroUser: true },
-        formato: { type: 'json_schema', schema: ESQUEMA_ENVELOPE as unknown as Record<string, unknown> },
-        signal: entrada.signal,
-      })
-    } catch (e) {
-      // Falha ANTES do stream (teto de caracteres, chave ausente, 4xx).
-      yield { tipo: 'erro', mensagem: mensagemDeErro(e) }
-      return
-    }
+    for (let volta = 0; ; volta++) {
+      const mensagens: MensagemIA[] =
+        blocosAssistente.length === 0
+          ? mensagensBase
+          : [
+              ...mensagensBase,
+              // Os blocos de resposta voltam COMO VIERAM (inclusive os de
+              // ferramenta). O cast existe porque o SDK tipa resposta e
+              // parâmetro em uniões separadas; a forma no fio é a mesma.
+              { role: 'assistant', content: blocosAssistente as unknown as Anthropic.ContentBlockParam[] },
+            ]
 
-    // Lê o SSE do client e traduz para os eventos do driver. Reaproveitar o
-    // parser do cliente aqui não é preciosismo: é o mesmo formato que a rota
-    // devolve ao navegador, testado contra fragmentação de chunks.
-    const parser = createSSEParser()
-    const reader = chamada.stream.getReader()
-    const decoder = new TextDecoder()
-    let erro: string | null = null
+      let chamada: Awaited<ReturnType<typeof streamCompletion>>
+      try {
+        chamada = await streamCompletion({
+          system: entrada.system,
+          messages: mensagens,
+          model: entrada.modelo,
+          versao: entrada.versao ?? 'padrao',
+          maxTokens: entrada.maxTokens ?? MAX_TOKENS_RODADA,
+          // O prefixo estável da sessão: system + contexto do caso.
+          cache: { system: true, primeiroUser: true },
+          formato: { type: 'json_schema', schema: ESQUEMA_ENVELOPE as unknown as Record<string, unknown> },
+          ...(ferramentas ? { tools: ferramentas } : {}),
+          signal: entrada.signal,
+        })
+      } catch (e) {
+        // Falha ANTES do stream (teto de caracteres, chave ausente, 4xx).
+        yield { tipo: 'erro', mensagem: mensagemDeErro(e) }
+        return
+      }
 
-    try {
-      for (;;) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const eventos = [...parser.feed(decoder.decode(value, { stream: true }))]
-        for (const ev of eventos) {
+      // Lê o SSE do client e traduz para os eventos do driver. Reaproveitar o
+      // parser do cliente aqui não é preciosismo: é o mesmo formato que a rota
+      // devolve ao navegador, testado contra fragmentação de chunks.
+      let erro: string | null = null
+      try {
+        for await (const ev of eventosDoStream(chamada.stream)) {
           if (ev.type === 'text' && typeof ev.text === 'string') {
             bruto += ev.text
             const texto = extrator.consumir(ev.text)
             if (texto) yield { tipo: 'texto_delta', texto }
+          } else if (ev.type === 'ferramenta') {
+            yield {
+              tipo: 'ferramenta',
+              nome: typeof ev.nome === 'string' ? ev.nome : 'code_execution',
+              estado: ev.estado === 'inicio' ? 'inicio' : 'fim',
+              ...(ev.erro ? { resumo: 'a execução falhou' } : {}),
+            }
           } else if (ev.type === 'done') {
             stopReason = (ev.stopReason as string | null) ?? null
           } else if (ev.type === 'error') {
             erro = String(ev.error ?? 'Erro na geração')
           }
         }
+      } catch (e) {
+        erro = mensagemDeErro(e)
       }
-      for (const ev of parser.flush()) {
-        if (ev.type === 'text' && typeof ev.text === 'string') {
-          bruto += ev.text
-          const texto = extrator.consumir(ev.text)
-          if (texto) yield { tipo: 'texto_delta', texto }
-        } else if (ev.type === 'error') {
-          erro = String(ev.error ?? 'Erro na geração')
+
+      if (erro) {
+        // Consome a promessa final mesmo no caminho de erro: deixá-la pendente
+        // deixaria uma rejeição sem tratamento pendurada no processo.
+        void chamada.getFinal().catch(() => {})
+
+        // REDE DE SEGURANÇA das ferramentas: recusa antes de UM caractere de
+        // resposta, com as tools declaradas, é sintoma de incompatibilidade do
+        // lado da API (tipo do tool aposentado, combinação recusada). Tentar de
+        // novo sem elas custa uma chamada e salva a rodada — o advogado perde o
+        // cálculo, não a sessão. Só vale enquanto nada foi transmitido: com
+        // texto já na tela, repetir duplicaria a resposta.
+        if (ferramentas && !degradouFerramentas && bruto === '' && blocosAssistente.length === 0) {
+          degradouFerramentas = true
+          ferramentas = undefined
+          logger.warn('ia.sessao.ferramentas.degradado', { modelo: entrada.modelo })
+          continue
         }
+
+        yield { tipo: 'erro', mensagem: erro }
+        return
       }
-    } catch (e) {
-      erro = mensagemDeErro(e)
-    } finally {
-      reader.releaseLock()
-    }
 
-    if (erro) {
-      // Consome a promessa final mesmo no caminho de erro: deixá-la pendente
-      // deixaria uma rejeição sem tratamento pendurada no processo.
-      void chamada.getFinal().catch(() => {})
-      yield { tipo: 'erro', mensagem: erro }
-      return
-    }
+      // O uso só existe depois que a mensagem fecha. `getFinal` é a fonte
+      // autoritativa do texto (o acumulado do SSE deve bater, mas não dependemos
+      // disso), do usage com as parcelas de cache e dos BLOCOS da resposta.
+      let final: Awaited<ReturnType<Awaited<ReturnType<typeof streamCompletion>>['getFinal']>>
+      try {
+        final = await chamada.getFinal()
+      } catch (e) {
+        yield { tipo: 'erro', mensagem: mensagemDeErro(e) }
+        return
+      }
 
-    // O uso só existe depois que a mensagem fecha. `getFinal` é a fonte
-    // autoritativa do texto (o acumulado do SSE deve bater, mas não dependemos
-    // disso) e do usage com as parcelas de cache.
-    let uso = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
-    try {
-      const final = await chamada.getFinal()
-      if (final.text) bruto = final.text
-      uso = final.usage
+      textoFinal += final.text
+      uso.input += final.usage.input
+      uso.output += final.usage.output
+      uso.cacheRead += final.usage.cacheRead
+      uso.cacheWrite += final.usage.cacheWrite
       stopReason = final.stopReason ?? stopReason
-    } catch (e) {
-      yield { tipo: 'erro', mensagem: mensagemDeErro(e) }
-      return
+      blocos.push(...final.content)
+      blocosAssistente.push(...final.content)
+
+      // `pause_turn`: o laço de server tools da Anthropic bateu no limite de
+      // iterações. Reenviar a conversa retoma exatamente de onde parou.
+      if (stopReason !== 'pause_turn') break
+      if (volta >= MAX_CONTINUACOES) {
+        logger.warn('ia.sessao.pause_turn.teto', { modelo: entrada.modelo, voltas: volta + 1 })
+        break
+      }
     }
 
     yield {
@@ -175,7 +278,22 @@ export class DriverMessages implements SessaoDriver {
       modelo: entrada.modelo,
     }
 
-    const { envelope, degradado } = lerEnvelope(bruto)
+    // ARQUIVOS GERADOS NO SANDBOX (F0.5). O bloco de resultado traz só o
+    // file_id; os bytes vêm da Files API. Nada aqui pode derrubar a rodada — na
+    // pior das hipóteses o advogado fica sem o anexo e com a resposta inteira.
+    const { fileIds, execucoes } = arquivosDaResposta(blocos)
+    if (fileIds.length > 0) {
+      try {
+        const coleta = await coletarArquivosGerados(fileIds)
+        if (coleta.arquivos.length > 0 || coleta.recusados.length > 0) {
+          yield { tipo: 'arquivos', arquivos: coleta.arquivos, recusados: coleta.recusados }
+        }
+      } catch (e) {
+        logger.error('ia.sessao.artefatos.coleta', { arquivos: fileIds.length }, e)
+      }
+    }
+
+    const { envelope, degradado } = lerEnvelope(textoFinal || bruto)
 
     // O extrator já entregou o texto ao vivo; se a leitura final divergir (JSON
     // degradado, corte por max_tokens), manda o que faltou para o painel não
@@ -195,8 +313,60 @@ export class DriverMessages implements SessaoDriver {
       respostaMarkdown: envelope.resposta_markdown,
       stopReason,
       degradado,
+      execucoes,
     }
   }
+}
+
+/** Lê um ReadableStream de SSE e entrega os eventos já interpretados. */
+async function* eventosDoStream(stream: ReadableStream): AsyncGenerator<SSEEvent> {
+  const parser = createSSEParser()
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      for (const ev of parser.feed(decoder.decode(value, { stream: true }))) yield ev
+    }
+    for (const ev of parser.flush()) yield ev
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+/**
+ * Baixa os arquivos criados no container, aplicando a POLÍTICA antes do
+ * download: extensão fora da allowlist ou tamanho acima do teto viram recusa
+ * (com aviso no turno) — nunca 500 MB atravessando a função da Vercel.
+ */
+async function coletarArquivosGerados(fileIds: string[]): Promise<{
+  arquivos: ArquivoAnthropic[]
+  recusados: Array<{ titulo: string; motivo: MotivoIgnorado }>
+}> {
+  const arquivos: ArquivoAnthropic[] = []
+  const recusados: Array<{ titulo: string; motivo: MotivoIgnorado }> = []
+
+  for (const fileId of fileIds.slice(0, MAX_ARTEFATOS_POR_RODADA)) {
+    try {
+      const meta = await metadadosArquivo(fileId)
+      const veredicto = arquivoPermitido({ nome: meta.nome, tamanho: meta.tamanho })
+      if (!veredicto.ok) {
+        recusados.push({ titulo: tituloArtefato(meta.nome), motivo: veredicto.motivo ?? 'sem_nome' })
+        continue
+      }
+      if (!meta.baixavel) {
+        recusados.push({ titulo: tituloArtefato(meta.nome), motivo: 'vazio' })
+        continue
+      }
+      arquivos.push(await baixarArquivo(meta))
+    } catch (e) {
+      // LGPD: só o id do arquivo na Anthropic — nunca o nome (pode ter o nome do cliente).
+      logger.error('ia.sessao.artefato.download', { fileId }, e)
+    }
+  }
+
+  return { arquivos, recusados }
 }
 
 /** Instância única do driver da Fase 0. */

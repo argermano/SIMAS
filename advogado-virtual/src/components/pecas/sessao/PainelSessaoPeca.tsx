@@ -51,6 +51,25 @@ export function PainelSessaoPeca({
   const [abrindo, setAbrindo] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
+  // ARTEFATOS (F0.5): o arquivo entra no dossiê sozinho — o advogado não
+  // aprova nada, só precisa SABER. Um toast por rodada que gerou arquivo.
+  const artefatosRodada = s.artefatosRodada
+  useEffect(() => {
+    if (artefatosRodada.length === 0) return
+    const planilha = artefatosRodada.some((a) => a.ext === 'xlsx' || a.ext === 'csv')
+    const titulo = planilha
+      ? 'Planilha anexada ao dossiê'
+      : artefatosRodada.length > 1
+        ? 'Arquivos anexados ao dossiê'
+        : 'Arquivo anexado ao dossiê'
+    success(
+      titulo,
+      artefatosRodada.length === 1
+        ? `${artefatosRodada[0].nome} está na pasta do caso.`
+        : `${artefatosRodada.length} arquivos foram para a pasta do caso.`,
+    )
+  }, [artefatosRodada, success])
+
   useEffect(() => {
     if (!menuAberto) return
     const fora = (e: MouseEvent) => {
@@ -183,7 +202,11 @@ export function PainelSessaoPeca({
             parcial={s.parcial}
             instrucaoEmVoo={s.instrucaoEmVoo}
             pensando={emRodada}
+            calculando={s.calculando}
             reconectando={s.reconectando}
+            artefatosRemovidos={s.artefatosRemovidos}
+            onRemoverArtefato={s.removerArtefato}
+            somenteLeitura={Boolean(encerrada)}
           />
         )}
       </div>

@@ -10,8 +10,9 @@
 import { useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { SeloCitacoes, type ResumoCitacoes } from '@/components/pecas/SeloCitacoes'
+import { CardArtefato, artefatosDoPayload } from './CardArtefato'
 import type { TurnoPeca } from '@/lib/ia/sessao/sessoes'
-import { AlertTriangle, Loader2, Paperclip, Scissors, Sparkles, SquareCheck } from 'lucide-react'
+import { AlertTriangle, Calculator, Loader2, Paperclip, Scissors, Sparkles, SquareCheck } from 'lucide-react'
 
 function hora(iso: string): string {
   try {
@@ -86,14 +87,50 @@ function TurnoAdvogado({ turno }: { turno: TurnoPeca }) {
   )
 }
 
-function TurnoAgente({ turno }: { turno: TurnoPeca }) {
+function TurnoAgente({
+  turno,
+  artefatosRemovidos,
+  onRemoverArtefato,
+  somenteLeitura,
+}: {
+  turno: TurnoPeca
+  artefatosRemovidos: string[]
+  onRemoverArtefato: (documentoId: string) => Promise<{ ok: boolean; erro?: string }>
+  somenteLeitura: boolean
+}) {
   const citacoes = turno.payload?.citacoes as ResumoCitacoes | undefined
   const degradado = Boolean(turno.payload?.degradado)
   const cortado = turno.payload?.stop_reason === 'max_tokens'
+  const execucoes = Number(turno.payload?.execucoes ?? 0)
+  // Artefatos que a rodada gerou e o SIMAS já anexou ao dossiê (F0.5). Some da
+  // lista o que foi removido (aqui na tela ou por quem abriu o dossiê).
+  const artefatos = artefatosDoPayload(turno.payload).filter(
+    (a) => !a.removido && !artefatosRemovidos.includes(a.documentoId),
+  )
 
   return (
     <div className="rounded-2xl rounded-bl-md border border-border bg-card px-3 py-2">
       <MarkdownTurno>{turno.conteudo ?? ''}</MarkdownTurno>
+
+      {artefatos.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {artefatos.map((a) => (
+            <CardArtefato
+              key={a.documentoId}
+              artefato={a}
+              onRemover={onRemoverArtefato}
+              somenteLeitura={somenteLeitura}
+            />
+          ))}
+        </div>
+      )}
+
+      {execucoes > 0 && (
+        <p className="mt-1.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+          <Calculator className="h-3 w-3 shrink-0" />
+          {execucoes === 1 ? '1 cálculo executado no sandbox' : `${execucoes} cálculos executados no sandbox`}
+        </p>
+      )}
 
       {(degradado || cortado) && (
         <p className="mt-2 flex items-start gap-1.5 rounded-md bg-warning/10 px-2 py-1 text-[11px] text-warning">
@@ -123,7 +160,11 @@ export function ListaTurnos({
   parcial,
   instrucaoEmVoo,
   pensando,
+  calculando,
   reconectando,
+  artefatosRemovidos,
+  onRemoverArtefato,
+  somenteLeitura,
 }: {
   turnos: TurnoPeca[]
   /** Resposta em construção (SSE). */
@@ -131,7 +172,13 @@ export function ListaTurnos({
   /** Instrução enviada e ainda não persistida. */
   instrucaoEmVoo: string | null
   pensando: boolean
+  /** O agente está rodando código no sandbox agora (F0.5). */
+  calculando: boolean
   reconectando: boolean
+  /** Artefatos removidos nesta tela (somem sem esperar o próximo GET). */
+  artefatosRemovidos: string[]
+  onRemoverArtefato: (documentoId: string) => Promise<{ ok: boolean; erro?: string }>
+  somenteLeitura: boolean
 }) {
   const fim = useRef<HTMLDivElement>(null)
 
@@ -155,7 +202,13 @@ export function ListaTurnos({
         t.papel === 'advogado' ? (
           <TurnoAdvogado key={t.id} turno={t} />
         ) : t.papel === 'agente' ? (
-          <TurnoAgente key={t.id} turno={t} />
+          <TurnoAgente
+            key={t.id}
+            turno={t}
+            artefatosRemovidos={artefatosRemovidos}
+            onRemoverArtefato={onRemoverArtefato}
+            somenteLeitura={somenteLeitura}
+          />
         ) : (
           <TurnoSistema key={t.id} turno={t} />
         ),
@@ -184,8 +237,15 @@ export function ListaTurnos({
       {pensando && !parcial && (
         <div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          Lendo o caso e escrevendo a resposta...
+          {calculando ? 'Calculando no sandbox (Python)...' : 'Lendo o caso e escrevendo a resposta...'}
         </div>
+      )}
+
+      {calculando && parcial && (
+        <p className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
+          <Calculator className="h-3 w-3 shrink-0 animate-pulse" />
+          Calculando no sandbox (Python)...
+        </p>
       )}
 
       {reconectando && (

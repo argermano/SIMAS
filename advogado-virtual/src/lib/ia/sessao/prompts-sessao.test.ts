@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { montarSystemSessao, SYSTEM_SESSAO } from './prompts'
+import { montarSystemSessao, SYSTEM_ARTEFATOS, SYSTEM_SESSAO } from './prompts'
 import { ESQUEMA_ENVELOPE } from './envelope'
 import { ANTI_INJECTION } from '@/lib/anthropic/client'
 import { SYSTEM_MODO_REFINAR } from '@/lib/prompts/pecas/_shared/modo-refinar'
@@ -46,6 +46,23 @@ describe('SYSTEM_SESSAO', () => {
   })
 })
 
+describe('SYSTEM_ARTEFATOS (F0.5 — cálculos no sandbox)', () => {
+  it('texto estável', () => {
+    expect(SYSTEM_ARTEFATOS).toMatchSnapshot('system-artefatos')
+  })
+
+  it('diz as regras que o dossiê depende', () => {
+    // O nome do arquivo é a CHAVE do versionamento (regerar substitui) e o
+    // rótulo que o escritório vê na pasta do caso.
+    expect(SYSTEM_ARTEFATOS).toContain('NOME DESCRITIVO EM PORTUGUÊS')
+    expect(SYSTEM_ARTEFATOS).toContain('SUBSTITUI a versão anterior')
+    expect(SYSTEM_ARTEFATOS).toContain('anexado AUTOMATICAMENTE ao dossiê')
+    for (const ext of ['.xlsx', '.csv', '.docx', '.pdf', '.md', '.png']) {
+      expect(SYSTEM_ARTEFATOS).toContain(ext)
+    }
+  })
+})
+
 describe('montarSystemSessao', () => {
   it('com prompt curado: curado + modo refinar + sessão, nessa ordem', () => {
     const ctx = ctxFake()
@@ -62,6 +79,25 @@ describe('montarSystemSessao', () => {
 
   it('composição completa estável (a que o modelo recebe, já com o guardrail do client)', () => {
     expect(montarSystemSessao(ctxFake()) + ANTI_INJECTION).toMatchSnapshot('composicao-com-guardrail')
+  })
+
+  it('com artefatos: o bloco do sandbox entra POR ÚLTIMO e não muda o resto', () => {
+    const sem = montarSystemSessao(ctxFake())
+    const com = montarSystemSessao(ctxFake(), { artefatos: true })
+    // O prefixo é byte a byte o mesmo — o cache de prompt da sessão depende disso.
+    expect(com).toBe(`${sem}\n\n${SYSTEM_ARTEFATOS}`)
+    expect(com.startsWith(sem)).toBe(true)
+  })
+
+  it('sem opções: composição idêntica à da F0.3 (nenhum snapshot antigo muda)', () => {
+    expect(montarSystemSessao(ctxFake(), {})).toBe(montarSystemSessao(ctxFake()))
+    expect(montarSystemSessao(ctxFake(), { artefatos: false })).toBe(montarSystemSessao(ctxFake()))
+  })
+
+  it('composição com artefatos estável (snapshot NOVO — os anteriores intactos)', () => {
+    expect(montarSystemSessao(ctxFake(), { artefatos: true }) + ANTI_INJECTION).toMatchSnapshot(
+      'composicao-com-artefatos',
+    )
   })
 
   it('NÃO duplica o guardrail (quem o acrescenta é o client de IA)', () => {

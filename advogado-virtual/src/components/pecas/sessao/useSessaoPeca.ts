@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createSSEParser } from '@/lib/sse-parser'
 import { subirDocumentoDoCaso } from '@/lib/documentos/upload-cliente'
+import type { ArtefatoUI } from './CardArtefato'
 import type { PropostaPeca, SessaoPeca, TurnoPeca } from '@/lib/ia/sessao/sessoes'
 
 export type EstadoSessao = 'idle' | 'enviando' | 'streaming' | 'aguardando_decisao' | 'erro'
@@ -81,6 +82,12 @@ export function useSessaoPeca(params: { pecaId: string; atendimentoId?: string }
   const [custoRodadaUsd, setCustoRodadaUsd] = useState(0)
   /** Stream caiu: a rodada continua no servidor e a tela busca o resultado. */
   const [reconectando, setReconectando] = useState(false)
+  /** Arquivos que a ÚLTIMA rodada gerou e já anexou ao dossiê (F0.5). */
+  const [artefatosRodada, setArtefatosRodada] = useState<ArtefatoUI[]>([])
+  /** Removidos nesta tela — somem do painel sem esperar o próximo GET. */
+  const [artefatosRemovidos, setArtefatosRemovidos] = useState<string[]>([])
+  /** O agente está rodando código no sandbox agora (muda o texto do "pensando"). */
+  const [calculando, setCalculando] = useState(false)
 
   const montado = useRef(true)
   useEffect(() => {
@@ -205,6 +212,8 @@ export function useSessaoPeca(params: { pecaId: string; atendimentoId?: string }
       setErro(null)
       setParcial('')
       setCustoRodadaUsd(0)
+      setArtefatosRodada([])
+      setCalculando(false)
       setInstrucaoEmVoo(instrucao)
       setEstado('enviando')
 
@@ -238,6 +247,8 @@ export function useSessaoPeca(params: { pecaId: string; atendimentoId?: string }
             setParcial(acumulado)
           } else if (ev.type === 'custo') {
             setCustoRodadaUsd(Number(ev.custoUsd ?? 0))
+          } else if (ev.type === 'ferramenta') {
+            setCalculando(ev.estado === 'inicio')
           } else if (ev.type === 'done') {
             const final = (ev.respostaMarkdown as string) ?? ''
             if (final) {
@@ -245,6 +256,9 @@ export function useSessaoPeca(params: { pecaId: string; atendimentoId?: string }
               setParcial(final)
             }
             setCustoRodadaUsd(Number(ev.custoUsd ?? 0))
+            setCalculando(false)
+            const gerados = Array.isArray(ev.artefatos) ? (ev.artefatos as ArtefatoUI[]) : []
+            if (gerados.length > 0) setArtefatosRodada(gerados)
           } else if (ev.type === 'error') {
             falha.mensagem = (ev.error as string) ?? 'A rodada falhou.'
           }
@@ -260,6 +274,7 @@ export function useSessaoPeca(params: { pecaId: string; atendimentoId?: string }
         await carregarSessao(sessao.id)
         if (!montado.current) return
         setParcial('')
+        setCalculando(false)
         setInstrucaoEmVoo(null)
         if (falha.mensagem) {
           setErro(falha.mensagem)
@@ -330,6 +345,41 @@ export function useSessaoPeca(params: { pecaId: string; atendimentoId?: string }
       }
     },
     [pecaId, sessao, atendimentoId, carregarSessao],
+  )
+
+  /**
+   * Remove do dossiê um arquivo que a IA gerou. São DUAS chamadas às rotas que
+   * já existem, na única ordem possível: o DELETE de documentos recusa (409)
+   * enquanto o doc estiver em alguma pasta — então primeiro desvincula, depois
+   * apaga. O arquivo sai do caso e, pela fila, do Drive.
+   */
+  const removerArtefato = useCallback(
+    async (documentoId: string): Promise<{ ok: boolean; erro?: string }> => {
+      try {
+        const desv = await fetch(`/api/documentos/${documentoId}/vinculo`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ desvincular: true }),
+        })
+        if (!desv.ok && desv.status !== 404) {
+          return { ok: false, erro: await lerErro(desv, 'Não foi possível desvincular o arquivo.') }
+        }
+
+        const res = await fetch(`/api/documentos/${documentoId}`, { method: 'DELETE' })
+        if (!res.ok && res.status !== 404) {
+          return { ok: false, erro: await lerErro(res, 'Não foi possível remover o arquivo.') }
+        }
+
+        if (montado.current) {
+          setArtefatosRemovidos((prev) => (prev.includes(documentoId) ? prev : [...prev, documentoId]))
+          setArtefatosRodada((prev) => prev.filter((a) => a.documentoId !== documentoId))
+        }
+        return { ok: true }
+      } catch {
+        return { ok: false, erro: 'Falha de rede ao remover o arquivo.' }
+      }
+    },
+    [],
   )
 
   /** Decide a proposta (aceite por seção). É o único caminho que muda a peça. */
@@ -414,6 +464,10 @@ export function useSessaoPeca(params: { pecaId: string; atendimentoId?: string }
     encerrada,
     custoRodadaUsd,
     custoSessaoUsd: Number(sessao?.custo_lista_usd ?? 0),
+    artefatosRodada,
+    artefatosRemovidos,
+    calculando,
+    removerArtefato,
     criarSessao,
     abrirSessao,
     fecharSessao,
