@@ -12,11 +12,17 @@
 6. Registrar progresso neste arquivo (marcar pacotes ✅ com hash do commit).
 
 ## Pacotes da Fase 0 (ordem)
-- F0.1 Fundação API: upgrade @anthropic-ai/sdk ≥0.88; client.ts multi-turno + cache_control + thinking adaptive/effort (avançado) + remover header output-128k; usage.ts → PRECOS_MTOK (opus-5, sonnet-5 c/ vigência intro, fable, cache read/write) + logUsage com cache/sessão/turno; migration 085 (§5 do plano).
+- F0.1 ✅ 86b98bd — Fundação API: upgrade @anthropic-ai/sdk 0.78→0.121; client.ts multi-turno + cache_control + thinking adaptive/effort (avançado) + remover header output-128k; usage.ts → PRECOS_MTOK (opus-5, sonnet-5 c/ vigência intro, fable, cache read/write) + logUsage com cache/sessão/turno; migration 085 (§5 do plano).
 - F0.2 Motor único: montarContextoPeca extraído de gerar-peca; ModoMotor criar|refinar|corrigir; refinar-peca reescrita (versiona a peça; origem='refino'+instrucao); correcao-auto no núcleo; editor-documento com pecaId+cota.
 - F0.3 Sessão (driver messages): pecas_sessoes/turnos/propostas; rotas /api/pecas/[id]/sessao/**; structured output {resumo, secoes[]} → propostas; aplicarPatchSecoes (lib pura+tests); verificar_citacoes por rodada; resumo Haiku dos grandes.
 - F0.4 UI: painelLateral no DocumentEditor; PainelSessaoPeca (turnos, composer c/ anexo, CardProposta→ComparadorSecoes, BarraCusto, CardArtefato); useSessaoPeca (SSE+retomada).
 - F0.5 Artefatos automáticos: code_execution (server tool) no driver messages; src/lib/ia/sessao/artefatos.ts — todo arquivo gerado (xlsx/csv/docx/pdf/md/png, ≤25MB) vai SEM confirmação ao dossiê (tipo apoio_ia, vínculos caso/processo, Drive), versionando por nome lógico (regerar substitui). Validação da Fase 0 pelo dono.
+
+> **F0.1 (2026-08-27, 86b98bd)** — entregue: SDK 0.121; client.ts multi-turno + `cache_control` (TTL 1h, opt-in) +
+> thinking adaptive/effort high no 'avancado' + header output-128k removido + `ANTI_INJECTION` exportado + cache tokens no usage;
+> usage.ts com `PRECOS_MTOK` (vigência do intro do Sonnet 5) e custo de cache (11 testes); migration 085 aplicada em produção.
+> Efeitos colaterais a validar com o dono: a versão "Raciocínio estendido" agora PENSA de verdade (gerar-peca e analise-geral) —
+> mais lenta e mais cara por chamada; `analise-geral` subiu de maxDuration 120→300s por causa disso.
 
 (Fases 1–3: pacotes detalhados no plano abaixo; F1 = Managed Agents driver, F2 = escala documental+pesquisa+biblioteca de acórdãos, F3 = créditos/cobrança/admin.)
 
