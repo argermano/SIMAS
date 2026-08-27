@@ -13,7 +13,7 @@
 
 ## Pacotes da Fase 0 (ordem)
 - F0.1 ✅ 86b98bd — Fundação API: upgrade @anthropic-ai/sdk 0.78→0.121; client.ts multi-turno + cache_control + thinking adaptive/effort (avançado) + remover header output-128k; usage.ts → PRECOS_MTOK (opus-5, sonnet-5 c/ vigência intro, fable, cache read/write) + logUsage com cache/sessão/turno; migration 085 (§5 do plano).
-- F0.2 Motor único: montarContextoPeca extraído de gerar-peca; ModoMotor criar|refinar|corrigir; refinar-peca reescrita (versiona a peça; origem='refino'+instrucao); correcao-auto no núcleo; editor-documento com pecaId+cota.
+- F0.2 ✅ c22fe89 — Motor único: montarContextoPeca extraído de gerar-peca; ModoMotor criar|refinar|corrigir; refinar-peca reescrita (versiona a peça; origem='refino'+instrucao); correcao-auto no núcleo; editor-documento com pecaId+cota.
 - F0.3 Sessão (driver messages): pecas_sessoes/turnos/propostas; rotas /api/pecas/[id]/sessao/**; structured output {resumo, secoes[]} → propostas; aplicarPatchSecoes (lib pura+tests); verificar_citacoes por rodada; resumo Haiku dos grandes.
 - F0.4 UI: painelLateral no DocumentEditor; PainelSessaoPeca (turnos, composer c/ anexo, CardProposta→ComparadorSecoes, BarraCusto, CardArtefato); useSessaoPeca (SSE+retomada).
 - F0.5 Artefatos automáticos: code_execution (server tool) no driver messages; src/lib/ia/sessao/artefatos.ts — todo arquivo gerado (xlsx/csv/docx/pdf/md/png, ≤25MB) vai SEM confirmação ao dossiê (tipo apoio_ia, vínculos caso/processo, Drive), versionando por nome lógico (regerar substitui). Validação da Fase 0 pelo dono.
@@ -23,6 +23,19 @@
 > usage.ts com `PRECOS_MTOK` (vigência do intro do Sonnet 5) e custo de cache (11 testes); migration 085 aplicada em produção.
 > Efeitos colaterais a validar com o dono: a versão "Raciocínio estendido" agora PENSA de verdade (gerar-peca e analise-geral) —
 > mais lenta e mais cara por chamada; `analise-geral` subiu de maxDuration 120→300s por causa disso.
+
+> **F0.2 (2026-08-27, c22fe89)** — entregue: `src/lib/ia/pecas/contexto.ts` com `montarContextoPeca` (escopo
+> completo p/ criar, enxuto p/ refino/editor) + `contextoDaPeca`/`blocoContextoDoCaso`; `ModoMotor` e
+> `montarPromptDoModo` (pura) em motor.ts; `SYSTEM_REFINAMENTO` → `_shared/modo-refinar.ts` e o system+instruções
+> da correção → `_shared/modo-corrigir.ts`, byte a byte (10 snapshots novos; os 40 curados intactos).
+> `refinar-peca` renasceu ({pecaId, instrucao, versao?}, SSE, versiona com origem='refino'+instrucao; rede de
+> segurança só cobre abandono e não reabre caso finalizado; salvar-peca não duplica a versão já arquivada).
+> `refinamento-peca` continua criando a peça v1, agora com triagem + MAX_CHARS_POR_DOC (era o candidato nº 1 ao
+> 413) e sem sobrescrever `atendimentos.pedidos_especificos`. `editor-documento` aceita `pecaId` e ganhou cota
+> (trial 100 / básico 500 / profissional 2000).
+> Pendências deixadas para o F0.4 (UI): passar `pecaId` do editor aos diálogos de IA — sem isso o contexto do
+> caso no editor-documento fica disponível mas não é acionado pela tela; e o cliente do `refinar-peca` (hoje a
+> rota existe e funciona por SSE, mas nenhuma tela a chama ainda).
 
 (Fases 1–3: pacotes detalhados no plano abaixo; F1 = Managed Agents driver, F2 = escala documental+pesquisa+biblioteca de acórdãos, F3 = créditos/cobrança/admin.)
 
