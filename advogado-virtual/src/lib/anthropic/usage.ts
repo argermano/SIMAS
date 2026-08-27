@@ -91,7 +91,9 @@ export function custoEstimadoUSD(t: TokensChamada): number {
 
 export async function logUsage(params: {
   tenantId: string
-  userId: string
+  /** null quando a chamada não tem dono humano (rotina de sistema). A coluna
+   * user_id é nullable desde a migration 074. */
+  userId: string | null
   endpoint: string
   modelo: string
   tokensInput: number
@@ -120,7 +122,7 @@ export async function logUsage(params: {
 
   const { error } = await supabase.from('api_usage_log').insert({
     tenant_id: params.tenantId,
-    user_id: params.userId,
+    user_id: params.userId ?? null,
     endpoint: params.endpoint,
     modelo: params.modelo,
     tokens_input: params.tokensInput,

@@ -45,7 +45,16 @@ export function dividirSecoes(md: string): Secao[] {
   return secoes
 }
 
-const normalizar = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+/**
+ * Chave de comparação de títulos: ignora caixa, pontuação e espaçamento —
+ * "## DOS FATOS" e "Dos fatos:" são a MESMA seção. Exportada para o patch por
+ * seção (src/lib/diff/patch-secoes.ts) casar títulos com o mesmo critério que
+ * o diff, evitando "seção não encontrada" por causa de dois-pontos.
+ */
+export const normalizarTitulo = (t: string) =>
+  (t ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+const normalizar = normalizarTitulo
 
 /**
  * Compara base (versão anterior) × atual, pareando seções por título.

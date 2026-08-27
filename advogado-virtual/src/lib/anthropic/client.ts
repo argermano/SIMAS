@@ -184,6 +184,15 @@ interface EntradaIA {
   versao?: VersaoIA | null
   /** Pontos de cache de prompt (opt-in). */
   cache?: OpcoesCache
+  /**
+   * Structured output: JSON Schema que a API OBRIGA a resposta a seguir
+   * (`output_config.format`). Usado pela sessão de lapidação, cujo envelope
+   * `{resposta_markdown, proposta}` não pode depender de boa vontade do modelo.
+   * O texto transmitido passa a ser o JSON — quem chama decide como exibi-lo.
+   */
+  formato?: Anthropic.JSONOutputFormat | null
+  /** Cancela a chamada quando o cliente desiste da rodada. */
+  signal?: AbortSignal
 }
 
 /** Caracteres de texto de uma conversa — base do teto MAX_PROMPT_CHARS. */
@@ -249,13 +258,27 @@ function montarSystem(texto: string, cache?: OpcoesCache): string | Anthropic.Te
  * `budget_tokens` foi removido nos modelos atuais (400 se enviado) — a
  * profundidade se controla por `output_config.effort`. O modo padrão não envia
  * nada e segue exatamente como antes.
+ *
+ * `formato` (structured outputs, F0.3) entra no MESMO `output_config`: a API
+ * passa a garantir a FORMA da resposta contra o JSON Schema, em vez de
+ * confiarmos numa instrução de "responda só JSON". Quem não pede formato nem
+ * versão avançada continua sem `output_config` nenhum na requisição.
  */
-function extrasVersao(versao?: VersaoIA | null): {
+function extrasVersao(
+  versao?: VersaoIA | null,
+  formato?: Anthropic.JSONOutputFormat | null,
+): {
   thinking?: Anthropic.ThinkingConfigParam
   output_config?: Anthropic.OutputConfig
 } {
-  if (versao !== 'avancado') return {}
-  return { thinking: { type: 'adaptive' }, output_config: { effort: 'high' } }
+  const avancado = versao === 'avancado'
+  if (!avancado && !formato) return {}
+
+  const output_config: Anthropic.OutputConfig = {}
+  if (avancado) output_config.effort = 'high'
+  if (formato) output_config.format = formato
+
+  return { ...(avancado ? { thinking: { type: 'adaptive' as const } } : {}), output_config }
 }
 
 /** Teto de saída efetivo (aplica o piso do raciocínio quando ele está ligado). */
@@ -305,11 +328,12 @@ export async function streamCompletion(params: EntradaIA): Promise<{
     max_tokens: maxTokens,
     system: montarSystem(comGuardrail(params.system), params.cache),
     messages,
-    ...extrasVersao(params.versao),
+    ...extrasVersao(params.versao, params.formato),
   }, {
     // Piso de 10 min (default de streaming do SDK) + escala p/ peças grandes: sem
     // este override, o timeout global curto do cliente cortaria a geração no meio.
     timeout: timeoutSaida(maxTokens, 10 * 60_000),
+    ...(params.signal ? { signal: params.signal } : {}),
   })
 
   const readable = new ReadableStream({
@@ -440,7 +464,7 @@ export async function completionText(params: EntradaIA): Promise<{ text: string;
     max_tokens: maxTokens,
     system: montarSystem(comGuardrail(params.system), params.cache),
     messages,
-    ...extrasVersao(params.versao),
+    ...extrasVersao(params.versao, params.formato),
   }, { timeout: timeoutSaida(maxTokens, COMPLETION_TIMEOUT_MS) })
 
   return { text: textoDosBlocos(message.content), usage: usoDe(message.usage) }
@@ -464,7 +488,7 @@ export async function completionJSON<T = unknown>(params: EntradaIA & {
     max_tokens: maxTokens,
     system: montarSystem(comGuardrail(params.system) + JSON_ONLY, params.cache),
     messages,
-    ...extrasVersao(params.versao),
+    ...extrasVersao(params.versao, params.formato),
   }, { timeout: timeoutSaida(maxTokens, COMPLETION_TIMEOUT_MS) })
 
   const text = textoDosBlocos(message.content)

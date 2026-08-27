@@ -260,8 +260,13 @@ export type OrigemVersao = 'manual' | 'sessao' | 'correcao' | 'refino'
 
 /**
  * Salva a versão atual da peça em pecas_versoes antes de sobrescrevê-la.
- * Usado pelo refino (modo 'refinar'), que registra também a ORIGEM e a
- * INSTRUÇÃO do advogado — o rastro do "porquê" daquela versão (085).
+ * Usado pelo refino (modo 'refinar') e pela aplicação de proposta da sessão de
+ * lapidação (origem='sessao'), que registram também a ORIGEM e a INSTRUÇÃO do
+ * advogado — o rastro do "porquê" daquela versão (085).
+ *
+ * Nunca duplica: se aquele número de versão já está arquivado (o refino grava a
+ * linha antes do stream), a chamada é no-op — cada versão tem UMA linha, e a
+ * que já existe é a que carrega o "porquê". Mesma regra do salvar-peca.
  */
 export async function salvarVersaoAnterior(
   supabase: SupabaseServer,
@@ -272,8 +277,21 @@ export async function salvarVersaoAnterior(
     usuarioId: string
     origem?: OrigemVersao
     instrucao?: string | null
+    /** Sessão de lapidação que originou a versão (origem='sessao'). */
+    sessaoId?: string | null
+    /** Turno da sessão que originou a versão. */
+    turnoId?: string | null
   },
 ): Promise<void> {
+  const { data: jaArquivada } = await supabase
+    .from('pecas_versoes')
+    .select('id')
+    .eq('peca_id', params.pecaId)
+    .eq('versao', params.versao)
+    .limit(1)
+    .maybeSingle()
+  if (jaArquivada) return
+
   await supabase.from('pecas_versoes').insert({
     peca_id: params.pecaId,
     versao: params.versao,
@@ -281,6 +299,8 @@ export async function salvarVersaoAnterior(
     alterado_por: params.usuarioId,
     origem: params.origem ?? 'manual',
     instrucao: params.instrucao ?? null,
+    sessao_id: params.sessaoId ?? null,
+    turno_id: params.turnoId ?? null,
   })
 }
 
