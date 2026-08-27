@@ -147,6 +147,9 @@ export class DriverMessages implements SessaoDriver {
     }
 
     if (erro) {
+      // Consome a promessa final mesmo no caminho de erro: deixá-la pendente
+      // deixaria uma rejeição sem tratamento pendurada no processo.
+      void chamada.getFinal().catch(() => {})
       yield { tipo: 'erro', mensagem: erro }
       return
     }
