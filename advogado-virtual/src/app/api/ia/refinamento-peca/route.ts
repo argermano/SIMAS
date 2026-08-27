@@ -2,50 +2,28 @@ import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
-import { statusInicialPeca, respostaStreamPeca, logUsagePosStream, salvarPecaPosStreamSeVazia } from '@/lib/ia/pecas/motor'
+import { montarContextoPeca } from '@/lib/ia/pecas/contexto'
+import {
+  statusInicialPeca,
+  montarPromptDoModo,
+  respostaStreamPeca,
+  logUsagePosStream,
+  salvarPecaPosStreamSeVazia,
+} from '@/lib/ia/pecas/motor'
 import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
-import { SYSTEM_REGRAS_FORENSE } from '@/lib/prompts/pecas/regras-formatacao'
 import { logger } from '@/lib/logger'
 
 export const maxDuration = 300 // geração/reescrita de peça pode levar 150-275s; teto baixo cortava a saída
 
-const LABELS_AREA: Record<string, string> = {
-  previdenciario: 'Previdenciário',
-  trabalhista:    'Trabalhista',
-  civel:          'Cível',
-  criminal:       'Criminal',
-  tributario:     'Tributário',
-  empresarial:    'Empresarial',
-  familia:        'Família',
-  medico:         'Direito Médico',
-}
-
-const SYSTEM_REFINAMENTO = `Você é um advogado brasileiro extremamente experiente e minucioso, especialista em revisão e refinamento de peças processuais. Seu trabalho é receber uma peça existente, analisá-la junto com os documentos do caso e as instruções do advogado, e produzir uma versão refinada e melhorada.
-
-REGRA FUNDAMENTAL — MANTER O PADRÃO DO ADVOGADO:
-A peça original foi redigida pelo advogado e reflete o ESTILO, ESTRUTURA e MODELO preferido dele. Você DEVE:
-- Preservar a mesma estrutura de seções e organização da peça original
-- Manter o mesmo tom e estilo de redação do advogado
-- Respeitar a ordem dos argumentos e a lógica de exposição original
-- Manter o mesmo nível de formalidade e vocabulário
-- NÃO reorganizar seções, NÃO alterar a estrutura dos pedidos, NÃO mudar o formato do preâmbulo
-- Apenas MELHORAR o conteúdo dentro da estrutura existente, nunca substituir o modelo
-
-REGRAS:
-- Produza a peça completa em Markdown, pronta para uso
-- Mantenha a estrutura formal da peça (endereçamento, qualificação, fatos, fundamentação, pedidos)
-- Preserve dados corretos da peça original (nomes, CPFs, datas, etc.)
-- Corrija erros factuais quando os documentos contradizem a peça
-- Fortaleça a argumentação jurídica com base nos documentos
-- Siga as instruções específicas do advogado
-- Use formatação Markdown (##, **, etc.) para estruturar a peça
-- Campos que não puderem ser determinados devem usar [PREENCHER]
-- NÃO inclua comentários, explicações ou metadados — apenas a peça refinada
-- NUNCA use linhas divisórias (---, ___, ***) — separe seções apenas com espaçamento e títulos
-
-${SYSTEM_REGRAS_FORENSE}`
-
-// POST /api/ia/refinamento-peca — gera peça refinada com streaming
+// POST /api/ia/refinamento-peca — porta de entrada de peça VINDA DE FORA: o
+// advogado cola/sobe uma peça pronta e a IA a refina com os documentos do caso.
+// Cria a peça v1 no SIMAS (é o nascimento dela aqui dentro) — diferente de
+// /api/ia/refinar-peca, que refina uma peça JÁ existente e a versiona.
+//
+// Usa o modo 'refinar' do motor único (F0.2): mesmo system e mesma montagem de
+// prompt, agora com a triagem de relevância dos documentos e o teto por
+// documento (MAX_CHARS_POR_DOC) — antes ia o texto integral de todos os
+// documentos, o principal candidato a estourar o limite de prompt (413).
 export async function POST(req: NextRequest) {
   const start = Date.now()
 
@@ -72,57 +50,22 @@ export async function POST(req: NextRequest) {
 
     const statusInicial = statusInicialPeca(usuario.role)
 
-    // Buscar atendimento + documentos + cliente
-    const { data: atendimento } = await supabase
-      .from('atendimentos')
-      .select('*, documentos(tipo, texto_extraido, file_name), clientes(nome)')
-      .eq('id', atendimentoId)
-      .eq('tenant_id', usuario.tenant_id)
-      .single()
-    if (!atendimento) return jsonError('Atendimento não encontrado', 404)
+    // Contexto enxuto: documentos triados + qualificação. Sem jurisprudência e
+    // sem modelo padrão — a estrutura aqui é a da peça que o advogado trouxe.
+    const ctx = await montarContextoPeca({
+      supabase,
+      tenantId: usuario.tenant_id,
+      atendimentoId,
+      area,
+      tipo: 'refinamento',
+      escopo: 'enxuto',
+    })
+    if (!ctx) return jsonError('Atendimento não encontrado', 404)
 
-    const documentos = (atendimento.documentos ?? [])
-      .filter((d: Record<string, unknown>) => d.texto_extraido && (d.texto_extraido as string).trim().length > 10)
-      .map((d: Record<string, unknown>) => ({
-        tipo: d.tipo as string,
-        texto_extraido: d.texto_extraido as string,
-        file_name: d.file_name as string,
-      }))
-
-    const nomeArea = LABELS_AREA[area] ?? area
-
-    // Build prompt
-    const partes: string[] = [
-      `Você é um advogado especialista em Direito ${nomeArea}. Refine a peça processual abaixo.`,
-      '',
-      '## PEÇA ORIGINAL (a ser refinada)',
-      pecaOriginal,
-    ]
-
-    if (documentos.length > 0) {
-      partes.push('', '## DOCUMENTOS DO CASO')
-      for (const doc of documentos) {
-        partes.push(`### ${doc.file_name} (${doc.tipo})`, doc.texto_extraido, '')
-      }
-      partes.push('Use os documentos acima para corrigir dados, fortalecer argumentação e fundamentar melhor os pedidos.')
-    }
-
-    if (instrucoes?.trim()) {
-      partes.push('', '## INSTRUÇÕES DO ADVOGADO (PRIORIDADE MÁXIMA)', instrucoes.trim())
-    }
-
-    partes.push(
-      '',
-      '## TAREFA',
-      `Produza a peça refinada COMPLETA em Markdown, considerando a área de ${nomeArea}.`,
-      'IMPORTANTE: Mantenha EXATAMENTE o mesmo padrão, modelo e estrutura da peça original do advogado.',
-      'Apenas melhore o conteúdo (argumentação, fundamentação, dados) dentro da estrutura existente.',
-      'Aplique as instruções do advogado, cruze com os documentos e melhore a argumentação.',
-      'NUNCA use linhas divisórias (---, ___) na peça.',
-      'Responda APENAS com o Markdown da peça — sem explicações, sem comentários.',
-    )
-
-    const prompt = partes.join('\n')
+    const { system, prompt } = montarPromptDoModo('refinar', ctx, {
+      pecaAtual: pecaOriginal,
+      instrucao: instrucoes,
+    })
 
     // Criar peça no banco
     const { data: peca } = await supabase
@@ -139,7 +82,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     const { stream, getUsage, getFinal } = await streamCompletion({
-      system: SYSTEM_REFINAMENTO,
+      system,
       prompt,
       maxTokens: 32768,
     })

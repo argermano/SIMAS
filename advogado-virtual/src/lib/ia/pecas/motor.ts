@@ -1,10 +1,11 @@
 // Núcleo de orquestração compartilhado pelos endpoints de geração/refino de
 // peças (gerar-peca, refinamento-peca, refinar-peca, correcao-auto).
 //
-// NÃO contém prompts — só a "fiação" comum: status inicial, aumento do prompt
-// com modelo/jurisprudência, resposta SSE, log de uso pós-stream e
-// versionamento. Cada endpoint é um adaptador fino (modo: criar | refinar |
-// corrigir) sobre estes helpers + o registro de prompts curados.
+// NÃO contém prompts próprios — só a "fiação" comum: status inicial, aumento do
+// prompt com modelo/jurisprudência, resposta SSE, log de uso pós-stream,
+// versionamento e a COMPOSIÇÃO dos modos (montarPromptDoModo). Cada endpoint é
+// um adaptador fino (modo: criar | refinar | corrigir) sobre estes helpers + o
+// contexto do caso (./contexto.ts) + o registro de prompts curados.
 
 import { after } from 'next/server'
 import * as Sentry from '@sentry/nextjs'
@@ -12,6 +13,10 @@ import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { logUsage } from '@/lib/anthropic/usage'
 import { formatarPeca } from '@/lib/format/formatar-peca'
 import { logger } from '@/lib/logger'
+import { AREAS, type AreaId } from '@/lib/constants/areas'
+import { SYSTEM_MODO_REFINAR, buildPromptModoRefinar } from '@/lib/prompts/pecas/_shared/modo-refinar'
+import { SYSTEM_MODO_CORRIGIR, buildPromptModoCorrigir } from '@/lib/prompts/pecas/_shared/modo-corrigir'
+import type { ContextoPeca } from './contexto'
 import type { createClient } from '@/lib/supabase/server'
 
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>
@@ -33,6 +38,14 @@ export function salvarPecaPosStreamSeVazia(params: {
   getFinal: () => Promise<{ text: string }>
   pecaId: string
   atendimentoId: string
+  /**
+   * Refino da MESMA peça (modo 'refinar'): aqui a peça JÁ tem conteúdo, então a
+   * rede não pode olhar só "está vazia?" — ela cobre exclusivamente o ABANDONO.
+   * Só grava se o conteúdo no banco continuar sendo EXATAMENTE o de antes do
+   * stream; se o cliente já salvou (fluxo normal, com a guarda anti-encolhimento
+   * da camada C), não encosta na peça.
+   */
+  refino?: { conteudoAnterior: string | null; versaoAnterior: number }
 }): void {
   after(async () => {
     const admin = createAdminClient(
@@ -49,8 +62,15 @@ export function salvarPecaPosStreamSeVazia(params: {
         .eq('id', params.pecaId)
         .single()
 
-      // Caminho feliz: o cliente já salvou — nada a fazer.
-      if (atual?.conteudo_markdown) return
+      if (params.refino) {
+        // Refino: o cliente já persistiu o texto novo → nada a fazer. Comparar o
+        // conteúdo (e não só "não vazio") é o que impede sobrescrever em silêncio
+        // uma edição do advogado feita durante o stream.
+        if ((atual?.conteudo_markdown ?? '') !== (params.refino.conteudoAnterior ?? '')) return
+      } else if (atual?.conteudo_markdown) {
+        // Geração: caminho feliz — o cliente já salvou.
+        return
+      }
 
       // Última linha de defesa: um blip transitório no banco não pode custar a
       // peça, então persiste com 1 retry (o builder do supabase-js não lança
@@ -59,11 +79,18 @@ export function salvarPecaPosStreamSeVazia(params: {
         pecaId: params.pecaId,
         atendimentoId: params.atendimentoId,
         conteudoMarkdown: formatarPeca(text),
+        // No refino a peça sobrevive à rodada: a versão anterior já foi
+        // arquivada em pecas_versoes antes do stream, então aqui só avança o nº.
+        novaVersao: params.refino ? params.refino.versaoAnterior + 1 : undefined,
+        // ...e o caso NÃO volta para 'peca_gerada': refinar uma peça de um
+        // atendimento finalizado não pode reabrir o caso pelas costas.
+        marcarAtendimento: !params.refino,
       })
 
       logger.warn('ia.pecas.rede_seguranca.salvou', {
         pecaId: params.pecaId,
         atendimentoId: params.atendimentoId,
+        modo: params.refino ? 'refino' : 'criacao',
       })
     } catch (e) {
       // Falha do fallback do fallback: o usuário já recebeu "sucesso" e a peça
@@ -116,14 +143,24 @@ function erroPersistencia(tabela: 'pecas' | 'atendimentos', status: number, code
  */
 async function gravarPecaComRetry(
   admin: SupabaseAdmin,
-  params: { pecaId: string; atendimentoId: string; conteudoMarkdown: string },
+  params: {
+    pecaId: string
+    atendimentoId: string
+    conteudoMarkdown: string
+    novaVersao?: number
+    /** Marca o atendimento como 'peca_gerada' (só na criação — ver refino). */
+    marcarAtendimento?: boolean
+  },
 ): Promise<void> {
   const gravar = async () => {
+    const patch: Record<string, unknown> = { conteudo_markdown: params.conteudoMarkdown }
+    if (params.novaVersao !== undefined) patch.versao = params.novaVersao
     const up = await admin
       .from('pecas')
-      .update({ conteudo_markdown: params.conteudoMarkdown })
+      .update(patch)
       .eq('id', params.pecaId)
     if (up.error) throw erroPersistencia('pecas', up.status, up.error.code)
+    if (params.marcarAtendimento === false) return
     const upAtend = await admin
       .from('atendimentos')
       .update({ status: 'peca_gerada' })
@@ -218,18 +255,101 @@ export function logUsagePosStream(params: {
   }).catch((e) => console.error(`[logUsage] erro pós-stream (${params.endpoint}):`, e))
 }
 
+/** De onde veio a versão arquivada (coluna `origem` da migration 085). */
+export type OrigemVersao = 'manual' | 'sessao' | 'correcao' | 'refino'
+
 /**
  * Salva a versão atual da peça em pecas_versoes antes de sobrescrevê-la.
- * Usado por correcao-auto e refinar-peca (modo: corrigir/refinar).
+ * Usado pelo refino (modo 'refinar'), que registra também a ORIGEM e a
+ * INSTRUÇÃO do advogado — o rastro do "porquê" daquela versão (085).
  */
 export async function salvarVersaoAnterior(
   supabase: SupabaseServer,
-  params: { pecaId: string; versao: number; conteudoMarkdown: string | null; usuarioId: string },
+  params: {
+    pecaId: string
+    versao: number
+    conteudoMarkdown: string | null
+    usuarioId: string
+    origem?: OrigemVersao
+    instrucao?: string | null
+  },
 ): Promise<void> {
   await supabase.from('pecas_versoes').insert({
     peca_id: params.pecaId,
     versao: params.versao,
     conteudo_markdown: params.conteudoMarkdown,
     alterado_por: params.usuarioId,
+    origem: params.origem ?? 'manual',
+    instrucao: params.instrucao ?? null,
   })
+}
+
+// ─── Modos do motor único (F0.2) ────────────────────────────────────────────
+
+/**
+ * Os três modos do motor de peças. TODOS usam o mesmo contexto do caso
+ * (montarContextoPeca) e mudam apenas a composição do prompt:
+ *  • 'criar'    — redige a peça do zero (prompt curado da área/tipo + modelo do
+ *                 escritório + jurisprudência + fundamentação verificada).
+ *  • 'refinar'  — reescreve uma peça existente sob a instrução do advogado.
+ *  • 'corrigir' — aplica uma das correções automáticas do editor.
+ */
+export type ModoMotor = 'criar' | 'refinar' | 'corrigir'
+
+/** Entradas específicas do modo (o contexto do caso vem no ContextoPeca). */
+export interface EntradaModo {
+  /** refinar/corrigir: conteúdo atual da peça. */
+  pecaAtual?: string
+  /** refinar: instrução do advogado para esta rodada. */
+  instrucao?: string
+  /** corrigir: remover_citacao | completar_item | ajustar_pedido. */
+  tipoCorrecao?: string
+}
+
+/**
+ * Compõe o par (system, prompt) do modo. É PURA — nenhum acesso a banco ou
+ * rede — justamente para os snapshots poderem travar o texto byte a byte.
+ *
+ * O modo 'criar' reproduz EXATAMENTE o que a rota gerar-peca fazia inline:
+ * promptBase + modelo padrão + jurisprudência + fundamentação verificada.
+ * O modo 'corrigir' não usa contexto do caso (a correção só olha a peça).
+ */
+export function montarPromptDoModo(
+  modo: ModoMotor,
+  ctx: ContextoPeca | null,
+  entrada: EntradaModo = {},
+): { system: string; prompt: string } {
+  if (modo === 'corrigir') {
+    return {
+      system: SYSTEM_MODO_CORRIGIR,
+      prompt: buildPromptModoCorrigir(entrada.pecaAtual ?? '', entrada.tipoCorrecao ?? ''),
+    }
+  }
+
+  if (!ctx) throw new Error(`montarPromptDoModo('${modo}') exige o contexto do caso`)
+
+  if (modo === 'refinar') {
+    // Quando existe prompt curado para (área, tipo), ele entra ANTES do bloco de
+    // refino: a persona/estrutura da área continua valendo, o modo só acrescenta
+    // "reescreva preservando o padrão do advogado". Sem curado (ex.: peça colada
+    // de fora, tipo 'refinamento'), o system é só o do modo.
+    return {
+      system: ctx.meta.curado ? `${ctx.system}\n\n${SYSTEM_MODO_REFINAR}` : SYSTEM_MODO_REFINAR,
+      prompt: buildPromptModoRefinar({
+        areaNome: AREAS[ctx.meta.area as AreaId]?.nome ?? ctx.meta.area,
+        pecaAtual: entrada.pecaAtual ?? '',
+        documentos: ctx.documentosContexto,
+        instrucoes: entrada.instrucao,
+      }),
+    }
+  }
+
+  return {
+    system: ctx.system,
+    prompt:
+      anexarModeloEJurisprudencia(ctx.promptBase, {
+        modeloPadrao: ctx.meta.modeloPadrao,
+        jurisprudenciaTexto: ctx.meta.jurisprudenciaTexto,
+      }) + ctx.meta.blocoFundamentacao,
+  }
 }

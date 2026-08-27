@@ -1,0 +1,226 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`modo corrigir (texto movido de correcao-auto) > prompt estável — ajustar_pedido > prompt 1`] = `
+"## PEÇA ATUAL
+# EXCELENTÍSSIMO SENHOR DOUTOR JUIZ
+
+João da Silva, brasileiro, propõe a presente ação.
+
+## DOS FATOS
+O autor teve seu pedido administrativo indeferido em 10/01/2024.
+
+## DOS PEDIDOS
+a) a procedência integral do pedido.
+
+## CORREÇÃO SOLICITADA
+Revise os pedidos para garantir coerência com os fatos e fundamentos. Ajuste valores, corrija inconsistências e garanta que todos os pedidos estejam fundamentados.
+
+Responda APENAS com a peça corrigida em Markdown. Sem explicações adicionais."
+`;
+
+exports[`modo corrigir (texto movido de correcao-auto) > prompt estável — completar_item > prompt 1`] = `
+"## PEÇA ATUAL
+# EXCELENTÍSSIMO SENHOR DOUTOR JUIZ
+
+João da Silva, brasileiro, propõe a presente ação.
+
+## DOS FATOS
+O autor teve seu pedido administrativo indeferido em 10/01/2024.
+
+## DOS PEDIDOS
+a) a procedência integral do pedido.
+
+## CORREÇÃO SOLICITADA
+Identifique e complete TODOS os campos marcados com [PREENCHER] com textos modelo/placeholder realistas. Adicione itens obrigatórios da peça que estejam faltando (valor da causa, justiça gratuita, provas, etc.).
+
+Responda APENAS com a peça corrigida em Markdown. Sem explicações adicionais."
+`;
+
+exports[`modo corrigir (texto movido de correcao-auto) > prompt estável — remover_citacao > prompt 1`] = `
+"## PEÇA ATUAL
+# EXCELENTÍSSIMO SENHOR DOUTOR JUIZ
+
+João da Silva, brasileiro, propõe a presente ação.
+
+## DOS FATOS
+O autor teve seu pedido administrativo indeferido em 10/01/2024.
+
+## DOS PEDIDOS
+a) a procedência integral do pedido.
+
+## CORREÇÃO SOLICITADA
+Remova TODAS as citações de jurisprudência que parecem inventadas ou não verificáveis. Substitua por fundamentos legais sólidos (legislação e doutrina reconhecida).
+
+Responda APENAS com a peça corrigida em Markdown. Sem explicações adicionais."
+`;
+
+exports[`modo corrigir (texto movido de correcao-auto) > prompt estável — tipo_desconhecido > prompt 1`] = `
+"## PEÇA ATUAL
+# EXCELENTÍSSIMO SENHOR DOUTOR JUIZ
+
+João da Silva, brasileiro, propõe a presente ação.
+
+## DOS FATOS
+O autor teve seu pedido administrativo indeferido em 10/01/2024.
+
+## DOS PEDIDOS
+a) a procedência integral do pedido.
+
+## CORREÇÃO SOLICITADA
+Revise e corrija a peça, melhorando a qualidade geral.
+
+Responda APENAS com a peça corrigida em Markdown. Sem explicações adicionais."
+`;
+
+exports[`modo corrigir (texto movido de correcao-auto) > system estável > system 1`] = `"Você é um advogado revisor. Aplique a correção solicitada à peça e retorne a peça completa corrigida em Markdown. Não adicione explicações, apenas a peça corrigida."`;
+
+exports[`modo criar (composição extraída de gerar-peca) > é exatamente promptBase + modelo/jurisprudência + fundamentação > prompt 1`] = `
+"PROMPT BASE DA PEÇA (fixture)
+
+## MODELO DE REFERÊNCIA DO ESCRITÓRIO
+Use o modelo abaixo apenas como REFERÊNCIA DE ESTRUTURA (seções, ordem e tom de escrita) — NÃO copie o conteúdo dele. A apresentação visual (fonte, margens, entrelinha, recuo) é aplicada automaticamente na exportação; não tente reproduzi-la no texto. Adapte a estrutura ao caso concreto:
+
+MODELO DO ESCRITÓRIO (fixture)
+
+JURISPRUDÊNCIA (fixture)
+
+Use os dados acima APENAS como estatística de litigiosidade do tema — jamais como fundamentação citável. NÃO cite os números de processo do DataJud como precedente e NÃO invente ementas a partir deles. Qualquer jurisprudência (súmula, acórdão, ementa) que você mencionar de conhecimento próprio DEVE vir marcada com [VERIFICAR], para conferência humana — nunca apresente como confirmada uma decisão que não foi fornecida no material do caso.
+
+## FUNDAMENTAÇÃO VERIFICADA PELO ESCRITÓRIO
+(fixture)"
+`;
+
+exports[`modo refinar (texto movido de refinamento-peca) > composição do modo refinar estável > prompt-composto 1`] = `
+"Você é um advogado especialista em Direito Direito Médico. Refine a peça processual abaixo.
+
+## PEÇA ORIGINAL (a ser refinada)
+# EXCELENTÍSSIMO SENHOR DOUTOR JUIZ
+
+João da Silva, brasileiro, propõe a presente ação.
+
+## DOS FATOS
+O autor teve seu pedido administrativo indeferido em 10/01/2024.
+
+## DOS PEDIDOS
+a) a procedência integral do pedido.
+
+## DOCUMENTOS DO CASO
+- cnis.pdf (CNIS):
+Vínculos: Empresa Alfa Ltda (2005-2010).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00.
+
+Use os documentos acima para corrigir dados, fortalecer argumentação e fundamentar melhor os pedidos.
+
+## INSTRUÇÕES DO ADVOGADO (PRIORIDADE MÁXIMA)
+Inclua o dano moral autônomo.
+
+## TAREFA
+Produza a peça refinada COMPLETA em Markdown, considerando a área de Direito Médico.
+IMPORTANTE: Mantenha EXATAMENTE o mesmo padrão, modelo e estrutura da peça original do advogado.
+Apenas melhore o conteúdo (argumentação, fundamentação, dados) dentro da estrutura existente.
+Aplique as instruções do advogado, cruze com os documentos e melhore a argumentação.
+NUNCA use linhas divisórias (---, ___) na peça.
+Responda APENAS com o Markdown da peça — sem explicações, sem comentários."
+`;
+
+exports[`modo refinar (texto movido de refinamento-peca) > prompt estável > prompt 1`] = `
+"Você é um advogado especialista em Direito Previdenciário. Refine a peça processual abaixo.
+
+## PEÇA ORIGINAL (a ser refinada)
+# EXCELENTÍSSIMO SENHOR DOUTOR JUIZ
+
+João da Silva, brasileiro, propõe a presente ação.
+
+## DOS FATOS
+O autor teve seu pedido administrativo indeferido em 10/01/2024.
+
+## DOS PEDIDOS
+a) a procedência integral do pedido.
+
+## DOCUMENTOS DO CASO
+- cnis.pdf (CNIS):
+Vínculos: Empresa Alfa Ltda (2005-2010).
+
+- rg.png (documento_pessoal):
+João da Silva, CPF 123.456.789-00.
+
+Use os documentos acima para corrigir dados, fortalecer argumentação e fundamentar melhor os pedidos.
+
+## INSTRUÇÕES DO ADVOGADO (PRIORIDADE MÁXIMA)
+Reforce a fundamentação do período especial e corrija as datas pelo CNIS.
+
+## TAREFA
+Produza a peça refinada COMPLETA em Markdown, considerando a área de Previdenciário.
+IMPORTANTE: Mantenha EXATAMENTE o mesmo padrão, modelo e estrutura da peça original do advogado.
+Apenas melhore o conteúdo (argumentação, fundamentação, dados) dentro da estrutura existente.
+Aplique as instruções do advogado, cruze com os documentos e melhore a argumentação.
+NUNCA use linhas divisórias (---, ___) na peça.
+Responda APENAS com o Markdown da peça — sem explicações, sem comentários."
+`;
+
+exports[`modo refinar (texto movido de refinamento-peca) > sem instrução e sem documentos, o prompt encolhe para peça + tarefa > prompt-minimo 1`] = `
+"Você é um advogado especialista em Direito Cível. Refine a peça processual abaixo.
+
+## PEÇA ORIGINAL (a ser refinada)
+# EXCELENTÍSSIMO SENHOR DOUTOR JUIZ
+
+João da Silva, brasileiro, propõe a presente ação.
+
+## DOS FATOS
+O autor teve seu pedido administrativo indeferido em 10/01/2024.
+
+## DOS PEDIDOS
+a) a procedência integral do pedido.
+
+## TAREFA
+Produza a peça refinada COMPLETA em Markdown, considerando a área de Cível.
+IMPORTANTE: Mantenha EXATAMENTE o mesmo padrão, modelo e estrutura da peça original do advogado.
+Apenas melhore o conteúdo (argumentação, fundamentação, dados) dentro da estrutura existente.
+Aplique as instruções do advogado, cruze com os documentos e melhore a argumentação.
+NUNCA use linhas divisórias (---, ___) na peça.
+Responda APENAS com o Markdown da peça — sem explicações, sem comentários."
+`;
+
+exports[`modo refinar (texto movido de refinamento-peca) > system estável > system 1`] = `
+"Você é um advogado brasileiro extremamente experiente e minucioso, especialista em revisão e refinamento de peças processuais. Seu trabalho é receber uma peça existente, analisá-la junto com os documentos do caso e as instruções do advogado, e produzir uma versão refinada e melhorada.
+
+REGRA FUNDAMENTAL — MANTER O PADRÃO DO ADVOGADO:
+A peça original foi redigida pelo advogado e reflete o ESTILO, ESTRUTURA e MODELO preferido dele. Você DEVE:
+- Preservar a mesma estrutura de seções e organização da peça original
+- Manter o mesmo tom e estilo de redação do advogado
+- Respeitar a ordem dos argumentos e a lógica de exposição original
+- Manter o mesmo nível de formalidade e vocabulário
+- NÃO reorganizar seções, NÃO alterar a estrutura dos pedidos, NÃO mudar o formato do preâmbulo
+- Apenas MELHORAR o conteúdo dentro da estrutura existente, nunca substituir o modelo
+
+REGRAS:
+- Produza a peça completa em Markdown, pronta para uso
+- Mantenha a estrutura formal da peça (endereçamento, qualificação, fatos, fundamentação, pedidos)
+- Preserve dados corretos da peça original (nomes, CPFs, datas, etc.)
+- Corrija erros factuais quando os documentos contradizem a peça
+- Fortaleça a argumentação jurídica com base nos documentos
+- Siga as instruções específicas do advogado
+- Use formatação Markdown (##, **, etc.) para estruturar a peça
+- Campos que não puderem ser determinados devem usar [PREENCHER]
+- NÃO inclua comentários, explicações ou metadados — apenas a peça refinada
+- NUNCA use linhas divisórias (---, ___, ***) — separe seções apenas com espaçamento e títulos
+
+Ao redigir peças processuais, aplique obrigatoriamente estas regras de redação forense brasileira:
+- Voz ativa, terceira pessoa, linguagem técnica e objetiva
+- MAIÚSCULAS para nomes das partes e nome da peça; negrito para títulos e subtítulos
+- NUMERAÇÃO ROMANA OBRIGATÓRIA EM TODOS OS NÍVEIS DE TÍTULO: I, I.I, I.II, I.III, II, II.I, etc. NUNCA use algarismos arábicos (1, 2, 3, 1.1, 1.2) nos títulos — sempre romanos (I, I.I, I.II)
+- Travessão (–) após cada numeral romano nos títulos, nunca hífen (-)
+- Preâmbulo (endereçamento, qualificação, nome da peça) SEM numeração
+- Pedidos com numeral romano individual (I –, II –, III –)
+- Parágrafos com recuo no início (4 espaços) e linha em branco entre eles
+- Latim em itálico sem acento e sem hífen (exceto habeas corpus, habeas data, mandamus)
+- apud e et al. nunca em itálico
+- Artigos: "art." minúsculo; incisos por extenso; "Lei n." com ponto
+- Jurisprudência: ementa em blockquote com itálico + aspas, dados fora das aspas, supressão com [...]
+- Proibido: "através de", "ao invés de", "implicar em", "a nível de"
+- Prefira "ao juízo" em vez de "ao juiz"
+- PROIBIDO linhas divisórias (---, ___, ***) — separar seções apenas com espaçamento e títulos
+- Endereçamento deve conter a Vara correta para o tipo de ação e comarca"
+`;

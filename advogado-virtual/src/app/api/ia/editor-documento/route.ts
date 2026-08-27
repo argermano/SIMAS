@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { getAuthContext } from '@/lib/auth'
 import { jsonError } from '@/lib/api'
 import { streamCompletion, DEFAULT_MODEL } from '@/lib/anthropic/client'
+import { verificarCota, mensagemCotaExcedida } from '@/lib/anthropic/quota'
+import { contextoDaPeca, blocoContextoDoCaso } from '@/lib/ia/pecas/contexto'
 import { logUsagePosStream } from '@/lib/ia/pecas/motor'
 import { logger } from '@/lib/logger'
 
@@ -20,17 +22,24 @@ REGRAS:
 - Responda APENAS com o conteúdo Markdown da seção solicitada, sem explicações adicionais
 - Use # para título principal, ## para seções, ### para subseções`
 
-// POST /api/ia/editor-documento — gerar ou reescrever seção de documento com streaming
+// POST /api/ia/editor-documento — gerar ou reescrever seção de documento com streaming.
+//
+// F0.2: aceita `pecaId` opcional. Com ele, a edição passa a enxergar o CASO
+// (qualificação das partes + documentos relevantes do dossiê), em vez de editar
+// no escuro — é a diferença entre "reescreva esta seção" e "reescreva esta
+// seção sabendo quem é o autor e o que dizem as provas". Sem `pecaId`, o
+// comportamento é exatamente o de antes.
 export async function POST(req: NextRequest) {
   const start = Date.now()
   try {
-    const { acao, conteudo, descricao, contexto_documento, instrucao, documento_completo } = await req.json() as {
+    const { acao, conteudo, descricao, contexto_documento, instrucao, documento_completo, pecaId } = await req.json() as {
       acao: Acao
       conteudo?: string
       descricao?: string
       contexto_documento?: string
       instrucao?: string
       documento_completo?: string
+      pecaId?: string
     }
 
     if (!acao) {
@@ -39,7 +48,11 @@ export async function POST(req: NextRequest) {
 
     const auth = await getAuthContext()
     if (!auth.ok) return auth.response
-    const { usuario } = auth
+    const { supabase, usuario } = auth
+
+    // Deixa de ser sem-limite: a edição por IA no editor agora tem cota própria.
+    const cota = await verificarCota(supabase, usuario.tenant_id, 'editor_documento')
+    if (!cota.permitido) return jsonError(mensagemCotaExcedida(cota), 429)
 
     let prompt: string
 
@@ -84,6 +97,14 @@ ${descricao}
 
 Gere o conteúdo completo da seção em Markdown. Inclua um heading (##) como título da seção seguido do conteúdo.
 Retorne APENAS o conteúdo Markdown da seção, sem explicações adicionais.`
+    }
+
+    // Contexto do caso (opcional): entra ANTES da tarefa — material de
+    // referência primeiro, instrução por último. Best-effort: se a peça sumiu ou
+    // o dossiê falhar, a edição acontece como sempre aconteceu.
+    if (pecaId) {
+      const ctx = await contextoDaPeca({ supabase, tenantId: usuario.tenant_id, pecaId })
+      if (ctx) prompt = `${blocoContextoDoCaso(ctx)}\n\n${prompt}`
     }
 
     const { stream, getUsage } = await streamCompletion({ system: SYSTEM_EDITOR, prompt })

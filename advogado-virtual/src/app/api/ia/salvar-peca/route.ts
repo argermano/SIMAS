@@ -56,14 +56,27 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Salva versão histórica antes de atualizar
+    // Salva versão histórica antes de atualizar. Se esta versão JÁ foi
+    // arquivada (o refino grava a linha antes do stream, com origem='refino' e a
+    // instrução do advogado), não duplica: cada número de versão tem UMA linha
+    // no histórico, e a que já existe é a que carrega o "porquê".
     if (pecaAtual.conteudo_markdown) {
-      await supabase.from('pecas_versoes').insert({
-        peca_id: pecaId,
-        versao: pecaAtual.versao,
-        conteudo_markdown: pecaAtual.conteudo_markdown,
-        alterado_por: usuario.id,
-      })
+      const { data: jaArquivada } = await supabase
+        .from('pecas_versoes')
+        .select('id')
+        .eq('peca_id', pecaId)
+        .eq('versao', pecaAtual.versao)
+        .limit(1)
+        .maybeSingle()
+
+      if (!jaArquivada) {
+        await supabase.from('pecas_versoes').insert({
+          peca_id: pecaId,
+          versao: pecaAtual.versao,
+          conteudo_markdown: pecaAtual.conteudo_markdown,
+          alterado_por: usuario.id,
+        })
+      }
     }
 
     // Atualiza a peça com novo conteúdo e incrementa versão

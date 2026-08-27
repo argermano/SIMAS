@@ -37,6 +37,7 @@ export const LIMITES_PLANO: Record<string, Record<string, number>> = {
     analise_geral:  100,
     comando:        200,
     correcao:       200,
+    editor_documento: 100,
   },
   basico: {
     gerar_peca:     200,
@@ -48,6 +49,7 @@ export const LIMITES_PLANO: Record<string, Record<string, number>> = {
     analise_geral:  500,
     comando:        1000,
     correcao:       1000,
+    editor_documento: 500,
   },
   profissional: {
     gerar_peca:     1000,
@@ -59,10 +61,13 @@ export const LIMITES_PLANO: Record<string, Record<string, number>> = {
     analise_geral:  2000,
     comando:        5000,
     correcao:       5000,
+    editor_documento: 2000,
   },
 }
-// editor_documento, extrair_dados e extrair_teses ficam SEM limite (log-only,
-// visíveis no dashboard mas sem bloqueio — operações auxiliares/de curadoria).
+// extrair_dados e extrair_teses ficam SEM limite (log-only, visíveis no
+// dashboard mas sem bloqueio — operações auxiliares/de curadoria).
+// editor_documento GANHOU limite no F0.2: com `pecaId` ele carrega o dossiê do
+// caso no prompt, então deixou de ser uma chamadinha de editor.
 
 export function categorizar(endpoint: string): { label: string; grupo: string; chave: string } {
   if (CATEGORIAS[endpoint]) return CATEGORIAS[endpoint]
