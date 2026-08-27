@@ -25,7 +25,9 @@ import { PreencherSidebar } from './PreencherSidebar'
 import { AiComandoDialog } from './AiComandoDialog'
 import { JurisprudenciaDialog } from './JurisprudenciaDialog'
 import { useToast } from '@/components/ui/toast'
+import { Button } from '@/components/ui/button'
 import { baixarGerado, mensagemErroDownload } from '@/lib/download'
+import { PanelRightClose, X } from 'lucide-react'
 
 // Markdown → HTML (entrada) — limpa os mesmos artefatos que a exportação remove,
 // para a prévia refletir o documento final (Word).
@@ -55,9 +57,39 @@ interface DocumentEditorProps {
   extraAcoes?: ReactNode
   /** Opções de exportação .docx (ex.: { contrato: true } ou { compacto: true }). */
   exportOpts?: { compacto?: boolean; contrato?: boolean }
+  /**
+   * Coluna direita opcional (hoje: a sessão de lapidação). Quem passa também
+   * controla se ela existe — o editor só decide ONDE ela cabe: coluna docada em
+   * telas largas, gaveta sobre o documento nas estreitas.
+   */
+  painelLateral?: ReactNode
+  /** Rótulo da gaveta (< xl) e dos botões de fechar/recolher. */
+  painelTitulo?: string
+  /** Fecha o painel — o estado (e a preferência) é de quem o abriu. */
+  onFecharPainel?: () => void
+  /** Peça em edição: dá contexto do caso aos diálogos de IA (F0.2). */
+  pecaId?: string
+  /**
+   * Com uma sessão de lapidação ATIVA, o comando livre de IA deixa de ser
+   * one-shot: vira uma rodada da sessão (com dossiê, histórico e proposta).
+   */
+  onEnviarParaSessao?: (instrucao: string) => void
 }
 
-export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSalvar, salvando, extraAcoes, exportOpts }: DocumentEditorProps) {
+export function DocumentEditor({
+  titulo: tituloInicial,
+  conteudo,
+  onVoltar,
+  onSalvar,
+  salvando,
+  extraAcoes,
+  exportOpts,
+  painelLateral,
+  painelTitulo = 'Painel',
+  onFecharPainel,
+  pecaId,
+  onEnviarParaSessao,
+}: DocumentEditorProps) {
   const { success, error: toastError } = useToast()
   const [titulo, setTitulo]           = useState(tituloInicial)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -70,6 +102,39 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
 
   // Converte o markdown inicial para HTML uma vez
   const conteudoHtml = useMemo(() => mdToHtml(conteudo), [conteudo])
+
+  // xl (1280px) é o ponto em que a coluna do painel CABE ao lado do documento.
+  // O valor tem de casar com as classes `xl:` usadas lá embaixo, senão sobra
+  // painel duplicado (coluna + gaveta) ou nenhum.
+  const [painelCabeDocado, setPainelCabeDocado] = useState(true)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1280px)')
+    const upd = () => setPainelCabeDocado(mq.matches)
+    upd()
+    mq.addEventListener('change', upd)
+    return () => mq.removeEventListener('change', upd)
+  }, [])
+
+  const painelDocado = Boolean(painelLateral) && painelCabeDocado
+
+  // Com a coluna docada, as duas barras laterais do editor recolhem sozinhas:
+  // 224 + 288 + 420px deixariam o documento com menos de 350px num notebook.
+  // Ao fechar o painel, elas voltam exatamente como o usuário as tinha deixado.
+  const lateraisAntesDoPainel = useRef<{ esquerda: boolean; direita: boolean } | null>(null)
+  useEffect(() => {
+    if (painelDocado) {
+      if (!lateraisAntesDoPainel.current) {
+        lateraisAntesDoPainel.current = { esquerda: sidebarCollapsed, direita: rightPanelCollapsed }
+        setSidebarCollapsed(true)
+        setRightPanelCollapsed(true)
+      }
+    } else if (lateraisAntesDoPainel.current) {
+      setSidebarCollapsed(lateraisAntesDoPainel.current.esquerda)
+      setRightPanelCollapsed(lateraisAntesDoPainel.current.direita)
+      lateraisAntesDoPainel.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [painelDocado])
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -212,6 +277,7 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         <TopicSidebar
           editor={editor}
           contextoDocumento={contextoDocumento}
+          pecaId={pecaId}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(v => !v)}
           getMarkdown={getMarkdown}
@@ -225,8 +291,10 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
           }}
         />
 
-        {/* Área do documento — simulação A4 */}
-        <div className="flex-1 overflow-y-auto bg-muted py-8 px-4">
+        {/* Área do documento — simulação A4. `min-w-0` deixa a coluna encolher
+            quando o painel lateral entra (sem ele, a folha A4 empurraria o
+            painel para fora da tela). */}
+        <div className="min-w-0 flex-1 overflow-y-auto bg-muted py-8 px-4">
           <div className="editor-a4-page">
             <EditorContent editor={editor} className="h-full" />
           </div>
@@ -238,7 +306,53 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
           collapsed={rightPanelCollapsed}
           onToggleCollapse={() => setRightPanelCollapsed(v => !v)}
         />
+
+        {/* Painel lateral (xl+): coluna de ~420px, que encolhe até 360 antes de
+            espremer o documento. A guarda CSS (hidden xl:flex) evita a coluna
+            no primeiro paint das telas estreitas, antes de o matchMedia rodar. */}
+        {painelDocado && (
+          <aside className="relative hidden w-[420px] min-w-[360px] shrink border-l border-border bg-card xl:flex xl:flex-col">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onFecharPainel}
+              title={`Recolher ${painelTitulo.toLowerCase()}`}
+              aria-label={`Recolher ${painelTitulo.toLowerCase()}`}
+              className="absolute right-2 top-2 z-10 h-9 w-9 rounded-full bg-card/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </Button>
+            {painelLateral}
+          </aside>
+        )}
       </div>
+
+      {/* Painel lateral (< xl): gaveta sobre o documento. z-45 fica acima do
+          editor (z-40) e abaixo dos diálogos de comparação/revisão (z-50). */}
+      {painelLateral && !painelCabeDocado && (
+        <div className="fixed inset-0 z-[45] xl:hidden" role="dialog" aria-modal="true" aria-label={painelTitulo}>
+          <button
+            type="button"
+            className="absolute inset-0 bg-foreground/30"
+            onClick={onFecharPainel}
+            aria-label={`Fechar ${painelTitulo.toLowerCase()}`}
+            tabIndex={-1}
+          />
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-border bg-card shadow-2xl">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onFecharPainel}
+              title={`Fechar ${painelTitulo.toLowerCase()}`}
+              aria-label={`Fechar ${painelTitulo.toLowerCase()}`}
+              className="absolute right-2 top-2 z-10 h-9 w-9 rounded-full bg-card/80 text-muted-foreground backdrop-blur-sm hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            {painelLateral}
+          </div>
+        </div>
+      )}
 
       {/* Dialog de busca de jurisprudência */}
       <JurisprudenciaDialog
@@ -259,6 +373,8 @@ export function DocumentEditor({ titulo: tituloInicial, conteudo, onVoltar, onSa
         open={comandoIaOpen}
         onClose={() => setComandoIaOpen(false)}
         documentoMarkdown={getMarkdown()}
+        pecaId={pecaId}
+        onEnviarParaSessao={onEnviarParaSessao}
         onAceitar={(novoConteudo) => {
           if (editor) {
             editor.commands.setContent(mdToHtml(novoConteudo))

@@ -39,6 +39,9 @@ const serverSchema = z.object({
   GOOGLE_DRIVE_SA_KEY_BASE64: z.string().optional(),
   GOOGLE_DRIVE_PASTA_RAIZ: z.string().optional(),
   CONTACT_REPLY_EMAIL: z.string().optional(),
+  // Cotação do dólar mostrada no painel da sessão (F0.4). Pública porque quem
+  // formata o custo é o navegador; ausente = 5,70 (src/lib/ia/sessao/custo-brl.ts).
+  NEXT_PUBLIC_USD_BRL: z.string().optional(),
   NEXT_PUBLIC_SITE_URL: z.string().optional(),
   NEXTAUTH_URL: z.string().optional(),
 })

@@ -12,10 +12,21 @@ const STATUS_LABEL: Record<StatusSecao, { label: string; cor: string }> = {
   removida:   { label: 'removida',    cor: 'bg-destructive/10 text-destructive' },
 }
 
+/** O que o advogado decidiu em cada seção — na ordem em que elas aparecem. */
+export interface EscolhaComparador {
+  titulo: string
+  status: StatusSecao
+  escolha: EscolhaSecao
+}
+
 /**
  * Comparador de seções (E9): mostra as diferenças entre a versão anterior e a
  * atual, seção a seção, e deixa o advogado ACEITAR (manter o novo) ou REVERTER
  * (voltar ao anterior) cada uma. Aplica o resultado montado no editor.
+ *
+ * `onAplicar` recebe também as escolhas por seção: quem compara VERSÕES só
+ * precisa do markdown, mas a sessão de lapidação precisa saber QUAL seção foi
+ * aceita para mandar a decisão ao servidor (o texto ele recalcula sozinho).
  */
 export function ComparadorSecoes({
   base,
@@ -27,7 +38,7 @@ export function ComparadorSecoes({
   base: string
   atual: string
   versaoBase?: number
-  onAplicar: (markdown: string) => void
+  onAplicar: (markdown: string, escolhas: EscolhaComparador[]) => void
   onFechar: () => void
 }) {
   const blocos = useMemo(() => compararSecoes(base, atual), [base, atual])
@@ -110,7 +121,16 @@ export function ComparadorSecoes({
 
         <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
           <Button variant="ghost" size="sm" onClick={onFechar}>Cancelar</Button>
-          <Button size="sm" onClick={() => onAplicar(montarMarkdown(blocos, escolhas))} disabled={mudadas.length === 0}>
+          <Button
+            size="sm"
+            onClick={() =>
+              onAplicar(
+                montarMarkdown(blocos, escolhas),
+                blocos.map((b, i) => ({ titulo: b.titulo, status: b.status, escolha: escolhas[i] ?? escolhaPadrao(b.status) })),
+              )
+            }
+            disabled={mudadas.length === 0}
+          >
             Aplicar escolhas
           </Button>
         </div>

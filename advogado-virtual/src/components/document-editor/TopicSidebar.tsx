@@ -10,13 +10,15 @@ import { Sparkles, Plus, RefreshCw, ChevronLeft, ChevronRight, Loader2 } from 'l
 interface TopicSidebarProps {
   editor: Editor | null
   contextoDocumento: string
+  /** Peça em edição: dá ao editor-documento o contexto do caso (F0.2). */
+  pecaId?: string
   collapsed: boolean
   onToggleCollapse: () => void
   getMarkdown?: () => string
   onInsertContent?: (markdown: string) => void
 }
 
-export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCollapse, getMarkdown, onInsertContent }: TopicSidebarProps) {
+export function TopicSidebar({ editor, contextoDocumento, pecaId, collapsed, onToggleCollapse, getMarkdown, onInsertContent }: TopicSidebarProps) {
   const [topics,         setTopics]         = useState<DocumentTopic[]>([])
   const [activeTopic,    setActiveTopic]     = useState<string | null>(null)
   const [rewriteTarget,  setRewriteTarget]   = useState<DocumentTopic | null>(null)
@@ -118,6 +120,7 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
           acao:               'gerar_topico',
           descricao:          descTopico,
           contexto_documento: contextoDocumento,
+          pecaId,
         }),
         signal: abortRef.current.signal,
       })
@@ -280,6 +283,7 @@ export function TopicSidebar({ editor, contextoDocumento, collapsed, onToggleCol
         topicText={rewriteTarget?.text ?? ''}
         originalContent={rewriteTarget ? getTopicContent(rewriteTarget) : ''}
         contextoDocumento={contextoDocumento}
+        pecaId={pecaId}
         onAceitar={handleAceitarReescrita}
       />
 

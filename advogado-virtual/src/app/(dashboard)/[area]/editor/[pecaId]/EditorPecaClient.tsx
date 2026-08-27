@@ -1,17 +1,19 @@
 'use client'
 
-import { useState, useRef, useEffect, type ComponentProps } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, type ComponentProps } from 'react'
 import { useRouter } from 'next/navigation'
 import { DocumentEditor } from '@/components/document-editor/DocumentEditor'
 import { RelatorioValidacao } from '@/components/pecas/RelatorioValidacao'
 import { SeloCitacoes } from '@/components/pecas/SeloCitacoes'
 import { ComparadorSecoes } from '@/components/pecas/ComparadorSecoes'
+import { PainelSessaoPeca } from '@/components/pecas/sessao/PainelSessaoPeca'
+import { useSessaoPeca } from '@/components/pecas/sessao/useSessaoPeca'
 import { useStreaming } from '@/components/shared/StreamingText'
 import { formatarPeca } from '@/lib/format/formatar-peca'
 import { salvarPecaComGuarda } from '@/lib/ia/pecas/salvar-peca-client'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
-import { Send, CheckCircle, Clock, ClipboardCheck, X, Loader2, GitCompare, Paperclip } from 'lucide-react'
+import { Send, CheckCircle, Clock, ClipboardCheck, X, Loader2, GitCompare, Paperclip, Sparkles } from 'lucide-react'
 
 type ValidacaoData = ComponentProps<typeof RelatorioValidacao>['data']
 
@@ -28,6 +30,19 @@ interface EditorPecaClientProps {
   validacaoInicial?: ValidacaoData | null
   /** Já existe um .docx desta peça anexado aos documentos do caso (080). */
   materializada?: boolean
+}
+
+// Preferência por navegador: quem fecha o painel da sessão não quer vê-lo
+// de volta a cada peça aberta. Fora do React (localStorage falha em modo
+// privado/iframe) e lida em layout effect — no HTML do servidor ele não existe.
+const SESSAO_RECOLHIDA_KEY = 'pecas.sessao.recolhido'
+
+function lerSessaoRecolhida(): boolean {
+  try {
+    return localStorage.getItem(SESSAO_RECOLHIDA_KEY) !== '0'
+  } catch {
+    return true
+  }
 }
 
 const PRAZO_OPTIONS = [
@@ -71,6 +86,64 @@ export function EditorPecaClient({
   const [validacao, setValidacao]       = useState<ValidacaoData | null>(validacaoInicial ?? null)
   const [corrigindo, setCorrigindo]     = useState<string | null>(null)
   const { startStream } = useStreaming()
+
+  // Sessão de lapidação (Motor v3 / F0.4). O hook mora AQUI, e não dentro do
+  // painel: a conversa sobrevive ao remount do editor (que acontece a cada
+  // proposta aplicada) e o badge de proposta pendente existe com o painel
+  // fechado.
+  const sessao = useSessaoPeca({ pecaId, atendimentoId })
+  const [painelSessao, setPainelSessao] = useState(false)
+
+  useLayoutEffect(() => {
+    setPainelSessao(!lerSessaoRecolhida())
+  }, [])
+
+  function definirPainelSessao(aberto: boolean) {
+    setPainelSessao(aberto)
+    try {
+      localStorage.setItem(SESSAO_RECOLHIDA_KEY, aberto ? '0' : '1')
+    } catch { /* ignore */ }
+  }
+
+  // Vindo do refinamento (?abrirSessao=1): abre o painel e, se não houver
+  // sessão ativa, cria uma. O parâmetro sai da URL para não repetir a criação
+  // num F5. Lido do window (e não de useSearchParams) para não obrigar a
+  // página a uma fronteira de Suspense no build.
+  const [abrirPedido, setAbrirPedido] = useState(false)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('abrirSessao') !== '1') return
+    setAbrirPedido(true)
+    definirPainelSessao(true)
+    params.delete('abrirSessao')
+    const busca = params.toString()
+    window.history.replaceState(null, '', `${window.location.pathname}${busca ? `?${busca}` : ''}`)
+  }, [])
+
+  const criouSessaoRef = useRef(false)
+  const { carregando: sessaoCarregando, sessao: sessaoAtiva, criarSessao } = sessao
+  useEffect(() => {
+    if (!abrirPedido || sessaoCarregando || sessaoAtiva || criouSessaoRef.current) return
+    criouSessaoRef.current = true
+    void criarSessao('padrao')
+  }, [abrirPedido, sessaoCarregando, sessaoAtiva, criarSessao])
+
+  // Uma proposta virou versão nova: o texto autoritativo está no servidor.
+  async function recarregarPeca() {
+    try {
+      const res = await fetch(`/api/pecas/${pecaId}`)
+      if (res.ok) {
+        const data = await res.json()
+        const novo = (data.peca?.conteudo_markdown as string | undefined) ?? ''
+        setConteudoAtual(novo)
+        setEditorKey((k) => k + 1)
+      }
+    } catch {
+      toastError('Peça atualizada', 'Não foi possível recarregar o texto — recarregue a página.')
+    }
+    // Cabeçalho (v{n}) e histórico de versões vêm do servidor.
+    router.refresh()
+  }
 
   // Comparador de versões (E9): base = versão anterior carregada sob demanda.
   const [comparando, setComparando]     = useState<{ base: string; versao?: number } | null>(null)
@@ -308,9 +381,35 @@ export function EditorPecaClient({
     </a>
   ) : null
 
+  // Lapidar com IA: abre/fecha o painel da sessão. O badge avisa que existe
+  // uma proposta esperando decisão mesmo com o painel fechado.
+  const botaoSessao = (
+    <div className="relative">
+      <Button
+        size="sm"
+        variant={painelSessao ? 'secondary' : 'ghost'}
+        onClick={() => definirPainelSessao(!painelSessao)}
+        className="gap-1.5"
+        title="Conversar com a IA sobre esta peça, com o dossiê do caso"
+      >
+        <Sparkles className="h-4 w-4" />
+        Lapidar com IA
+      </Button>
+      {sessao.propostaPendente && !painelSessao && (
+        <span
+          className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground"
+          title="Há uma proposta aguardando sua decisão"
+        >
+          1
+        </span>
+      )}
+    </div>
+  )
+
   const acoes = (
     <div className="flex items-center gap-2">
       {avisoAnexada}
+      {botaoSessao}
       {seloCitacoes}
       {badgeRevisao}
       <Button
@@ -355,6 +454,29 @@ export function EditorPecaClient({
         onSalvar={handleSalvar}
         salvando={salvando}
         extraAcoes={acoes}
+        pecaId={pecaId}
+        painelTitulo="Lapidação com IA"
+        onFecharPainel={() => definirPainelSessao(false)}
+        onEnviarParaSessao={
+          sessao.sessao && !sessao.encerrada
+            ? (instrucao) => {
+                definirPainelSessao(true)
+                void sessao.enviar(instrucao)
+              }
+            : undefined
+        }
+        painelLateral={
+          painelSessao ? (
+            <PainelSessaoPeca
+              sessao={sessao}
+              conteudoAtual={conteudoAtual}
+              temCaso={Boolean(atendimentoId)}
+              onAplicada={(versao) => {
+                if (versao != null) void recarregarPeca()
+              }}
+            />
+          ) : undefined
+        }
       />
 
       {/* Painel de revisão automática (validar → corrigir) */}

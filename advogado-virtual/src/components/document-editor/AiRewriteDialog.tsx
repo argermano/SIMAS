@@ -11,6 +11,8 @@ interface AiRewriteDialogProps {
   topicText: string
   originalContent: string
   contextoDocumento: string
+  /** Peça em edição: dá ao editor-documento o contexto do caso (F0.2). */
+  pecaId?: string
   onAceitar: (novoConteudo: string) => void
 }
 
@@ -20,6 +22,7 @@ export function AiRewriteDialog({
   topicText,
   originalContent,
   contextoDocumento,
+  pecaId,
   onAceitar,
 }: AiRewriteDialogProps) {
   const [reescrito,   setReescrito]   = useState('')
@@ -46,6 +49,7 @@ export function AiRewriteDialog({
           acao:                 'reescrever',
           conteudo:             originalContent,
           contexto_documento:   contextoDocumento,
+          pecaId,
         }),
         signal: abortRef.current.signal,
       })

@@ -155,7 +155,9 @@ export function TelaRefinamento({
       setTimeout(() => {
         if (controller.signal.aborted) return
         if (emRevisao) success('Peça enviada para revisão!', 'Um advogado ou administrador irá avaliar e aprovar a peça.')
-        router.push(emRevisao ? `/${area}` : `/${area}/editor/${pecaId}`)
+        // ?abrirSessao=1: a peça acabou de nascer da v1 — o editor abre já com
+        // a sessão de lapidação, que é onde o refino de verdade acontece agora.
+        router.push(emRevisao ? `/${area}` : `/${area}/editor/${pecaId}?abrirSessao=1`)
       }, 1400)
     } else if (r.motivo === 'timeout') {
       setRecuperacao({ fase: 'falha' })
@@ -213,7 +215,9 @@ export function TelaRefinamento({
     if (fin.emRevisao) {
       success('Peça enviada para revisão!', 'Um advogado ou administrador irá avaliar e aprovar a peça.')
     }
-    router.push(fin.destino)
+    // Sem revisão pendente, o destino é o editor: abre com a sessão de
+    // lapidação já montada (a rodada seguinte é o refino de verdade).
+    router.push(fin.emRevisao ? fin.destino : `${fin.destino}?abrirSessao=1`)
   }
 
   const podeGerar = !!atendimentoId && pecaOriginal.trim().length > 50
