@@ -16,7 +16,9 @@
 - F0.2 ✅ c22fe89 — Motor único: montarContextoPeca extraído de gerar-peca; ModoMotor criar|refinar|corrigir; refinar-peca reescrita (versiona a peça; origem='refino'+instrucao); correcao-auto no núcleo; editor-documento com pecaId+cota.
 - F0.3 ✅ 909c623 — Sessão (driver messages): pecas_sessoes/turnos/propostas; rotas /api/pecas/[id]/sessao/**; structured output {resumo, secoes[]} → propostas; aplicarPatchSecoes (lib pura+tests); verificar_citacoes por rodada; resumo Haiku dos grandes.
 - F0.4 ✅ 40e9bb7 — UI: painelLateral no DocumentEditor; PainelSessaoPeca (turnos, composer c/ anexo, CardProposta→ComparadorSecoes, BarraCusto, CardArtefato); useSessaoPeca (SSE+retomada).
-- F0.5 Artefatos automáticos: code_execution (server tool) no driver messages; src/lib/ia/sessao/artefatos.ts — todo arquivo gerado (xlsx/csv/docx/pdf/md/png, ≤25MB) vai SEM confirmação ao dossiê (tipo apoio_ia, vínculos caso/processo, Drive), versionando por nome lógico (regerar substitui). Validação da Fase 0 pelo dono.
+- F0.5 ✅ 5ff50d2 — Artefatos automáticos: code_execution (server tool) no driver messages; src/lib/ia/sessao/artefatos.ts — todo arquivo gerado (xlsx/csv/docx/pdf/md/png, ≤25MB) vai SEM confirmação ao dossiê (tipo apoio_ia, vínculos caso/processo, Drive), versionando por nome lógico (regerar substitui). Validação da Fase 0 pelo dono.
+
+> **FASE 0 COMPLETA** (2026-08-27) — F0.1 a F0.5 no ar. Falta só a validação ponta a ponta pelo dono (§15).
 
 > **F0.1 (2026-08-27, 86b98bd)** — entregue: SDK 0.121; client.ts multi-turno + `cache_control` (TTL 1h, opt-in) +
 > thinking adaptive/effort high no 'avancado' + header output-128k removido + `ANTI_INJECTION` exportado + cache tokens no usage;
@@ -74,6 +76,40 @@
 > Único ajuste fora do F0.4: `ComparadorSecoes.onAplicar` passou a receber TAMBÉM as escolhas por seção
 > (aditivo; quem compara versões ignora o 2º argumento). Nada do backend F0.3 precisou mudar.
 > Pendências para o F0.5: `CardArtefato`/`CardFerramenta` (o painel já ignora o evento `ferramenta` sem quebrar).
+
+> **F0.5 (2026-08-27, 5ff50d2)** — entregue: a rodada declara o server tool `code_execution`
+> (`{ type: 'code_execution_20260521', name: 'code_execution' }` na chamada NORMAL de streaming — sem header beta;
+> env `ANTHROPIC_CODE_EXECUTION_TOOL` como válvula para voltar ao `..._20260120`), SEM web tools (Fase 2).
+> `src/lib/anthropic/files.ts` (metadados + download da Files API, beta `files-api-2025-04-14`);
+> `client.ts` aceita `tools`, devolve os BLOCOS da resposta no `getFinal` (é onde estão os `file_id` e o que a
+> retomada de `pause_turn` precisa reenviar) e emite um evento SSE `ferramenta` a cada uso/resultado de server tool.
+> `src/lib/ia/sessao/artefatos.ts`: política (allowlist xlsx/csv/docx/pdf/md/png, teto 25 MB, teto de 8 arquivos por
+> rodada), leitura dos blocos `bash_code_execution_tool_result` (aceita também a forma legada) e materialização
+> AUTOMÁTICA — bucket `documentos` em `<tenant>/clientes/<cliente>/casos/<caso>/apoio-ia/<sessao>_<slug>.<ext>`,
+> linha em `documentos` (tipo `apoio_ia`, `file_name` "Apoio IA — <título>", `texto_extraido` só de csv/md),
+> `documento_vinculos` na pasta do caso (+ processo) e `enfileirarDriveSync`: o MESMO caminho de `materializar.ts`.
+> **Versionamento por nome lógico** em `pecas_sessoes_anexos` (migration 086: `origem` 'advogado'|'gerado' + `slug`,
+> índice único parcial por (sessão, slug)): regerar a planilha substitui o Storage e ATUALIZA a mesma linha.
+> `driver-messages` ganhou o laço de retomada de `pause_turn` (teto `MAX_CONTINUACOES=3`, sem "Continue.") e uma
+> rede de segurança: se a API recusar a rodada ANTES de qualquer texto com as tools declaradas, ela é refeita SEM
+> ferramentas (a sessão degrada para a F0.4 em vez de falhar). `rodada.ts` materializa ANTES de gravar o turno do
+> agente (o payload guarda `artefatos: [{documentoId, nome, ext, tamanho, atualizado}]` e `execucoes`) e nunca
+> derruba a rodada por causa de artefato — o que não entrou vira turno de sistema com o motivo.
+> UI: `CardArtefato` na bolha do agente (abrir por URL assinada; remover = desvincular + DELETE nas rotas de
+> documentos que já existem), toast "Planilha anexada ao dossiê", "Calculando no sandbox (Python)..." durante a
+> rodada e a contagem de execuções no turno. Prompt: bloco NOVO `SYSTEM_ARTEFATOS`, **opt-in**
+> (`montarSystemSessao(ctx, { artefatos: true })`) — os snapshots da F0.3 continuam byte a byte iguais e a
+> composição nova tem snapshot próprio.
+> Decisões de desenho: (a) artefato gerado NÃO volta ao contexto da rodada seguinte (`documentosDaSessao` filtra
+> `origem='gerado'`) — reinjetar a planilha que o próprio agente escreveu queimaria tokens e invalidaria o cache
+> do dossiê; (b) o GET da sessão marca `removido` nos artefatos cujo documento sumiu, para o painel não oferecer
+> "abrir" em arquivo apagado; (c) `texto_extraido` de .xlsx/.docx/.pdf fica vazio (TODO da F2 — o projeto não tem
+> lib de planilha e ler o arquivo só para indexar não paga).
+> **Não verificado contra a API real**: a chave `ANTHROPIC_API_KEY` do `.env.local` está inválida (a de produção
+> vive na Vercel), então a combinação `output_config.format` + `tools` e o tipo `code_execution_20260521` não
+> puderam ser exercitados aqui — daí a rede de segurança acima. O 1º teste do dono ("monte a planilha dos 3
+> cenários") é o que confirma a forma no fio; se ela falhar, o log `ia.sessao.ferramentas.degradado` aparece e a
+> saída é trocar a env para `code_execution_20260120`.
 
 (Fases 1–3: pacotes detalhados no plano abaixo; F1 = Managed Agents driver, F2 = escala documental+pesquisa+biblioteca de acórdãos, F3 = créditos/cobrança/admin.)
 
